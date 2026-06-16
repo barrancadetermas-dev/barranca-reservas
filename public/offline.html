@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sin conexión · MILA</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { height: 100%; }
+    body {
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      background: #0F172A;
+      color: #F8FAFC;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      position: relative;
+      overflow: hidden;
+    }
+    .glow {
+      position: absolute; border-radius: 50%;
+      filter: blur(100px); opacity: .15; pointer-events: none;
+    }
+    .glow-1 { width: 500px; height: 500px; background: #6366F1; top: -150px; right: 5%; }
+    .glow-2 { width: 400px; height: 400px; background: #8B5CF6; bottom: -100px; left: 5%; }
+    .card {
+      position: relative; z-index: 2;
+      text-align: center;
+      max-width: 420px; width: 100%;
+      background: rgba(255,255,255,.04);
+      border: 1px solid rgba(255,255,255,.09);
+      border-radius: 24px;
+      padding: 52px 40px;
+      backdrop-filter: blur(20px);
+    }
+    .icon-wrap {
+      width: 72px; height: 72px;
+      background: rgba(99,102,241,.15);
+      border: 1px solid rgba(99,102,241,.3);
+      border-radius: 20px;
+      display: flex; align-items: center; justify-content: center;
+      margin: 0 auto 28px;
+    }
+    .icon-wrap svg { opacity: .9; }
+    h1 {
+      font-size: 1.5rem; font-weight: 700;
+      color: #F8FAFC; margin-bottom: 12px;
+      letter-spacing: -.02em;
+    }
+    p {
+      font-size: .925rem; color: #94A3B8;
+      line-height: 1.65; margin-bottom: 32px;
+    }
+    .btn {
+      display: inline-block;
+      background: #6366F1; color: white;
+      border: none; border-radius: 10px;
+      padding: 12px 28px;
+      font-size: .9rem; font-weight: 600;
+      cursor: pointer; transition: background .15s;
+    }
+    .btn:hover { background: #4F46E5; }
+    .brand {
+      margin-top: 32px;
+      font-size: .75rem; color: #475569;
+      letter-spacing: .03em;
+    }
+    .brand strong { color: #64748B; }
+    /* Animación de pulso */
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+    .dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: #EF4444;
+      display: inline-block; margin-right: 6px; vertical-align: middle;
+      animation: pulse 1.8s ease-in-out infinite;
+    }
+  </style>
+</head>
+<body>
+  <div class="glow glow-1"></div>
+  <div class="glow glow-2"></div>
+
+  <div class="card">
+    <div class="icon-wrap">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#818CF8" stroke-width="1.5" width="36" height="36">
+        <line x1="1" y1="1" x2="23" y2="23"/>
+        <path d="M16.72 11.06A10.94 10.94 0 0112 10c-2.7 0-5.17.95-7.07 2.51"/>
+        <path d="M5 12.55a11 11 0 0114.08 0"/>
+        <path d="M10.71 5.05A16 16 0 0122.56 9"/>
+        <path d="M1.42 9a16 16 0 014.84-2.96"/>
+        <path d="M8.53 16.11a6 6 0 016.95 0"/>
+        <circle cx="12" cy="20" r="1"/>
+      </svg>
+    </div>
+
+    <h1>Sin conexión</h1>
+    <p>
+      No hay conexión a internet en este momento.<br>
+      El sistema MILA requiere conexión para funcionar.
+    </p>
+    <p style="margin-bottom:24px;font-size:.8rem">
+      <span class="dot"></span>Reconectando automáticamente...
+    </p>
+
+    <button class="btn" onclick="window.location.reload()">
+      Reintentar ahora
+    </button>
+
+    <p class="brand">
+      <strong>MILA</strong> · Sistema Inteligente para Alojamientos
+    </p>
+  </div>
+
+  <script>
+    // Redirigir automáticamente cuando se recupere la conexión
+    window.addEventListener('online', () => {
+      setTimeout(() => window.location.href = '/', 800);
+    });
+  </script>
+</body>
+</html>

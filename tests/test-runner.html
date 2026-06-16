@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Tests — Barranca de Termas PMS</title>
+  <style>
+    body { font-family: monospace; background: #0F172A; color: #E2E8F0; padding: 24px; }
+    h1   { color: #6366F1; font-size: 1.2rem; }
+    .pass { color: #34D399; } .fail { color: #EF4444; }
+    .section { margin: 20px 0 8px; font-weight: 700; color: #94A3B8; border-bottom: 1px solid #334155; padding-bottom: 4px; }
+    .result  { padding: 3px 0; font-size: .875rem; }
+    #summary { margin-top: 20px; padding: 16px; border-radius: 8px; font-size: 1rem; font-weight: 700; }
+    .pass-bg { background: rgba(52,211,153,.15); color: #34D399; }
+    .fail-bg { background: rgba(239,68,68,.15);  color: #EF4444; }
+  </style>
+</head>
+<body>
+  <h1>🧪 Test Suite — Barranca de Termas PMS</h1>
+  <div id="output"></div>
+  <div id="summary"></div>
+
+  <script type="module">
+    import './unit/pricing.test.js';
+    import './unit/colors.test.js';
+    import './unit/availability.test.js';
+
+    // El runner se auto-ejecuta al cargar los módulos
+  </script>
+</body>
+</html>

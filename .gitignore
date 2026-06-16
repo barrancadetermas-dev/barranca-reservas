@@ -1,0 +1,42 @@
+# ── Entorno ──────────────────────────────────────────
+.env
+.env.local
+.env.production
+
+# ── Node (si se agrega Vite/bundler en el futuro) ────
+node_modules/
+dist/
+.pnp
+.pnp.js
+
+# ── Vercel ────────────────────────────────────────────
+.vercel
+
+# ── Editores ──────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# ── Logs ─────────────────────────────────────────────
+*.log
+npm-debug.log*
+
+# ── Backups ───────────────────────────────────────────
+*.bak
+*.sql.bak
+
+# Credenciales reales de Supabase — NO commitear
+js/config.js
+
+# Vite build output
+dist/
+
+# Variables de entorno reales
+.env.local
+.env.*.local
+
+# Antiguo config.js (reemplazado por .env.local + Vite)
+js/config.js

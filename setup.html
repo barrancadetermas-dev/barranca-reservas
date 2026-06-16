@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Configuración inicial — Barranca de Termas PMS</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    :root{
+      --primary:#6366F1;--primary-d:#4F46E5;--bg:#F8FAFC;--surface:#fff;
+      --border:#E2E8F0;--text:#0F172A;--text-2:#475569;--text-3:#94A3B8;
+      --success:#16A34A;--danger:#DC2626;--r:10px;
+    }
+    body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-height:100dvh}
+    .setup-shell{max-width:760px;margin:0 auto;padding:40px 20px 80px}
+    .setup-header{text-align:center;margin-bottom:48px}
+    .setup-header .logo{font-size:2.5rem;margin-bottom:12px}
+    .setup-header h1{font-size:1.8rem;font-weight:800;margin-bottom:6px}
+    .setup-header p{color:var(--text-2);font-size:.95rem}
+    .steps-nav{display:flex;align-items:center;gap:0;margin-bottom:40px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);overflow:hidden}
+    .step-dot{flex:1;padding:12px 8px;text-align:center;font-size:.78rem;font-weight:600;color:var(--text-3);cursor:pointer;transition:all .2s;border-right:1px solid var(--border);position:relative}
+    .step-dot:last-child{border-right:none}
+    .step-dot.active{background:var(--primary);color:white}
+    .step-dot.done{background:#EFF6FF;color:var(--primary)}
+    .step-dot .step-num{display:block;font-size:1rem;font-weight:800;margin-bottom:2px}
+    .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:28px;margin-bottom:20px}
+    .card h2{font-size:1.1rem;font-weight:700;margin-bottom:6px}
+    .card .subtitle{font-size:.85rem;color:var(--text-2);margin-bottom:24px}
+    .form-group{margin-bottom:18px}
+    label{display:block;font-size:.82rem;font-weight:600;color:var(--text-2);margin-bottom:6px}
+    input[type=text],input[type=email],input[type=number],select,textarea{
+      width:100%;padding:10px 14px;border:1px solid var(--border);border-radius:8px;
+      font-family:inherit;font-size:.875rem;color:var(--text);background:var(--surface);
+      transition:border .2s;outline:none
+    }
+    input:focus,select:focus,textarea:focus{border-color:var(--primary)}
+    .hint{font-size:.75rem;color:var(--text-3);margin-top:4px}
+    .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+    .btn{display:inline-flex;align-items:center;gap:8px;padding:10px 20px;border-radius:8px;
+      font-weight:600;font-size:.875rem;cursor:pointer;border:none;transition:all .2s}
+    .btn-primary{background:var(--primary);color:white}
+    .btn-primary:hover{background:var(--primary-d)}
+    .btn-outline{background:transparent;border:1px solid var(--border);color:var(--text-2)}
+    .btn-outline:hover{border-color:var(--primary);color:var(--primary)}
+    .btn-sm{padding:7px 14px;font-size:.8rem}
+    .btn-danger{background:#FEF2F2;color:var(--danger);border:1px solid #FECACA}
+    .footer-actions{display:flex;justify-content:space-between;align-items:center;margin-top:28px}
+
+    /* Tabla de unidades */
+    .units-table{width:100%;border-collapse:collapse;font-size:.82rem}
+    .units-table th{background:#F8FAFC;padding:8px 10px;text-align:left;font-weight:600;color:var(--text-2);border-bottom:2px solid var(--border)}
+    .units-table td{padding:6px 6px;border-bottom:1px solid var(--border);vertical-align:middle}
+    .units-table input{padding:6px 10px;font-size:.82rem}
+    .color-swatch{width:32px;height:32px;border-radius:6px;border:2px solid rgba(0,0,0,.1);cursor:pointer}
+    .color-options{display:flex;gap:4px;flex-wrap:wrap}
+    .color-opt{width:22px;height:22px;border-radius:50%;cursor:pointer;border:2px solid transparent;transition:all .15s}
+    .color-opt.selected{border-color:var(--text);transform:scale(1.2)}
+
+    /* SQL output */
+    .sql-block{background:#0F172A;color:#E2E8F0;border-radius:var(--r);padding:20px;
+      font-family:'Courier New',monospace;font-size:.75rem;line-height:1.7;
+      white-space:pre;overflow-x:auto;max-height:400px;overflow-y:auto;position:relative}
+    .copy-btn{position:absolute;top:12px;right:12px;padding:6px 14px;background:rgba(255,255,255,.1);
+      border:1px solid rgba(255,255,255,.2);border-radius:6px;color:white;cursor:pointer;font-size:.75rem;font-weight:600}
+    .copy-btn:hover{background:rgba(255,255,255,.2)}
+    .step-panel{display:none}
+    .step-panel.active{display:block}
+
+    /* Final step */
+    .final-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+    .final-card{border:1px solid var(--border);border-radius:var(--r);padding:20px;text-align:center}
+    .final-card .icon{font-size:2rem;margin-bottom:8px}
+    .final-card h3{font-size:.9rem;font-weight:700;margin-bottom:6px}
+    .final-card p{font-size:.78rem;color:var(--text-2);margin-bottom:12px}
+    .final-card a{color:var(--primary);font-size:.82rem;font-weight:600}
+    @media(max-width:600px){.form-grid,.final-grid{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+<div class="setup-shell">
+  <div class="setup-header">
+    <div class="logo">🏨</div>
+    <h1>Asistente de Configuración</h1>
+    <p>Configurá tu sistema en 4 pasos. Al final generamos el SQL que necesitás para arrancar.</p>
+  </div>
+
+  <!-- AVISO PREVIO -->
+  <div style="background:#FEF3C7;border:1px solid #FCD34D;border-radius:10px;padding:16px 20px;margin-bottom:32px;display:flex;gap:14px;align-items:flex-start">
+    <span style="font-size:1.4rem;flex-shrink:0">⚠️</span>
+    <div>
+      <strong style="font-size:.9rem;color:#92400E">Antes de usar este asistente:</strong>
+      <p style="font-size:.82rem;color:#78350F;margin-top:4px;line-height:1.6">
+        Las tablas de la base de datos tienen que existir primero.<br>
+        Si es una instalación nueva, ejecutá <strong>schema.sql</strong> en Supabase → SQL Editor
+        antes de correr el SQL que este asistente genera.<br>
+        <a href="docs/GUIA-1-INSTALACION.md" style="color:#D97706;font-weight:600">
+          Ver Guía 1 — Instalación paso a paso →
+        </a>
+      </p>
+    </div>
+  </div>
+
+  <!-- Navegación de pasos -->
+  <div class="steps-nav">
+    <div class="step-dot active" data-step="1"><span class="step-num">1</span>Tu complejo</div>
+    <div class="step-dot"        data-step="2"><span class="step-num">2</span>Departamentos</div>
+    <div class="step-dot"        data-step="3"><span class="step-num">3</span>SQL generado</div>
+    <div class="step-dot"        data-step="4"><span class="step-num">4</span>¿Qué sigue?</div>
+  </div>
+
+  <!-- PASO 1: Datos del hotel -->
+  <div class="step-panel active" id="step-1">
+    <div class="card">
+      <h2>🏠 Datos de tu complejo</h2>
+      <p class="subtitle">Esta información aparecerá en el sistema y en los comprobantes.</p>
+      <div class="form-group">
+        <label>Nombre del complejo *</label>
+        <input type="text" id="h-name" placeholder="ej: Barranca de Termas" value="Barranca de Termas">
+      </div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Ciudad *</label>
+          <input type="text" id="h-city" placeholder="ej: Villa Pehuenia">
+        </div>
+        <div class="form-group">
+          <label>País</label>
+          <input type="text" id="h-country" value="Argentina">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Descripción breve</label>
+        <textarea id="h-desc" rows="2" placeholder="ej: Complejo de 7 apartamentos turísticos en la Patagonia."></textarea>
+      </div>
+      <div class="form-group">
+        <label>Identificador del sistema (slug) *
+          <span style="font-size:.72rem;color:var(--text-3);margin-left:6px">Solo minúsculas, sin espacios, con guiones</span>
+        </label>
+        <input type="text" id="h-slug" placeholder="ej: barranca-de-termas">
+        <div class="hint" id="slug-hint"></div>
+      </div>
+    </div>
+    <div class="footer-actions">
+      <span style="font-size:.82rem;color:var(--text-3)">Paso 1 de 4</span>
+      <button class="btn btn-primary" onclick="goToStep(2)">Siguiente →</button>
+    </div>
+  </div>
+
+  <!-- PASO 2: Unidades -->
+  <div class="step-panel" id="step-2">
+    <div class="card">
+      <h2>🛏️ Tus departamentos / unidades</h2>
+      <p class="subtitle">Configurá cada unidad con su nombre, capacidad y color identificador.</p>
+      <div style="overflow-x:auto">
+        <table class="units-table">
+          <thead>
+            <tr>
+              <th style="width:40px">#</th>
+              <th>Nombre</th>
+              <th style="width:100px">Capacidad</th>
+              <th>Color</th>
+              <th style="width:40px"></th>
+            </tr>
+          </thead>
+          <tbody id="units-tbody"></tbody>
+        </table>
+      </div>
+      <button class="btn btn-outline btn-sm" style="margin-top:12px" onclick="addUnit()">+ Agregar unidad</button>
+    </div>
+    <div class="footer-actions">
+      <button class="btn btn-outline" onclick="goToStep(1)">← Atrás</button>
+      <button class="btn btn-primary" onclick="goToStep(3)">Generar SQL →</button>
+    </div>
+  </div>
+
+  <!-- PASO 3: SQL generado -->
+  <div class="step-panel" id="step-3">
+    <div class="card">
+      <h2>📋 SQL de configuración generado</h2>
+      <p class="subtitle">Copiá este SQL y ejecutalo en <strong>Supabase → SQL Editor</strong>. Solo necesitás hacerlo una vez.</p>
+      <div style="position:relative">
+        <pre class="sql-block" id="sql-output">Cargando...</pre>
+        <button class="copy-btn" onclick="copySQL()">📋 Copiar</button>
+      </div>
+      <div style="margin-top:14px;display:flex;gap:10px">
+        <button class="btn btn-outline btn-sm" onclick="downloadSQL()">⬇️ Descargar como .sql</button>
+      </div>
+    </div>
+    <div class="footer-actions">
+      <button class="btn btn-outline" onclick="goToStep(2)">← Atrás</button>
+      <button class="btn btn-primary" onclick="goToStep(4)">Siguiente →</button>
+    </div>
+  </div>
+
+  <!-- PASO 4: Qué sigue -->
+  <div class="step-panel" id="step-4">
+    <div class="card">
+      <h2>🎉 ¡Listo! ¿Qué sigue?</h2>
+      <p class="subtitle">Ya tenés el SQL de configuración. Ahora seguí estos pasos para terminar la instalación.</p>
+      <div style="display:flex;flex-direction:column;gap:12px;margin-top:8px">
+        <div style="display:flex;gap:14px;padding:14px 16px;border:1px solid var(--border);border-radius:var(--r)">
+          <span style="font-size:1.4rem">1️⃣</span>
+          <div><strong>Ejecutá el SQL en Supabase</strong><br>
+          <span style="font-size:.82rem;color:var(--text-2)">Entrá a tu proyecto en Supabase → SQL Editor → pegá el SQL que generamos y hacé clic en "Run".</span></div>
+        </div>
+        <div style="display:flex;gap:14px;padding:14px 16px;border:1px solid var(--border);border-radius:var(--r)">
+          <span style="font-size:1.4rem">2️⃣</span>
+          <div><strong>Creá el usuario administrador</strong><br>
+          <span style="font-size:.82rem;color:var(--text-2)">En Supabase → Authentication → Users → Invite user. Luego asocialo al hotel con el segundo bloque SQL.</span></div>
+        </div>
+        <div style="display:flex;gap:14px;padding:14px 16px;border:1px solid var(--border);border-radius:var(--r)">
+          <span style="font-size:1.4rem">3️⃣</span>
+          <div><strong>Configurá las credenciales</strong><br>
+          <span style="font-size:.82rem;color:var(--text-2)">Copiá <code>.env.example</code> → <code>.env.local</code> y pegá tu URL y clave de Supabase. O configurá las variables en Vercel.</span></div>
+        </div>
+        <div style="display:flex;gap:14px;padding:14px 16px;border:1px solid var(--border);border-radius:var(--r)">
+          <span style="font-size:1.4rem">4️⃣</span>
+          <div><strong>Publicá en Vercel</strong><br>
+          <span style="font-size:.82rem;color:var(--text-2)">Conectá tu repositorio de GitHub a Vercel, configurá las env vars y hacé deploy.</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="card" style="background:#F0FDF4;border-color:#BBF7D0">
+      <h2 style="color:#166534">📚 Guías detalladas</h2>
+      <p style="font-size:.85rem;color:#166534;margin-top:6px">Encontrás toda la documentación paso a paso en la carpeta <code>docs/</code> del proyecto:</p>
+      <ul style="margin:12px 0 0 20px;display:flex;flex-direction:column;gap:6px">
+        <li><a href="docs/GUIA-1-INSTALACION.md" style="color:var(--primary);font-size:.85rem">GUIA-1-INSTALACION.md — GitHub + Supabase + usuario admin</a></li>
+        <li><a href="docs/GUIA-2-PUBLICACION.md" style="color:var(--primary);font-size:.85rem">GUIA-2-PUBLICACION.md — Publicar con Vercel</a></li>
+        <li><a href="docs/GUIA-3-DOMINIO.md" style="color:var(--primary);font-size:.85rem">GUIA-3-DOMINIO.md — Conectar dominio propio</a></li>
+      </ul>
+    </div>
+    <div class="footer-actions">
+      <button class="btn btn-outline" onclick="goToStep(3)">← Ver SQL</button>
+      <a href="index.html" class="btn btn-primary">Abrir el sistema →</a>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Colores disponibles ───────────────────────────
+const PALETTE = [
+  '#EF4444','#F97316','#EAB308','#84CC16','#22C55E',
+  '#14B8A6','#22D3EE','#38BDF8','#3B82F6','#6366F1',
+  '#8B5CF6','#A855F7','#C084FC','#F472B6','#FB7185',
+  '#64748B','#374151',
+];
+const DEFAULT_UNITS = [
+  { name:'3AMB Duplex',      cap:6, color:'#EF4444' },
+  { name:'2AMB Duplex',      cap:5, color:'#3B82F6' },
+  { name:'2AMB Duplex',      cap:5, color:'#22D3EE' },
+  { name:'2AMB Planta Baja', cap:4, color:'#84CC16' },
+  { name:'2AMB Planta Baja', cap:4, color:'#38BDF8' },
+  { name:'2AMB Planta Alta', cap:4, color:'#F472B6' },
+  { name:'2AMB Planta Alta', cap:4, color:'#C084FC' },
+];
+let units = DEFAULT_UNITS.map((u,i) => ({ ...u, id: i }));
+let unitCounter = units.length;
+
+// ── Auto-slug ─────────────────────────────────────
+document.getElementById('h-name').addEventListener('input', function() {
+  const slug = this.value.toLowerCase()
+    .replace(/á/g,'a').replace(/é/g,'e').replace(/í/g,'i').replace(/ó/g,'o').replace(/ú/g,'u').replace(/ñ/g,'n')
+    .replace(/[^a-z0-9\s-]/g,'').trim().replace(/\s+/g,'-');
+  document.getElementById('h-slug').value = slug;
+  document.getElementById('slug-hint').textContent = slug ? `El sistema usará: "${slug}"` : '';
+});
+
+// ── Tabla de unidades ─────────────────────────────
+function renderUnits() {
+  const tbody = document.getElementById('units-tbody');
+  tbody.innerHTML = units.map((u, i) => `
+    <tr>
+      <td style="font-weight:700;color:#94A3B8">${i+1}</td>
+      <td><input type="text" value="${u.name}" onchange="units[${i}].name=this.value" style="width:100%"></td>
+      <td><input type="number" value="${u.cap}" min="1" max="20" onchange="units[${i}].cap=parseInt(this.value)" style="width:80px"></td>
+      <td>
+        <div class="color-options">
+          ${PALETTE.map(c => `
+            <div class="color-opt${u.color===c?' selected':''}"
+              style="background:${c}" title="${c}"
+              onclick="units[${i}].color='${c}';renderUnits()"></div>
+          `).join('')}
+        </div>
+      </td>
+      <td>
+        ${units.length > 1 ? `<button class="btn btn-danger btn-sm" onclick="removeUnit(${i})">✕</button>` : ''}
+      </td>
+    </tr>`).join('');
+}
+
+function addUnit() {
+  units.push({ name: `Unidad ${units.length+1}`, cap: 4, color: PALETTE[units.length % PALETTE.length], id: unitCounter++ });
+  renderUnits();
+}
+
+function removeUnit(i) { units.splice(i,1); renderUnits(); }
+
+// ── Generador SQL ─────────────────────────────────
+function generateSQL() {
+  const name    = document.getElementById('h-name').value.trim()    || 'Mi Complejo';
+  const slug    = document.getElementById('h-slug').value.trim()    || 'mi-complejo';
+  const city    = document.getElementById('h-city').value.trim()    || 'Argentina';
+  const country = document.getElementById('h-country').value.trim() || 'Argentina';
+  const desc    = document.getElementById('h-desc').value.trim()    || '';
+  const now     = new Date().toLocaleDateString('es-AR');
+
+  const unitsSQL = units.map((u,i) =>
+    `  (v_hotel_id, '${u.name.replace(/'/g,"\\'")}', '', ${u.cap}, '', ${i+1}, '${u.color}', TRUE)`
+  ).join(',\n');
+
+  return `-- ═══════════════════════════════════════════════
+-- SQL de configuración para: ${name}
+-- Generado por el Asistente de Configuración · ${now}
+-- Ejecutar en: Supabase → SQL Editor → Run
+-- ═══════════════════════════════════════════════
+
+-- ── 1. Crear el hotel ────────────────────────────
+INSERT INTO hotels (name, slug, description, timezone, city, country)
+VALUES (
+  '${name.replace(/'/g,"\\'")}',
+  '${slug}',
+  '${desc.replace(/'/g,"\\'")}',
+  'America/Argentina/Buenos_Aires',
+  '${city.replace(/'/g,"\\'")}',
+  '${country.replace(/'/g,"\\'")}'
+)
+ON CONFLICT (slug) DO UPDATE
+  SET name = EXCLUDED.name, description = EXCLUDED.description;
+
+-- ── 2. Crear departamentos ───────────────────────
+DO $$
+DECLARE v_hotel_id UUID;
+BEGIN
+  SELECT id INTO v_hotel_id FROM hotels WHERE slug = '${slug}';
+
+  IF v_hotel_id IS NULL THEN
+    RAISE EXCEPTION 'Hotel ${slug} no encontrado. Verificá que el bloque anterior se ejecutó.';
+  END IF;
+
+  INSERT INTO units (hotel_id, name, description, max_guests, floor, sort_order, color, is_active)
+  VALUES
+${unitsSQL}
+  ON CONFLICT DO NOTHING;
+
+  RAISE NOTICE '✅ ${units.length} unidades creadas para: ${name}';
+END $$;
+
+-- ── 3. Comisiones por canal (ajustables en Config) ──
+INSERT INTO channel_commissions (hotel_id, channel, commission_pct)
+SELECT id, 'booking', 15.00 FROM hotels WHERE slug = '${slug}'
+ON CONFLICT (hotel_id, channel) DO NOTHING;
+
+INSERT INTO channel_commissions (hotel_id, channel, commission_pct)
+SELECT id, 'airbnb', 18.00 FROM hotels WHERE slug = '${slug}'
+ON CONFLICT (hotel_id, channel) DO NOTHING;
+
+-- ── 4. Configuración de notificaciones ──────────
+INSERT INTO notification_config (hotel_id, notify_checkin, notify_checkout)
+SELECT id, TRUE, TRUE FROM hotels WHERE slug = '${slug}'
+ON CONFLICT (hotel_id) DO NOTHING;
+
+-- ── 5. Verificación ──────────────────────────────
+SELECT sort_order AS "#", '#' || sort_order || ' · ' || name AS "Departamento", color
+FROM units
+WHERE hotel_id = (SELECT id FROM hotels WHERE slug = '${slug}')
+ORDER BY sort_order;
+
+
+-- ════════════════════════════════════════════════
+-- PASO SIGUIENTE: Crear el usuario administrador
+-- ════════════════════════════════════════════════
+-- 1. En Supabase → Authentication → Users → "Add user"
+-- 2. Ingresá el email del admin y una contraseña
+-- 3. Copiá el "User UID" que aparece en la lista
+-- 4. Reemplazá PEGAR-UUID-AQUI con ese valor y ejecutá:
+
+INSERT INTO hotel_users (hotel_id, user_id, role)
+SELECT
+  (SELECT id FROM hotels WHERE slug = '${slug}'),
+  'PEGAR-UUID-AQUI',
+  'admin'
+ON CONFLICT (hotel_id, user_id) DO UPDATE SET role = 'admin';`;
+}
+
+// ── Navegación de pasos ───────────────────────────
+function goToStep(n) {
+  if (n === 3) {
+    document.getElementById('sql-output').textContent = generateSQL();
+  }
+  document.querySelectorAll('.step-panel').forEach((p,i) => p.classList.toggle('active', i===n-1));
+  document.querySelectorAll('.step-dot').forEach((d,i) => {
+    d.classList.toggle('active', i===n-1);
+    d.classList.toggle('done',   i<n-1);
+  });
+  window.scrollTo({top:0, behavior:'smooth'});
+}
+
+function copySQL() {
+  const sql = document.getElementById('sql-output').textContent;
+  navigator.clipboard.writeText(sql).then(() => {
+    const btn = document.querySelector('.copy-btn');
+    btn.textContent = '✅ Copiado';
+    setTimeout(() => btn.textContent = '📋 Copiar', 2000);
+  });
+}
+
+function downloadSQL() {
+  const sql  = document.getElementById('sql-output').textContent;
+  const slug = document.getElementById('h-slug').value || 'mi-complejo';
+  const blob = new Blob([sql], { type: 'text/plain;charset=utf-8' });
+  const a    = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: `setup_${slug}.sql` });
+  a.click(); URL.revokeObjectURL(a.href);
+}
+
+// Init
+renderUnits();
+</script>
+</body>
+</html>
