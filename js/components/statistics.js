@@ -1,53 +1,55 @@
 import { isDemo, can } from '../auth/permissions.js';
 import { formatARS, showToast, getUnitLabel, getUnitColor, getUnitChipHTML, AppContext } from '../supabase-config.js';
-// Panel analítico: ocupación, rendimiento, precios
-// Módulo de gastos con vencimientos y checklist
-// ═══════════════════════════════════════════════════
+
+// ══════════════════════════════════════════════════
+// statistics.js v5.1 — MILA
+// • KPIs compactos sin scroll vertical
+// • 4 métricas por fila: ADR, RevPAR, ocupación, ingresos
+// • Heatmap de ocupación (nueva pestaña)
+// • Exportar PDF y Excel
+// • Gastos + P&L completo (preservados)
+// ══════════════════════════════════════════════════
 
 const MONTH_NAMES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio',
                      'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 
 const CATEGORY_COLORS = {
-  servicios:    '#3B82F6',
-  mantenimiento:'#F59E0B',
-  limpieza:     '#34D399',
-  impuestos:    '#F43F5E',
-  personal:     '#A855F7',
-  otros:        '#94A3B8',
+  servicios:    '#3B82F6', mantenimiento:'#F59E0B',
+  limpieza:     '#34D399', impuestos:    '#F43F5E',
+  personal:     '#A855F7', otros:        '#94A3B8',
+};
+
+const SOURCE_LABELS = {
+  direct:'Directo', booking:'Booking', airbnb:'Airbnb',
+  family:'Familia', walkin:'Espontáneo', company:'Empresa',
+  referral:'Referido', despegar:'Despegar', expedia:'Expedia',
 };
 
 export class Statistics {
   constructor(supabase, ctx) {
-    this.db      = supabase;
-    this.ctx     = ctx;
-    this._tab    = 'units';
-
+    this.db   = supabase;
+    this.ctx  = ctx;
+    this._tab = 'units';
     this._initPeriodSelectors();
     this._bindTabs();
     this._bindButtons();
+    window._statsInstance = this;
   }
 
-  // ── Inicialización ────────────────────────────────
   init() {
-    // Cargar por defecto el mes actual
     const now = new Date();
     document.getElementById('stats-month').value = now.getMonth();
     document.getElementById('stats-year').value  = now.getFullYear();
+    this._tab = 'units';
     this.loadUnits();
-    this.loadExpenses();
   }
 
   _initPeriodSelectors() {
     const monthSel = document.getElementById('stats-month');
     const yearSel  = document.getElementById('stats-year');
     if (!monthSel || !yearSel) return;
-
-    MONTH_NAMES.forEach((m, i) => {
-      monthSel.innerHTML += `<option value="${i}">${m}</option>`;
-    });
-
-    const now     = new Date();
-    const curYear = now.getFullYear();
+    MONTH_NAMES.forEach((m, i) => { monthSel.innerHTML += `<option value="${i}">${m}</option>`; });
+    const now = new Date(), curYear = now.getFullYear();
     for (let y = curYear - 2; y <= curYear + 1; y++) {
       yearSel.innerHTML += `<option value="${y}" ${y === curYear ? 'selected' : ''}>${y}</option>`;
     }
@@ -60,13 +62,18 @@ export class Statistics {
         document.querySelectorAll('#section-statistics .tabs-bar .tab').forEach(t => t.classList.remove('active'));
         tab.classList.add('active');
         this._tab = tab.dataset.tab;
-        document.getElementById('stats-units-panel')?.classList.toggle('hidden',    this._tab !== 'units');
-        document.getElementById('stats-expenses-panel')?.classList.toggle('hidden', this._tab !== 'expenses');
-        document.getElementById('stats-pl-panel')?.classList.toggle('hidden',       this._tab !== 'pl');
-
+        this._showPanel(this._tab);
+        if (this._tab === 'units')    this.loadUnits();
         if (this._tab === 'expenses') this.loadExpenses();
         if (this._tab === 'pl')       this.loadPL();
+        if (this._tab === 'heatmap')  this.loadHeatmap();
       });
+    });
+  }
+
+  _showPanel(tab) {
+    ['units','expenses','pl','heatmap'].forEach(t => {
+      document.getElementById(`stats-${t}-panel`)?.classList.toggle('hidden', t !== tab);
     });
   }
 
@@ -74,8 +81,8 @@ export class Statistics {
     document.getElementById('btn-load-stats')?.addEventListener('click', () => {
       this.loadUnits();
       if (this._tab === 'expenses') this.loadExpenses();
+      if (this._tab === 'heatmap')  this.loadHeatmap();
     });
-
     document.getElementById('btn-add-expense')?.addEventListener('click', () => {
       document.getElementById('expense-editing-id').value = '';
       document.getElementById('expense-desc').value    = '';
@@ -93,7 +100,6 @@ export class Statistics {
     const month = parseInt(document.getElementById('stats-month')?.value ?? new Date().getMonth());
     const year  = parseInt(document.getElementById('stats-year')?.value  ?? new Date().getFullYear());
 
-    // ── Demo mode ──
     if (AppContext.IS_DEMO) {
       const { generateMockStats } = await import('../services/mock-data.js');
       const stats = generateMockStats(this.ctx.units);
@@ -101,29 +107,23 @@ export class Statistics {
       return;
     }
 
-    const firstDay = `${year}-${String(month + 1).padStart(2, '0')}-01`;
-    const lastDay  = new Date(year, month + 1, 0);
-    const lastDayStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(lastDay.getDate()).padStart(2, '0')}`;
+    const firstDay   = `${year}-${String(month+1).padStart(2,'0')}-01`;
+    const lastDay    = new Date(year, month + 1, 0);
+    const lastDayStr = `${year}-${String(month+1).padStart(2,'0')}-${String(lastDay.getDate()).padStart(2,'0')}`;
     const daysInMonth = lastDay.getDate();
 
     try {
       const { data: bookings } = await this.db
         .from('bookings')
-        .select(`
-          id, check_in, check_out, price_per_night, total_amount, status,
-          booking_units(unit_id)
-        `)
+        .select('id, check_in, check_out, price_per_night, total_amount, status, nights, booking_units(unit_id)')
         .eq('hotel_id', this.ctx.hotelId)
-        .neq('status', 'cancelled')
-        .neq('status', 'blocked')
-        .lte('check_in',  lastDayStr)
-        .gt('check_out',  firstDay);
+        .neq('status', 'cancelled').neq('status', 'blocked')
+        .lte('check_in', lastDayStr).gt('check_out', firstDay);
 
       const stats = this._computeUnitStats(bookings ?? [], firstDay, lastDayStr, daysInMonth);
       this._renderUnitStats(stats, month, year, daysInMonth);
-
     } catch (err) {
-      console.error('Statistics loadUnits error:', err);
+      console.error('[Statistics] loadUnits error:', err);
       showToast('Error al cargar estadísticas', 'error');
     }
   }
@@ -131,39 +131,26 @@ export class Statistics {
   _computeUnitStats(bookings, firstDay, lastDay, daysInMonth) {
     const statsMap = {};
     this.ctx.units.forEach(u => {
-      statsMap[u.id] = {
-        unit:        u,
-        nightsOcc:   0,
-        revenue:     0,
-        bookingCount: 0,
-        totalPriceNights: 0, // para precio promedio ponderado
-      };
+      statsMap[u.id] = { unit: u, nightsOcc: 0, revenue: 0, bookingCount: 0, totalPriceNights: 0 };
     });
 
     bookings.forEach(b => {
       (b.booking_units ?? []).forEach(({ unit_id }) => {
         if (!statsMap[unit_id]) return;
-
-        // Overlap entre reserva y mes
-        const ciDate  = new Date(Math.max(new Date(b.check_in  + 'T00:00:00'), new Date(firstDay + 'T00:00:00')));
+        const ciDate  = new Date(Math.max(new Date(b.check_in + 'T00:00:00'),  new Date(firstDay + 'T00:00:00')));
         const coDate  = new Date(Math.min(new Date(b.check_out + 'T00:00:00'), new Date(lastDay  + 'T23:59:59')));
         const nights  = Math.max(0, Math.round((coDate - ciDate) / 86400000));
-
-        statsMap[unit_id].nightsOcc    += nights;
-        statsMap[unit_id].bookingCount += 1;
+        statsMap[unit_id].nightsOcc       += nights;
+        statsMap[unit_id].bookingCount    += 1;
         statsMap[unit_id].totalPriceNights += nights * (b.price_per_night ?? 0);
-
-        // Revenue: proporcional al overlap
         const totalNights = Math.round((new Date(b.check_out + 'T00:00:00') - new Date(b.check_in + 'T00:00:00')) / 86400000);
-        if (totalNights > 0) {
-          statsMap[unit_id].revenue += (b.total_amount ?? 0) * (nights / totalNights);
-        }
+        if (totalNights > 0) statsMap[unit_id].revenue += (b.total_amount ?? 0) * (nights / totalNights);
       });
     });
 
     return Object.values(statsMap).map(s => ({
       ...s,
-      occupancyPct: Math.min(100, Math.round((s.nightsOcc / daysInMonth) * 100)),
+      occupancyPct:     Math.min(100, Math.round((s.nightsOcc / daysInMonth) * 100)),
       avgPricePerNight: s.nightsOcc > 0 ? Math.round(s.totalPriceNights / s.nightsOcc) : 0,
     })).sort((a, b) => b.revenue - a.revenue);
   }
@@ -172,368 +159,481 @@ export class Statistics {
     const container = document.getElementById('stats-units-grid');
     if (!container) return;
 
-    const maxRevenue = Math.max(...stats.map(s => s.revenue), 1);
+    const totalRevenue  = stats.reduce((s, u) => s + u.revenue, 0);
+    const totalNights   = stats.reduce((s, u) => s + u.nightsOcc, 0);
+    const avgOcc        = Math.round(stats.reduce((s, u) => s + u.occupancyPct, 0) / (stats.length || 1));
+    const totalBookings = stats.reduce((s, u) => s + u.bookingCount, 0);
+    const ADR           = totalNights > 0 ? Math.round(totalRevenue / totalNights) : 0;
+    const totalRooms    = this.ctx.units.length;
+    const RevPAR        = totalRooms > 0 ? Math.round((totalRevenue / (totalRooms * daysInMonth))) : 0;
+    const avgStay       = totalBookings > 0 ? (totalNights / totalBookings).toFixed(1) : '0';
 
-    container.innerHTML = `
-      <div style="margin-bottom:20px">
-        <h3 style="font-size:.95rem;font-weight:700;color:var(--color-text)">
-          Reporte — ${MONTH_NAMES[month]} ${year}
-          <span style="font-size:.78rem;font-weight:400;color:var(--color-text-3);margin-left:8px">(${daysInMonth} días)</span>
-        </h3>
-      </div>
-    `;
+    // ── KPIs compactos (fila única, 4 columnas) ────
+    let html = `
+      <div class="stats-kpi-row">
+        ${this._kpiCard('Ingreso bruto', formatARS(totalRevenue), 'blue', '↗ vs período')}
+        ${this._kpiCard('ADR', formatARS(ADR), 'green', 'Tarifa prom. diaria')}
+        ${this._kpiCard('RevPAR', formatARS(RevPAR), 'purple', 'Ingreso por hab. disp.')}
+        ${this._kpiCard('Ocupación', avgOcc + '%', avgOcc >= 70 ? 'green' : avgOcc >= 40 ? 'amber' : 'rose', `${totalNights} noches`)}
+        ${this._kpiCard('Estadía prom.', avgStay + ' noches', 'blue', `${totalBookings} reservas`)}
+        ${this._kpiCard('Unidades', totalRooms, 'gray', `${daysInMonth} días disponibles`)}
+      </div>`;
 
-    stats.forEach((s, idx) => {
-      const card = document.createElement('div');
-      card.className = 'unit-stat-card';
-      const color    = getUnitColor(s.unit);
-      const label    = getUnitLabel(s.unit); // "#N · Nombre"
-      const revPct   = Math.round((s.revenue / maxRevenue) * 100);
-      const rankLabel = idx === 0 ? '🥇 Mejor rendimiento' : idx === stats.length - 1 ? '📉 Menor rendimiento' : '';
-
-      card.style.borderLeft = `4px solid ${color}`;
-      card.innerHTML = `
-        <div class="unit-stat-header">
-          <div style="display:flex;align-items:center;gap:10px">
-            <span style="width:14px;height:14px;border-radius:50%;background:${color};flex-shrink:0"></span>
-            <div>
-              <span class="unit-stat-name" style="color:${color}">${label}</span>
-              <span style="display:block;font-size:.73rem;color:var(--color-text-2);margin-top:2px">Hasta ${s.unit.max_guests} personas</span>
-            </div>
+    // ── Exportar ──────────────────────────────────
+    if (can('exportData')) {
+      html += `
+        <div class="stats-export-row">
+          <span style="font-size:.78rem;color:var(--color-text-3)">${MONTH_NAMES[month]} ${year} · ${daysInMonth} días</span>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-outline btn-sm" id="btn-exp-excel">📊 Excel</button>
+            <button class="btn btn-outline btn-sm" id="btn-exp-pdf">📄 PDF</button>
           </div>
-          ${rankLabel ? `<span style="font-size:.75rem;font-weight:600;color:${color}">${rankLabel}</span>` : ''}
-        </div>
-        <div class="unit-stat-kpis">
-          <div class="unit-kpi"><span class="unit-kpi-val">${s.occupancyPct}%</span><span class="unit-kpi-lbl">Ocupación</span></div>
-          <div class="unit-kpi"><span class="unit-kpi-val">${s.nightsOcc}</span><span class="unit-kpi-lbl">Noches alq.</span></div>
-          <div class="unit-kpi"><span class="unit-kpi-val">${formatARS(s.avgPricePerNight)}</span><span class="unit-kpi-lbl">Precio/noche</span></div>
-          <div class="unit-kpi"><span class="unit-kpi-val">${s.bookingCount}</span><span class="unit-kpi-lbl">Reservas</span></div>
-        </div>
-        <div style="display:flex;align-items:center;gap:12px">
-          <div class="occ-bar-track" style="flex:1">
-            <div class="occ-bar-fill" style="width:0%;background:${color}" data-target="${revPct}%"></div>
-          </div>
-          <strong style="font-size:.9rem;min-width:100px;text-align:right">${formatARS(s.revenue)}</strong>
-        </div>
-      `;
+        </div>`;
+    }
 
-      container.appendChild(card);
-    });
+    // ── Tabla compacta por unidad ─────────────────
+    html += `
+      <div class="stats-table-wrap">
+        <table class="stats-compact-table">
+          <thead>
+            <tr>
+              <th>Unidad</th>
+              <th>Ocupación</th>
+              <th>Noches</th>
+              <th>ADR</th>
+              <th>Reservas</th>
+              <th>Ingreso</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${stats.map((s, i) => {
+              const color  = getUnitColor(s.unit);
+              const occW   = Math.max(4, s.occupancyPct);
+              const rank   = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : '';
+              return `
+              <tr>
+                <td>
+                  <div style="display:flex;align-items:center;gap:8px">
+                    <span style="width:10px;height:10px;border-radius:50%;background:${color};flex-shrink:0"></span>
+                    <span style="font-weight:600;font-size:.82rem">${rank} ${s.unit.name}</span>
+                  </div>
+                </td>
+                <td>
+                  <div style="display:flex;align-items:center;gap:8px;min-width:120px">
+                    <div class="occ-bar-track" style="flex:1;height:6px">
+                      <div class="occ-bar-fill" style="width:${occW}%;background:${color};transition:width .6s"></div>
+                    </div>
+                    <span style="font-size:.78rem;font-weight:700;color:${color};min-width:34px">${s.occupancyPct}%</span>
+                  </div>
+                </td>
+                <td style="font-size:.82rem">${s.nightsOcc}</td>
+                <td style="font-size:.82rem">${s.avgPricePerNight > 0 ? formatARS(s.avgPricePerNight) : '—'}</td>
+                <td style="font-size:.82rem">${s.bookingCount}</td>
+                <td style="font-weight:700;font-size:.875rem">${formatARS(s.revenue)}</td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+          <tfoot>
+            <tr style="font-weight:700;background:var(--color-surface-2)">
+              <td>TOTAL</td>
+              <td>${avgOcc}% prom.</td>
+              <td>${totalNights}</td>
+              <td>${formatARS(ADR)}</td>
+              <td>${totalBookings}</td>
+              <td>${formatARS(totalRevenue)}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>`;
 
-    // Animar barras de rendimiento
-    requestAnimationFrame(() => {
-      container.querySelectorAll('.occ-bar-fill').forEach(bar => {
-        const target = bar.getAttribute('data-target');
-        setTimeout(() => { bar.style.width = target; }, 100);
-      });
-    });
+    container.innerHTML = html;
 
-    // Totales del período con chips de unidades
-    const totalRevenue = stats.reduce((s, u) => s + u.revenue, 0);
-    const totalNights  = stats.reduce((s, u) => s + u.nightsOcc, 0);
-    const avgOcc       = Math.round(stats.reduce((s, u) => s + u.occupancyPct, 0) / stats.length);
+    // Bind exportar
+    document.getElementById('btn-exp-excel')?.addEventListener('click', () => this._exportExcel(stats, month, year));
+    document.getElementById('btn-exp-pdf')?.addEventListener('click',   () => this._exportPDF(stats, month, year, { ADR, RevPAR, avgOcc, totalRevenue, totalNights, daysInMonth }));
+  }
 
-    const rankingList = stats.map((s, i) =>
-      `<div style="display:flex;align-items:center;gap:8px;padding:4px 0">
-        <span style="width:18px;font-size:.78rem;font-weight:700;color:var(--color-text-3)">#${i+1}</span>
-        ${getUnitChipHTML(s.unit, 'sm')}
-        <span style="margin-left:auto;font-size:.82rem;font-weight:700">${formatARS(s.revenue)}</span>
-        <span style="font-size:.75rem;color:var(--color-text-3)">(${s.occupancyPct}% ocup.)</span>
-      </div>`).join('');
-
-    container.innerHTML += `
-      <div class="card" style="background:var(--color-primary-l);border-color:rgba(99,102,241,.2)">
-        <div class="card-header"><h3 style="color:var(--color-primary)">Resumen del período — ${MONTH_NAMES[month]} ${year}</h3></div>
-        <div class="unit-stat-kpis" style="margin:16px 0 20px">
-          <div class="unit-kpi"><span class="unit-kpi-val">${formatARS(totalRevenue)}</span><span class="unit-kpi-lbl">Ingreso bruto</span></div>
-          <div class="unit-kpi"><span class="unit-kpi-val">${totalNights}</span><span class="unit-kpi-lbl">Total noches</span></div>
-          <div class="unit-kpi"><span class="unit-kpi-val">${avgOcc}%</span><span class="unit-kpi-lbl">Ocup. promedio</span></div>
-          <div class="unit-kpi"><span class="unit-kpi-val">${stats.reduce((s,u)=>s+u.bookingCount,0)}</span><span class="unit-kpi-lbl">Total reservas</span></div>
-        </div>
-        <div style="border-top:1px solid rgba(99,102,241,.15);padding-top:16px">
-          <div style="font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;
-            color:var(--color-text-3);margin-bottom:10px">Ranking de rendimiento</div>
-          ${rankingList}
-        </div>
+  _kpiCard(label, value, color, sub) {
+    const colors = {
+      blue:   { bg:'#e6f1fb', text:'#185fa5' },
+      green:  { bg:'#eaf3de', text:'#3b6d11' },
+      purple: { bg:'#eeedfe', text:'#534ab7' },
+      amber:  { bg:'#faeeda', text:'#854f0b' },
+      rose:   { bg:'#fcebeb', text:'#a32d2d' },
+      gray:   { bg:'#f1efe8', text:'#5f5e5a' },
+    };
+    const c = colors[color] ?? colors.blue;
+    return `
+      <div class="stat-kpi-card" style="background:${c.bg}">
+        <div class="stat-kpi-val" style="color:${c.text}">${value}</div>
+        <div class="stat-kpi-lbl">${label}</div>
+        <div class="stat-kpi-sub">${sub}</div>
       </div>`;
   }
 
   // ══════════════════════════════════════════════════
-  // GASTOS OPERATIVOS
+  // HEATMAP DE OCUPACIÓN
   // ══════════════════════════════════════════════════
-  // ══════════════════════════════════════════════════
-  // P&L MENSUAL (#18 — completado)
-  // ══════════════════════════════════════════════════
-  async loadPL() {
-    const container = document.getElementById('stats-pl-panel');
-    if (!container) return;
-    container.innerHTML = `<div class="skeleton-box" style="height:320px"></div>`;
+  async loadHeatmap() {
+    const panel = document.getElementById('stats-heatmap-panel');
+    if (!panel) return;
+    panel.innerHTML = '<div class="loading-state">Generando mapa de calor...</div>';
 
     const month = parseInt(document.getElementById('stats-month')?.value ?? new Date().getMonth());
     const year  = parseInt(document.getElementById('stats-year')?.value  ?? new Date().getFullYear());
 
-    // Demo mode
-    if (AppContext.IS_DEMO) {
-      const { generateMockStats, generateMockExpenses, MOCK_COMMISSIONS } = await import('../services/mock-data.js');
-      const stats    = generateMockStats(this.ctx.units);
-      const expenses = generateMockExpenses();
-      this._renderPL(stats.reduce((m,s) => { m[s.unit.source??'direct'] = (m[s.unit.source??'direct']??0)+s.revenue; return m; }, {}),
-        expenses, MOCK_COMMISSIONS, month, year);
-      return;
-    }
-
     const firstDay   = `${year}-${String(month+1).padStart(2,'0')}-01`;
-    const lastDay    = new Date(year, month+1, 0);
+    const lastDay    = new Date(year, month + 1, 0);
     const lastDayStr = `${year}-${String(month+1).padStart(2,'0')}-${String(lastDay.getDate()).padStart(2,'0')}`;
+    const daysInMonth = lastDay.getDate();
+    const today = new Date().toISOString().split('T')[0];
 
-    const [bookingsRes, expensesRes, commissionsRes] = await Promise.all([
-      this.db.from('bookings').select('source, total_amount')
-        .eq('hotel_id', this.ctx.hotelId)
-        .not('status', 'in', '(cancelled,blocked)')
-        .gte('check_in', firstDay).lte('check_in', lastDayStr),
-      this.db.from('expenses').select('*').eq('hotel_id', this.ctx.hotelId)
-        .or(`due_date.is.null,and(due_date.gte.${firstDay},due_date.lte.${lastDayStr})`),
-      this.db.from('channel_commissions').select('*').eq('hotel_id', this.ctx.hotelId),
-    ]);
+    try {
+      let bookings = [];
+      if (AppContext.IS_DEMO) {
+        const { generateMockBookings } = await import('../services/mock-data.js');
+        bookings = generateMockBookings(this.ctx.units, year, month);
+      } else {
+        const { data } = await this.db
+          .from('bookings')
+          .select('check_in, check_out, status, source, booking_units(unit_id)')
+          .eq('hotel_id', this.ctx.hotelId)
+          .neq('status', 'cancelled')
+          .lte('check_in', lastDayStr)
+          .gt('check_out', firstDay);
+        bookings = data ?? [];
+      }
 
-    const revenueBySource = {};
-    (bookingsRes.data ?? []).forEach(b => {
-      const src = b.source ?? 'direct';
-      revenueBySource[src] = (revenueBySource[src] ?? 0) + (b.total_amount ?? 0);
-    });
+      // Construir mapa: unitId → Set de días ocupados
+      const occMap = {};
+      this.ctx.units.forEach(u => { occMap[u.id] = new Set(); });
 
-    const commMap = {};
-    (commissionsRes.data ?? []).forEach(c => { commMap[c.channel] = c.commission_pct; });
+      bookings.forEach(b => {
+        (b.booking_units ?? []).forEach(({ unit_id }) => {
+          if (!occMap[unit_id]) return;
+          let d = new Date(Math.max(new Date(b.check_in + 'T00:00:00'), new Date(firstDay + 'T00:00:00')));
+          const end = new Date(Math.min(new Date(b.check_out + 'T00:00:00'), new Date(lastDayStr + 'T23:59:59')));
+          while (d <= end) {
+            occMap[unit_id].add(d.getDate());
+            d.setDate(d.getDate() + 1);
+          }
+        });
+      });
 
-    this._renderPL(revenueBySource, expensesRes.data ?? [], commMap, month, year);
-  }
+      // Días de la semana abreviados
+      const dayNames = ['D','L','M','X','J','V','S'];
+      const days     = Array.from({ length: daysInMonth }, (_, i) => i + 1);
 
-  _renderPL(revenueBySource, expenses, commMap, month, year) {
-    const container = document.getElementById('stats-pl-panel');
-    if (!container) return;
+      // Calcular % ocupación por día (para la leyenda)
+      const dailyOcc = days.map(d => {
+        const occ = this.ctx.units.filter(u => occMap[u.id].has(d)).length;
+        return Math.round((occ / this.ctx.units.length) * 100);
+      });
 
-    const MONTH_NAMES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio',
-                         'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
-    const period = `${MONTH_NAMES[month]} ${year}`;
-    const SOURCE_LABELS = { direct:'🏠 Directo', booking:'🟦 Booking', airbnb:'🟧 Airbnb', family:'🟪 Familia' };
+      const todayDay = today.startsWith(`${year}-${String(month+1).padStart(2,'0')}`)
+        ? parseInt(today.split('-')[2]) : null;
 
-    let totalGross = 0, totalComm = 0;
-    const sourceRows = Object.entries(revenueBySource).map(([src, gross]) => {
-      const commPct  = commMap[src] ?? 0;
-      const comm     = gross * (commPct / 100);
-      const net      = gross - comm;
-      totalGross    += gross;
-      totalComm     += comm;
-      return { src, gross, comm, commPct, net };
-    });
-    const totalNet    = totalGross - totalComm;
-    const totalExpPaid= expenses.filter(e => e.paid).reduce((s, e) => s + e.amount, 0);
-    const totalExpAll = expenses.reduce((s, e) => s + e.amount, 0);
-    const result      = totalNet - totalExpPaid;
-    const resultColor = result >= 0 ? 'var(--color-success)' : 'var(--color-danger)';
+      // Header de días
+      const daysHeaderHTML = days.map(d => {
+        const date   = new Date(year, month, d);
+        const dayOfW = date.getDay();
+        const isWknd = dayOfW === 0 || dayOfW === 6;
+        const isToday = d === todayDay;
+        return `<div class="hm-day-head ${isWknd ? 'hm-weekend' : ''} ${isToday ? 'hm-today' : ''}"
+                     title="${date.toLocaleDateString('es-AR', {weekday:'long', day:'numeric'})}">
+          <div class="hm-day-num">${d}</div>
+          <div class="hm-day-name">${dayNames[dayOfW]}</div>
+        </div>`;
+      }).join('');
 
-    const fmt = (n) => formatARS(n);
+      // Filas por unidad
+      const rowsHTML = this.ctx.units.map(u => {
+        const color = getUnitColor(u);
+        const cells = days.map(d => {
+          const occupied = occMap[u.id].has(d);
+          const isToday  = d === todayDay;
+          return `<div class="hm-cell ${occupied ? 'hm-occ' : 'hm-free'} ${isToday ? 'hm-today' : ''}"
+                       style="${occupied ? `background:${color};opacity:.85` : ''}"
+                       title="${u.name} — día ${d}: ${occupied ? 'Ocupado' : 'Libre'}">
+          </div>`;
+        }).join('');
 
-    const expByCategory = {};
-    expenses.forEach(e => {
-      expByCategory[e.category] = (expByCategory[e.category] ?? 0) + e.amount;
-    });
-
-    container.innerHTML = `
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
-        <div>
-          <h3 style="font-size:1rem;font-weight:700">Estado de Resultados — ${period}</h3>
-          <p style="font-size:.78rem;color:var(--color-text-3);margin-top:4px">Ingresos netos de comisiones vs. gastos operativos</p>
-        </div>
-        ${can('exportData') ? `<button class="btn btn-outline btn-sm" id="btn-export-pl">📥 Exportar</button>` : ''}
-      </div>
-
-      <!-- INGRESOS -->
-      <div class="card" style="margin-bottom:16px">
-        <div style="font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;
-          color:var(--color-text-3);margin-bottom:12px">Ingresos por canal</div>
-        <table class="pl-table">
-          <thead><tr><th>Canal</th><th>Bruto</th><th>Comisión</th><th>Neto</th></tr></thead>
-          <tbody>
-            ${sourceRows.length ? sourceRows.map(r => `
-              <tr>
-                <td>${SOURCE_LABELS[r.src] ?? r.src}</td>
-                <td>${fmt(r.gross)}</td>
-                <td style="color:var(--color-danger)">${r.commPct > 0 ? `−${fmt(r.comm)} (${r.commPct}%)` : '—'}</td>
-                <td style="font-weight:600">${fmt(r.net)}</td>
-              </tr>`).join('') : `<tr><td colspan="4" style="text-align:center;color:var(--color-text-3)">Sin reservas en este período</td></tr>`}
-          </tbody>
-          <tfoot>
-            <tr class="pl-total">
-              <td><strong>TOTAL INGRESOS</strong></td>
-              <td><strong>${fmt(totalGross)}</strong></td>
-              <td style="color:var(--color-danger)">${totalComm > 0 ? `−${fmt(totalComm)}` : '—'}</td>
-              <td style="color:var(--color-success)"><strong>${fmt(totalNet)}</strong></td>
-            </tr>
-          </tfoot>
-        </table>
-      </div>
-
-      <!-- GASTOS -->
-      <div class="card" style="margin-bottom:16px">
-        <div style="font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;
-          color:var(--color-text-3);margin-bottom:12px">Gastos operativos</div>
-        <table class="pl-table">
-          <thead><tr><th>Categoría</th><th>Total</th><th>Pagados</th><th>Pendientes</th></tr></thead>
-          <tbody>
-            ${Object.entries(expByCategory).length ? Object.entries(expByCategory).map(([cat, total]) => {
-              const paid = expenses.filter(e => e.category === cat && e.paid).reduce((s,e) => s+e.amount, 0);
-              return `<tr>
-                <td style="text-transform:capitalize">${cat}</td>
-                <td>${fmt(total)}</td>
-                <td style="color:var(--color-success)">${fmt(paid)}</td>
-                <td style="color:var(--color-warning)">${fmt(total - paid)}</td>
-              </tr>`;
-            }).join('') : `<tr><td colspan="4" style="text-align:center;color:var(--color-text-3)">Sin gastos en este período</td></tr>`}
-          </tbody>
-          <tfoot>
-            <tr class="pl-total">
-              <td><strong>TOTAL GASTOS</strong></td>
-              <td><strong>${fmt(totalExpAll)}</strong></td>
-              <td style="color:var(--color-success)"><strong>${fmt(totalExpPaid)}</strong></td>
-              <td style="color:var(--color-warning)"><strong>${fmt(totalExpAll - totalExpPaid)}</strong></td>
-            </tr>
-          </tfoot>
-        </table>
-      </div>
-
-      <!-- RESULTADO NETO -->
-      <div class="card" style="background:${result >= 0 ? 'rgba(34,197,94,.06)' : 'rgba(239,68,68,.06)'};
-        border-color:${result >= 0 ? 'rgba(34,197,94,.2)' : 'rgba(239,68,68,.2)'}">
-        <div style="display:flex;align-items:center;justify-content:space-between">
-          <div>
-            <div style="font-size:.78rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--color-text-3)">
-              Resultado Neto del Período
+        const unitOcc = Math.round((occMap[u.id].size / daysInMonth) * 100);
+        return `
+          <div class="hm-row">
+            <div class="hm-unit-label">
+              <span class="hm-unit-dot" style="background:${color}"></span>
+              <span class="hm-unit-name">${u.name}</span>
+              <span class="hm-unit-pct">${unitOcc}%</span>
             </div>
-            <div style="font-size:.78rem;color:var(--color-text-3);margin-top:4px">
-              Ingresos netos (${fmt(totalNet)}) − Gastos pagados (${fmt(totalExpPaid)})
-            </div>
-          </div>
-          <div style="text-align:right">
-            <div style="font-size:2rem;font-weight:800;color:${resultColor}">
-              ${result >= 0 ? '+' : ''}${fmt(result)}
-            </div>
-            <div style="font-size:.75rem;color:var(--color-text-3)">${period}</div>
+            <div class="hm-cells-row">${cells}</div>
+          </div>`;
+      }).join('');
+
+      // Fila de calor total (resumen inferior)
+      const heatRow = days.map(d => {
+        const pct = dailyOcc[d - 1];
+        const bg  = pct >= 90 ? '#ef4444'
+                  : pct >= 70 ? '#f59e0b'
+                  : pct >= 40 ? '#22c55e'
+                  : pct > 0  ? '#93c5fd'
+                  : '#f1f5f9';
+        const isToday = d === todayDay;
+        return `<div class="hm-cell hm-heat" style="background:${bg};opacity:${Math.max(.3, pct/100 + .3)}"
+                     title="Día ${d}: ${pct}% ocupado"></div>`;
+      }).join('');
+
+      panel.innerHTML = `
+        <div class="hm-header-row">
+          <h4>Mapa de Ocupación — ${MONTH_NAMES[month]} ${year}</h4>
+          <div class="hm-legend">
+            <span class="hm-leg-item"><span class="hm-leg-dot" style="background:#93c5fd"></span>Baja</span>
+            <span class="hm-leg-item"><span class="hm-leg-dot" style="background:#22c55e"></span>Media</span>
+            <span class="hm-leg-item"><span class="hm-leg-dot" style="background:#f59e0b"></span>Alta</span>
+            <span class="hm-leg-item"><span class="hm-leg-dot" style="background:#ef4444"></span>Completo</span>
           </div>
         </div>
-      </div>`;
+        <div class="heatmap-scroll">
+          <div class="heatmap-grid" style="--days:${daysInMonth}">
+            <div class="hm-corner"></div>
+            <div class="hm-days-header">${daysHeaderHTML}</div>
+            ${rowsHTML}
+            <div class="hm-row">
+              <div class="hm-unit-label" style="font-size:.7rem;font-weight:700;color:var(--color-text-3)">TOTAL %</div>
+              <div class="hm-cells-row">${heatRow}</div>
+            </div>
+          </div>
+        </div>`;
 
-    document.getElementById('btn-export-pl')?.addEventListener('click', async () => {
-      const { exportPLCSV } = await import('../services/export-service.js');
-      const stats = sourceRows.map(r => ({
-        unit: { name: SOURCE_LABELS[r.src] ?? r.src, sort_order: 0 },
-        revenue: r.net, nightsOcc: 0, bookingCount: 0, avgPricePerNight: 0, occupancyPct: 0,
-      }));
-      exportPLCSV(stats, expenses, commMap, month, year);
-    });
+    } catch (err) {
+      console.error('[Statistics] heatmap error:', err);
+      panel.innerHTML = '<div class="error-state"><p>Error al cargar el mapa de calor.</p></div>';
+    }
   }
 
+  // ══════════════════════════════════════════════════
+  // GASTOS OPERATIVOS (preservado)
+  // ══════════════════════════════════════════════════
   async loadExpenses() {
     const month = parseInt(document.getElementById('stats-month')?.value ?? new Date().getMonth());
     const year  = parseInt(document.getElementById('stats-year')?.value  ?? new Date().getFullYear());
-
-    const firstDay = `${year}-${String(month + 1).padStart(2, '0')}-01`;
-    const lastDay  = new Date(year, month + 1, 0);
-    const lastDayStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(lastDay.getDate()).padStart(2, '0')}`;
-
+    const firstDay   = `${year}-${String(month+1).padStart(2,'0')}-01`;
+    const lastDay    = new Date(year, month + 1, 0);
+    const lastDayStr = `${year}-${String(month+1).padStart(2,'0')}-${String(lastDay.getDate()).padStart(2,'0')}`;
     try {
-      const { data: expenses } = await this.db
-        .from('expenses')
-        .select('*')
+      const { data: expenses } = await this.db.from('expenses').select('*')
         .eq('hotel_id', this.ctx.hotelId)
         .or(`due_date.is.null,and(due_date.gte.${firstDay},due_date.lte.${lastDayStr})`)
         .order('due_date', { ascending: true, nullsFirst: false });
-
       this._renderExpenses(expenses ?? []);
-    } catch (err) {
-      console.error('Expenses load error:', err);
-    }
+    } catch (err) { console.error('[Statistics] expenses error:', err); }
   }
 
   _renderExpenses(expenses) {
     const container = document.getElementById('expenses-list');
     const summary   = document.getElementById('expenses-summary');
     if (!container) return;
-
-    const totalAmt  = expenses.reduce((s, e) => s + e.amount, 0);
-    const paidAmt   = expenses.filter(e => e.paid).reduce((s, e) => s + e.amount, 0);
+    const totalAmt   = expenses.reduce((s,e) => s+e.amount, 0);
+    const paidAmt    = expenses.filter(e=>e.paid).reduce((s,e) => s+e.amount, 0);
     const pendingAmt = totalAmt - paidAmt;
-
     if (summary) {
       summary.innerHTML = `
-        <div class="expense-summary-item"><label>Total gastos</label><strong>${formatARS(totalAmt)}</strong></div>
+        <div class="expense-summary-item"><label>Total</label><strong>${formatARS(totalAmt)}</strong></div>
         <div class="expense-summary-item"><label style="color:var(--color-success)">Pagados</label><strong style="color:var(--color-success)">${formatARS(paidAmt)}</strong></div>
-        <div class="expense-summary-item"><label style="color:var(--color-warning)">Pendientes</label><strong style="color:var(--color-warning)">${formatARS(pendingAmt)}</strong></div>
-      `;
+        <div class="expense-summary-item"><label style="color:var(--color-warning)">Pendientes</label><strong style="color:var(--color-warning)">${formatARS(pendingAmt)}</strong></div>`;
     }
-
     if (!expenses.length) {
-      container.innerHTML = `<div class="empty-state"><span class="empty-state-icon">💰</span><p>Sin gastos registrados en este período.</p></div>`;
+      container.innerHTML = `<div class="empty-state"><span class="empty-state-icon">💰</span><p>Sin gastos en este período.</p></div>`;
       return;
     }
-
     container.innerHTML = expenses.map(e => `
-      <div class="expense-row ${e.paid ? 'paid' : ''}" id="exp-row-${e.id}">
-        <div class="expense-category-dot" style="background:${CATEGORY_COLORS[e.category] ?? '#94A3B8'}"></div>
+      <div class="expense-row ${e.paid ? 'paid':''}" id="exp-row-${e.id}">
+        <div class="expense-category-dot" style="background:${CATEGORY_COLORS[e.category]??'#94A3B8'}"></div>
         <div class="expense-info">
           <div class="expense-desc">${e.description}</div>
-          <div class="expense-meta">
-            ${e.category} 
-            ${e.due_date ? `· Vence: ${e.due_date}` : ''}
-            ${e.paid && e.paid_at ? `· Pagado: ${e.paid_at.slice(0,10)}` : ''}
-          </div>
+          <div class="expense-meta">${e.category}${e.due_date?` · Vence: ${e.due_date}`:''}${e.paid&&e.paid_at?` · Pagado: ${e.paid_at.slice(0,10)}`:''}</div>
         </div>
-        <strong class="expense-amount" style="color:${e.paid ? 'var(--color-success)' : 'var(--color-text)'}">
-          ${formatARS(e.amount)}
-        </strong>
-        <label class="expense-paid-toggle" title="${e.paid ? 'Marcar como pendiente' : 'Marcar como pagado'}">
-          <input type="checkbox" ${e.paid ? 'checked' : ''} onchange="window._statsInstance.toggleExpense('${e.id}', this.checked)">
+        <strong class="expense-amount" style="color:${e.paid?'var(--color-success)':'var(--color-text)'}">${formatARS(e.amount)}</strong>
+        <label class="expense-paid-toggle" title="${e.paid?'Marcar pendiente':'Marcar pagado'}">
+          <input type="checkbox" ${e.paid?'checked':''} onchange="window._statsInstance.toggleExpense('${e.id}',this.checked)">
         </label>
-        <button class="btn btn-ghost btn-xs" onclick="window._statsInstance.editExpense('${e.id}')" title="Editar">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-        </button>
-        <button class="btn btn-ghost btn-xs" onclick="window._statsInstance.deleteExpense('${e.id}')" title="Eliminar" style="color:var(--color-danger)">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg>
-        </button>
-      </div>
-    `).join('');
-
-    window._statsInstance = this;
+        <button class="btn btn-ghost btn-xs" onclick="window._statsInstance.editExpense('${e.id}')" title="Editar">✏️</button>
+        <button class="btn btn-ghost btn-xs" onclick="window._statsInstance.deleteExpense('${e.id}')" title="Eliminar" style="color:var(--color-danger)">🗑️</button>
+      </div>`).join('');
   }
 
   async toggleExpense(id, paid) {
-    const { error } = await this.db.from('expenses').update({
-      paid,
-      paid_at: paid ? new Date().toISOString() : null,
-    }).eq('id', id);
-    if (error) { showToast('Error al actualizar gasto', 'error'); return; }
-    const row = document.getElementById(`exp-row-${id}`);
-    if (row) row.classList.toggle('paid', paid);
-    showToast(paid ? 'Marcado como pagado ✓' : 'Marcado como pendiente', 'success');
+    const { error } = await this.db.from('expenses').update({ paid, paid_at: paid ? new Date().toISOString() : null }).eq('id', id);
+    if (error) { showToast('Error', 'error'); return; }
+    document.getElementById(`exp-row-${id}`)?.classList.toggle('paid', paid);
+    showToast(paid ? 'Pagado ✓' : 'Marcado como pendiente', 'success');
   }
-
   async editExpense(id) {
-    const { data: expense } = await this.db.from('expenses').select('*').eq('id', id).single();
-    if (!expense) return;
+    const { data: e } = await this.db.from('expenses').select('*').eq('id', id).single();
+    if (!e) return;
     document.getElementById('expense-editing-id').value = id;
-    document.getElementById('expense-category').value   = expense.category ?? 'otros';
-    document.getElementById('expense-desc').value       = expense.description ?? '';
-    document.getElementById('expense-amount').value     = expense.amount ?? '';
-    document.getElementById('expense-due').value        = expense.due_date ?? '';
+    document.getElementById('expense-category').value   = e.category ?? 'otros';
+    document.getElementById('expense-desc').value       = e.description ?? '';
+    document.getElementById('expense-amount').value     = e.amount ?? '';
+    document.getElementById('expense-due').value        = e.due_date ?? '';
     document.getElementById('expense-modal-title').textContent = 'Editar Gasto';
     document.getElementById('overlay-expense').classList.remove('hidden');
   }
-
   async deleteExpense(id) {
     if (!confirm('¿Eliminar este gasto?')) return;
-    const { error } = await this.db.from('expenses').delete().eq('id', id);
-    if (error) { showToast('Error al eliminar', 'error'); return; }
+    await this.db.from('expenses').delete().eq('id', id);
     document.getElementById(`exp-row-${id}`)?.remove();
     showToast('Gasto eliminado', 'success');
-}
+  }
+
+  // ══════════════════════════════════════════════════
+  // P&L (preservado, fuente de verdad)
+  // ══════════════════════════════════════════════════
+  async loadPL() {
+    const container = document.getElementById('stats-pl-panel');
+    if (!container) return;
+    container.innerHTML = `<div class="skeleton-box" style="height:320px"></div>`;
+    const month = parseInt(document.getElementById('stats-month')?.value ?? new Date().getMonth());
+    const year  = parseInt(document.getElementById('stats-year')?.value  ?? new Date().getFullYear());
+    if (AppContext.IS_DEMO) {
+      const { generateMockStats, generateMockExpenses, MOCK_COMMISSIONS } = await import('../services/mock-data.js');
+      const stats    = generateMockStats(this.ctx.units);
+      const expenses = generateMockExpenses();
+      this._renderPL(stats.reduce((m,s)=>{m[s.unit.source??'direct']=(m[s.unit.source??'direct']??0)+s.revenue;return m;},{}), expenses, MOCK_COMMISSIONS, month, year);
+      return;
+    }
+    const firstDay   = `${year}-${String(month+1).padStart(2,'0')}-01`;
+    const lastDay    = new Date(year,month+1,0);
+    const lastDayStr = `${year}-${String(month+1).padStart(2,'0')}-${String(lastDay.getDate()).padStart(2,'0')}`;
+    const [bRes, eRes, cRes] = await Promise.all([
+      this.db.from('bookings').select('source,total_amount').eq('hotel_id',this.ctx.hotelId).not('status','in','(cancelled,blocked)').gte('check_in',firstDay).lte('check_in',lastDayStr),
+      this.db.from('expenses').select('*').eq('hotel_id',this.ctx.hotelId).or(`due_date.is.null,and(due_date.gte.${firstDay},due_date.lte.${lastDayStr})`),
+      this.db.from('channel_commissions').select('*').eq('hotel_id',this.ctx.hotelId),
+    ]);
+    const revenueBySource = {};
+    (bRes.data??[]).forEach(b=>{ const s=b.source??'direct'; revenueBySource[s]=(revenueBySource[s]??0)+(b.total_amount??0); });
+    const commMap = {};
+    (cRes.data??[]).forEach(c=>{ commMap[c.channel]=c.commission_pct; });
+    this._renderPL(revenueBySource, eRes.data??[], commMap, month, year);
+  }
+
+  _renderPL(revenueBySource, expenses, commMap, month, year) {
+    const container = document.getElementById('stats-pl-panel');
+    if (!container) return;
+    const period = `${MONTH_NAMES[month]} ${year}`;
+    let totalGross=0, totalComm=0;
+    const sourceRows = Object.entries(revenueBySource).map(([src,gross])=>{
+      const commPct=commMap[src]??0, comm=gross*(commPct/100), net=gross-comm;
+      totalGross+=gross; totalComm+=comm;
+      return { src, gross, comm, commPct, net };
+    });
+    const totalNet=totalGross-totalComm;
+    const totalExpPaid=expenses.filter(e=>e.paid).reduce((s,e)=>s+e.amount,0);
+    const totalExpAll=expenses.reduce((s,e)=>s+e.amount,0);
+    const result=totalNet-totalExpPaid;
+    const resultColor=result>=0?'var(--color-success)':'var(--color-danger)';
+    const expByCategory={};
+    expenses.forEach(e=>{ expByCategory[e.category]=(expByCategory[e.category]??0)+e.amount; });
+    container.innerHTML = `
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+        <div><h3 style="font-size:1rem;font-weight:700">Estado de Resultados — ${period}</h3>
+        <p style="font-size:.78rem;color:var(--color-text-3);margin-top:4px">Ingresos netos vs. gastos operativos</p></div>
+        ${can('exportData')?`<button class="btn btn-outline btn-sm" id="btn-export-pl">📥 Exportar</button>`:''}
+      </div>
+      <div class="card" style="margin-bottom:16px">
+        <div style="font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--color-text-3);margin-bottom:12px">Ingresos por canal</div>
+        <table class="pl-table"><thead><tr><th>Canal</th><th>Bruto</th><th>Comisión</th><th>Neto</th></tr></thead>
+        <tbody>${sourceRows.length?sourceRows.map(r=>`<tr><td>${SOURCE_LABELS[r.src]??r.src}</td><td>${formatARS(r.gross)}</td><td style="color:var(--color-danger)">${r.commPct>0?`−${formatARS(r.comm)} (${r.commPct}%)`:'—'}</td><td style="font-weight:600">${formatARS(r.net)}</td></tr>`).join(''):`<tr><td colspan="4" style="text-align:center;color:var(--color-text-3)">Sin reservas</td></tr>`}
+        </tbody><tfoot><tr class="pl-total"><td><strong>TOTAL</strong></td><td><strong>${formatARS(totalGross)}</strong></td><td style="color:var(--color-danger)">${totalComm>0?`−${formatARS(totalComm)}`:'—'}</td><td style="color:var(--color-success)"><strong>${formatARS(totalNet)}</strong></td></tr></tfoot></table>
+      </div>
+      <div class="card" style="margin-bottom:16px">
+        <div style="font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--color-text-3);margin-bottom:12px">Gastos operativos</div>
+        <table class="pl-table"><thead><tr><th>Categoría</th><th>Total</th><th>Pagados</th><th>Pendientes</th></tr></thead>
+        <tbody>${Object.entries(expByCategory).length?Object.entries(expByCategory).map(([cat,total])=>{const paid=expenses.filter(e=>e.category===cat&&e.paid).reduce((s,e)=>s+e.amount,0);return `<tr><td style="text-transform:capitalize">${cat}</td><td>${formatARS(total)}</td><td style="color:var(--color-success)">${formatARS(paid)}</td><td style="color:var(--color-warning)">${formatARS(total-paid)}</td></tr>`;}).join(''):`<tr><td colspan="4" style="text-align:center;color:var(--color-text-3)">Sin gastos</td></tr>`}
+        </tbody><tfoot><tr class="pl-total"><td><strong>TOTAL GASTOS</strong></td><td><strong>${formatARS(totalExpAll)}</strong></td><td style="color:var(--color-success)"><strong>${formatARS(totalExpPaid)}</strong></td><td style="color:var(--color-warning)"><strong>${formatARS(totalExpAll-totalExpPaid)}</strong></td></tr></tfoot></table>
+      </div>
+      <div class="card" style="background:${result>=0?'rgba(34,197,94,.06)':'rgba(239,68,68,.06)'};border-color:${result>=0?'rgba(34,197,94,.2)':'rgba(239,68,68,.2)'}">
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <div><div style="font-size:.78rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--color-text-3)">Resultado Neto del Período</div>
+          <div style="font-size:.78rem;color:var(--color-text-3);margin-top:4px">${formatARS(totalNet)} − ${formatARS(totalExpPaid)} gastos</div></div>
+          <div style="text-align:right"><div style="font-size:2rem;font-weight:800;color:${resultColor}">${result>=0?'+':''}${formatARS(result)}</div>
+          <div style="font-size:.75rem;color:var(--color-text-3)">${period}</div></div>
+        </div>
+      </div>`;
+    document.getElementById('btn-export-pl')?.addEventListener('click', async () => {
+      const { exportPLCSV } = await import('../services/export-service.js');
+      exportPLCSV(sourceRows.map(r=>({unit:{name:SOURCE_LABELS[r.src]??r.src,sort_order:0},revenue:r.net,nightsOcc:0,bookingCount:0,avgPricePerNight:0,occupancyPct:0})), expenses, commMap, month, year);
+    });
+  }
+
+  // ══════════════════════════════════════════════════
+  // EXPORTACIÓN
+  // ══════════════════════════════════════════════════
+  _exportExcel(stats, month, year) {
+    const rows = [
+      ['Unidad','Ocupación %','Noches','ADR','Reservas','Ingreso'],
+      ...stats.map(s => [
+        s.unit.name, s.occupancyPct, s.nightsOcc,
+        s.avgPricePerNight, s.bookingCount, Math.round(s.revenue),
+      ]),
+    ];
+    const csv   = rows.map(r => r.join(',')).join('\n');
+    const blob  = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' });
+    const link  = document.createElement('a');
+    link.href   = URL.createObjectURL(blob);
+    link.download = `mila-estadisticas-${MONTH_NAMES[month]}-${year}.csv`;
+    link.click();
+    URL.revokeObjectURL(link.href);
+  }
+
+  _exportPDF(stats, month, year, kpis) {
+    const { ADR, RevPAR, avgOcc, totalRevenue, totalNights, daysInMonth } = kpis;
+    const rows = stats.map(s => `
+      <tr>
+        <td>${s.unit.name}</td>
+        <td>${s.occupancyPct}%</td>
+        <td>${s.nightsOcc}</td>
+        <td>${formatARS(s.avgPricePerNight)}</td>
+        <td>${s.bookingCount}</td>
+        <td>${formatARS(s.revenue)}</td>
+      </tr>`).join('');
+
+    const w = window.open('', '_blank');
+    w.document.write(`<!DOCTYPE html><html><head><title>MILA Estadísticas ${MONTH_NAMES[month]} ${year}</title>
+      <style>
+        body{font-family:Arial,sans-serif;padding:24px;color:#1e293b}
+        h1{font-size:18px;margin-bottom:4px}p{font-size:12px;color:#64748b;margin-bottom:20px}
+        .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px}
+        .kpi{background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:12px;text-align:center}
+        .kpi-val{font-size:20px;font-weight:700;color:#1e293b}
+        .kpi-lbl{font-size:11px;color:#64748b;margin-top:2px}
+        table{width:100%;border-collapse:collapse;font-size:12px}
+        th{background:#f1f5f9;text-align:left;padding:8px 10px;font-weight:600;border-bottom:1px solid #e2e8f0}
+        td{padding:7px 10px;border-bottom:1px solid #f1f5f9}
+        tfoot td{font-weight:700;background:#f8fafc}
+        @media print{.no-print{display:none}}
+      </style></head>
+      <body>
+        <h1>MILA · Estadísticas de Ocupación</h1>
+        <p>${MONTH_NAMES[month]} ${year} · ${daysInMonth} días · ${this.ctx.units.length} unidades</p>
+        <button class="no-print" onclick="window.print()" style="margin-bottom:20px;padding:8px 16px;background:#6366f1;color:#fff;border:none;border-radius:6px;cursor:pointer">Imprimir / Guardar PDF</button>
+        <div class="kpis">
+          <div class="kpi"><div class="kpi-val">${formatARS(totalRevenue)}</div><div class="kpi-lbl">Ingreso Bruto</div></div>
+          <div class="kpi"><div class="kpi-val">${formatARS(ADR)}</div><div class="kpi-lbl">ADR</div></div>
+          <div class="kpi"><div class="kpi-val">${formatARS(RevPAR)}</div><div class="kpi-lbl">RevPAR</div></div>
+          <div class="kpi"><div class="kpi-val">${avgOcc}%</div><div class="kpi-lbl">Ocupación</div></div>
+        </div>
+        <table>
+          <thead><tr><th>Unidad</th><th>Ocupación</th><th>Noches</th><th>ADR</th><th>Reservas</th><th>Ingreso</th></tr></thead>
+          <tbody>${rows}</tbody>
+          <tfoot><tr>
+            <td>TOTAL</td><td>${avgOcc}%</td><td>${totalNights}</td>
+            <td>${formatARS(ADR)}</td><td>${stats.reduce((s,u)=>s+u.bookingCount,0)}</td>
+            <td>${formatARS(totalRevenue)}</td>
+          </tr></tfoot>
+        </table>
+      </body></html>`);
+    w.document.close();
+    setTimeout(() => w.print(), 500);
+  }
 }

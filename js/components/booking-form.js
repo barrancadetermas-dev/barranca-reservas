@@ -10,6 +10,7 @@ import { can, isDemo } from '../auth/permissions.js';
 import { formatARS, toISODate, showToast, getUnitLabel, getUnitColor, getUnitChipHTML, SOURCE_CONFIG } from '../supabase-config.js';
 import { logAction } from '../services/audit-service.js';
 import { DateRangePicker } from './date-range-picker.js';
+// PriceSuggester se carga lazy en _runPriceSuggestion()
 
 const PAYMENT_METHODS = [
   { value: 'cash',        label: 'Efectivo' },
@@ -44,8 +45,10 @@ export class BookingForm {
     this._editingId   = null;
     this._selectedGuestId = null;
     this._selectedUnitIds = new Set();
-    this._datePicker  = null;
-    this._payRowCount = 0;
+    this._datePicker   = null;
+    this._payRowCount  = 0;
+    this._priceSuggester = null; // lazy init
+    this._suggestTimer   = null;
     this._cachedTotal = 0;
     this._currentDetailBookingId = null;
 
@@ -88,27 +91,52 @@ export class BookingForm {
   }
 
   // ── Renderizar selector de canal (compacto, sin emojis) ──
-  _renderSourceSelector() {
+  _renderSourceSelector(value = 'direct') {
     const container = document.getElementById('f-source-selector');
     if (!container) return;
-    container.innerHTML = SOURCE_OPTIONS.map(s => `
-      <label class="src-chip" data-source="${s.value}"
-             style="--src-color:${s.color}">
-        <input type="radio" name="booking-source" value="${s.value}"
-               ${s.value === 'direct' ? 'checked' : ''} style="display:none">
-        <span class="src-dot" style="background:${s.color}"></span>
-        <span class="src-label">${s.label}</span>
-      </label>`).join('');
 
-    container.querySelectorAll('.src-chip').forEach(chip => {
-      chip.addEventListener('click', () => {
-        container.querySelectorAll('.src-chip').forEach(c => c.classList.remove('selected'));
+    // Si ya tiene src-chips del HTML estático, solo re-bind los eventos
+    const existing = container.querySelectorAll('.src-chip');
+    if (existing.length === 0) {
+      // Renderizar desde JS
+      container.innerHTML = SOURCE_OPTIONS.map(s => `
+        <label class="src-chip" data-source="${s.value}" style="--src-color:${s.color}">
+          <input type="radio" name="booking-source" value="${s.value}"
+                 ${s.value === value ? 'checked' : ''} style="display:none">
+          <span class="src-dot" style="background:${s.color}"></span>
+          <span class="src-label">${s.label}</span>
+        </label>`).join('');
+    }
+
+    // Bind eventos en todos los chips (HTML estático o generados)
+    const allChips = container.querySelectorAll('.src-chip[data-source]');
+    allChips.forEach(chip => {
+      // Limpiar eventos anteriores clonando el nodo
+      const fresh = chip.cloneNode(true);
+      chip.replaceWith(fresh);
+    });
+
+    container.querySelectorAll('.src-chip[data-source]').forEach(chip => {
+      chip.addEventListener('click', (e) => {
+        e.preventDefault();
+        container.querySelectorAll('.src-chip').forEach(c => {
+          c.classList.remove('selected');
+          const inp = c.querySelector('input');
+          if (inp) inp.checked = false;
+        });
         chip.classList.add('selected');
-        chip.querySelector('input').checked = true;
+        const inp = chip.querySelector('input');
+        if (inp) inp.checked = true;
       });
     });
-    // Seleccionar "directo" por defecto
-    container.querySelector('.src-chip[data-source="direct"]')?.classList.add('selected');
+
+    // Set default selection
+    const defaultChip = container.querySelector(`.src-chip[data-source="${value}"]`);
+    if (defaultChip) {
+      defaultChip.classList.add('selected');
+      const inp = defaultChip.querySelector('input');
+      if (inp) inp.checked = true;
+    }
   }
 
   // ── Abrir para nueva reserva ──────────────────────
@@ -294,6 +322,7 @@ export class BookingForm {
           document.getElementById('f-checkout').value = end   ?? '';
           this._updateBreakdown();
           this._updateBlockedDates();
+          this._triggerPriceSuggestion();
         }
       });
     }
@@ -307,31 +336,103 @@ export class BookingForm {
   _renderUnitSelector() {
     const container = document.getElementById('units-selector');
     if (!container) return;
+    if (!this.ctx.units?.length) {
+      container.innerHTML = '<p style="font-size:.8rem;color:var(--color-text-3);padding:8px">Sin unidades configuradas.</p>';
+      return;
+    }
     container.innerHTML = this.ctx.units.map(u => {
       const selected = this._selectedUnitIds.has(u.id);
+      const color    = u.color ?? '#6366f1';
       return `
-        <label class="unit-chip ${selected ? 'selected' : ''}" data-unit-id="${u.id}"
-               style="--unit-color:${u.color ?? '#64748b'}">
-          <input type="checkbox" style="display:none" ${selected ? 'checked' : ''}>
-          <span>${u.name}</span>
+        <label class="unit-option ${selected ? 'selected' : ''}"
+               data-unit-id="${u.id}" style="cursor:pointer">
+          <span style="width:12px;height:12px;border-radius:50%;
+            background:${color};flex-shrink:0;display:inline-block"></span>
+          <span class="unit-option-name">${u.name}</span>
+          ${u.max_guests ? `<span class="unit-option-detail">hasta ${u.max_guests} huéspedes</span>` : ''}
+          <input type="checkbox" ${selected ? 'checked' : ''} style="accent-color:${color};margin-left:auto">
         </label>`;
     }).join('');
 
-    container.querySelectorAll('.unit-chip').forEach(chip => {
+    container.querySelectorAll('.unit-option[data-unit-id]').forEach(chip => {
       chip.addEventListener('click', (e) => {
         e.preventDefault();
         const uid = chip.dataset.unitId;
+        const cb  = chip.querySelector('input[type="checkbox"]');
         if (this._selectedUnitIds.has(uid)) {
           this._selectedUnitIds.delete(uid);
           chip.classList.remove('selected');
+          if (cb) cb.checked = false;
         } else {
           this._selectedUnitIds.add(uid);
           chip.classList.add('selected');
+          if (cb) cb.checked = true;
         }
         this._updateBlockedDates();
         this._updateBreakdown();
+        this._triggerPriceSuggestion();
       });
     });
+  }
+
+  // ── Sugeridor de precio dinámico ─────────────────
+  _triggerPriceSuggestion() {
+    clearTimeout(this._suggestTimer);
+    this._suggestTimer = setTimeout(() => this._runPriceSuggestion(), 500);
+  }
+
+  async _runPriceSuggestion() {
+    const ci       = document.getElementById('f-checkin')?.value;
+    const co       = document.getElementById('f-checkout')?.value;
+    const unitIds  = [...this._selectedUnitIds];
+    const container = document.getElementById('price-suggestion-container');
+    if (!container) return;
+
+    if (!ci || !co || !unitIds.length) {
+      container.innerHTML = '';
+      return;
+    }
+
+    // Lazy load PriceSuggester
+    if (!this._priceSuggester) {
+      try {
+        const mod = await import('../services/price-suggester.js');
+        if (mod?.PriceSuggester) {
+          this._priceSuggester = new mod.PriceSuggester(this.db, this.ctx);
+          this._PriceSuggesterClass = mod.PriceSuggester;
+        }
+      } catch(e) {
+        container.innerHTML = '';
+        return;
+      }
+    }
+    if (!this._priceSuggester) return;
+
+    container.innerHTML = '<div class="ps-loading">⟳ Analizando historial...</div>';
+
+    try {
+      const currentPrice = parseFloat(document.getElementById('f-price')?.value) || 0;
+      const result = await this._priceSuggester.suggest(unitIds, ci, co);
+      container.innerHTML = this._PriceSuggesterClass.renderPanel(result, currentPrice);
+
+      // Bind "Usar este precio" button
+      container.querySelector('.ps-use')?.addEventListener('click', (e) => {
+        const price = parseFloat(e.target.dataset.price);
+        if (!price) return;
+        const priceEl = document.getElementById('f-price');
+        if (priceEl) {
+          priceEl.value = price;
+          priceEl.dispatchEvent(new Event('input'));
+          // Brief highlight
+          priceEl.style.borderColor = '#22c55e';
+          priceEl.style.boxShadow = '0 0 0 2px #22c55e28';
+          setTimeout(() => { priceEl.style.borderColor=''; priceEl.style.boxShadow=''; }, 1800);
+        }
+        showToast('Precio sugerido aplicado ✓', 'success');
+      });
+    } catch (err) {
+      container.innerHTML = '';
+    }
   }
 
   // ── Calcular fechas bloqueadas para el picker ─────

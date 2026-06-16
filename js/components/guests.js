@@ -252,6 +252,29 @@ export class GuestsCRM {
         </div>
       </div>
 
+      <!-- ── ETIQUETAS DEL HUÉSPED ── -->
+      <div class="guest-tags-editor" style="margin-bottom:16px;padding:14px 16px;background:var(--color-surface-2);border-radius:12px;border:1px solid var(--color-border)">
+        <div style="font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--color-text-3);margin-bottom:10px">Etiquetas</div>
+        <div class="guest-tags-row" style="margin-bottom:10px">
+          ${this._buildTagBadges(g.tags ?? [])}
+          ${g.bad_experience ? '<span class="gtag gtag-bad">⚠️ Mala experiencia</span>' : ''}
+        </div>
+        <div class="tag-checkboxes" style="display:flex;flex-wrap:wrap;gap:8px">
+          ${[
+            ['vip',         '⭐ VIP'],
+            ['frecuente',   '♺ Frecuente'],
+            ['empresa',     '🏢 Empresa'],
+            ['referido',    '👥 Referido'],
+            ['no_recomendar','⛔ No recomendar'],
+          ].map(([key, label]) => `
+            <label class="tag-toggle ${(g.tags??[]).includes(key) ? 'active' : ''}" data-tag="${key}">
+              <input type="checkbox" style="display:none" ${(g.tags??[]).includes(key) ? 'checked' : ''}>
+              ${label}
+            </label>`).join('')}
+        </div>
+        <button class="btn btn-outline btn-sm" id="btn-save-tags" style="margin-top:12px">Guardar etiquetas</button>
+      </div>
+
       <!-- ── ANTECEDENTE DE MALA EXPERIENCIA ── -->
       <div id="bad-exp-section" style="margin-bottom:20px">
         ${this._buildBadExpSection(g)}
@@ -273,6 +296,21 @@ export class GuestsCRM {
         bookings.map(b => this._buildStayCard(b, g.bad_experience_booking_id)).join('')
       }
     `;
+  }
+
+  _buildTagBadges(tags) {
+    const MAP = {
+      vip:           ['⭐ VIP',       'gtag-vip'],
+      frecuente:     ['♺ Frecuente',  'gtag-frecuente'],
+      empresa:       ['🏢 Empresa',   'gtag-empresa'],
+      referido:      ['👥 Referido',  'gtag-referido'],
+      no_recomendar: ['⛔ No recomendar','gtag-norec'],
+    };
+    if (!tags?.length) return '<span style="font-size:.75rem;color:var(--color-text-3)">Sin etiquetas</span>';
+    return tags.map(t => {
+      const [label, cls] = MAP[t] ?? [t, ''];
+      return `<span class="gtag ${cls}">${label}</span>`;
+    }).join('');
   }
 
   _buildBadExpSection(g) {
@@ -389,6 +427,24 @@ export class GuestsCRM {
   // ACCIONES: MALA EXPERIENCIA
   // ══════════════════════════════════════════════════
   _bindProfileActions(guest) {
+    // Tags toggles
+    document.querySelectorAll('.tag-toggle').forEach(toggle => {
+      toggle.addEventListener('click', () => {
+        toggle.classList.toggle('active');
+        toggle.querySelector('input').checked = toggle.classList.contains('active');
+      });
+    });
+    // Save tags
+    document.getElementById('btn-save-tags')?.addEventListener('click', async () => {
+      const tags = [...document.querySelectorAll('.tag-toggle.active')].map(t => t.dataset.tag);
+      try {
+        await this.db.from('guests').update({ tags }).eq('id', guest.id);
+        showToast('Etiquetas guardadas ✓', 'success');
+      } catch { showToast('Error al guardar etiquetas', 'error'); }
+    });
+  }
+
+  _bindProfileActions_orig(guest) {
     // Marcar nueva mala experiencia
     document.getElementById('btn-mark-bad-exp')?.addEventListener('click', () => {
       document.getElementById('bad-exp-new-form')?.classList.remove('hidden');

@@ -1,7 +1,8 @@
 // ═══════════════════════════════════════════════════
-// date-range-picker.js v1.0 — Selector visual de fechas
-// Reemplaza los <input type="date"> del formulario
-// Muestra disponibilidad por unidad seleccionada
+// date-range-picker.js v2.0 — FIX
+// • Hover via CSS class — sin re-render en mouseenter
+// • Re-render solo cuando cambian start/end dates
+// • Soporte touch para mobile
 // ═══════════════════════════════════════════════════
 
 const DAY_NAMES   = ['Lu','Ma','Mi','Ju','Vi','Sá','Do'];
@@ -13,15 +14,14 @@ export class DateRangePicker {
     this._container    = typeof container === 'string'
       ? document.getElementById(container) : container;
     this._onChange     = options.onChange ?? (() => {});
-    this._blockedDates = new Set(options.blockedDates ?? []); // Set of 'YYYY-MM-DD'
+    this._blockedDates = new Set(options.blockedDates ?? []);
     this._startDate    = null;
     this._endDate      = null;
-    this._hovering     = null;
-    this._selecting    = false; // true = eligiendo check-out
+    this._hoverDate    = null;
     const now          = new Date();
     this._year         = now.getFullYear();
     this._month        = now.getMonth();
-    this._render();
+    if (this._container) this._render();
   }
 
   // ── API pública ───────────────────────────────────
@@ -43,171 +43,214 @@ export class DateRangePicker {
   clear() {
     this._startDate = null;
     this._endDate   = null;
-    this._selecting = false;
-    this._hovering  = null;
+    this._hoverDate = null;
     this._render();
     this._onChange(null, null);
   }
 
-  // ── Render ────────────────────────────────────────
+  // ── Render completo — solo al cambiar datos ───────
   _render() {
     if (!this._container) return;
+
+    const nextM = this._month === 11 ? 0  : this._month + 1;
+    const nextY = this._month === 11 ? this._year + 1 : this._year;
+
     this._container.innerHTML = `
       <div class="drp-wrapper">
         <div class="drp-header">
-          <button class="drp-nav-btn" id="drp-prev">‹</button>
+          <button class="drp-nav-btn" id="drp-prev" type="button" aria-label="Mes anterior">‹</button>
           <div class="drp-months-container">
-            ${this._renderMonth(this._year, this._month)}
-            ${this._renderMonth(
-              this._month === 11 ? this._year + 1 : this._year,
-              this._month === 11 ? 0 : this._month + 1
-            )}
+            ${this._renderMonthHTML(this._year, this._month)}
+            ${this._renderMonthHTML(nextY, nextM)}
           </div>
-          <button class="drp-nav-btn" id="drp-next">›</button>
+          <button class="drp-nav-btn" id="drp-next" type="button" aria-label="Mes siguiente">›</button>
         </div>
         <div class="drp-footer">
-          ${this._startDate && this._endDate ? `
-            <span class="drp-summary">
-              📅 ${this._fmtDisplay(this._startDate)} → ${this._fmtDisplay(this._endDate)}
-              · ${this._nightsBetween(this._startDate, this._endDate)} noches
-            </span>
-            <button class="drp-clear-btn" id="drp-clear">✕ Limpiar</button>
-          ` : `
-            <span class="drp-hint">
-              ${!this._startDate ? '👆 Seleccioná la fecha de ingreso' :
-                !this._endDate  ? '👆 Ahora seleccioná la fecha de salida' : ''}
-            </span>
-          `}
+          ${this._startDate && this._endDate
+            ? `<span class="drp-summary">
+                 📅 ${this._fmt(this._startDate)} → ${this._fmt(this._endDate)}
+                 · ${this._nights(this._startDate, this._endDate)} noches
+               </span>
+               <button class="drp-clear-btn" id="drp-clear" type="button">✕ Limpiar</button>`
+            : `<span class="drp-hint" id="drp-hint">
+                 ${!this._startDate ? '👆 Seleccioná la fecha de ingreso'
+                   : '👆 Ahora seleccioná la fecha de salida'}
+               </span>`}
         </div>
       </div>`;
 
-    this._container.querySelector('#drp-prev')?.addEventListener('click', () => {
-      this._month--;
-      if (this._month < 0) { this._month = 11; this._year--; }
+    // ── Bind navegación ───────────────────────────────
+    this._container.querySelector('#drp-prev').addEventListener('click', (e) => {
+      e.preventDefault(); e.stopPropagation();
+      if (this._month === 0) { this._month = 11; this._year--; }
+      else this._month--;
       this._render();
     });
-    this._container.querySelector('#drp-next')?.addEventListener('click', () => {
-      this._month++;
-      if (this._month > 11) { this._month = 0; this._year++; }
+    this._container.querySelector('#drp-next').addEventListener('click', (e) => {
+      e.preventDefault(); e.stopPropagation();
+      if (this._month === 11) { this._month = 0; this._year++; }
+      else this._month++;
       this._render();
     });
-    this._container.querySelector('#drp-clear')?.addEventListener('click', () => this.clear());
+    this._container.querySelector('#drp-clear')?.addEventListener('click', (e) => {
+      e.preventDefault(); e.stopPropagation();
+      this.clear();
+    });
 
+    // ── Bind días — hover via CSS, click dispara re-render ──
     this._container.querySelectorAll('.drp-day[data-date]').forEach(el => {
-      el.addEventListener('click',      () => this._handleDayClick(el.dataset.date));
-      el.addEventListener('mouseenter', () => { this._hovering = el.dataset.date; this._render(); });
-      el.addEventListener('mouseleave', () => { this._hovering = null; this._render(); });
+      // Click
+      el.addEventListener('click', (e) => {
+        e.preventDefault(); e.stopPropagation();
+        if (el.classList.contains('drp-past') || el.classList.contains('drp-blocked')) return;
+        this._handleClick(el.dataset.date);
+      });
+
+      // Touch support
+      el.addEventListener('touchend', (e) => {
+        e.preventDefault();
+        if (el.classList.contains('drp-past') || el.classList.contains('drp-blocked')) return;
+        this._handleClick(el.dataset.date);
+      }, { passive: false });
+
+      // Hover: solo actualiza clase CSS — sin re-render
+      el.addEventListener('mouseenter', () => {
+        if (!this._startDate || this._endDate) return;
+        this._hoverDate = el.dataset.date;
+        this._updateRangeHighlight();
+      });
+    });
+
+    this._container.addEventListener('mouseleave', () => {
+      this._hoverDate = null;
+      this._updateRangeHighlight();
     });
   }
 
-  _renderMonth(year, month) {
+  // ── Render HTML de un mes ─────────────────────────
+  _renderMonthHTML(year, month) {
     const daysInMonth = new Date(year, month + 1, 0).getDate();
-    const firstDay    = new Date(year, month, 1).getDay(); // 0=Dom
-    const startOffset = (firstDay + 6) % 7; // adjust to Mon-start
+    const firstDow    = new Date(year, month, 1).getDay();
+    const startOffset = (firstDow + 6) % 7; // lunes = 0
     const today       = new Date().toISOString().split('T')[0];
 
-    let html = `
-      <div class="drp-month">
-        <div class="drp-month-title">${MONTH_NAMES[month]} ${year}</div>
-        <div class="drp-day-headers">
-          ${DAY_NAMES.map(d => `<div class="drp-day-name">${d}</div>`).join('')}
-        </div>
-        <div class="drp-days">
-          ${Array.from({ length: startOffset }, () => '<div class="drp-day drp-day-empty"></div>').join('')}`;
+    let cells = Array.from({ length: startOffset }, () =>
+      '<div class="drp-day drp-day-empty"></div>').join('');
 
     for (let d = 1; d <= daysInMonth; d++) {
-      const dateStr  = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-      const isPast   = dateStr < today;
-      const isToday  = dateStr === today;
-      const isBlocked = this._blockedDates.has(dateStr);
-      const isStart  = dateStr === this._startDate;
-      const isEnd    = dateStr === this._endDate;
-      const hover    = this._startDate && !this._endDate && this._hovering && this._hovering > this._startDate;
-      const inRange  = this._startDate && this._endDate
-        ? dateStr > this._startDate && dateStr < this._endDate
-        : hover && this._hovering
-          ? dateStr > this._startDate && dateStr <= this._hovering
-          : false;
+      const ds = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+      const isPast    = ds < today;
+      const isToday   = ds === today;
+      const isBlocked = this._blockedDates.has(ds);
+      const isStart   = ds === this._startDate;
+      const isEnd     = ds === this._endDate;
+      const inRange   = this._startDate && this._endDate
+        ? ds > this._startDate && ds < this._endDate
+        : false;
 
-      const classes = [
+      const cls = [
         'drp-day',
-        isPast    ? 'drp-past'    : '',
-        isToday   ? 'drp-today'   : '',
-        isBlocked ? 'drp-blocked' : '',
-        isStart   ? 'drp-start'   : '',
-        isEnd     ? 'drp-end'     : '',
-        inRange   ? 'drp-in-range': '',
-        (!isPast && !isBlocked) ? 'drp-available' : '',
+        isPast    ? 'drp-past'      : '',
+        isToday   ? 'drp-today'     : '',
+        isBlocked ? 'drp-blocked'   : '',
+        isStart   ? 'drp-start'     : '',
+        isEnd     ? 'drp-end'       : '',
+        inRange   ? 'drp-in-range'  : '',
+        !isPast && !isBlocked ? 'drp-available' : '',
       ].filter(Boolean).join(' ');
 
-      html += `<div class="${classes}" data-date="${dateStr}" title="${isBlocked ? '🔴 Ocupado' : ''}">
+      cells += `<div class="${cls}" data-date="${ds}" title="${isBlocked ? '🔴 Ocupado' : ds}">
         <span>${d}</span>
         ${isBlocked ? '<div class="drp-blocked-dot"></div>' : ''}
       </div>`;
     }
 
-    html += '</div></div>';
-    return html;
+    return `
+      <div class="drp-month">
+        <div class="drp-month-title">${MONTH_NAMES[month]} ${year}</div>
+        <div class="drp-day-headers">
+          ${DAY_NAMES.map(n => `<div class="drp-day-name">${n}</div>`).join('')}
+        </div>
+        <div class="drp-days" data-year="${year}" data-month="${month}">${cells}</div>
+      </div>`;
   }
 
-  // ── Lógica de selección ───────────────────────────
-  _handleDayClick(dateStr) {
-    const today = new Date().toISOString().split('T')[0];
-    if (dateStr < today) return; // no permitir fechas pasadas
+  // ── Highlight de rango hover — sin re-render ──────
+  _updateRangeHighlight() {
+    if (!this._container) return;
+    const hover = this._hoverDate;
 
-    if (!this._startDate || (this._startDate && this._endDate)) {
-      // Empezar nueva selección
-      this._startDate = dateStr;
-      this._endDate   = null;
-      this._selecting = true;
-    } else {
-      // Seleccionar check-out
-      if (dateStr <= this._startDate) {
-        // Si clickea antes del start, resetear
-        this._startDate = dateStr;
-        this._endDate   = null;
-        return this._render();
-      }
-      // Validar que no haya fechas bloqueadas en el rango
-      const blocked = this._hasBlockedInRange(this._startDate, dateStr);
-      if (blocked) {
-        this._showRangeError();
+    this._container.querySelectorAll('.drp-day[data-date]').forEach(el => {
+      const ds = el.dataset.date;
+      if (!this._startDate || this._endDate) {
+        el.classList.remove('drp-hover-range', 'drp-hover-end');
         return;
       }
-      this._endDate   = dateStr;
-      this._selecting = false;
-      this._onChange(this._startDate, this._endDate);
+      if (hover && hover > this._startDate) {
+        const inHover = ds > this._startDate && ds < hover;
+        const isHoverEnd = ds === hover;
+        el.classList.toggle('drp-hover-range', inHover);
+        el.classList.toggle('drp-hover-end', isHoverEnd && !el.classList.contains('drp-blocked'));
+      } else {
+        el.classList.remove('drp-hover-range', 'drp-hover-end');
+      }
+    });
+  }
+
+  // ── Lógica de click ───────────────────────────────
+  _handleClick(ds) {
+    const today = new Date().toISOString().split('T')[0];
+    if (ds < today) return;
+
+    if (!this._startDate || (this._startDate && this._endDate)) {
+      // Iniciar nueva selección
+      this._startDate = ds;
+      this._endDate   = null;
+      this._hoverDate = null;
+      this._render();
+      return;
     }
+
+    // Segunda fecha (checkout)
+    if (ds <= this._startDate) {
+      // Clic antes del start → resetear
+      this._startDate = ds;
+      this._endDate   = null;
+      this._render();
+      return;
+    }
+
+    if (this._hasBlockedInRange(this._startDate, ds)) {
+      const hint = this._container.querySelector('#drp-hint');
+      if (hint) {
+        hint.textContent = '⚠️ Hay fechas ocupadas en ese rango. Elegí otro período.';
+        hint.style.color = '#DC2626';
+        setTimeout(() => {
+          if (hint) { hint.textContent = '👆 Seleccioná la fecha de ingreso'; hint.style.color = ''; }
+        }, 3000);
+      }
+      return;
+    }
+
+    this._endDate   = ds;
+    this._hoverDate = null;
     this._render();
+    this._onChange(this._startDate, this._endDate);
   }
 
   _hasBlockedInRange(start, end) {
-    for (const blocked of this._blockedDates) {
-      if (blocked > start && blocked < end) return true;
+    for (const b of this._blockedDates) {
+      if (b > start && b < end) return true;
     }
     return false;
   }
 
-  _showRangeError() {
-    const hint = this._container.querySelector('.drp-hint');
-    if (hint) {
-      hint.textContent = '⚠️ Hay fechas ocupadas en ese rango. Seleccioná otro período.';
-      hint.style.color = '#DC2626';
-      setTimeout(() => { hint.textContent = ''; hint.style.color = ''; }, 3000);
-    }
+  _nights(start, end) {
+    return Math.round((new Date(end + 'T12:00:00') - new Date(start + 'T12:00:00')) / 86400000);
   }
 
-  // ── Helpers ───────────────────────────────────────
-  _nightsBetween(start, end) {
-    const d1 = new Date(start + 'T12:00:00');
-    const d2 = new Date(end   + 'T12:00:00');
-    return Math.round((d2 - d1) / 86400000);
-  }
-
-  _fmtDisplay(d) {
+  _fmt(d) {
     if (!d) return '—';
-    return new Date(d + 'T12:00:00').toLocaleDateString('es-AR', {
-      day: '2-digit', month: 'short',
-    });
+    return new Date(d + 'T12:00:00').toLocaleDateString('es-AR', { day:'2-digit', month:'short' });
   }
 }

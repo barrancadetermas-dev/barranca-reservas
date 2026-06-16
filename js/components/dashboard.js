@@ -36,10 +36,11 @@ export class Dashboard {
         return;
       }
       const today = toISODate(new Date());
-      const [kpis, dollar, reminders] = await Promise.all([
+      const [kpis, dollar, reminders, forecast] = await Promise.all([
         this._fetchKPIs(today),
         fetchDollarRates(),
         this._fetchTodayReminders(today),
+        this._fetchForecast(today),
       ]);
 
       this._renderKPIs(kpis, today);
@@ -47,6 +48,7 @@ export class Dashboard {
       this._renderDollar(dollar);
       this._renderArrivals(kpis.arrivals);
       this._renderReminders(reminders);
+      this._renderForecast(forecast);
 
       // Actualizar badge de recordatorios via evento (sin dependencia circular)
       const pendingReminders = reminders.filter(r => !r.completed).length;
@@ -313,4 +315,100 @@ export class Dashboard {
       </div>
     `).join('');
   }
+
+  // ── Proyección de ingresos del mes ───────────────
+  async _fetchForecast(today) {
+    const year  = new Date().getFullYear();
+    const month = new Date().getMonth();
+    const firstDay   = `${year}-${String(month+1).padStart(2,'0')}-01`;
+    const lastDay    = new Date(year, month+1, 0);
+    const lastDayStr = `${year}-${String(month+1).padStart(2,'0')}-${String(lastDay.getDate()).padStart(2,'0')}`;
+
+    // Mismo período año anterior
+    const prevYear      = year - 1;
+    const prevFirstDay  = `${prevYear}-${String(month+1).padStart(2,'0')}-01`;
+    const prevLastDay   = `${prevYear}-${String(month+1).padStart(2,'0')}-${String(lastDay.getDate()).padStart(2,'0')}`;
+
+    try {
+      const [curRes, prevRes] = await Promise.all([
+        this.db.from('bookings').select('status, total_amount, total_paid, check_in, check_out')
+          .eq('hotel_id', this.ctx.hotelId)
+          .not('status', 'in', '(cancelled,blocked)')
+          .gte('check_in', firstDay).lte('check_in', lastDayStr),
+        this.db.from('bookings').select('total_amount')
+          .eq('hotel_id', this.ctx.hotelId)
+          .not('status', 'in', '(cancelled,blocked)')
+          .gte('check_in', prevFirstDay).lte('check_in', prevLastDay),
+      ]);
+
+      const current = curRes.data ?? [];
+      const prev    = prevRes.data ?? [];
+
+      const confirmed   = current.filter(b => b.status === 'paid').reduce((s,b) => s + (b.total_amount ?? 0), 0);
+      const partial     = current.filter(b => b.status === 'partial').reduce((s,b) => s + (b.total_amount ?? 0), 0);
+      const pending     = current.filter(b => b.status === 'pending').reduce((s,b) => s + (b.total_amount ?? 0), 0);
+      const prevTotal   = prev.reduce((s,b) => s + (b.total_amount ?? 0), 0);
+      const estimated   = confirmed + partial * 0.9 + pending * 0.5;
+      const yoyDelta    = prevTotal > 0 ? Math.round(((estimated - prevTotal) / prevTotal) * 100) : null;
+
+      return { confirmed, partial, pending, estimated, prevTotal, yoyDelta,
+               monthName: ['Enero','Febrero','Marzo','Abril','Mayo','Junio',
+                 'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'][month],
+               prevYear };
+    } catch { return null; }
+  }
+
+  _renderForecast(data) {
+    const container = document.getElementById('dashboard-forecast');
+    if (!container) return;
+    if (!data) { container.innerHTML = ''; return; }
+
+    const { confirmed, partial, pending, estimated, prevTotal, yoyDelta, monthName, prevYear } = data;
+    const fmt = (n) => '$' + Math.round(n).toLocaleString('es-AR');
+    const yoyColor = yoyDelta === null ? '#64748b' : yoyDelta >= 0 ? '#22c55e' : '#ef4444';
+    const yoySign  = yoyDelta === null ? '' : yoyDelta >= 0 ? '+' : '';
+
+    const maxBar = Math.max(confirmed + partial + pending, prevTotal, 1);
+    const pctConf = Math.round((confirmed / maxBar) * 100);
+    const pctPart = Math.round((partial   / maxBar) * 100);
+    const pctPend = Math.round((pending   / maxBar) * 100);
+    const pctPrev = Math.round((prevTotal / maxBar) * 100);
+
+    container.innerHTML = `
+      <div class="forecast-widget">
+        <div class="forecast-header">
+          <div>
+            <div class="forecast-title">Proyección ${monthName}</div>
+            <div class="forecast-sub">Estimado basado en reservas actuales</div>
+          </div>
+          <div class="forecast-total">${fmt(estimated)}</div>
+        </div>
+
+        <div class="forecast-bar-group">
+          <div class="forecast-bar-label">Este mes</div>
+          <div class="forecast-bar-track">
+            <div class="forecast-bar-seg" style="width:${pctConf}%;background:#22c55e" title="Confirmado: ${fmt(confirmed)}"></div>
+            <div class="forecast-bar-seg" style="width:${pctPart}%;background:#f59e0b" title="Parcial: ${fmt(partial)}"></div>
+            <div class="forecast-bar-seg" style="width:${pctPend}%;background:#e2e8f0" title="Pendiente: ${fmt(pending)}"></div>
+          </div>
+          <span class="forecast-bar-val">${fmt(confirmed + partial + pending)}</span>
+        </div>
+
+        <div class="forecast-bar-group">
+          <div class="forecast-bar-label" style="color:var(--color-text-3)">${monthName} ${prevYear}</div>
+          <div class="forecast-bar-track">
+            <div class="forecast-bar-seg" style="width:${pctPrev}%;background:#cbd5e1"></div>
+          </div>
+          <span class="forecast-bar-val" style="color:var(--color-text-3)">${fmt(prevTotal)}</span>
+        </div>
+
+        <div class="forecast-legend">
+          <span><span class="fleg-dot" style="background:#22c55e"></span>Confirmado ${fmt(confirmed)}</span>
+          <span><span class="fleg-dot" style="background:#f59e0b"></span>Parcial ${fmt(partial)}</span>
+          <span><span class="fleg-dot" style="background:#e2e8f0"></span>Pendiente ${fmt(pending)}</span>
+          ${yoyDelta !== null ? `<span style="margin-left:auto;font-weight:700;color:${yoyColor}">AaA ${yoySign}${yoyDelta}%</span>` : ''}
+        </div>
+      </div>`;
+  }
+
 }

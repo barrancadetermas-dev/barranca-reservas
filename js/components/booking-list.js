@@ -1,9 +1,13 @@
 import { can, isDemo } from "../auth/permissions.js";
 // ═══════════════════════════════════════════════════
-// booking-list.js — Listado y Archivo de Reservas
+// booking-list.js v5.1 — Listado y Archivo de Reservas
+// + Flag visual de huésped conflictivo
+// + Acciones completas (checkout, cancelar, duplicar)
+// + Exportar PDF y Excel desde la lista
 // ═══════════════════════════════════════════════════
 
 import { formatARS, formatDate, showToast, getUnitChipHTML, getSourceBadgeHTML, getBookingBarColor, getUnitLabel, getUnitColor } from '../supabase-config.js';
+import { logAction } from '../services/audit-service.js';
 
 const STATUS_LABELS = {
   pending:   'Sin seña',
@@ -11,6 +15,14 @@ const STATUS_LABELS = {
   paid:      'Abonada',
   cancelled: 'Cancelada',
   blocked:   'Bloqueada',
+};
+
+const STATUS_CLASSES = {
+  pending:   'status-pending',
+  partial:   'status-partial',
+  paid:      'status-paid',
+  cancelled: 'status-cancelled',
+  blocked:   'status-blocked',
 };
 
 export class BookingList {
@@ -27,7 +39,7 @@ export class BookingList {
     this._dateFrom = '';
     this._dateTo   = '';
     this._page     = 1;
-    this._pageSize = 25;
+    this._pageSize = 30;
     this._allBookings = [];
 
     this._bindTabs();
@@ -35,19 +47,28 @@ export class BookingList {
     this._bindSourceFilters();
     this._populateUnitFilter();
 
-    // Event Delegation para las acciones en la lista
+    // Event delegation — acciones en la lista
     document.getElementById('bookings-list')?.addEventListener('click', (e) => {
       const btn = e.target.closest('[data-action]');
       const row = e.target.closest('.booking-row');
-      if (!btn || !row) return;
-
+      if (!row) return;
       const id = row.dataset.bookingId;
-      const action = btn.dataset.action;
 
-      if (action === 'view') this._openDetail(id);
-      if (action === 'edit') this.bookingForm.openEdit(id);
-      if (action === 'delete') this._deleteBooking(id);
-      if (action === 'whatsapp') this._sendWhatsApp(id);
+      if (!btn) {
+        // Clic en la fila → ver detalle
+        this._openDetail(id);
+        return;
+      }
+
+      const action = btn.dataset.action;
+      if (action === 'view')      this._openDetail(id);
+      if (action === 'edit')      this.bookingForm.openEdit(id);
+      if (action === 'whatsapp')  this._sendWhatsApp(id);
+      if (action === 'delete')    this._deleteBooking(id);
+      if (action === 'checkout')  this._doCheckout(id);
+      if (action === 'flag')      this._openFlagModal(id, row);
+      if (action === 'duplicate') this._duplicateBooking(id);
+      e.stopPropagation();
     });
 
     document.addEventListener('booking:changed', () => {
@@ -57,23 +78,27 @@ export class BookingList {
     });
   }
 
+  // ── Carga principal ────────────────────────────────
   async load() {
     try {
-      if (window.AppContext?.IS_DEMO) {
+      if (this.ctx.IS_DEMO) {
         const { generateMockBookings } = await import('../services/mock-data.js');
         const now = new Date();
         this._allBookings = generateMockBookings(this.ctx.units, now.getFullYear(), now.getMonth());
         this._render(now.toISOString().split('T')[0]);
         return;
       }
-      const today = new Date().toISOString().split('T')[0];
 
       const { data, error } = await this.db
         .from('bookings')
         .select(`
-          id, check_in, check_out, nights, status, source, total_amount, total_paid, balance,
-          price_per_night, notes, is_blocked, block_reason, created_at,
-          guests!bookings_guest_id_fkey(id, first_name, last_name, dni, phone, bad_experience, bad_experience_note),
+          id, check_in, check_out, nights, status, source,
+          total_amount, total_paid, balance, price_per_night,
+          notes, is_blocked, block_reason, created_at,
+          guests!bookings_guest_id_fkey(
+            id, first_name, last_name, dni, phone,
+            bad_experience, bad_experience_note, tags
+          ),
           booking_units(unit_id, units(name, sort_order, color))
         `)
         .eq('hotel_id', this.ctx.hotelId)
@@ -81,20 +106,23 @@ export class BookingList {
 
       if (error) throw error;
       this._allBookings = data ?? [];
-      this._render(today);
+      this._render(new Date().toISOString().split('T')[0]);
       this._updateNavBadge(data);
+
     } catch (err) {
       console.error('BookingList load error:', err);
       showToast('Error al cargar reservas', 'error');
     }
   }
 
+  // ── Tabs ──────────────────────────────────────────
   _bindTabs() {
     document.querySelectorAll('#section-bookings .tabs-bar .tab').forEach(tab => {
       tab.addEventListener('click', () => {
         document.querySelectorAll('#section-bookings .tabs-bar .tab').forEach(t => t.classList.remove('active'));
         tab.classList.add('active');
-        this._tab = tab.dataset.tab;
+        this._tab  = tab.dataset.tab;
+        this._page = 1;
         this._render(new Date().toISOString().split('T')[0]);
       });
     });
@@ -106,6 +134,7 @@ export class BookingList {
         document.querySelectorAll('.source-filter-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         this._source = btn.dataset.source;
+        this._page   = 1;
         this._render(new Date().toISOString().split('T')[0]);
       });
     });
@@ -113,19 +142,27 @@ export class BookingList {
   }
 
   _bindFilters() {
-    const debounce = (fn, ms) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };
+    const deb = (fn, ms) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };
 
-    document.getElementById('booking-search')?.addEventListener('input', debounce((e) => {
+    document.getElementById('booking-search')?.addEventListener('input', deb((e) => {
       this._search = e.target.value.trim().toLowerCase();
       this._page   = 1;
       this._render(new Date().toISOString().split('T')[0]);
     }, 250));
 
     ['filter-status', 'filter-unit', 'filter-date-from', 'filter-date-to'].forEach(id => {
-        document.getElementById(id)?.addEventListener('change', (e) => {
-            this[`_${id.replace('filter-', '').replace('-', '_')}`] = e.target.value;
-            this._render(new Date().toISOString().split('T')[0]);
-        });
+      document.getElementById(id)?.addEventListener('change', (e) => {
+        const key = '_' + id.replace('filter-', '').replace(/-([a-z])/g, (_, c) => c.toUpperCase());
+        this[key] = e.target.value;
+        this._page = 1;
+        this._render(new Date().toISOString().split('T')[0]);
+      });
+    });
+
+    // Load more
+    document.getElementById('btn-load-more')?.addEventListener('click', () => {
+      this._page++;
+      this._render(new Date().toISOString().split('T')[0]);
     });
   }
 
@@ -138,82 +175,363 @@ export class BookingList {
     });
   }
 
-  _render(today) {
-    const container = document.getElementById('bookings-list');
-    if (!container) return;
-
-    let filtered = this._applyFilters(this._allBookings, today);
-
-    if (!filtered.length) {
-      container.innerHTML = `<div class="empty-state"><p>${this._tab === 'active' ? 'No hay reservas activas.' : 'No hay historial.'}</p></div>`;
-      return;
-    }
-
-    container.innerHTML = '';
-    if (can('exportData')) {
-      container.innerHTML += `<div style="display:flex;justify-content:flex-end;margin-bottom:12px">
-        <button class="btn btn-outline btn-sm" id="btn-export-csv">📥 Exportar (${filtered.length})</button></div>`;
-      document.getElementById('btn-export-csv')?.addEventListener('click', async () => {
-        const { exportBookingsCSV } = await import('../services/export-service.js');
-        exportBookingsCSV(filtered);
-      });
-    }
-
-    const listEl = document.createElement('div');
-    listEl.className = 'bookings-list';
-    listEl.innerHTML = filtered.slice(0, this._page * this._pageSize).map(b => this._renderRow(b, today)).join('');
-    container.appendChild(listEl);
-  }
-
-  _renderRow(b, today) {
-    const guest = b.guests ? `${b.guests.first_name} ${b.guests.last_name}` : (b.is_blocked ? 'Bloqueo' : 'Sin huésped');
-    const { color: barColor, label: barLabel } = getBookingBarColor(b);
-    
-    return `
-      <div class="booking-row" data-booking-id="${b.id}">
-        <div style="width:4px;background:${barColor};"></div>
-        <div class="booking-info">
-          <span>${guest}</span>
-          <div class="booking-meta">📅 ${formatDate(b.check_in)} → ${formatDate(b.check_out)}</div>
-        </div>
-        <div class="booking-actions">
-          <button data-action="view" class="btn btn-ghost" title="Ver">👁️</button>
-          <button data-action="whatsapp" class="btn btn-ghost" title="WhatsApp">💬</button>
-          <button data-action="edit" class="btn btn-ghost" title="Editar">✏️</button>
-          ${can("deleteBooking") ? `<button data-action="delete" class="btn btn-ghost" title="Eliminar" style="color:var(--color-danger)">🗑️</button>` : ''}
-        </div>
-      </div>`;
-  }
-
+  // ── Filtros aplicados ─────────────────────────────
   _applyFilters(bookings, today) {
     return bookings.filter(b => {
       const isArchive = b.check_out < today;
-      if (this._tab === 'active' && isArchive) return false;
+      if (this._tab === 'active'  && isArchive)  return false;
       if (this._tab === 'archive' && !isArchive) return false;
-      // Agrega aquí tus otras lógicas de filtrado...
+
+      if (this._status && b.status !== this._status) return false;
+      if (this._source && b.source !== this._source) return false;
+      if (this._unit) {
+        const units = (b.booking_units ?? []).map(bu => bu.unit_id);
+        if (!units.includes(this._unit)) return false;
+      }
+      if (this._dateFrom && b.check_in  < this._dateFrom) return false;
+      if (this._dateTo   && b.check_out > this._dateTo)   return false;
+
+      if (this._search) {
+        const g    = b.guests;
+        const name = g ? `${g.first_name} ${g.last_name}`.toLowerCase() : '';
+        const dni  = (g?.dni ?? '').toLowerCase();
+        const unit = (b.booking_units ?? []).map(bu => bu.units?.name ?? '').join(' ').toLowerCase();
+        if (!name.includes(this._search) && !dni.includes(this._search) && !unit.includes(this._search)) return false;
+      }
+
       return true;
     });
   }
 
+  // ── Render principal ──────────────────────────────
+  _render(today) {
+    const container = document.getElementById('bookings-list');
+    if (!container) return;
+
+    const filtered = this._applyFilters(this._allBookings, today);
+    const showing  = filtered.slice(0, this._page * this._pageSize);
+    const hasMore  = filtered.length > showing.length;
+
+    if (!filtered.length) {
+      container.innerHTML = `
+        <div class="empty-state">
+          <span class="empty-state-icon">📋</span>
+          <p>${this._tab === 'active' ? 'No hay reservas activas.' : 'No hay reservas en el archivo.'}</p>
+          ${this._search || this._status || this._unit || this._source
+            ? '<p style="font-size:.78rem;color:var(--color-text-3)">Probá cambiando los filtros.</p>' : ''}
+        </div>`;
+      return;
+    }
+
+    let html = '';
+
+    // Header con conteo y exportar
+    html += `<div class="list-header-bar">
+      <span class="list-count">${filtered.length} reserva${filtered.length !== 1 ? 's' : ''}</span>
+      <div style="display:flex;gap:8px">`;
+
+    if (can('exportData')) {
+      html += `<button class="btn btn-outline btn-sm" id="btn-export-excel-list">📊 Excel</button>
+               <button class="btn btn-outline btn-sm" id="btn-export-pdf-list">📄 PDF</button>`;
+    }
+    html += `</div></div>`;
+
+    // Filas
+    html += showing.map(b => this._renderRow(b, today)).join('');
+
+    // Load more
+    if (hasMore) {
+      html += `<div style="text-align:center;padding:16px">
+        <button class="btn btn-outline" id="btn-load-more">
+          Ver más (${filtered.length - showing.length} restantes)
+        </button></div>`;
+    }
+
+    container.innerHTML = html;
+
+    // Bind botones de exportación
+    document.getElementById('btn-export-excel-list')?.addEventListener('click', () => this._exportExcel(filtered));
+    document.getElementById('btn-export-pdf-list')?.addEventListener('click',   () => this._exportPDF(filtered));
+    document.getElementById('btn-load-more')?.addEventListener('click', () => {
+      this._page++;
+      this._render(today);
+    });
+  }
+
+  // ── Fila individual ────────────────────────────────
+  _renderRow(b, today) {
+    const g      = b.guests;
+    const guest  = g ? `${g.first_name ?? ''} ${g.last_name ?? ''}`.trim() : (b.is_blocked ? 'Bloqueo' : 'Sin huésped');
+    const { color: barColor, label: barLabel } = getBookingBarColor(b);
+    const units  = (b.booking_units ?? []);
+    const unitChips = units.map(bu => {
+      const u = { ...bu.units, id: bu.unit_id };
+      return getUnitChipHTML(u, 'sm');
+    }).join(' ');
+
+    // Flags de huésped
+    const isBad   = g?.bad_experience || (g?.tags ?? []).includes('no_recomendar');
+    const isVIP   = (g?.tags ?? []).includes('vip');
+    const isFrecuente = (g?.tags ?? []).includes('frecuente');
+
+    const flagHTML = isBad ? `<span class="guest-flag flag-bad" title="${g?.bad_experience_note ?? 'Mala experiencia'}">⚑ Conflictivo</span>`
+                  : isVIP ? `<span class="guest-flag flag-vip" title="Huésped VIP">★ VIP</span>`
+                  : isFrecuente ? `<span class="guest-flag flag-freq" title="Huésped frecuente">♺ Frecuente</span>`
+                  : '';
+
+    const isToday  = b.check_in === today || b.check_out === today;
+    const statusCls = STATUS_CLASSES[b.status] ?? '';
+    const statusLbl = STATUS_LABELS[b.status]  ?? b.status;
+    const nights   = b.nights ?? Math.round((new Date(b.check_out) - new Date(b.check_in)) / 86400000);
+
+    return `
+      <div class="booking-row ${isBad ? 'booking-row-bad' : ''}" data-booking-id="${b.id}"
+           style="cursor:pointer">
+        <div class="booking-row-accent" style="background:${barColor}"></div>
+        <div class="booking-row-body">
+          <div class="booking-row-main">
+            <div class="booking-guest-col">
+              <span class="booking-guest-name">
+                ${guest}
+                ${flagHTML}
+              </span>
+              <div class="booking-meta-row">
+                ${unitChips}
+                ${getSourceBadgeHTML(b.source)}
+              </div>
+            </div>
+            <div class="booking-dates-col">
+              <span class="booking-date-range">
+                ${formatDate(b.check_in)} → ${formatDate(b.check_out)}
+              </span>
+              <span class="booking-nights">${nights} noche${nights !== 1 ? 's' : ''}</span>
+            </div>
+            <div class="booking-amount-col">
+              <span class="booking-total">${formatARS(b.total_amount)}</span>
+              ${b.balance > 0 ? `<span class="booking-balance-due">Saldo: ${formatARS(b.balance)}</span>` : ''}
+            </div>
+            <div class="booking-status-col">
+              <span class="status-badge ${statusCls}">${statusLbl}</span>
+            </div>
+            <div class="booking-actions-col" onclick="event.stopPropagation()">
+              <button data-action="edit"     class="btn btn-ghost btn-icon-sm" title="Editar">✏️</button>
+              <button data-action="whatsapp" class="btn btn-ghost btn-icon-sm" title="WhatsApp">💬</button>
+              <button data-action="flag"     class="btn btn-ghost btn-icon-sm" title="Marcar huésped"
+                      style="${isBad ? 'color:var(--color-danger)' : ''}">⚑</button>
+              ${b.check_out === today && b.status !== 'cancelled'
+                ? `<button data-action="checkout" class="btn btn-ghost btn-icon-sm" title="Hacer check-out" style="color:#22c55e">✓ OUT</button>`
+                : ''}
+              ${can('deleteBooking') ? `<button data-action="delete" class="btn btn-ghost btn-icon-sm" title="Eliminar" style="color:var(--color-danger)">🗑️</button>` : ''}
+            </div>
+          </div>
+          ${isToday ? `<div class="booking-today-banner" style="background:${barColor}18;border-color:${barColor}">
+            ${b.check_in === today ? '🟢 CHECK-IN HOY' : '🔵 CHECK-OUT HOY'}
+          </div>` : ''}
+        </div>
+      </div>`;
+  }
+
+  // ── Modal de FLAG de huésped ───────────────────────
+  async _openFlagModal(bookingId, row) {
+    const booking = this._allBookings.find(b => b.id === bookingId);
+    const guest   = booking?.guests;
+    if (!guest?.id) { showToast('No hay huésped asociado', 'warning'); return; }
+
+    const existing = document.getElementById('overlay-flag-guest');
+    if (existing) existing.remove();
+
+    const currentTags = guest.tags ?? [];
+    const isBad       = guest.bad_experience ?? false;
+
+    const modal = document.createElement('div');
+    modal.className = 'modal-overlay';
+    modal.id = 'overlay-flag-guest';
+    modal.innerHTML = `
+      <div class="modal modal-sm">
+        <div class="modal-header">
+          <h3 class="modal-title">Marcar Huésped</h3>
+          <button class="modal-close" id="flag-close">✕</button>
+        </div>
+        <div class="modal-body">
+          <p style="font-size:.875rem;margin-bottom:16px">
+            <strong>${guest.first_name} ${guest.last_name}</strong>
+          </p>
+          <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:16px">
+            ${this._flagCheckbox('flag-bad-exp',   'Mala experiencia / Conflictivo',  isBad)}
+            ${this._flagCheckbox('flag-vip',        'VIP — Atención preferencial',     currentTags.includes('vip'))}
+            ${this._flagCheckbox('flag-frecuente',  'Huésped frecuente',               currentTags.includes('frecuente'))}
+            ${this._flagCheckbox('flag-empresa',    'Cliente empresa',                 currentTags.includes('empresa'))}
+            ${this._flagCheckbox('flag-norec',      'No recomendar',                   currentTags.includes('no_recomendar'))}
+          </div>
+          <div class="form-group">
+            <label>Observaciones internas</label>
+            <textarea id="flag-notes" rows="3" placeholder="Detalles de la situación..."
+              style="width:100%;resize:vertical">${guest.bad_experience_note ?? ''}</textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-outline" id="flag-cancel">Cancelar</button>
+          <button class="btn btn-primary" id="flag-save">Guardar</button>
+        </div>
+      </div>`;
+
+    document.body.appendChild(modal);
+    const close = () => modal.remove();
+    modal.querySelector('#flag-close').onclick  = close;
+    modal.querySelector('#flag-cancel').onclick = close;
+    modal.addEventListener('click', e => { if (e.target === modal) close(); });
+
+    modal.querySelector('#flag-save').addEventListener('click', async () => {
+      const newTags = [];
+      if (modal.querySelector('#flag-vip')?.checked)       newTags.push('vip');
+      if (modal.querySelector('#flag-frecuente')?.checked) newTags.push('frecuente');
+      if (modal.querySelector('#flag-empresa')?.checked)   newTags.push('empresa');
+      if (modal.querySelector('#flag-norec')?.checked)     newTags.push('no_recomendar');
+
+      const badExp  = modal.querySelector('#flag-bad-exp')?.checked ?? false;
+      const notes   = modal.querySelector('#flag-notes').value.trim();
+
+      try {
+        await this.db.from('guests').update({
+          bad_experience:      badExp,
+          bad_experience_note: notes || null,
+          tags:                newTags,
+        }).eq('id', guest.id);
+
+        await logAction(this.db, this.ctx, 'guest_flagged', { guestId: guest.id, tags: newTags });
+        showToast('Huésped actualizado ✓', 'success');
+        close();
+        await this.load();
+      } catch (err) {
+        showToast('Error al guardar: ' + err.message, 'error');
+      }
+    });
+  }
+
+  _flagCheckbox(id, label, checked) {
+    return `
+      <label style="display:flex;align-items:center;gap:10px;font-size:.875rem;cursor:pointer">
+        <input type="checkbox" id="${id}" ${checked ? 'checked' : ''}
+               style="width:16px;height:16px;accent-color:var(--color-primary)">
+        ${label}
+      </label>`;
+  }
+
+  // ── Checkout rápido ───────────────────────────────
+  async _doCheckout(id) {
+    if (!confirm('¿Confirmar check-out de esta reserva?')) return;
+    try {
+      await this.db.from('bookings').update({ status: 'paid' }).eq('id', id);
+      // Crear tarea de limpieza automáticamente
+      const booking = this._allBookings.find(b => b.id === id);
+      if (booking) {
+        const { OperationsModule } = await import('./operations.js');
+        await OperationsModule.createCheckoutCleaningTask(this.db, this.ctx, booking);
+      }
+      showToast('Check-out realizado ✓', 'success');
+      this.load();
+    } catch (err) {
+      showToast('Error: ' + err.message, 'error');
+    }
+  }
+
+  // ── Duplicar reserva ──────────────────────────────
+  async _duplicateBooking(id) {
+    const b = this._allBookings.find(x => x.id === id);
+    if (!b) return;
+    this.bookingForm.open({ unitId: b.booking_units?.[0]?.unit_id });
+    showToast('Reserva base cargada — modificá las fechas', 'info');
+  }
+
+  // ── Detalle ───────────────────────────────────────
   async _openDetail(id) {
-    const { data: booking } = await this.db.from('bookings').select('*, guests(*), booking_units(unit_id, units(name))').eq('id', id).single();
+    const { data: booking } = await this.db
+      .from('bookings')
+      .select('*, guests(*), booking_units(unit_id, units(name)), payments(*)')
+      .eq('id', id).single();
     if (booking) this.bookingForm.openDetail(booking);
   }
 
+  // ── Eliminar ──────────────────────────────────────
   async _deleteBooking(id) {
-    if (!confirm('¿Eliminar?')) return;
-    await this.db.from('bookings').delete().eq('id', id);
-    this.load();
+    if (!confirm('¿Eliminar esta reserva? Esta acción no se puede deshacer.')) return;
+    try {
+      await this.db.from('bookings').delete().eq('id', id);
+      await logAction(this.db, this.ctx, 'booking_deleted', { bookingId: id });
+      showToast('Reserva eliminada', 'warning');
+      this.load();
+    } catch (err) { showToast('Error: ' + err.message, 'error'); }
   }
 
+  // ── WhatsApp ──────────────────────────────────────
   async _sendWhatsApp(id) {
-     // ... tu lógica original ...
+    const booking = this._allBookings.find(b => b.id === id);
+    if (!booking?.guests?.phone) { showToast('Sin número de teléfono', 'warning'); return; }
+    const { generateVoucherText } = await import('../services/whatsapp-service.js');
+    const text = generateVoucherText(booking);
+    const phone = booking.guests.phone.replace(/\D/g, '');
+    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`, '_blank');
   }
 
+  // ── Exportar Excel ────────────────────────────────
+  async _exportExcel(bookings) {
+    const { exportBookingsExcel } = await import('../services/export-service.js');
+    exportBookingsExcel(bookings);
+  }
+
+  // ── Exportar PDF ──────────────────────────────────
+  _exportPDF(bookings) {
+    const month = new Date().toLocaleString('es-AR', { month: 'long', year: 'numeric' });
+    const rows  = bookings.map(b => {
+      const g = b.guests;
+      const guest = g ? `${g.first_name} ${g.last_name}` : '—';
+      const unit  = (b.booking_units ?? []).map(bu => bu.units?.name ?? '').join(', ');
+      return `<tr>
+        <td>${guest}</td>
+        <td>${unit}</td>
+        <td>${b.check_in}</td>
+        <td>${b.check_out}</td>
+        <td>${b.nights}</td>
+        <td>${formatARS(b.total_amount)}</td>
+        <td>${STATUS_LABELS[b.status] ?? b.status}</td>
+      </tr>`;
+    }).join('');
+
+    const w = window.open('', '_blank');
+    w.document.write(`
+      <!DOCTYPE html><html><head><title>Reservas MILA</title>
+      <style>body{font-family:sans-serif;padding:24px}
+        h1{font-size:16px;margin-bottom:4px}
+        p{font-size:12px;color:#666;margin-bottom:16px}
+        table{width:100%;border-collapse:collapse;font-size:12px}
+        th{background:#f1f5f9;text-align:left;padding:6px 10px;font-weight:600}
+        td{padding:5px 10px;border-bottom:1px solid #e2e8f0}
+        @media print{.no-print{display:none}}
+      </style></head>
+      <body>
+        <h1>MILA · Listado de Reservas</h1>
+        <p>${month} · ${bookings.length} reservas</p>
+        <button class="no-print" onclick="window.print()" style="margin-bottom:16px;padding:6px 14px">Imprimir / PDF</button>
+        <table>
+          <thead><tr>
+            <th>Huésped</th><th>Unidad</th><th>Check-in</th><th>Check-out</th>
+            <th>Noches</th><th>Total</th><th>Estado</th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </body></html>`);
+    w.document.close();
+    setTimeout(() => w.print(), 500);
+  }
+
+  // ── Badge de nav ──────────────────────────────────
   _updateNavBadge(bookings) {
-    const today = new Date().toISOString().split('T')[0];
+    const today   = new Date().toISOString().split('T')[0];
     const pending = (bookings ?? []).filter(b => b.check_out >= today && b.status === 'pending').length;
-    const badge = document.getElementById('nav-badge-bookings');
-    if (badge) badge.style.display = pending > 0 ? 'inline' : 'none';
+    const badge   = document.getElementById('nav-badge-bookings');
+    if (badge) {
+      badge.style.display  = pending > 0 ? 'inline' : 'none';
+      badge.textContent    = pending;
+    }
   }
 }

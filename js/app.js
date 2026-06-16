@@ -747,7 +747,19 @@ window.deleteReminder=(async(id)=>{if(!confirm('¿Eliminar?'))return;await supab
 // MODALES (reminders, expenses, guest profile, season)
 // ══════════════════════════════════════════════════
 function setupReminderModal() {
-  const open=()=>{populateReminderUnitSelect();document.getElementById('overlay-reminder').classList.remove('hidden');};
+  const open=()=>{
+    // Reset form
+    const titleEl = document.getElementById('r-title');
+    const dateEl  = document.getElementById('r-date');
+    const descEl  = document.getElementById('r-desc');
+    if (titleEl) titleEl.value = '';
+    if (descEl)  descEl.value  = '';
+    if (dateEl)  dateEl.value  = new Date().toISOString().split('T')[0];
+    populateReminderUnitSelect();
+    document.getElementById('overlay-reminder').classList.remove('hidden');
+    // Focus the title field for better UX
+    setTimeout(() => titleEl?.focus(), 100);
+  };
   const close=()=>document.getElementById('overlay-reminder').classList.add('hidden');
   document.getElementById('btn-add-reminder')?.addEventListener('click',open);
   document.getElementById('btn-add-reminder-main')?.addEventListener('click',open);
@@ -767,14 +779,39 @@ function setupReminderModal() {
   });
 }
 function populateReminderUnitSelect(){
-  const sel=document.getElementById('r-unit');
-  if(!sel) return;
+  const container = document.getElementById('r-unit-container');
+  const sel = document.getElementById('r-unit');
+  if (!sel) return;
+
   const units = AppContext.units ?? [];
-  sel.innerHTML='<option value="">General (todo el hotel)</option>';
-  units.forEach(u=>{
-    const opt=document.createElement('option');
-    opt.value=u.id;
-    opt.textContent=`#${u.sort_order} · ${u.name}`;
+
+  // Reset
+  sel.innerHTML = '<option value="">General (todo el hotel)</option>';
+
+  if (!units.length) {
+    // Units might still be loading — show a placeholder
+    const opt = document.createElement('option');
+    opt.value = ''; opt.disabled = true;
+    opt.textContent = '(Cargando unidades...)';
+    sel.appendChild(opt);
+    // Retry once in 1 second
+    setTimeout(() => {
+      const retryUnits = AppContext.units ?? [];
+      sel.innerHTML = '<option value="">General (todo el hotel)</option>';
+      retryUnits.forEach(u => {
+        const o = document.createElement('option');
+        o.value = u.id;
+        o.textContent = `#${u.sort_order ?? ''} · ${u.name}`;
+        sel.appendChild(o);
+      });
+    }, 1000);
+    return;
+  }
+
+  units.forEach(u => {
+    const opt = document.createElement('option');
+    opt.value = u.id;
+    opt.textContent = `#${u.sort_order ?? ''} · ${u.name}`;
     sel.appendChild(opt);
   });
 }

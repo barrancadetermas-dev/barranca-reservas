@@ -448,26 +448,36 @@
     <div class="step-content hidden" id="step-2">
       <div class="form-group">
         <label>Canal de origen <span class="label-hint">¿Cómo llegó esta reserva?</span></label>
-        <div class="source-selector" id="f-source-selector">
-          <label class="source-option selected" data-source="direct" style="--source-color:#64748B">
-            <input type="radio" name="booking-source" value="direct" checked>
-            <span class="src-dot"></span><span class="src-label">🏠 Directo</span>
+        <div id="f-source-selector">
+          <!-- Renderizado por booking-form.js via _renderSourceSelector() -->
+          <!-- Fallback estático en caso de que JS no haya corrido aún -->
+          <label class="src-chip selected" data-source="direct" style="--src-color:#64748B">
+            <input type="radio" name="booking-source" value="direct" checked style="display:none">
+            <span class="src-dot" style="background:#64748B"></span><span class="src-label">Directo</span>
           </label>
-          <label class="source-option" data-source="walkin" style="--source-color:#0891B2">
-            <input type="radio" name="booking-source" value="walkin">
-            <span class="src-dot"></span><span class="src-label">🚶 Espontáneo</span>
+          <label class="src-chip" data-source="walkin" style="--src-color:#0891B2">
+            <input type="radio" name="booking-source" value="walkin" style="display:none">
+            <span class="src-dot" style="background:#0891B2"></span><span class="src-label">Espontáneo</span>
           </label>
-          <label class="source-option" data-source="booking" style="--source-color:#1D4ED8">
-            <input type="radio" name="booking-source" value="booking">
-            <span class="src-dot"></span><span class="src-label">🟦 Booking</span>
+          <label class="src-chip" data-source="booking" style="--src-color:#1D4ED8">
+            <input type="radio" name="booking-source" value="booking" style="display:none">
+            <span class="src-dot" style="background:#1D4ED8"></span><span class="src-label">Booking</span>
           </label>
-          <label class="source-option" data-source="airbnb" style="--source-color:#EA580C">
-            <input type="radio" name="booking-source" value="airbnb">
-            <span class="src-dot"></span><span class="src-label">🟧 Airbnb</span>
+          <label class="src-chip" data-source="airbnb" style="--src-color:#EA580C">
+            <input type="radio" name="booking-source" value="airbnb" style="display:none">
+            <span class="src-dot" style="background:#EA580C"></span><span class="src-label">Airbnb</span>
           </label>
-          <label class="source-option" data-source="family" style="--source-color:#7C3AED">
-            <input type="radio" name="booking-source" value="family">
-            <span class="src-dot"></span><span class="src-label">🟪 Familia</span>
+          <label class="src-chip" data-source="family" style="--src-color:#7C3AED">
+            <input type="radio" name="booking-source" value="family" style="display:none">
+            <span class="src-dot" style="background:#7C3AED"></span><span class="src-label">Familia</span>
+          </label>
+          <label class="src-chip" data-source="company" style="--src-color:#0F766E">
+            <input type="radio" name="booking-source" value="company" style="display:none">
+            <span class="src-dot" style="background:#0F766E"></span><span class="src-label">Empresa</span>
+          </label>
+          <label class="src-chip" data-source="referral" style="--src-color:#B45309">
+            <input type="radio" name="booking-source" value="referral" style="display:none">
+            <span class="src-dot" style="background:#B45309"></span><span class="src-label">Referido</span>
           </label>
         </div>
       </div>
@@ -490,7 +500,7 @@
     <!-- Step 3: Pricing -->
     <div class="step-content hidden" id="step-3">
       <div class="form-grid-2">
-        <div class="form-group"><label>Precio por noche ($) <span class="req">*</span></label><input type="number" id="f-price" min="0" step="500" placeholder="45000"></div>
+        <div class="form-group"><label>Precio por noche ($) <span class="req">*</span></label><input type="number" id="f-price" oninput="document.getElementById('price-suggestion-container') && this._runPriceSuggestion?.()" min="0" step="500" placeholder="45000"></div>
         <div class="form-group"><label>Noches sin cargo</label><input type="number" id="f-free-nights" min="0" value="0"></div>
       </div>
       <div class="form-grid-2">
@@ -511,6 +521,8 @@
         <div class="pb-row pb-add" id="pbr-surcharge"><span>Recargo</span><span id="pb-surcharge">+$—</span></div>
         <div class="pb-row pb-total"><span>TOTAL</span><span id="pb-total">$—</span></div>
       </div>
+      <!-- ✨ Sugeridor de precio dinámico -->
+      <div id="price-suggestion-container" style="margin-top:14px"></div>
     </div>
 
     <!-- Step 4: Payments -->
@@ -618,7 +630,15 @@
       <div class="form-group"><label>Descripción</label><textarea id="r-desc" rows="2" placeholder="Detalles adicionales..."></textarea></div>
       <div class="form-grid-2">
         <div class="form-group"><label>Fecha <span class="req">*</span></label><input type="date" id="r-date"></div>
-        <div class="form-group"><label>Unidad (opcional)</label><select id="r-unit"><option value="">General</option></select></div>
+        <div class="form-group" id="r-unit-container">
+          <label for="r-unit">Departamento (opcional)</label>
+          <select id="r-unit" class="filter-select" style="width:100%;padding:10px 12px;border:1px solid var(--color-border);border-radius:var(--r-md);background:var(--color-surface);color:var(--color-text);font-size:.875rem">
+            <option value="">General (todo el hotel)</option>
+          </select>
+          <p style="font-size:.7rem;color:var(--color-text-3);margin-top:4px">
+            Las unidades se cargan automáticamente desde tu configuración.
+          </p>
+        </div>
       </div>
     </div>
     <div class="modal-footer">
