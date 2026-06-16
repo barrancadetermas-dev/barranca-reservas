@@ -774,7 +774,9 @@ export class BookingForm {
       });
       if (payRows.length) await this.db.from('payments').insert(payRows);
 
-      await logAction(this.db, this.ctx, bookingId ? 'booking_updated' : 'booking_created', { bookingId });
+      const _logVerb = this._editingId ? 'UPDATE' : 'CREATE';
+      const _logSummary = this._editingId ? 'Reserva actualizada' : 'Reserva creada';
+      await logAction(_logVerb, 'booking', String(bookingId), _logSummary);
 
       showToast(this._editingId ? 'Reserva actualizada ✓' : 'Reserva creada ✓', 'success');
 
