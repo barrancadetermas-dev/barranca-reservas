@@ -722,13 +722,13 @@ export class BookingForm {
         guest_id:         guestId,
         check_in:         ci,
         check_out:        co,
-        nights,
+        // nights: columna GENERATED ALWAYS en PostgreSQL — no se puede insertar
         source,
         price_per_night:  price,
         discount_pct:     disc,
         surcharge_amount: surch,
         free_nights:      freeN,
-        deposit_amount:   dep,
+        // deposit_amount: dep, ← requiere ejecutar migration_v5_deposit_and_cron.sql primero
         total_amount:     total,
         total_paid:       paid,
         balance,

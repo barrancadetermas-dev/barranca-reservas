@@ -891,10 +891,13 @@ function setupConnectivityIndicator() {
   window.addEventListener('online',  () => setStatus('connected'));
   window.addEventListener('offline', () => setStatus('disconnected'));
 
-  // Escuchar estado del canal Realtime de Supabase
-  supabase.realtime.on('connect',    () => setStatus('connected'));
-  supabase.realtime.on('reconnect',  () => setStatus('connected'));
-  supabase.realtime.on('disconnect', () => setStatus(navigator.onLine ? 'reconnecting' : 'disconnected'));
+  // Escuchar estado del canal Realtime de Supabase (API v2)
+  // supabase.realtime.on() no existe en v2 — se usa el callback de subscribe()
+  supabase.channel('conn-status-monitor').subscribe((state) => {
+    if (state === 'SUBSCRIBED')    setStatus('connected');
+    if (state === 'CLOSED')        setStatus('disconnected');
+    if (state === 'CHANNEL_ERROR') setStatus(navigator.onLine ? 'reconnecting' : 'disconnected');
+  });
 }
 
 
