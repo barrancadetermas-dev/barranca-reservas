@@ -475,6 +475,8 @@ svg { flex-shrink: 0; }
 .cal-cell.today-col { background: rgba(99,102,241,.04); }
 .cal-cell.today-col:hover { background: rgba(99,102,241,.08); }
 .cal-cell.selecting { background: rgba(99,102,241,.15) !important; }
+.cal-cell.past-cell { background: rgba(0,0,0,.045); }
+.cal-cell.past-cell:hover { background: rgba(0,0,0,.08); }
 
 /* Booking bars inside cells */
 .bar {
