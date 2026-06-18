@@ -79,6 +79,22 @@ export class BookingList {
   }
 
   // ── Carga principal ────────────────────────────────
+  // ── Avatar con iniciales y color consistente ─────
+  static _avatar(guest) {
+    if (!guest) return '<div class="bl-avatar bl-avatar-empty">?</div>';
+    const fn = guest.first_name ?? '';
+    const ln = guest.last_name  ?? '';
+    const initials = ((fn[0] ?? '') + (ln[0] ?? '')).toUpperCase() || '?';
+    // Hash simple para color consistente por huésped
+    const str   = (fn + ln).toLowerCase();
+    let hash    = 0;
+    for (let i = 0; i < str.length; i++) hash = str.charCodeAt(i) + ((hash << 5) - hash);
+    const hue   = Math.abs(hash) % 360;
+    const bg    = `hsl(${hue},55%,88%)`;
+    const color = `hsl(${hue},55%,32%)`;
+    return `<div class="bl-avatar" style="background:${bg};color:${color}" title="${fn} ${ln}">${initials}</div>`;
+  }
+
   async load() {
     try {
       if (this.ctx.IS_DEMO) {
@@ -291,13 +307,16 @@ export class BookingList {
         <div class="booking-row-body">
           <div class="booking-row-main">
             <div class="booking-guest-col">
-              <span class="booking-guest-name">
-                ${guest}
-                ${flagHTML}
-              </span>
-              <div class="booking-meta-row">
-                ${unitChips}
-                ${getSourceBadgeHTML(b.source)}
+              ${BookingList._avatar(g)}
+              <div class="booking-guest-info">
+                <span class="booking-guest-name">
+                  ${guest}
+                  ${flagHTML}
+                </span>
+                <div class="booking-meta-row">
+                  ${unitChips}
+                  ${getSourceBadgeHTML(b.source)}
+                </div>
               </div>
             </div>
             <div class="booking-dates-col">

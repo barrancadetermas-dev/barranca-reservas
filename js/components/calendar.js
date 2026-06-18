@@ -178,8 +178,20 @@ export class Calendar {
       const isToday = d===todayDay && this.month===todayMonth && this.year===todayYear;
       const dateISO = `${this.year}-${String(this.month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
       const hasRem  = !!reminderMap[dateISO];
+      const dayOfWeek2 = date.getDay();
+      const isWknd2    = dayOfWeek2 === 0 || dayOfWeek2 === 6;
+      const isPastDay2 = dateISO < new Date().toISOString().split('T')[0];
+      const holiday2   = holidays?.get ? holidays.get(dateISO) : null;
+      const isHoliday2 = !!holiday2 && holiday2.type !== 'vacation';
+
       const dh = document.createElement('div');
-      dh.className = `cal-day-header${isToday?' today':''}`;
+      let dhCls2 = 'cal-day-header';
+      if (isToday)   dhCls2 += ' today';
+      if (isWknd2)   dhCls2 += ' weekend';
+      if (isPastDay2 && !isToday) dhCls2 += ' past-header';
+      if (isHoliday2) dhCls2 += ` holiday holiday-${holiday2.type}`;
+      dh.className = dhCls2;
+      dh.title = holiday2?.label ?? '';
       dh.innerHTML = `${d}<span class="day-name">${DAY_NAMES[date.getDay()]}</span>
         ${hasRem?`<div style="width:4px;height:4px;border-radius:50%;background:var(--color-warning);margin:2px auto 0"></div>`:''}
         ${isToday?`<div style="width:4px;height:4px;border-radius:50%;background:var(--color-primary);margin:1px auto 0"></div>`:''}`;
@@ -215,11 +227,13 @@ export class Calendar {
 
         const cellHoliday = holidays.get(dateISO);
         const cellIsWknd  = new Date(dateISO + 'T12:00:00').getDay() % 6 === 0;
+        const cellIsPast  = dateISO < new Date().toISOString().split('T')[0];
 
         const cell = document.createElement('div');
         let cellCls = 'cal-cell';
         if (isToday)           cellCls += ' today-col';
         if (cellIsWknd)        cellCls += ' weekend-col';
+        if (cellIsPast)        cellCls += ' past-col';
         if (cellHoliday?.type === 'fixed' || cellHoliday?.type === 'movable') cellCls += ' holiday-col';
         if (cellHoliday?.type === 'vacation') cellCls += ' vacation-col';
         if (cellHoliday?.type === 'bridge')   cellCls += ' bridge-col';
@@ -741,8 +755,20 @@ export class Calendar {
     days.forEach(d => {
       const iso   = d.toISOString().split('T')[0];
       const isToday = iso === today;
+      const dayOfWeek2 = date.getDay();
+      const isWknd2    = dayOfWeek2 === 0 || dayOfWeek2 === 6;
+      const isPastDay2 = dateISO < new Date().toISOString().split('T')[0];
+      const holiday2   = holidays?.get ? holidays.get(dateISO) : null;
+      const isHoliday2 = !!holiday2 && holiday2.type !== 'vacation';
+
       const dh = document.createElement('div');
-      dh.className = `cal-day-header${isToday?' today':''}`;
+      let dhCls2 = 'cal-day-header';
+      if (isToday)   dhCls2 += ' today';
+      if (isWknd2)   dhCls2 += ' weekend';
+      if (isPastDay2 && !isToday) dhCls2 += ' past-header';
+      if (isHoliday2) dhCls2 += ` holiday holiday-${holiday2.type}`;
+      dh.className = dhCls2;
+      dh.title = holiday2?.label ?? '';
       dh.innerHTML = `${d.getDate()}<span class="day-name">${['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'][d.getDay()]}</span>`;
       grid.appendChild(dh);
     });

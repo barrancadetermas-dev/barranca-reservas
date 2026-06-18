@@ -190,6 +190,32 @@ export class Dashboard {
     const guEl = document.getElementById('kpi-guests-val');
     this._setKPI('kpi-guests-val', kpis.occupiedUnits);
     this._animateCounter(guEl, kpis.occupiedUnits);
+
+    // Micro sparklines para los 4 KPIs
+    this._renderSparkline('kpi-checkins',  kpis.weeklyCheckins   ?? []);
+    this._renderSparkline('kpi-checkouts', kpis.weeklyCheckouts  ?? []);
+    this._renderSparkline('kpi-recambios', kpis.weeklyRecambios  ?? []);
+    this._renderSparkline('kpi-guests',    kpis.weeklyOccupancy  ?? []);
+  }
+
+  _renderSparkline(cardId, data7) {
+    const card = document.getElementById(cardId);
+    if (!card) return;
+    // Remove existing sparkline
+    card.querySelector('.kpi-sparkline')?.remove();
+    if (!data7.length) return;
+
+    const max = Math.max(...data7, 1);
+    const bars = data7.map((v, i) => {
+      const h = Math.max(10, Math.round((v / max) * 100));
+      const isToday = i === data7.length - 1;
+      return `<div class="kpi-spark-bar ${isToday ? 'today' : ''}"
+                   style="height:${h}%"></div>`;
+    }).join('');
+    const sparkEl = document.createElement('div');
+    sparkEl.className = 'kpi-sparkline';
+    sparkEl.innerHTML = bars;
+    card.querySelector('.kpi-body')?.appendChild(sparkEl);
   }
 
   _setKPI(id, value) {

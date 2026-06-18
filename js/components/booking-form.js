@@ -10,6 +10,7 @@ import { can, isDemo } from '../auth/permissions.js';
 import { formatARS, toISODate, showToast, getUnitLabel, getUnitColor, getUnitChipHTML, SOURCE_CONFIG } from '../supabase-config.js';
 import { logAction } from '../services/audit-service.js';
 import { DateRangePicker } from './date-range-picker.js';
+import { getChannelCommission } from '../services/config-service.js';
 // PriceSuggester se carga lazy en _runPriceSuggestion()
 
 const PAYMENT_METHODS = [
@@ -632,7 +633,7 @@ export class BookingForm {
     return true;
   }
 
-  // ── Precio breakdown ──────────────────────────────
+  // ── Precio breakdown con comisión de canal ──────────
   _updateBreakdown() {
     const ci    = document.getElementById('f-checkin').value;
     const co    = document.getElementById('f-checkout').value;
@@ -641,9 +642,18 @@ export class BookingForm {
     const surch = parseFloat(document.getElementById('f-surcharge').value) || 0;
     const freeN = parseInt(document.getElementById('f-free-nights').value) || 0;
 
+    // Canal de origen actualmente seleccionado
+    const source = document.querySelector('input[name="booking-source"]:checked')?.value ?? 'direct';
+
+    const set     = (id, text) => { const el = document.getElementById(id); if (el) el.textContent = text; };
+    const show    = (id, show) => document.getElementById(id)?.style.setProperty('display', show ? '' : 'none');
+
     if (!ci || !co || !price) {
-      ['pb-nights','pb-subtotal','pb-discount','pb-surcharge','pb-total','pb-free-nights']
+      ['pb-nights','pb-subtotal','pb-discount','pb-surcharge','pb-total',
+       'pb-free-nights','pb-commission','pb-net']
         .forEach(id => { const el = document.getElementById(id); if (el) el.textContent = '—'; });
+      show('pbr-commission', false);
+      show('pbr-net', false);
       return;
     }
 
@@ -653,19 +663,47 @@ export class BookingForm {
     const discAmt  = subtotal * (disc / 100);
     const total    = Math.max(0, subtotal - discAmt + surch);
 
-    const set = (id, text) => { const el = document.getElementById(id); if (el) el.textContent = text; };
-    set('pb-nights',     `${nights} noche${nights !== 1 ? 's' : ''}`);
-    set('pb-subtotal',   formatARS(subtotal));
+    // Comisión del canal (desde AppContext.config vía config-service)
+    const commPct  = getChannelCommission(source);   // 0 si no hay comisión
+    const commAmt  = total * (commPct / 100);
+    const netAmt   = total - commAmt;
+
+    // Nombres de canales con comisión
+    const CHANNEL_NAMES = {
+      booking:'Booking.com', airbnb:'Airbnb',
+      despegar:'Despegar', expedia:'Expedia',
+    };
+
+    set('pb-nights',      `${nights} noche${nights !== 1 ? 's' : ''}`);
+    set('pb-subtotal',    formatARS(subtotal));
     set('pb-free-nights', freeN > 0 ? `−${formatARS(price * freeN)}` : '—');
-    set('pb-discount',   disc > 0 ? `−${formatARS(discAmt)} (${disc}%)` : '—');
-    set('pb-surcharge',  surch > 0 ? `+${formatARS(surch)}` : '—');
-    set('pb-total',      formatARS(total));
+    set('pb-discount',    disc  > 0 ? `−${formatARS(discAmt)} (${disc}%)` : '—');
+    set('pb-surcharge',   surch > 0 ? `+${formatARS(surch)}` : '—');
+    set('pb-total',       formatARS(total));
 
-    document.getElementById('pbr-free-nights')?.style.setProperty('display', freeN > 0 ? '' : 'none');
-    document.getElementById('pbr-discount')?.style.setProperty('display',    disc > 0 ? '' : 'none');
-    document.getElementById('pbr-surcharge')?.style.setProperty('display',   surch > 0 ? '' : 'none');
+    show('pbr-free-nights', freeN > 0);
+    show('pbr-discount',    disc  > 0);
+    show('pbr-surcharge',   surch > 0);
 
-    this._cachedTotal = total;
+    // Mostrar comisión solo si el canal la tiene
+    if (commPct > 0) {
+      const label = document.getElementById('pb-commission-label');
+      if (label) label.textContent = `Comisión ${CHANNEL_NAMES[source] ?? source} (${commPct}%)`;
+      set('pb-commission', `−${formatARS(commAmt)}`);
+      set('pb-net', formatARS(netAmt));
+      show('pbr-commission', true);
+      show('pbr-net', true);
+    } else {
+      show('pbr-commission', false);
+      show('pbr-net', false);
+    }
+
+    // Guardar para submit
+    this._cachedTotal      = total;
+    this._cachedCommPct    = commPct;
+    this._cachedCommAmt    = commAmt;
+    this._cachedNetAmt     = netAmt;
+
     this._updatePaymentSummary();
   }
 
@@ -739,8 +777,17 @@ export class BookingForm {
   // ── Búsqueda de huéspedes ─────────────────────────
   async _searchGuests(q) {
     const container = document.getElementById('guest-results');
+    const searchEl  = document.getElementById('guest-search');
     if (!container) return;
     if (q.length < 2) { container.classList.add('hidden'); return; }
+
+    // Typing indicator
+    const existingSpinner = searchEl?.parentElement?.querySelector('.guest-searching');
+    if (!existingSpinner && searchEl) {
+      const spinner = document.createElement('div');
+      spinner.className = 'guest-searching';
+      searchEl.parentElement?.appendChild(spinner);
+    }
 
     const { data } = await this.db
       .from('guests')
@@ -750,6 +797,9 @@ export class BookingForm {
       .limit(6);
 
     if (!data?.length) { container.classList.add('hidden'); return; }
+
+    // Remove spinner
+    searchEl?.parentElement?.querySelector('.guest-searching')?.remove();
 
     container.innerHTML = data.map(g => {
       const isBad = g.bad_experience || (g.tags ?? []).includes('no_recomendar');
@@ -859,6 +909,9 @@ export class BookingForm {
         total_paid:       paid,
         balance,
         notes:            notes || null,
+        commission_pct:   this._cachedCommPct  ?? 0,
+        commission_amount:this._cachedCommAmt  ?? 0,
+        net_amount:       this._cachedNetAmt   ?? total,
         status:           balance <= 0 ? 'paid' : paid > 0 ? 'partial' : 'pending',
       };
 

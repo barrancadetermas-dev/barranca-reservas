@@ -2229,3 +2229,140 @@ select {
 [data-theme="dark"] .pax-btn       { background: #0f172a; }
 [data-theme="dark"] .pax-input     { background: #1e293b; border-color: #334155; }
 [data-theme="dark"] .pax-total     { background: rgba(99,102,241,.12); border-color: rgba(99,102,241,.2); }
+
+/* ══════════════════════════════════════════════════
+   MILA v6.3 — 8 MEJORAS VISUALES + COMISIONES
+   ══════════════════════════════════════════════════ */
+
+/* ── 1. CALENDAR: Días pasados ────────────────────── */
+.cal-day-header.past-header {
+  opacity: .38;
+  background: var(--color-surface-2) !important;
+  color: var(--color-text-3) !important;
+}
+.cal-day-header.past-header .day-name { color: var(--color-text-3) !important; }
+.cal-day-header.today {
+  color: var(--color-primary) !important;
+  background: var(--color-primary-l) !important;
+  font-weight: 800;
+  border-top: 2px solid var(--color-primary);
+  opacity: 1 !important;
+}
+.cal-day-header.today .day-name { color: var(--color-primary) !important; font-weight: 600; }
+.past-col {
+  background: rgba(0,0,0,.016) !important;
+  opacity: .72;
+}
+.past-col .bar { filter: saturate(.55) brightness(.9) !important; }
+.today-col {
+  background: rgba(99,102,241,.05) !important;
+  border-left: 2px solid rgba(99,102,241,.25) !important;
+  border-right: 2px solid rgba(99,102,241,.25) !important;
+}
+[data-theme="dark"] .past-col { background: rgba(0,0,0,.12) !important; }
+[data-theme="dark"] .cal-day-header.past-header { background: #0d1621 !important; }
+
+/* ── 2. CALENDARIO: Altura de celda 44 → 52px ──────── */
+.cal-cell { height: 52px !important; }
+.bar { top: 8px !important; bottom: 8px !important; }
+
+/* ── 3. AVATAR en booking list ────────────────────── */
+.bl-avatar {
+  width: 34px; height: 34px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: .8rem; font-weight: 800; flex-shrink: 0;
+  letter-spacing: -.02em;
+}
+.bl-avatar-empty { background: var(--color-surface-2); color: var(--color-text-3); }
+.booking-guest-col {
+  display: flex !important;
+  align-items: center !important;
+  gap: 10px !important;
+}
+.booking-guest-info { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+
+/* ── 4. TOAST con progreso ────────────────────────── */
+.toast { position: relative; overflow: hidden; }
+.toast::after {
+  content: '';
+  position: absolute;
+  bottom: 0; left: 0; height: 2px;
+  background: currentColor; opacity: .4;
+  animation: toast-progress 3.5s linear forwards;
+}
+@keyframes toast-progress {
+  from { width: 100%; }
+  to   { width: 0%; }
+}
+
+/* ── 5. TRANSICIÓN entre secciones ───────────────── */
+.section { animation: sectionFadeIn .18s ease both; }
+@keyframes sectionFadeIn {
+  from { opacity: 0; transform: translateY(7px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── 6. DARK MODE: Calendar mejorado ─────────────── */
+[data-theme="dark"] .cal-cell:hover { background: rgba(99,102,241,.1) !important; }
+[data-theme="dark"] .today-col { background: rgba(99,102,241,.1) !important; }
+[data-theme="dark"] .weekend-col { background: rgba(99,102,241,.06) !important; }
+[data-theme="dark"] .cal-unit-label { background: #1a2535; }
+[data-theme="dark"] .cal-unit-label-header { background: #1a2535; }
+[data-theme="dark"] .cal-day-header { background: #141f30; }
+
+/* ── 7. TYPING indicator en búsqueda de huéspedes ── */
+.guest-searching {
+  display: inline-block; width: 14px; height: 14px;
+  border: 2px solid var(--color-border);
+  border-top-color: var(--color-primary);
+  border-radius: 50%; animation: spin .6s linear infinite;
+  margin-left: 6px; vertical-align: middle;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.search-icon-wrap { position: relative; display: flex; align-items: center; }
+
+/* ── 8. CANAL COLORS en listado ──────────────────── */
+.source-dot {
+  width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+  display: inline-block; margin-right: 4px; vertical-align: middle;
+}
+
+/* ── COMISIÓN en price breakdown ─────────────────── */
+.pb-commission {
+  background: rgba(245,158,11,.06);
+  border-radius: var(--r-sm);
+  margin: 4px -4px;
+  padding: 6px 4px;
+}
+.pb-commission span:first-child { font-weight: 600; color: #92400e; font-size: .8rem; }
+.pb-commission span:last-child  { color: #92400e; font-weight: 700; }
+.pb-net {
+  border-top: 2px solid var(--color-primary);
+  margin-top: 4px; padding-top: 8px;
+}
+.pb-net span:first-child { color: var(--color-primary); font-weight: 700; }
+.pb-net strong { color: var(--color-primary); font-size: 1.05rem; font-weight: 800; }
+[data-theme="dark"] .pb-commission { background: rgba(245,158,11,.1); }
+[data-theme="dark"] .pb-commission span { color: #fde68a !important; }
+[data-theme="dark"] .pb-net span:first-child { color: #818cf8; }
+[data-theme="dark"] .pb-net strong { color: #818cf8; }
+
+/* ── KPI micro sparkline ──────────────────────────── */
+.kpi-sparkline {
+  display: flex; align-items: flex-end; gap: 2px;
+  height: 24px; margin-top: 8px; opacity: .35;
+}
+.kpi-spark-bar {
+  flex: 1; border-radius: 2px 2px 0 0;
+  background: currentColor; min-width: 4px;
+  transition: height .4s ease;
+}
+.kpi-spark-bar.today { opacity: 1; }
+
+/* ── FIX: booking-guest-col flex ─────────────────── */
+.booking-row-main {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}

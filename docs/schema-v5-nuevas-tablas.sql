@@ -124,3 +124,10 @@ CREATE INDEX IF NOT EXISTS idx_hotel_stock_hotel ON hotel_stock(hotel_id);
 ALTER TABLE bookings ADD COLUMN IF NOT EXISTS pax      integer DEFAULT 1;
 ALTER TABLE bookings ADD COLUMN IF NOT EXISTS adults   integer DEFAULT 1;
 ALTER TABLE bookings ADD COLUMN IF NOT EXISTS children integer DEFAULT 0;
+
+-- ══════════════════════════════════════════════════
+-- MILA v6.3 — Campos de comisión en bookings
+-- ══════════════════════════════════════════════════
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS commission_pct    numeric(5,2) DEFAULT 0;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS commission_amount numeric(12,2) DEFAULT 0;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS net_amount        numeric(12,2);

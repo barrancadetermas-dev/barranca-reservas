@@ -555,7 +555,15 @@
         <div class="pb-row pb-deduct" id="pbr-free-nights"><span>Noches sin cargo</span><span id="pb-free-nights">−$—</span></div>
         <div class="pb-row pb-deduct" id="pbr-discount"><span>Descuento</span><span id="pb-discount">−$—</span></div>
         <div class="pb-row pb-add" id="pbr-surcharge"><span>Recargo</span><span id="pb-surcharge">+$—</span></div>
-        <div class="pb-row pb-total"><span>TOTAL</span><span id="pb-total">$—</span></div>
+        <div class="pb-row pb-commission" id="pbr-commission" style="display:none">
+          <span id="pb-commission-label">Comisión canal</span>
+          <span id="pb-commission">−$—</span>
+        </div>
+        <div class="pb-row pb-total"><span>TOTAL bruto</span><span id="pb-total">$—</span></div>
+        <div class="pb-row pb-net" id="pbr-net" style="display:none">
+          <span>Neto complejo</span>
+          <strong id="pb-net">$—</strong>
+        </div>
       </div>
       <!-- ✨ Sugeridor de precio dinámico -->
       <div id="price-suggestion-container" style="margin-top:14px"></div>
