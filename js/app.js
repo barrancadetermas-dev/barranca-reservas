@@ -1,3 +1,4 @@
+import { generateVoucherText, openWhatsAppVoucher, openManagerTemplate } from './services/whatsapp-service.js';
 // ═══════════════════════════════════════════════════
 // app.js v5.0 — MILA Sistema Inteligente para Alojamientos
 // + Roles (admin/staff/demo) + Demo banner
@@ -193,12 +194,20 @@ async function initApp(user) {
     setupReminderModal();
     setupExpenseModal();
     setupGuestProfileModal();
+    setupWhatsAppModal();
     setupCancelBookingModal();
     setupCheckInOutModal();
 
     document.addEventListener('reminders:badge', (e) => updateReminderBadge(e.detail.count));
     document.addEventListener('booking:fullypaid', () => launchConfetti());
     document.addEventListener('show:toast', (e) => showToast(e.detail.msg, e.detail.type));
+
+    // ── Recargar la sección activa cuando cambia una reserva (evento local del form) ──
+    document.addEventListener('booking:changed', () => {
+      if (currentSection === 'calendar')  calendar?.load();
+      if (currentSection === 'dashboard') dashboard?.load();
+      if (currentSection === 'bookings')  bookingList?.load();
+    });
 
     document.getElementById('btn-new-booking').addEventListener('click', () => {
       if (isDemo()) return showDemoAction(() => bookingForm.open());
@@ -544,6 +553,7 @@ export async function markCheckOut(bookingId) {
 
 // Exponer globalmente para handlers inline
 window.markCheckIn  = markCheckIn;
+window.openManagerTemplate = (booking) => openManagerTemplate(booking, AppContext);
 window.markCheckOut = markCheckOut;
 window.openCancelModal = openCancelModal;
 
@@ -763,10 +773,10 @@ function setupReminderModal() {
   const close=()=>document.getElementById('overlay-reminder').classList.add('hidden');
   document.getElementById('btn-add-reminder')?.addEventListener('click',open);
   document.getElementById('btn-add-reminder-main')?.addEventListener('click',open);
-  document.getElementById('reminder-close').addEventListener('click',close);
-  document.getElementById('reminder-cancel').addEventListener('click',close);
+  document.getElementById('reminder-close')?.addEventListener('click',close);
+  document.getElementById('reminder-cancel')?.addEventListener('click',close);
   document.getElementById('overlay-reminder').addEventListener('click',(e)=>{if(e.target===e.currentTarget)close();});
-  document.getElementById('reminder-save').addEventListener('click',async()=>{
+  document.getElementById('reminder-save')?.addEventListener('click',async()=>{
     const title=document.getElementById('r-title').value.trim(),date=document.getElementById('r-date').value;
     if(!title||!date){showToast('Título y fecha obligatorios','warning');return;}
     if(isDemo()){showDemoAction(null);close();return;}
@@ -821,7 +831,7 @@ function setupExpenseModal() {
   document.getElementById('expense-close')?.addEventListener('click',close);
   document.getElementById('expense-cancel')?.addEventListener('click',close);
   document.getElementById('overlay-expense')?.addEventListener('click',(e)=>{if(e.target===e.currentTarget)close();});
-  document.getElementById('expense-save').addEventListener('click',async()=>{
+  document.getElementById('expense-save')?.addEventListener('click',async()=>{
     if(!can('manageExpenses')){showToast('🔒 Sin permiso','warning');return;}
     if(isDemo()){showDemoAction(null);close();return;}
     const editingId=document.getElementById('expense-editing-id').value;
@@ -833,6 +843,31 @@ function setupExpenseModal() {
     showToast(editingId?'Gasto actualizado ✓':'Gasto registrado ✓','success');close();
     document.getElementById('expense-editing-id').value='';
     if(currentSection==='statistics')statistics?.loadExpenses();
+  });
+}
+
+// ── WhatsApp Manager Template Modal ──────────────────
+function setupWhatsAppModal() {
+  const close = () => document.getElementById('overlay-whatsapp')?.classList.add('hidden');
+  document.getElementById('wa-modal-close')?.addEventListener('click', close);
+  document.getElementById('wa-close-btn')?.addEventListener('click', close);
+  document.getElementById('overlay-whatsapp')?.addEventListener('click', (e) => {
+    if (e.target === e.currentTarget) close();
+  });
+  document.getElementById('wa-copy-btn')?.addEventListener('click', () => {
+    const ta = document.getElementById('wa-template-text');
+    if (!ta) return;
+    ta.select();
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(ta.value).then(() => {
+        const btn = document.getElementById('wa-copy-btn');
+        if (btn) { btn.textContent = '✓ Copiado!'; setTimeout(() => btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="15" height="15"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> Copiar', 2000); }
+        showToast('Texto copiado al portapapeles ✓', 'success');
+      });
+    } else {
+      document.execCommand('copy');
+      showToast('Texto copiado ✓', 'success');
+    }
   });
 }
 
@@ -891,13 +926,10 @@ function setupConnectivityIndicator() {
   window.addEventListener('online',  () => setStatus('connected'));
   window.addEventListener('offline', () => setStatus('disconnected'));
 
-  // Escuchar estado del canal Realtime de Supabase (API v2)
-  // supabase.realtime.on() no existe en v2 — se usa el callback de subscribe()
-  supabase.channel('conn-status-monitor').subscribe((state) => {
-    if (state === 'SUBSCRIBED')    setStatus('connected');
-    if (state === 'CLOSED')        setStatus('disconnected');
-    if (state === 'CHANNEL_ERROR') setStatus(navigator.onLine ? 'reconnecting' : 'disconnected');
-  });
+  // Escuchar estado del canal Realtime de Supabase
+  supabase.realtime.on('connect',    () => setStatus('connected'));
+  supabase.realtime.on('reconnect',  () => setStatus('connected'));
+  supabase.realtime.on('disconnect', () => setStatus(navigator.onLine ? 'reconnecting' : 'disconnected'));
 }
 
 

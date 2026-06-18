@@ -11,6 +11,7 @@ import {
   showToast, formatARS, formatDate, AppContext
 } from '../supabase-config.js';
 import { can } from '../auth/permissions.js';
+import { getHolidaysForYear, isWeekend } from '../services/arg-holidays.js';
 import { logAction } from '../services/audit-service.js';
 
 const DAY_NAMES   = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
@@ -160,6 +161,8 @@ export class Calendar {
     const todayDay    = today.getDate();
     const todayMonth  = today.getMonth();
     const todayYear   = today.getFullYear();
+    // Precargar feriados del año actual (con cache)
+    const holidays    = getHolidaysForYear(this.year);
 
     grid.style.gridTemplateColumns = `160px repeat(${daysInMonth}, minmax(30px, 1fr))`;
     grid.innerHTML = '';
@@ -210,11 +213,21 @@ export class Calendar {
         const bookings = cellMap[unit.id]?.[d] ?? [];
         const rems     = reminderMap[dateISO] ?? [];
 
+        const cellHoliday = holidays.get(dateISO);
+        const cellIsWknd  = new Date(dateISO + 'T12:00:00').getDay() % 6 === 0;
+
         const cell = document.createElement('div');
-        cell.className = `cal-cell${isToday?' today-col':''}`;
+        let cellCls = 'cal-cell';
+        if (isToday)           cellCls += ' today-col';
+        if (cellIsWknd)        cellCls += ' weekend-col';
+        if (cellHoliday?.type === 'fixed' || cellHoliday?.type === 'movable') cellCls += ' holiday-col';
+        if (cellHoliday?.type === 'vacation') cellCls += ' vacation-col';
+        if (cellHoliday?.type === 'bridge')   cellCls += ' bridge-col';
+        cell.className      = cellCls;
         cell.dataset.day    = d;
         cell.dataset.unitId = unit.id;
         cell.dataset.date   = dateISO;
+        if (cellHoliday) cell.title = cellHoliday.label;
 
         if (bookings.length === 0) {
           this._bindEmptyCell(cell, unit.id, d, dateISO);
@@ -321,16 +334,18 @@ export class Calendar {
     const container = document.getElementById('cal-legend-container');
     if (!container) return;
 
-    // Sección 1: Estado / Origen
+    // Sección 1: Estados base
     const statusItems = [
       { color: '#EAB308', label: 'Sin seña (directo)' },
       { color: '#DC2626', label: 'Con seña / depósito' },
-      { color: '#16A34A', label: 'Pagado (directo)' },
-      { color: '#1D4ED8', label: 'Booking.com' },
-      { color: '#EA580C', label: 'Airbnb' },
-      { color: '#7C3AED', label: 'Familia / Uso propio' },
-      { color: '#374151', label: 'Bloqueo' },
+      { color: '#16A34A', label: 'Pagado' },
+      { color: '#374151', label: 'Bloqueo / No disponible' },
     ];
+
+    // Sección 2: Canales de reserva (todos desde SOURCE_CONFIG)
+    const channelItems = Object.entries(SOURCE_CONFIG)
+      .filter(([k]) => k !== 'direct')
+      .map(([, cfg]) => ({ color: cfg.dot ?? cfg.color ?? '#64748b', label: cfg.label }));
 
     // Sección 2: Departamentos
     const unitItems = this.ctx.units.map(u => ({
@@ -341,8 +356,16 @@ export class Calendar {
     container.innerHTML = `
       <div class="cal-legend-wrapper">
         <div class="cal-legend-section">
-          <div class="cal-legend-title">Estado / Canal de reserva</div>
+          <div class="cal-legend-title">Estado</div>
           ${statusItems.map(i => `
+            <div class="legend-item">
+              <div class="legend-swatch" style="background:${i.color}"></div>
+              <span>${i.label}</span>
+            </div>`).join('')}
+        </div>
+        <div class="cal-legend-section">
+          <div class="cal-legend-title">Canales</div>
+          ${channelItems.map(i => `
             <div class="legend-item">
               <div class="legend-swatch" style="background:${i.color}"></div>
               <span>${i.label}</span>
@@ -355,6 +378,13 @@ export class Calendar {
               <div class="legend-swatch-circle" style="background:${i.color}"></div>
               <span style="color:${i.color};font-weight:700">${i.label}</span>
             </div>`).join('')}
+        </div>
+        <div class="cal-legend-section">
+          <div class="cal-legend-title">Calendario</div>
+          <div class="legend-item"><div class="legend-swatch" style="background:rgba(99,102,241,.15);border:1px solid #6366f1"></div><span>Fin de semana</span></div>
+          <div class="legend-item"><div class="legend-swatch" style="background:rgba(239,68,68,.12);border:1px solid #ef4444"></div><span>Feriado nacional</span></div>
+          <div class="legend-item"><div class="legend-swatch" style="background:rgba(168,85,247,.10);border:1px solid #a855f7"></div><span>Puente turístico*</span></div>
+          <div class="legend-item"><div class="legend-swatch" style="background:rgba(20,184,166,.10);border:1px solid #14b8a6"></div><span>Vacaciones invierno</span></div>
         </div>
       </div>`;
   }

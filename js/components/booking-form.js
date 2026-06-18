@@ -80,6 +80,9 @@ export class BookingForm {
       guestSearchTimer = setTimeout(() => this._searchGuests(e.target.value.trim()), 300);
     });
 
+    // ── Contadores de personas ───────────────────────
+    this._bindPaxCounters();
+
     // Navegación libre: clic en step indicator
     document.querySelectorAll('.step-item').forEach((el, i) => {
       el.style.cursor = 'pointer';
@@ -91,6 +94,46 @@ export class BookingForm {
   }
 
   // ── Renderizar selector de canal (compacto, sin emojis) ──
+  // ── Contadores de adultos / menores ──────────────
+  _bindPaxCounters() {
+    const updateTotal = () => {
+      const adults   = parseInt(document.getElementById('f-adults')?.value  ?? '1') || 1;
+      const children = parseInt(document.getElementById('f-children')?.value ?? '0') || 0;
+      const total    = adults + children;
+      const hiddenEl = document.getElementById('f-pax');
+      const totalNum = document.getElementById('pax-total-num');
+      const totalLbl = document.getElementById('pax-total-label');
+      if (hiddenEl)  hiddenEl.value      = total;
+      if (totalNum)  totalNum.textContent = total;
+      const lbl = document.getElementById('pax-total-display');
+      if (lbl) {
+        const span = lbl.querySelector('.pax-total-label');
+        if (span) span.textContent = total === 1 ? 'persona en total' : 'personas en total';
+      }
+    };
+
+    const makeCounter = (minusId, plusId, inputId, min = 0, max = 20) => {
+      const minus = document.getElementById(minusId);
+      const plus  = document.getElementById(plusId);
+      const input = document.getElementById(inputId);
+      if (!minus || !plus || !input) return;
+      minus.addEventListener('click', (e) => {
+        e.preventDefault();
+        const v = parseInt(input.value) || 0;
+        if (v > min) { input.value = v - 1; updateTotal(); }
+      });
+      plus.addEventListener('click', (e) => {
+        e.preventDefault();
+        const v = parseInt(input.value) || 0;
+        if (v < max) { input.value = v + 1; updateTotal(); }
+      });
+    };
+
+    makeCounter('adults-minus',   'adults-plus',   'f-adults',   1, 20);
+    makeCounter('children-minus', 'children-plus', 'f-children', 0, 20);
+    updateTotal();
+  }
+
   _renderSourceSelector(value = 'direct') {
     const container = document.getElementById('f-source-selector');
     if (!container) return;
@@ -201,6 +244,16 @@ export class BookingForm {
       if (b.check_in)  document.getElementById('f-checkin').value  = b.check_in;
       if (b.check_out) document.getElementById('f-checkout').value = b.check_out;
 
+      // Pre-fill pax
+      const adultsEd   = document.getElementById('f-adults');
+      const childrenEd = document.getElementById('f-children');
+      if (adultsEd)   adultsEd.value   = b.adults   ?? b.pax ?? '1';
+      if (childrenEd) childrenEd.value = b.children ?? '0';
+      // Trigger total update
+      const paxEvt = document.getElementById('f-adults');
+      if (paxEvt) paxEvt.dispatchEvent(new Event('input'));
+      this._bindPaxCounters();
+
       const setVal = (id, v) => { const el = document.getElementById(id); if (el) el.value = v ?? ''; };
       setVal('f-price',       b.price_per_night ?? '');
       setVal('f-discount',    b.discount_pct    ?? 0);
@@ -261,6 +314,15 @@ export class BookingForm {
         <div class="detail-nights">${booking.nights ?? '—'} noches</div>
         <div><span class="detail-label">Check-out</span><strong>${booking.check_out}</strong></div>
       </div>
+      ${(booking.pax || booking.adults) ? `
+      <div class="detail-pax">
+        <span class="detail-label">Personas</span>
+        <div class="detail-pax-badges">
+          ${booking.adults ? `<span class="pax-badge">🧑 ${booking.adults} adulto${booking.adults !== 1 ? 's' : ''}</span>` : ''}
+          ${booking.children ? `<span class="pax-badge">🧒 ${booking.children} menor${booking.children !== 1 ? 'es' : ''}</span>` : ''}
+          <span class="pax-badge pax-total">👥 ${booking.pax ?? ((booking.adults??0)+(booking.children??0))} en total</span>
+        </div>
+      </div>` : ''}
       <div class="detail-financials">
         <div><span class="detail-label">Total</span><strong>${formatARS(booking.total_amount)}</strong></div>
         <div><span class="detail-label">Abonado</span><strong class="text-success">${formatARS(booking.total_paid ?? 0)}</strong></div>
@@ -279,6 +341,31 @@ export class BookingForm {
     }
 
     overlay.classList.remove('hidden');
+
+    // ── Bindear botones del footer del detalle ─────────
+    // Cerrar
+    document.getElementById('detail-close')?.addEventListener('click', () => {
+      overlay.classList.add('hidden');
+    });
+    // Editar
+    document.getElementById('detail-edit')?.addEventListener('click', () => {
+      overlay.classList.add('hidden');
+      this.openEdit(booking.id);
+    });
+    // WhatsApp voucher (al huésped)
+    document.getElementById('detail-whatsapp')?.addEventListener('click', () => {
+      import('../services/whatsapp-service.js').then(mod => {
+        mod.openWhatsAppVoucher(booking, this.ctx);
+      });
+    });
+    // Mensaje para la encargada
+    document.getElementById('detail-manager-msg')?.addEventListener('click', () => {
+      import('../services/whatsapp-service.js').then(mod => {
+        mod.openManagerTemplate(booking, this.ctx);
+      });
+    });
+    // Clic fuera del modal → cerrar
+    overlay.onclick = (e) => { if (e.target === overlay) overlay.classList.add('hidden'); };
   }
 
   close() {
@@ -294,6 +381,21 @@ export class BookingForm {
     this._selectedUnitIds = new Set();
     this._payRowCount     = 0;
     this._cachedTotal     = 0;
+
+    // Reset pax counters
+    const adultsEl   = document.getElementById('f-adults');
+    const childrenEl = document.getElementById('f-children');
+    const paxEl      = document.getElementById('f-pax');
+    const paxNum     = document.getElementById('pax-total-num');
+    const paxLabel   = document.getElementById('pax-total-display');
+    if (adultsEl)   adultsEl.value   = '1';
+    if (childrenEl) childrenEl.value = '0';
+    if (paxEl)      paxEl.value      = '1';
+    if (paxNum)     paxNum.textContent = '1';
+    if (paxLabel) {
+      const s = paxLabel.querySelector('.pax-total-label');
+      if (s) s.textContent = 'persona en total';
+    }
 
     ['f-firstname','f-lastname','f-dni','f-phone','f-email','f-notes',
      'f-price','f-discount','f-surcharge','f-free-nights','f-deposit',
@@ -734,6 +836,10 @@ export class BookingForm {
         guestId = newGuest.id;
       }
 
+      const adults   = parseInt(document.getElementById('f-adults')?.value   ?? '1') || 1;
+      const children = parseInt(document.getElementById('f-children')?.value ?? '0') || 0;
+      const pax      = adults + children;
+
       const bookingPayload = {
         hotel_id:         this.ctx.hotelId,
         guest_id:         guestId,
@@ -741,6 +847,9 @@ export class BookingForm {
         check_out:        co,
         nights,
         source,
+        pax,
+        adults,
+        children,
         price_per_night:  price,
         discount_pct:     disc,
         surcharge_amount: surch,

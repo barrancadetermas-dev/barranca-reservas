@@ -122,3 +122,79 @@ export function generateVoucherText(booking, ctx) {
 
   return lines;
 }
+
+// ══════════════════════════════════════════════════
+// TEMPLATE PARA ENCARGADA — modal con texto copiable
+// ══════════════════════════════════════════════════
+
+/**
+ * Genera el texto del template para la encargada y abre el modal.
+ * Formato solicitado:
+ *   *Nueva Reserva* 🧾
+ *   - Apellido y Nombre: *López, María*
+ *   - Apartamento n°: #3
+ *   - Fecha Ingreso: 16/06/2026
+ *   - Fecha Salida: 19/06/2026
+ *   - Noches: 3
+ *   - Cant de Pers:
+ *   Abonan al ingreso $:
+ *   _Nota_:
+ */
+export function openManagerTemplate(booking, ctx) {
+  const modal    = document.getElementById('overlay-whatsapp');
+  const textarea = document.getElementById('wa-template-text');
+  if (!modal || !textarea) return;
+
+  textarea.value = generateManagerText(booking, ctx);
+
+  modal.classList.remove('hidden');
+
+  // Focus + select all para facilitar copiar
+  setTimeout(() => {
+    textarea.focus();
+    textarea.select();
+  }, 100);
+}
+
+export function generateManagerText(booking, ctx) {
+  const g = booking.guests ?? {};
+  const apellido = g.last_name  ?? '';
+  const nombre   = g.first_name ?? '';
+  const fullName = apellido && nombre
+    ? `${apellido}, ${nombre}`
+    : `${nombre} ${apellido}`.trim() || '—';
+
+  // Unidades
+  const units = (booking.booking_units ?? [])
+    .map(bu => bu.units?.sort_order ? `#${bu.units.sort_order}` : bu.units?.name ?? '')
+    .filter(Boolean).join(' / ') || '—';
+
+  // Fechas
+  const fmt = (iso) => {
+    if (!iso) return '—';
+    const [y, m, d] = iso.split('-');
+    return `${d}/${m}/${y}`;
+  };
+
+  // Saldo a abonar al ingreso (balance pendiente)
+  const saldo = booking.balance ?? (booking.total_amount ?? 0) - (booking.total_paid ?? 0);
+  const saldoFmt = saldo > 0
+    ? `$${Math.round(saldo).toLocaleString('es-AR')}`
+    : 'Sin saldo pendiente';
+
+  return [
+    `*Nueva Reserva* 🧾`,
+    ``,
+    `- Apellido y Nombre: *${fullName}*`,
+    `- Apartamento n°: ${units}`,
+    `- Fecha Ingreso: ${fmt(booking.check_in)}`,
+    `- Fecha Salida: ${fmt(booking.check_out)}`,
+    `- Noches: ${booking.nights ?? '—'}`,
+    `- Cant de Pers: ${booking.pax ?? ''}${booking.adults ? ` (${booking.adults} adultos${booking.children ? `, ${booking.children} menores` : ''})` : ''}`,"
+
+    ``,
+    `Abonan al ingreso $: ${saldo > 0 ? saldoFmt : '✅ Pagado'}`,
+    ``,
+    `_Nota_: ${booking.notes ?? ''}`,
+  ].join('\n');
+}

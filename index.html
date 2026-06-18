@@ -485,6 +485,42 @@
         <label>Unidades <span class="req">*</span> <span class="label-hint">Podés seleccionar más de una</span></label>
         <div id="units-selector" class="units-selector"></div>
       </div>
+      <!-- Cantidad de personas -->
+      <div class="form-group">
+        <label>Cantidad de personas</label>
+        <div class="pax-selector">
+          <div class="pax-field">
+            <div class="pax-icon">🧑</div>
+            <div class="pax-info">
+              <span class="pax-label">Adultos</span>
+              <span class="pax-hint">+13 años</span>
+            </div>
+            <div class="pax-counter">
+              <button type="button" class="pax-btn" id="adults-minus" aria-label="Menos adultos">−</button>
+              <input type="number" id="f-adults" class="pax-input" value="1" min="1" max="20" readonly>
+              <button type="button" class="pax-btn" id="adults-plus" aria-label="Más adultos">+</button>
+            </div>
+          </div>
+          <div class="pax-field">
+            <div class="pax-icon">🧒</div>
+            <div class="pax-info">
+              <span class="pax-label">Menores</span>
+              <span class="pax-hint">0–12 años</span>
+            </div>
+            <div class="pax-counter">
+              <button type="button" class="pax-btn" id="children-minus" aria-label="Menos menores">−</button>
+              <input type="number" id="f-children" class="pax-input" value="0" min="0" max="20" readonly>
+              <button type="button" class="pax-btn" id="children-plus" aria-label="Más menores">+</button>
+            </div>
+          </div>
+          <div class="pax-total" id="pax-total-display">
+            <span class="pax-total-num" id="pax-total-num">1</span>
+            <span class="pax-total-label">persona en total</span>
+          </div>
+        </div>
+        <input type="hidden" id="f-pax" value="1">
+      </div>
+
       <div class="form-group">
         <label>Fechas de estadía <span class="req">*</span></label>
         <div id="f-date-picker" class="date-picker-container"></div>
@@ -568,6 +604,10 @@
       <button class="btn btn-ghost btn-sm" id="detail-whatsapp">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="17" height="17"><path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z"/></svg>
         Voucher
+      </button>
+      <button class="btn btn-outline btn-sm" id="detail-manager-msg" title="Mensaje para la encargada">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+        Encargada
       </button>
       <button class="btn btn-ghost btn-sm" id="detail-duplicate-btn" title="Duplicar reserva con mismo huésped">📋 Duplicar</button>
       <button class="btn btn-outline btn-sm checkin-status expected" id="detail-checkin-btn" style="display:none">✅ Check-in</button>
@@ -715,5 +755,34 @@
 
 <!-- Scripts -->
 <script type="module" src="./js/app.js"></script>
+
+<!-- ══ MODAL: WHATSAPP TEMPLATE ══ -->
+<div class="modal-overlay hidden" id="overlay-whatsapp">
+  <div class="modal modal-sm" id="modal-whatsapp">
+    <div class="modal-header">
+      <h3 class="modal-title">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20" style="vertical-align:-4px;margin-right:6px"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+        Mensaje para la encargada
+      </h3>
+      <button class="modal-close" id="wa-modal-close">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="20" height="20"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body" style="gap:12px">
+      <p style="font-size:.8rem;color:var(--color-text-3)">
+        Copiá el texto y pegalo en WhatsApp para enviarle el resumen a la encargada del complejo.
+      </p>
+      <textarea id="wa-template-text" class="wa-textarea" rows="14" readonly></textarea>
+    </div>
+    <div class="modal-footer" style="justify-content:flex-end;gap:8px">
+      <button class="btn btn-outline" id="wa-close-btn">Cerrar</button>
+      <button class="btn btn-primary" id="wa-copy-btn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="15" height="15"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+        Copiar
+      </button>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>

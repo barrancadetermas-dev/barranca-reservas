@@ -475,8 +475,6 @@ svg { flex-shrink: 0; }
 .cal-cell.today-col { background: rgba(99,102,241,.04); }
 .cal-cell.today-col:hover { background: rgba(99,102,241,.08); }
 .cal-cell.selecting { background: rgba(99,102,241,.15) !important; }
-.cal-cell.past-cell { background: rgba(0,0,0,.045); }
-.cal-cell.past-cell:hover { background: rgba(0,0,0,.08); }
 
 /* Booking bars inside cells */
 .bar {
@@ -2043,3 +2041,191 @@ select {
   .drp-month:last-child { display: none; } /* Solo 1 mes en mobile */
   .drp-month { min-width: 0; }
 }
+
+/* ══════════════════════════════════════════════════
+   MILA v6.2 — Feriados + WhatsApp + Fixes
+   ══════════════════════════════════════════════════ */
+
+/* ── CALENDARIO: FIN DE SEMANA ──────────────────── */
+.cal-day-header.weekend {
+  background: rgba(99,102,241,.07);
+  color: #6366f1;
+}
+.cal-day-header.weekend .day-name { color: rgba(99,102,241,.6); }
+.weekend-col {
+  background: rgba(99,102,241,.03);
+}
+.weekend-col:hover { background: rgba(99,102,241,.08) !important; }
+
+/* ── CALENDARIO: FERIADOS ───────────────────────── */
+.cal-day-header.holiday {
+  background: rgba(239,68,68,.08);
+  color: #dc2626;
+}
+.cal-day-header.holiday .day-name { color: rgba(239,68,68,.55); }
+.cal-day-header.holiday-bridge {
+  background: rgba(168,85,247,.08);
+  color: #9333ea;
+}
+.holiday-col  { background: rgba(239,68,68,.05); }
+.holiday-col:hover { background: rgba(239,68,68,.09) !important; }
+.vacation-col { background: rgba(20,184,166,.06); }
+.vacation-col:hover { background: rgba(20,184,166,.1) !important; }
+.bridge-col   { background: rgba(168,85,247,.05); }
+.bridge-col:hover { background: rgba(168,85,247,.09) !important; }
+
+/* Dot indicador de feriado en el header */
+.dh-num { display: block; font-size: .8rem; font-weight: 600; }
+.dh-dot {
+  display: block; width: 4px; height: 4px; border-radius: 50%;
+  margin: 1px auto 0;
+  background: currentColor; opacity: .7;
+}
+
+/* ── LEYENDA: 4 columnas compactas ──────────────── */
+.cal-legend-wrapper {
+  display: flex; flex-wrap: wrap; gap: 16px 24px;
+}
+.cal-legend-section { min-width: 130px; }
+.cal-legend-title {
+  font-size: .7rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .05em; color: var(--color-text-3);
+  margin-bottom: 6px; padding-bottom: 4px;
+  border-bottom: 0.5px solid var(--color-border-tertiary);
+}
+.legend-item { display: flex; align-items: center; gap: 7px; font-size: .75rem; color: var(--color-text-2); margin-bottom: 4px; }
+.legend-swatch {
+  width: 14px; height: 14px; border-radius: 3px; flex-shrink: 0;
+}
+.legend-swatch-circle {
+  width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
+}
+
+/* ── DARK MODE: feriados/weekends ─────────────────── */
+[data-theme="dark"] .cal-day-header.weekend { background: rgba(99,102,241,.12); }
+[data-theme="dark"] .weekend-col { background: rgba(99,102,241,.05); }
+[data-theme="dark"] .cal-day-header.holiday { background: rgba(239,68,68,.12); }
+[data-theme="dark"] .holiday-col  { background: rgba(239,68,68,.07); }
+[data-theme="dark"] .vacation-col { background: rgba(20,184,166,.08); }
+[data-theme="dark"] .bridge-col   { background: rgba(168,85,247,.07); }
+
+/* ── MODAL WHATSAPP TEMPLATE ─────────────────────── */
+.wa-textarea {
+  font-family: var(--font-mono, 'Courier New', monospace);
+  font-size: .82rem;
+  line-height: 1.7;
+  padding: 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--r-md, 10px);
+  background: var(--color-surface-2);
+  color: var(--color-text);
+  resize: vertical;
+  min-height: 240px;
+  width: 100%;
+  cursor: text;
+}
+.wa-textarea:focus { outline: none; border-color: var(--color-primary); }
+
+/* ── MANAGER BUTTON IN DETAIL ─────────────────────── */
+#detail-manager-msg {
+  display: inline-flex; align-items: center; gap: 5px;
+}
+
+/* ══════════════════════════════════════════════════
+   MILA v6.3 — PAX SELECTOR + MEJORAS VISUALES
+   ══════════════════════════════════════════════════ */
+
+/* ── SELECTOR DE PERSONAS (Adultos / Menores) ────── */
+.pax-selector {
+  border: 1px solid var(--color-border);
+  border-radius: var(--r-lg, 12px);
+  overflow: hidden;
+  background: var(--color-surface);
+}
+.pax-field {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--color-border);
+  transition: background var(--t-fast, .12s);
+}
+.pax-field:last-of-type { border-bottom: none; }
+.pax-field:hover { background: var(--color-surface-2); }
+
+.pax-icon { font-size: 1.35rem; flex-shrink: 0; line-height: 1; }
+
+.pax-info { flex: 1; min-width: 0; }
+.pax-label { display: block; font-size: .875rem; font-weight: 600; color: var(--color-text); }
+.pax-hint  { display: block; font-size: .72rem; color: var(--color-text-3); margin-top: 1px; }
+
+.pax-counter {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--r-md, 10px);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.pax-btn {
+  width: 36px; height: 36px;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--color-surface-2);
+  border: none; cursor: pointer;
+  font-size: 1.2rem; font-weight: 300; color: var(--color-text-2);
+  transition: all var(--t-fast, .12s);
+  user-select: none; flex-shrink: 0;
+  line-height: 1;
+}
+.pax-btn:hover { background: var(--color-primary-l); color: var(--color-primary); }
+.pax-btn:active { transform: scale(.88); }
+.pax-input {
+  width: 40px; height: 36px;
+  border: none; border-left: 1px solid var(--color-border); border-right: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text);
+  text-align: center;
+  font-size: .9rem; font-weight: 700;
+  padding: 0; outline: none; cursor: default;
+  -moz-appearance: textfield;
+}
+.pax-input::-webkit-inner-spin-button,
+.pax-input::-webkit-outer-spin-button { -webkit-appearance: none; }
+
+.pax-total {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 16px;
+  background: var(--color-primary-l);
+  border-top: 1px solid rgba(99,102,241,.15);
+}
+.pax-total-num {
+  font-size: 1.1rem; font-weight: 800; color: var(--color-primary);
+}
+.pax-total-label { font-size: .8rem; color: var(--color-primary); font-weight: 500; }
+
+/* ── PAX en detalle de reserva ───────────────────── */
+.detail-pax { margin-top: 12px; }
+.detail-pax .detail-label { display: block; margin-bottom: 6px; }
+.detail-pax-badges { display: flex; flex-wrap: wrap; gap: 6px; }
+.pax-badge {
+  font-size: .78rem; padding: 3px 10px; border-radius: 20px;
+  background: var(--color-surface-2); color: var(--color-text-2);
+  border: 1px solid var(--color-border); font-weight: 500;
+}
+.pax-badge.pax-total {
+  background: var(--color-primary-l); color: var(--color-primary);
+  border-color: rgba(99,102,241,.2); font-weight: 700;
+}
+
+/* Dark mode */
+[data-theme="dark"] .pax-selector  { background: #1e293b; border-color: #334155; }
+[data-theme="dark"] .pax-field     { border-color: #334155; }
+[data-theme="dark"] .pax-field:hover { background: #0f172a; }
+[data-theme="dark"] .pax-counter   { border-color: #334155; }
+[data-theme="dark"] .pax-btn       { background: #0f172a; }
+[data-theme="dark"] .pax-input     { background: #1e293b; border-color: #334155; }
+[data-theme="dark"] .pax-total     { background: rgba(99,102,241,.12); border-color: rgba(99,102,241,.2); }

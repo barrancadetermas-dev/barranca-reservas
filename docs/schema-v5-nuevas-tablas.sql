@@ -116,3 +116,11 @@ CREATE INDEX IF NOT EXISTS idx_cleaning_hotel_date ON cleaning_tasks(hotel_id, s
 CREATE INDEX IF NOT EXISTS idx_maintenance_hotel_status ON maintenance_issues(hotel_id, status);
 CREATE INDEX IF NOT EXISTS idx_hotel_config_hotel ON hotel_config(hotel_id);
 CREATE INDEX IF NOT EXISTS idx_hotel_stock_hotel ON hotel_stock(hotel_id);
+
+-- ══════════════════════════════════════════════════
+-- MILA v6.3 — Campos de personas en bookings
+-- Ejecutar si las columnas no existen aún
+-- ══════════════════════════════════════════════════
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS pax      integer DEFAULT 1;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS adults   integer DEFAULT 1;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS children integer DEFAULT 0;
