@@ -185,7 +185,7 @@ export class GuestsCRM {
             id, check_in, check_out, nights, status,
             total_amount, total_paid, balance, notes, price_per_night,
             booking_units(units(name, sort_order, color, max_guests)),
-            payments(amount_ars, method)
+            payments(amount, method, payment_date)
           )
         `)
         .eq('id', guestId)

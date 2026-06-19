@@ -16,7 +16,7 @@ import { BookingForm }  from './components/booking-form.js';
 import { BookingList }  from './components/booking-list.js';
 import { Statistics }   from './components/statistics.js';
 import { GuestsCRM }    from './components/guests.js';
-import { fetchDollarRates } from './services/dollar-api.js';
+import { fetchDollarRates, startDollarAutoRefresh, formatDollarBadge } from './services/dollar-api.js';
 import { ConfigPanel }    from './components/config-panel.js';
 import { AuditPanel }     from './components/audit-panel.js';
 import { OperationsModule } from './components/operations.js';
@@ -110,24 +110,64 @@ document.getElementById('login-form').addEventListener('submit', async (e) => {
   const btnText  = document.getElementById('login-btn-text');
   const spinner  = document.getElementById('login-btn-spinner');
   const errEl    = document.getElementById('login-error');
+  const btn      = document.getElementById('login-btn');
 
-  btnText.classList.add('hidden');
-  spinner.classList.remove('hidden');
-  errEl.classList.add('hidden');
-
-  const { error } = await supabase.auth.signInWithPassword({ email, password });
-  btnText.classList.remove('hidden');
-  spinner.classList.add('hidden');
-
-  if (error) {
-    errEl.textContent = 'Credenciales incorrectas. Verificá tu email y contraseña.';
+  if (!email || !password) {
+    errEl.textContent = 'Ingresá tu email y contraseña.';
     errEl.classList.remove('hidden');
+    return;
+  }
+
+  btnText?.classList.add('hidden');
+  spinner?.classList.remove('hidden');
+  errEl?.classList.add('hidden');
+  if (btn) btn.disabled = true;
+
+  try {
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+
+    if (error) {
+      const msgs = {
+        'Invalid login credentials': 'Email o contraseña incorrectos.',
+        'Email not confirmed':       'Confirmá tu email antes de ingresar.',
+        'Too many requests':         'Demasiados intentos. Esperá un momento.',
+      };
+      const msg = msgs[error.message] ?? `Error: ${error.message}`;
+      errEl.textContent = msg;
+      errEl.classList.remove('hidden');
+      errEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+    // Si no hay error, onAuthStateChange dispara initApp automáticamente
+  } catch (ex) {
+    errEl.textContent = 'Error de conexión. Verificá tu internet.';
+    errEl.classList.remove('hidden');
+  } finally {
+    btnText?.classList.remove('hidden');
+    spinner?.classList.add('hidden');
+    if (btn) btn.disabled = false;
   }
 });
 
-document.getElementById('toggle-password')?.addEventListener('click', () => {
-  const i = document.getElementById('login-password');
-  i.type  = i.type === 'password' ? 'text' : 'password';
+document.getElementById('toggle-password')?.addEventListener('click', (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+  const input   = document.getElementById('login-password');
+  const btn     = document.getElementById('toggle-password');
+  const isShown = input.type === 'text';
+  input.type    = isShown ? 'password' : 'text';
+  // Actualizar ícono: ojo abierto / cerrado
+  btn.innerHTML = isShown
+    ? `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+        <circle cx="12" cy="12" r="3"/>
+       </svg>`
+    : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+        <path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94"/>
+        <path d="M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19"/>
+        <line x1="1" y1="1" x2="23" y2="23"/>
+       </svg>`;
+  // Mantener foco en el campo
+  input.focus();
 });
 
 document.getElementById('logout-btn').addEventListener('click', () => supabase.auth.signOut());
@@ -185,11 +225,19 @@ async function initApp(user) {
     await navigateTo('dashboard');
 
     loadDollarBadge();
+    updateOperationsBadge();
     setupRealtime();
     setupNavigation();
     setupGlobalShortcuts();
     setupCommandPalette();
     setupDarkModeToggle();
+    // ── Bottom nav (mobile) ────────────────────────
+    document.querySelectorAll('.bnav-item[data-section]').forEach(btn => {
+      btn.addEventListener('click', () => navigateTo(btn.dataset.section));
+    });
+    document.getElementById('bnav-fab')?.addEventListener('click', () => {
+      document.getElementById('btn-new-booking')?.click();
+    });
     setupConnectivityIndicator();
     setupReminderModal();
     setupExpenseModal();
@@ -202,12 +250,8 @@ async function initApp(user) {
     document.addEventListener('booking:fullypaid', () => launchConfetti());
     document.addEventListener('show:toast', (e) => showToast(e.detail.msg, e.detail.type));
 
-    // ── Recargar la sección activa cuando cambia una reserva (evento local del form) ──
-    document.addEventListener('booking:changed', () => {
-      if (currentSection === 'calendar')  calendar?.load();
-      if (currentSection === 'dashboard') dashboard?.load();
-      if (currentSection === 'bookings')  bookingList?.load();
-    });
+    // ── Recargar la sección activa cuando cambia una reserva (debounced) ──
+    document.addEventListener('booking:changed', () => debouncedCalendarLoad(400));
 
     document.getElementById('btn-new-booking').addEventListener('click', () => {
       if (isDemo()) return showDemoAction(() => bookingForm.open());
@@ -548,6 +592,17 @@ export async function markCheckOut(bookingId) {
   if (error) { showToast('Error al registrar check-out', 'error'); return; }
   await logAction('CHECKOUT', 'booking', bookingId, 'Check-out registrado');
   showToast('👋 Check-out registrado', 'success');
+  // Auto-crear tarea de limpieza para las unidades que hicieron check-out
+  try {
+    const { data: booking } = await supabase
+      .from('bookings')
+      .select('*, guests!bookings_guest_id_fkey(first_name,last_name), booking_units(unit_id,units(name))')
+      .eq('id', bookingId).single();
+    if (booking) {
+      const { OperationsModule } = await import('./components/operations.js');
+      await OperationsModule.createCheckoutCleaningTask(supabase, AppContext, booking);
+    }
+  } catch (_) { /* operaciones opcional */ }
   document.dispatchEvent(new CustomEvent('booking:changed'));
 }
 
@@ -560,13 +615,64 @@ window.openCancelModal = openCancelModal;
 // ══════════════════════════════════════════════════
 // DOLLAR BADGE
 // ══════════════════════════════════════════════════
+function _updateDollarUI(rates) {
+  if (!rates) return;
+
+  // Badge compacto en el header
+  const badgeEl = document.getElementById('dollar-badge-value');
+  if (badgeEl && rates.oficial?.sell) {
+    badgeEl.textContent = `$${Math.round(rates.oficial.sell).toLocaleString('es-AR')}`;
+  }
+
+  // Widget del dashboard
+  const setEl = (id, val) => { const el = document.getElementById(id); if (el && val) el.textContent = val; };
+  const fmt   = v => v ? `$${Math.round(v).toLocaleString('es-AR')}` : '—';
+
+  // Filas de fuentes individuales
+  const sources = rates.rawSources ?? [];
+  const ambito  = sources.find(s => s.source === 'ambito');
+  const dolarapi= sources.find(s => s.source === 'dolarapi');
+  const bluelytics = sources.find(s => s.source === 'bluelytics');
+
+  setEl('dol-of-buy',  fmt(rates.oficial?.buy));
+  setEl('dol-of-sell', fmt(rates.oficial?.sell));
+  setEl('dol-bl-buy',  fmt(rates.blue?.buy));
+  setEl('dol-bl-sell', fmt(rates.blue?.sell));
+
+  // Fuentes individuales
+  setEl('dol-ambito-sell',     fmt(ambito?.blue?.sell ?? ambito?.oficial?.sell));
+  setEl('dol-dolarapi-sell',   fmt(dolarapi?.blue?.sell ?? dolarapi?.oficial?.sell));
+  setEl('dol-bluelytics-sell', fmt(bluelytics?.blue?.sell ?? bluelytics?.oficial?.sell));
+
+  // Timestamp y estado
+  const statusEl = document.getElementById('dollar-status-badge');
+  if (statusEl) {
+    statusEl.textContent = `${rates.sources?.length ?? 1} fuente${rates.sources?.length !== 1 ? 's' : ''} · actualizado`;
+    statusEl.style.background = '#22c55e18';
+    statusEl.style.color      = '#15803d';
+  }
+
+  const updEl = document.getElementById('dollar-updated-at');
+  if (updEl) {
+    const t = new Date();
+    updEl.textContent = `Promedio de ${rates.sources?.join(', ') ?? 'dolarapi'} · ${t.toLocaleTimeString('es-AR', {hour:'2-digit',minute:'2-digit'})}`;
+  }
+
+  // Actualizar spread (diferencia blue vs oficial)
+  const spreadEl = document.getElementById('dol-spread');
+  if (spreadEl && rates.oficial?.sell && rates.blue?.sell) {
+    const spread = Math.round(((rates.blue.sell / rates.oficial.sell) - 1) * 100);
+    spreadEl.textContent = `Brecha: ${spread > 0 ? '+' : ''}${spread}%`;
+    spreadEl.style.color = spread > 50 ? '#dc2626' : spread > 20 ? '#f59e0b' : '#22c55e';
+  }
+}
+
 async function loadDollarBadge() {
   try {
     const rates = await fetchDollarRates();
-    if (rates?.oficial?.sell) {
-      document.getElementById('dollar-badge-value').textContent =
-        `$${rates.oficial.sell.toLocaleString('es-AR')}`;
-    }
+    _updateDollarUI(rates);
+    // Auto-refresh cada 5 minutos
+    startDollarAutoRefresh((newRates) => _updateDollarUI(newRates));
   } catch { /* silencioso */ }
 }
 
@@ -598,9 +704,7 @@ function handleBookingChange(payload) {
   if (payload.new?.status === 'paid' && payload.old?.status !== 'paid') {
     document.dispatchEvent(new CustomEvent('booking:fullypaid'));
   }
-  if (currentSection === 'calendar')   calendar?.load();
-  if (currentSection === 'dashboard')  dashboard?.load();
-  if (currentSection === 'bookings')   bookingList?.load();
+  debouncedCalendarLoad(500); // Realtime: esperar un poco más
 }
 
 function handlePaymentChange(payload) {
@@ -655,6 +759,17 @@ function setupGlobalShortcuts() {
   document.addEventListener('keydown', (e) => {
     if ((e.ctrlKey||e.metaKey) && e.key==='k') { e.preventDefault(); toggleCommandPalette(); }
     if (e.key==='Escape') closeCommandPalette();
+    // ← → navegar meses (sin foco en campos ni modales abiertos)
+    if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') &&
+        !['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName) &&
+        !document.querySelector('.modal-overlay:not(.hidden)')) {
+      if (currentSection === 'calendar') {
+        const btn = e.key === 'ArrowLeft'
+          ? document.getElementById('cal-prev')
+          : document.getElementById('cal-next');
+        btn?.click(); e.preventDefault();
+      }
+    }
   });
 }
 
@@ -729,6 +844,30 @@ export function updateReminderBadge(count) {
   if (!badge) return;
   if (count > 0) { badge.textContent=count; badge.style.display='inline'; badge.classList.add('nav-badge-pulse'); }
   else { badge.style.display='none'; badge.classList.remove('nav-badge-pulse'); }
+}
+
+async function updateOperationsBadge() {
+  const opsBadge = document.getElementById('nav-badge-operations');
+  if (!opsBadge || !AppContext.hotelId) return;
+  try {
+    const today = new Date().toISOString().split('T')[0];
+    const [cleanRes, maintRes] = await Promise.all([
+      supabase.from('cleaning_tasks')
+        .select('id', { count: 'exact', head: true })
+        .eq('hotel_id', AppContext.hotelId).eq('status','pending').eq('scheduled_date', today),
+      supabase.from('maintenance_issues')
+        .select('id', { count: 'exact', head: true })
+        .eq('hotel_id', AppContext.hotelId).neq('status','resolved').eq('priority','urgent'),
+    ]);
+    const n = (cleanRes.count ?? 0) + (maintRes.count ?? 0);
+    if (n > 0) {
+      opsBadge.textContent  = n;
+      opsBadge.style.display = 'inline';
+      opsBadge.style.background = n >= 3 ? '#ef4444' : '#f59e0b';
+    } else {
+      opsBadge.style.display = 'none';
+    }
+  } catch { /* tabla no creada aún */ }
 }
 
 async function loadRemindersSection() {
@@ -934,6 +1073,33 @@ function setupConnectivityIndicator() {
 
 
 // ══════════════════════════════════════════════════
-// START
+// START — manejo de URL params especiales
 // ══════════════════════════════════════════════════
-boot();
+(async () => {
+  const params = new URLSearchParams(window.location.search);
+  // ?demo=true → auto-login con usuario demo
+  if (params.get('demo') === 'true') {
+    const demoEmail = import.meta.env.VITE_DEMO_EMAIL ?? 'demo@milasistema.com';
+    const demoPass  = import.meta.env.VITE_DEMO_PASS  ?? 'MILAdemo2025!';
+    const { error } = await supabase.auth.signInWithPassword({ email: demoEmail, password: demoPass });
+    if (error) console.warn('[MILA] Demo login failed:', error.message);
+    else {
+      // Limpiar el param de la URL sin recargar
+      const url = new URL(window.location.href);
+      url.searchParams.delete('demo');
+      window.history.replaceState({}, '', url.toString());
+    }
+  }
+  // ?booking=ID → abrir detalle al cargar
+  if (params.get('booking')) {
+    window._pendingDetailId = params.get('booking');
+    const url = new URL(window.location.href);
+    url.searchParams.delete('booking');
+    window.history.replaceState({}, '', url.toString());
+  }
+  // ?section=calendar → ir a esa sección al arrancar
+  if (params.get('section')) {
+    window._pendingSection = params.get('section');
+  }
+  boot();
+})();

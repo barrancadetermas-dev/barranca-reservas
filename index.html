@@ -50,10 +50,19 @@
       </div>
       <div class="form-group">
         <label for="login-password">Contraseña</label>
-        <div class="input-wrapper">
-          <input type="password" id="login-password" placeholder="••••••••" autocomplete="current-password" required>
-          <button type="button" class="input-eye" id="toggle-password" tabindex="-1">
-            <svg id="eye-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+        <div class="input-wrapper" style="position:relative;display:flex;align-items:center">
+          <input type="password" id="login-password"
+                 placeholder="••••••••"
+                 autocomplete="current-password"
+                 style="padding-right:44px"
+                 required>
+          <button type="button" class="input-eye" id="toggle-password"
+                  title="Mostrar/ocultar contraseña"
+                  style="position:absolute;right:10px;top:50%;transform:translateY(-50%);
+                         background:none;border:none;cursor:pointer;padding:4px;
+                         color:var(--color-text-3);display:flex;align-items:center;
+                         transition:color .15s;z-index:2">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
               <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
               <circle cx="12" cy="12" r="3"/>
             </svg>
@@ -243,13 +252,36 @@
 
           <!-- Dollar Widget -->
           <div class="card widget-dollar">
-            <div class="card-header">
-              <h3>Cotización USD</h3>
-              <span class="badge badge-live" id="dollar-status-badge">Cargando</span>
+            <div class="card-header" style="margin-bottom:10px">
+              <h3>💵 Cotización USD</h3>
+              <span class="badge badge-live" id="dollar-status-badge"
+                    style="font-size:.68rem">Cargando...</span>
             </div>
-            <div class="dollar-grid" id="dollar-grid">
-              <div class="dollar-row"><span class="dollar-type">Oficial</span><div class="dollar-vals"><span>Compra: <strong id="dol-of-buy">—</strong></span><span>Venta: <strong id="dol-of-sell">—</strong></span></div></div>
-              <div class="dollar-row"><span class="dollar-type">Blue</span><div class="dollar-vals"><span>Compra: <strong id="dol-bl-buy">—</strong></span><span>Venta: <strong id="dol-bl-sell">—</strong></span></div></div>
+            <div class="dollar-avg-row">
+              <div class="dollar-avg-col">
+                <div class="dollar-avg-label">Oficial</div>
+                <div class="dollar-avg-vals">
+                  <span>C: <strong id="dol-of-buy">—</strong></span>
+                  <span>V: <strong id="dol-of-sell">—</strong></span>
+                </div>
+              </div>
+              <div class="dollar-avg-col">
+                <div class="dollar-avg-label">Blue</div>
+                <div class="dollar-avg-vals">
+                  <span>C: <strong id="dol-bl-buy">—</strong></span>
+                  <span>V: <strong id="dol-bl-sell">—</strong></span>
+                </div>
+              </div>
+            </div>
+            <div id="dol-spread" style="font-size:.75rem;font-weight:700;text-align:center;margin:8px 0 4px"></div>
+            <div class="dollar-sources-row">
+              <div class="dollar-source-item"><span class="dollar-source-label">Ámbito</span><strong id="dol-ambito-sell">—</strong></div>
+              <div class="dollar-source-item"><span class="dollar-source-label">DolarAPI</span><strong id="dol-dolarapi-sell">—</strong></div>
+              <div class="dollar-source-item"><span class="dollar-source-label">Bluelytics</span><strong id="dol-bluelytics-sell">—</strong></div>
+            </div>
+            <p class="dollar-updated-at" id="dollar-updated-at"
+               style="font-size:.65rem;color:var(--color-text-3);margin-top:8px"></p>
+          </div></div>
             </div>
             <p class="dollar-updated-at" id="dollar-updated-at"></p>
           </div>
@@ -282,6 +314,12 @@
             <button class="btn btn-ghost btn-icon" id="cal-next" title="Mes siguiente">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="19" height="19"><polyline points="9 18 15 12 9 6"/></svg>
             </button>
+        <button class="btn btn-outline btn-sm cal-print-btn" id="cal-print"
+                title="Imprimir calendario" onclick="window.print()"
+                style="padding:6px 10px;font-size:.78rem">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+          Imprimir
+        </button>
           </div>
           <button class="btn btn-outline btn-sm" id="cal-today">Hoy</button>
           <button class="btn btn-outline btn-sm" id="cal-view-toggle" title="Cambiar vista">☰ Lista</button>
@@ -617,6 +655,10 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
         Encargada
       </button>
+      <button class="btn btn-ghost btn-sm" id="detail-copy-link" title="Copiar link directo" style="gap:4px">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="13" height="13"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>
+        Copiar link
+      </button>
       <button class="btn btn-ghost btn-sm" id="detail-duplicate-btn" title="Duplicar reserva con mismo huésped">📋 Duplicar</button>
       <button class="btn btn-outline btn-sm checkin-status expected" id="detail-checkin-btn" style="display:none">✅ Check-in</button>
       <button class="btn btn-outline btn-sm checkin-status checkout" id="detail-checkout-btn" style="display:none">👋 Check-out</button>
@@ -792,5 +834,30 @@
   </div>
 </div>
 
+
+<!-- ═══════════════════════════════════════
+     BOTTOM NAV (solo mobile)
+═══════════════════════════════════════ -->
+<nav class="bottom-nav" id="bottom-nav" aria-label="Navegación mobile">
+  <button class="bnav-item" data-section="dashboard">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+    <span>Hoy</span>
+  </button>
+  <button class="bnav-item" data-section="calendar">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+    <span>Cal</span>
+  </button>
+  <button class="bnav-fab" id="bnav-fab" aria-label="Nueva reserva">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="22" height="22"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+  </button>
+  <button class="bnav-item" data-section="operations">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/></svg>
+    <span>Ops</span>
+  </button>
+  <button class="bnav-item" data-section="guests">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+    <span>CRM</span>
+  </button>
+</nav>
 </body>
 </html>

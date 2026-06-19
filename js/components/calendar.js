@@ -86,8 +86,8 @@ export class Calendar {
       .from('bookings')
       .select(`
         id, check_in, check_out, status, source, is_blocked, block_reason,
-        total_amount, total_paid, balance, nights,
-        guests!bookings_guest_id_fkey(first_name, last_name, bad_experience),
+        total_amount, total_paid, balance, nights, pax, adults, children, notes,
+        guests!bookings_guest_id_fkey(first_name, last_name, bad_experience, tags),
         booking_units(unit_id, units(name, sort_order, color, max_guests))
       `)
       .eq('hotel_id', this.ctx.hotelId)
@@ -567,7 +567,7 @@ export class Calendar {
       <div class="ct-guest">${guest}${hasBadExp ? ' <span style="color:#EF4444">⚠️</span>' : ''}</div>
       <div class="ct-unit">🛏️ ${units || '—'}</div>
       <div class="ct-dates" style="margin-top:6px">📅 ${booking.check_in} → ${booking.check_out}</div>
-      <div class="ct-nights">🌙 ${booking.nights ?? '?'} noches</div>
+      <div class="ct-nights">🌙 ${booking.nights ?? '?'} noches${booking.pax ? ` · 👥 ${booking.adults ?? booking.pax} adultos${booking.children ? ` + ${booking.children} menores` : ''}` : ''}</div>
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">
         <span style="padding:2px 8px;border-radius:99px;font-size:.7rem;font-weight:700;
           background:${getBookingBarColor(booking).color}22;color:${getBookingBarColor(booking).color};
@@ -622,8 +622,12 @@ export class Calendar {
     if (!unique.length) {
       grid.innerHTML = `<div class="empty-state" style="padding:40px">
         <span class="empty-state-icon">📅</span>
-        <p>Sin reservas en ${MONTH_NAMES[this.month]} ${this.year}</p>
+        <p>Sin reservas en ${MONTH_NAMES[this.month]} ${this.year}.</p>
+        <p style="font-size:.8rem;color:var(--color-text-3);margin-top:8px">
+          Usá ← → para navegar entre meses.
+        </p>
       </div>`;
+      this._renderDualLegend();
       return;
     }
 
@@ -663,6 +667,14 @@ export class Calendar {
           </div>
         </div>`;
     }).join('');
+
+    // Bind click events en la lista
+    grid.querySelectorAll('.list-booking-row[data-id]').forEach(row => {
+      row.addEventListener('click', () => this._openDetailById(row.dataset.id));
+    });
+
+    // Renderizar leyenda también en vista lista
+    this._renderDualLegend();
   }
 
   async _openDetailById(bookingId) {
@@ -731,7 +743,7 @@ export class Calendar {
   _renderWeekView(bookings) {
     const grid    = document.getElementById('calendar-grid');
     const legend  = document.getElementById('cal-legend-container');
-    if (legend) legend.innerHTML = '';
+    // (no limpiar leyenda — se re-renderiza al final)
     if (!this._weekStart) this._weekStart = this._getWeekStart(new Date());
 
     const days = Array.from({ length: 7 }, (_, i) => {
@@ -752,24 +764,29 @@ export class Calendar {
     corner.innerHTML = `<span style="font-size:.72rem;color:var(--color-text-3)">${weekStr}</span>`;
     grid.appendChild(corner);
 
+    // Cargar feriados para el año de la semana
+    const weekHolidays = getHolidaysForYear(days[0].getFullYear());
+
     days.forEach(d => {
-      const iso   = d.toISOString().split('T')[0];
-      const isToday = iso === today;
-      const dayOfWeek2 = date.getDay();
-      const isWknd2    = dayOfWeek2 === 0 || dayOfWeek2 === 6;
-      const isPastDay2 = dateISO < new Date().toISOString().split('T')[0];
-      const holiday2   = holidays?.get ? holidays.get(dateISO) : null;
-      const isHoliday2 = !!holiday2 && holiday2.type !== 'vacation';
+      const iso      = d.toISOString().split('T')[0];
+      const isToday  = iso === today;
+      const dow      = d.getDay();
+      const isWknd   = dow === 0 || dow === 6;
+      const isPast   = iso < today && !isToday;
+      const holiday  = weekHolidays.get(iso);
+      const isHoliday = !!holiday && holiday.type !== 'vacation';
 
       const dh = document.createElement('div');
-      let dhCls2 = 'cal-day-header';
-      if (isToday)   dhCls2 += ' today';
-      if (isWknd2)   dhCls2 += ' weekend';
-      if (isPastDay2 && !isToday) dhCls2 += ' past-header';
-      if (isHoliday2) dhCls2 += ` holiday holiday-${holiday2.type}`;
-      dh.className = dhCls2;
-      dh.title = holiday2?.label ?? '';
-      dh.innerHTML = `${d.getDate()}<span class="day-name">${['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'][d.getDay()]}</span>`;
+      let dhCls = 'cal-day-header';
+      if (isToday)   dhCls += ' today';
+      if (isWknd)    dhCls += ' weekend';
+      if (isPast)    dhCls += ' past-header';
+      if (isHoliday) dhCls += ` holiday holiday-${holiday.type}`;
+      dh.className = dhCls;
+      dh.title = holiday?.label ?? '';
+      dh.innerHTML = `<span class="dh-num">${d.getDate()}</span>
+        <span class="day-name">${['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'][d.getDay()]}</span>
+        ${holiday ? '<span class="dh-dot"></span>' : ''}`;
       grid.appendChild(dh);
     });
 
@@ -795,7 +812,14 @@ export class Calendar {
           (b.booking_units ?? []).some(bu => bu.unit_id === unit.id)
         );
         const cell = document.createElement('div');
-        cell.className = `cal-cell week-cell${isToday?' today-col':''}`;
+        const wcDow   = d.getDay();
+        const wcIsWknd = wcDow === 0 || wcDow === 6;
+        const wcIsPast = iso < today && !isToday;
+        let wcCls = 'cal-cell week-cell';
+        if (isToday)   wcCls += ' today-col';
+        if (wcIsWknd)  wcCls += ' weekend-col';
+        if (wcIsPast)  wcCls += ' past-col';
+        cell.className = wcCls;
         cell.dataset.date   = iso;
         cell.dataset.unitId = unit.id;
 
@@ -822,6 +846,8 @@ export class Calendar {
       });
     });
 
+    // Leyenda también en vista semana
+    this._renderDualLegend();
     // Navegación semana en controles existentes
     document.getElementById('cal-month-title').textContent = weekStr;
   }

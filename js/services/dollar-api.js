@@ -1,115 +1,163 @@
-// ═══════════════════════════════════════════════════
-// dollar-api.js — Cotización del Dólar Oficial (AR)
-// Fuente primaria: dolarapi.com
-// Fallback: bluelytics.com.ar
-// Caché en memoria: 30 minutos
-// ═══════════════════════════════════════════════════
+// ══════════════════════════════════════════════════
+// dollar-api.js v3.0 — Cotización del Dólar (AR)
+// 3 fuentes: dolarapi.com · Ámbito · bluelytics
+// Promedio entre fuentes disponibles
+// Auto-refresh configurable
+// ══════════════════════════════════════════════════
 
-let _cache = null;
-let _cacheTs = 0;
-const CACHE_TTL = 30 * 60 * 1000; // 30 minutos
+let _cache     = null;
+let _cacheTs   = 0;
+let _refreshId = null;
+
+const CACHE_TTL      = 5 * 60 * 1000;  // 5 minutos
+const TIMEOUT_MS     = 6000;
+const REFRESH_EVERY  = 5 * 60 * 1000;  // auto-refresh cada 5 min
+
+// ── Tipos de dólar que nos importan ──────────────
+// oficial / blue (paralelo)
 
 /**
- * Obtiene las cotizaciones del dólar.
- * @returns {{ oficial: {buy, sell}, blue: {buy, sell}, updatedAt: string } | null}
+ * Fetcha de las 3 fuentes en paralelo y promedia.
+ * Si alguna falla la ignora silenciosamente.
  */
 export async function fetchDollarRates() {
-  // Devolver caché si está vigente
-  if (_cache && (Date.now() - _cacheTs) < CACHE_TTL) {
-    return _cache;
-  }
+  if (_cache && Date.now() - _cacheTs < CACHE_TTL) return _cache;
 
-  // Intentar fuente primaria
-  try {
-    const result = await _fetchFromDolarAPI();
-    if (result) {
-      _cache   = result;
-      _cacheTs = Date.now();
-      return result;
-    }
-  } catch (e) {
-    console.warn('[dollar-api] Fuente primaria falló, usando fallback:', e.message);
-  }
-
-  // Intentar fuente secundaria
-  try {
-    const result = await _fetchFromBluelytics();
-    if (result) {
-      _cache   = result;
-      _cacheTs = Date.now();
-      return result;
-    }
-  } catch (e) {
-    console.warn('[dollar-api] Fuente secundaria también falló:', e.message);
-  }
-
-  return null;
-}
-
-/**
- * Fuente primaria: dolarapi.com
- */
-async function _fetchFromDolarAPI() {
-  const [oficialRes, blueRes] = await Promise.all([
-    fetch('https://dolarapi.com/v1/dolares/oficial', { signal: AbortSignal.timeout(5000) }),
-    fetch('https://dolarapi.com/v1/dolares/blue',    { signal: AbortSignal.timeout(5000) }),
+  const [r1, r2, r3] = await Promise.allSettled([
+    _fetchDolarAPI(),
+    _fetchAmbito(),
+    _fetchBluelytics(),
   ]);
 
-  if (!oficialRes.ok) throw new Error(`dolarapi oficial HTTP ${oficialRes.status}`);
+  const results = [r1, r2, r3]
+    .filter(r => r.status === 'fulfilled' && r.value)
+    .map(r => r.value);
 
-  const oficial = await oficialRes.json();
-  const blue    = blueRes.ok ? await blueRes.json() : null;
+  if (!results.length) return _cache ?? null;
 
-  return {
-    oficial: {
-      buy:  oficial.compra,
-      sell: oficial.venta,
-    },
-    blue: blue ? {
-      buy:  blue.compra,
-      sell: blue.venta,
-    } : null,
-    updatedAt: oficial.fechaActualizacion ?? new Date().toISOString(),
-    source: 'dolarapi',
+  // Promediar valores de fuentes disponibles
+  const avg = (vals) => {
+    const valid = vals.filter(v => v > 0);
+    if (!valid.length) return null;
+    return Math.round(valid.reduce((a, b) => a + b, 0) / valid.length);
   };
-}
 
-/**
- * Fuente secundaria: bluelytics
- */
-async function _fetchFromBluelytics() {
-  const res = await fetch('https://api.bluelytics.com.ar/v2/latest', {
-    signal: AbortSignal.timeout(5000)
-  });
-  if (!res.ok) throw new Error(`bluelytics HTTP ${res.status}`);
-  const data = await res.json();
+  const oficialBuys  = results.map(r => r.oficial?.buy).filter(Boolean);
+  const oficialSells = results.map(r => r.oficial?.sell).filter(Boolean);
+  const blueBuys     = results.map(r => r.blue?.buy).filter(Boolean);
+  const blueSells    = results.map(r => r.blue?.sell).filter(Boolean);
 
-  return {
+  const rates = {
     oficial: {
-      buy:  data.oficial?.value_buy,
-      sell: data.oficial?.value_sell,
+      buy:  avg(oficialBuys),
+      sell: avg(oficialSells),
     },
     blue: {
-      buy:  data.blue?.value_buy,
-      sell: data.blue?.value_sell,
+      buy:  avg(blueBuys),
+      sell: avg(blueSells),
     },
-    updatedAt: data.last_update ?? new Date().toISOString(),
-    source: 'bluelytics',
+    sources: results.map(r => r.source),
+    updatedAt: new Date().toISOString(),
+    rawSources: results,
   };
+
+  _cache   = rates;
+  _cacheTs = Date.now();
+  return rates;
 }
 
-/**
- * Limpia el caché (útil para forzar refresh).
- */
+// ── Fuente 1: dolarapi.com ────────────────────────
+async function _fetchDolarAPI() {
+  try {
+    const [of, bl] = await Promise.all([
+      _get('https://dolarapi.com/v1/dolares/oficial'),
+      _get('https://dolarapi.com/v1/dolares/blue'),
+    ]);
+    return {
+      oficial: { buy: of.compra, sell: of.venta },
+      blue:    bl ? { buy: bl.compra, sell: bl.venta } : null,
+      source:  'dolarapi',
+    };
+  } catch { return null; }
+}
+
+// ── Fuente 2: Ámbito Financiero ───────────────────
+async function _fetchAmbito() {
+  try {
+    const [of, bl] = await Promise.all([
+      _get('https://mercados.ambito.com/dolar/oficial/variacion'),
+      _get('https://mercados.ambito.com/dolar/informal/variacion'),
+    ]);
+    return {
+      oficial: {
+        buy:  parseFloat(of?.compra?.replace(',','.')),
+        sell: parseFloat(of?.venta?.replace(',','.')),
+      },
+      blue: {
+        buy:  parseFloat(bl?.compra?.replace(',','.')),
+        sell: parseFloat(bl?.venta?.replace(',','.')),
+      },
+      source: 'ambito',
+    };
+  } catch { return null; }
+}
+
+// ── Fuente 3: bluelytics.com.ar ───────────────────
+async function _fetchBluelytics() {
+  try {
+    const data = await _get('https://api.bluelytics.com.ar/v2/latest');
+    return {
+      oficial: {
+        buy:  data.oficial?.value_buy,
+        sell: data.oficial?.value_sell,
+      },
+      blue: {
+        buy:  data.blue?.value_buy,
+        sell: data.blue?.value_sell,
+      },
+      source: 'bluelytics',
+    };
+  } catch { return null; }
+}
+
+// ── Helper fetch con timeout ──────────────────────
+async function _get(url) {
+  const res = await fetch(url, { signal: AbortSignal.timeout(TIMEOUT_MS) });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
+// ── Auto-refresh ──────────────────────────────────
+export function startDollarAutoRefresh(onUpdate) {
+  if (_refreshId) clearInterval(_refreshId);
+  _refreshId = setInterval(async () => {
+    _cacheTs = 0; // forzar re-fetch
+    const rates = await fetchDollarRates();
+    if (rates && onUpdate) onUpdate(rates);
+  }, REFRESH_EVERY);
+  return _refreshId;
+}
+
+export function stopDollarAutoRefresh() {
+  if (_refreshId) { clearInterval(_refreshId); _refreshId = null; }
+}
+
 export function clearDollarCache() {
   _cache   = null;
   _cacheTs = 0;
 }
 
-/**
- * Devuelve la cotización oficial de venta del caché si existe.
- * Útil para mostrar el tipo de cambio en formularios de pago.
- */
 export function getCachedOfficialSell() {
   return _cache?.oficial?.sell ?? null;
+}
+
+/** Formatea para mostrar en el badge */
+export function formatDollarBadge(rates) {
+  if (!rates?.oficial?.sell) return '—';
+  const sell = rates.oficial.sell;
+  const blue = rates.blue?.sell;
+  if (blue && blue !== sell) {
+    return `OF $${sell.toLocaleString('es-AR')} · BL $${blue.toLocaleString('es-AR')}`;
+  }
+  return `$${sell.toLocaleString('es-AR')}`;
 }

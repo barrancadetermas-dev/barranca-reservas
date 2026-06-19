@@ -94,6 +94,32 @@ export class ConfigPanel {
   }
 
   _renderPanel() {
+    // Unidades configurables
+    const unitsHTML = `
+      <div class="config-group">
+        <div class="config-group-header">
+          <span class="config-group-icon">🏠</span>
+          <h4>Departamentos / Unidades</h4>
+        </div>
+        <div class="config-fields">
+          ${(this.ctx.units ?? []).map(u => `
+            <div class="config-field" style="grid-column:unset;flex-direction:row;align-items:center;gap:10px;padding:10px 16px">
+              <input type="color" class="unit-color-input" data-unit-id="${u.id}"
+                     value="${u.color ?? '#6366F1'}"
+                     style="width:34px;height:34px;border:none;border-radius:8px;cursor:pointer;
+                            padding:2px;background:none">
+              <div style="flex:1">
+                <div style="font-size:.875rem;font-weight:600">${u.name}</div>
+                <div style="font-size:.72rem;color:var(--color-text-3)">
+                  ${u.max_guests ? `Hasta ${u.max_guests} pers.` : ''} · Orden: #${u.sort_order ?? '?'}
+                </div>
+              </div>
+              <div class="unit-color-preview" style="width:10px;height:10px;border-radius:50%;
+                   background:${u.color ?? '#6366F1'};border:2px solid rgba(255,255,255,.2)"></div>
+            </div>`).join('') || '<div style="padding:16px;color:var(--color-text-3);font-size:.825rem">Sin unidades configuradas.</div>'}
+        </div>
+      </div>`;
+
     const groupsHTML = CONFIG_SCHEMA.map(group => `
       <div class="config-group">
         <div class="config-group-header">
@@ -129,12 +155,32 @@ export class ConfigPanel {
           Guardar configuración
         </button>
       </div>
-      <div class="config-groups">${groupsHTML}</div>
+      <div class="config-groups">${groupsHTML}${unitsHTML}</div>
     `;
   }
 
   _bindSave(container) {
     container.querySelector('#btn-save-config')?.addEventListener('click', () => this._save(container));
+
+    // Live preview al cambiar color
+    container.querySelectorAll('.unit-color-input').forEach(input => {
+      input.addEventListener('input', (e) => {
+        const preview = input.closest('.config-field').querySelector('.unit-color-preview');
+        if (preview) preview.style.background = e.target.value;
+      });
+      // Guardar al perder foco
+      input.addEventListener('change', async (e) => {
+        const unitId = input.dataset.unitId;
+        const color  = e.target.value;
+        try {
+          await this.db.from('units').update({ color }).eq('id', unitId);
+          // Update local context
+          const unit = this.ctx.units.find(u => u.id === unitId);
+          if (unit) unit.color = color;
+          showToast('Color actualizado ✓', 'success');
+        } catch { showToast('Error al guardar color', 'error'); }
+      });
+    });
   }
 
   async _save(container) {

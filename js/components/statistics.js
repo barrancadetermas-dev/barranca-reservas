@@ -191,6 +191,50 @@ export class Statistics {
         </div>`;
     }
 
+    // ── Gráfico de barras por canal de ingreso ──────
+    const channelRevenue = {};
+    (this._lastBookings ?? []).forEach(b => {
+      const src = b.source ?? 'direct';
+      channelRevenue[src] = (channelRevenue[src] ?? 0) + (b.total_amount ?? 0);
+    });
+    const sortedChannels = Object.entries(channelRevenue)
+      .sort(([,a],[,b]) => b - a).slice(0, 6);
+    const maxCh = sortedChannels[0]?.[1] ?? 1;
+
+    const CHANNEL_COLORS = {
+      direct:'#6366f1', walkin:'#0891b2', booking:'#1d4ed8',
+      airbnb:'#ea580c', family:'#7c3aed', company:'#0f766e',
+      referral:'#b45309', despegar:'#059669', expedia:'#dc2626',
+    };
+    const CHANNEL_NAMES = {
+      direct:'Directo', walkin:'Espontáneo', booking:'Booking',
+      airbnb:'Airbnb', family:'Familia', company:'Empresa',
+      referral:'Referido', despegar:'Despegar', expedia:'Expedia',
+    };
+
+    if (sortedChannels.length > 1) {
+      html += `
+        <div class="stats-section-title">Ingresos por canal</div>
+        <div class="channel-chart-card">
+          ${sortedChannels.map(([src, rev]) => {
+            const pct   = Math.round((rev / maxCh) * 100);
+            const color = CHANNEL_COLORS[src] ?? '#64748b';
+            const name  = CHANNEL_NAMES[src] ?? src;
+            return `
+              <div class="ch-row">
+                <div class="ch-label">
+                  <span class="ch-dot" style="background:${color}"></span>
+                  ${name}
+                </div>
+                <div class="ch-bar-track">
+                  <div class="ch-bar-fill" style="width:${pct}%;background:${color}"></div>
+                </div>
+                <div class="ch-val">${formatARS(rev)}</div>
+              </div>`;
+          }).join('')}
+        </div>`;
+    }
+
     // ── Tabla compacta por unidad ─────────────────
     html += `
       <div class="stats-table-wrap">
@@ -505,15 +549,24 @@ export class Statistics {
     const firstDay   = `${year}-${String(month+1).padStart(2,'0')}-01`;
     const lastDay    = new Date(year,month+1,0);
     const lastDayStr = `${year}-${String(month+1).padStart(2,'0')}-${String(lastDay.getDate()).padStart(2,'0')}`;
-    const [bRes, eRes, cRes] = await Promise.all([
-      this.db.from('bookings').select('source,total_amount').eq('hotel_id',this.ctx.hotelId).not('status','in','(cancelled,blocked)').gte('check_in',firstDay).lte('check_in',lastDayStr),
+    const [bRes, eRes, cRes, cfgRes] = await Promise.all([
+      this.db.from('bookings').select('source,total_amount,net_amount,commission_pct').eq('hotel_id',this.ctx.hotelId).not('status','in','(cancelled,blocked)').gte('check_in',firstDay).lte('check_in',lastDayStr),
       this.db.from('expenses').select('*').eq('hotel_id',this.ctx.hotelId).or(`due_date.is.null,and(due_date.gte.${firstDay},due_date.lte.${lastDayStr})`),
-      this.db.from('channel_commissions').select('*').eq('hotel_id',this.ctx.hotelId),
+      this.db.from('channel_commissions').select('*').eq('hotel_id',this.ctx.hotelId).then(r => r).catch(() => ({ data: [] })),
+      this.db.from('hotel_config').select('key,value').eq('hotel_id',this.ctx.hotelId).ilike('key','commission_%').then(r => r).catch(() => ({ data: [] })),
     ]);
     const revenueBySource = {};
     (bRes.data??[]).forEach(b=>{ const s=b.source??'direct'; revenueBySource[s]=(revenueBySource[s]??0)+(b.total_amount??0); });
+    // Comisiones: prioridad channel_commissions → hotel_config → booking.commission_pct
     const commMap = {};
     (cRes.data??[]).forEach(c=>{ commMap[c.channel]=c.commission_pct; });
+    // Fallback a hotel_config si channel_commissions está vacía
+    if (!Object.keys(commMap).length) {
+      (cfgRes.data??[]).forEach(row => {
+        const channel = row.key.replace('commission_','');
+        commMap[channel] = parseFloat(row.value) || 0;
+      });
+    }
     this._renderPL(revenueBySource, eRes.data??[], commMap, month, year);
   }
 

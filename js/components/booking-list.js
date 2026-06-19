@@ -473,13 +473,59 @@ export class BookingList {
 
   // ── Eliminar ──────────────────────────────────────
   async _deleteBooking(id) {
-    if (!confirm('¿Eliminar esta reserva? Esta acción no se puede deshacer.')) return;
-    try {
-      await this.db.from('bookings').delete().eq('id', id);
-      await logAction(this.db, this.ctx, 'booking_deleted', { bookingId: id });
-      showToast('Reserva eliminada', 'warning');
-      this.load();
-    } catch (err) { showToast('Error: ' + err.message, 'error'); }
+    // Eliminar diferido con opción de deshacer (5 segundos)
+    const row = document.querySelector(`.booking-row[data-booking-id="${id}"]`);
+    if (row) {
+      row.style.opacity     = '.35';
+      row.style.pointerEvents = 'none';
+      row.style.transition  = 'opacity .2s';
+    }
+
+    // Toast con botón Deshacer
+    const container = document.getElementById('toast-container');
+    const undo      = document.createElement('div');
+    undo.className  = 'toast toast-show';
+    undo.style.cssText = 'background:#fff8e1;border-left:3px solid #f59e0b;display:flex;align-items:center;gap:10px';
+    undo.innerHTML = `
+      <span style="width:20px;height:20px;border-radius:50%;background:#f59e0b;color:#fff;
+        display:flex;align-items:center;justify-content:center;font-size:.75rem;flex-shrink:0;font-weight:700">!</span>
+      <span style="flex:1;color:#78350f">Reserva eliminada</span>
+      <button id="undo-delete-${id}" style="background:#f59e0b;color:#fff;border:none;
+        border-radius:6px;padding:4px 12px;font-weight:700;cursor:pointer;font-size:.8rem">
+        Deshacer
+      </button>`;
+    container?.appendChild(undo);
+
+    let cancelled = false;
+    document.getElementById(`undo-delete-${id}`)?.addEventListener('click', () => {
+      cancelled = true;
+      undo.remove();
+      if (row) { row.style.opacity = ''; row.style.pointerEvents = ''; }
+      showToast('Eliminación cancelada ✓', 'success');
+    });
+
+    // Timer de 5 segundos
+    const timer = setTimeout(async () => {
+      undo.remove();
+      if (cancelled) return;
+      try {
+        await this.db.from('bookings').delete().eq('id', id);
+        await logAction(this.db, this.ctx, 'booking_deleted', { bookingId: id });
+        this.load();
+      } catch (err) {
+        if (row) { row.style.opacity = ''; row.style.pointerEvents = ''; }
+        showToast('Error al eliminar: ' + err.message, 'error');
+      }
+    }, 5000);
+
+    // Barra de progreso en el toast
+    undo.style.position = 'relative';
+    undo.style.overflow = 'hidden';
+    const bar = document.createElement('div');
+    bar.style.cssText = 'position:absolute;bottom:0;left:0;height:3px;background:#f59e0b;width:100%;transition:width 5s linear';
+    undo.appendChild(bar);
+    requestAnimationFrame(() => { bar.style.width = '0%'; });
+    setTimeout(() => { if (!cancelled) undo.classList.remove('toast-show'); }, 5000);
   }
 
   // ── WhatsApp ──────────────────────────────────────

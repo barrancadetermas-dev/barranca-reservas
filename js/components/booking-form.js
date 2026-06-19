@@ -341,6 +341,9 @@ export class BookingForm {
       body.innerHTML += `<div class="detail-payments"><div class="detail-label" style="margin-bottom:6px">Pagos</div>${payHtml}</div>`;
     }
 
+    // ── Timeline de cambios (audit_log) ──────────────
+    this._loadBookingTimeline(booking.id, body);
+
     overlay.classList.remove('hidden');
 
     // ── Bindear botones del footer del detalle ─────────
@@ -365,8 +368,79 @@ export class BookingForm {
         mod.openManagerTemplate(booking, this.ctx);
       });
     });
+    // Copiar link de reserva al portapapeles
+    document.getElementById('detail-copy-link')?.addEventListener('click', () => {
+      const url = `${window.location.origin}${window.location.pathname}?booking=${booking.id}`;
+      navigator.clipboard?.writeText(url).then(() => showToast('Link copiado ✓', 'success'));
+    });
     // Clic fuera del modal → cerrar
     overlay.onclick = (e) => { if (e.target === overlay) overlay.classList.add('hidden'); };
+  }
+
+  async _loadBookingTimeline(bookingId, body) {
+    try {
+      const { data: logs } = await this.db
+        .from('audit_log')
+        .select('action, description, user_email, created_at, meta')
+        .eq('hotel_id', this.ctx.hotelId)
+        .eq('entity_type', 'booking')
+        .eq('entity_id',   bookingId)
+        .order('created_at', { ascending: true })
+        .limit(20);
+
+      if (!logs?.length) return;
+
+      const COLORS = {
+        booking_created: '#22c55e',
+        booking_updated: '#3b82f6',
+        payment_added:   '#22c55e',
+        payment_deleted: '#ef4444',
+        checkout:        '#8b5cf6',
+        checkin:         '#0ea5e9',
+        booking_cancelled: '#ef4444',
+      };
+
+      const LABELS = {
+        booking_created:   'Reserva creada',
+        booking_updated:   'Reserva editada',
+        payment_added:     'Pago registrado',
+        payment_deleted:   'Pago eliminado',
+        checkout:          'Check-out',
+        checkin:           'Check-in',
+        booking_cancelled: 'Cancelada',
+      };
+
+      const timelineHTML = `
+        <div class="detail-timeline" style="margin-top:16px">
+          <div class="detail-label" style="margin-bottom:8px">Historial de cambios</div>
+          <div class="tl-list">
+            ${logs.map(log => {
+              const color = COLORS[log.action] ?? '#64748b';
+              const label = LABELS[log.action] ?? log.action;
+              const dt    = log.created_at
+                ? new Date(log.created_at).toLocaleString('es-AR', {
+                    day:'2-digit',month:'2-digit',year:'2-digit',
+                    hour:'2-digit',minute:'2-digit'
+                  })
+                : '—';
+              const user = log.user_email?.split('@')[0] ?? 'Sistema';
+              return `
+                <div class="tl-row">
+                  <div class="tl-dot-wrap">
+                    <div class="tl-dot" style="background:${color}"></div>
+                  </div>
+                  <div class="tl-content">
+                    <div class="tl-action">${label}</div>
+                    <div class="tl-meta">${user} · ${dt}</div>
+                    ${log.description ? `<div class="tl-desc">${log.description}</div>` : ''}
+                  </div>
+                </div>`;
+            }).join('')}
+          </div>
+        </div>`;
+
+      body?.insertAdjacentHTML('beforeend', timelineHTML);
+    } catch { /* audit_log opcional */ }
   }
 
   close() {
@@ -474,11 +548,57 @@ export class BookingForm {
         this._updateBlockedDates();
         this._updateBreakdown();
         this._triggerPriceSuggestion();
+        // Pre-cargar precio con ADR del mes actual si el campo está vacío
+        if (!document.getElementById('f-price')?.value) {
+          this._prefillPrice([...this._selectedUnitIds]);
+        }
       });
     });
   }
 
   // ── Sugeridor de precio dinámico ─────────────────
+  async _prefillPrice(unitIds) {
+    if (!unitIds.length) return;
+    const priceEl = document.getElementById('f-price');
+    if (!priceEl || priceEl.value) return; // ya tiene precio, no sobreescribir
+    try {
+      const today    = new Date();
+      const month    = today.getMonth();
+      const year     = today.getFullYear();
+      const firstDay = `${year}-${String(month+1).padStart(2,'0')}-01`;
+      const { data } = await this.db
+        .from('bookings')
+        .select('price_per_night, booking_units(unit_id)')
+        .eq('hotel_id', this.ctx.hotelId)
+        .not('status','in','(cancelled,blocked)')
+        .gte('check_in', firstDay)
+        .gt('price_per_night', 0);
+
+      const relevant = (data ?? []).filter(b =>
+        (b.booking_units ?? []).some(bu => unitIds.includes(bu.unit_id)) &&
+        b.price_per_night > 0
+      );
+
+      if (!relevant.length) return;
+
+      const adr = Math.round(
+        relevant.reduce((s, b) => s + b.price_per_night, 0) / relevant.length / 1000
+      ) * 1000; // redondear al millar
+
+      if (adr > 0) {
+        priceEl.value = adr;
+        priceEl.dispatchEvent(new Event('input'));
+        // Highlight sutil para avisar que fue pre-cargado
+        priceEl.style.borderColor = '#22c55e';
+        priceEl.style.boxShadow   = '0 0 0 3px rgba(34,197,94,.15)';
+        setTimeout(() => {
+          priceEl.style.borderColor = '';
+          priceEl.style.boxShadow   = '';
+        }, 2500);
+      }
+    } catch (_) {}
+  }
+
   _triggerPriceSuggestion() {
     clearTimeout(this._suggestTimer);
     this._suggestTimer = setTimeout(() => this._runPriceSuggestion(), 500);
@@ -630,7 +750,52 @@ export class BookingForm {
       showToast('Ingresá el precio por noche', 'warning');
       this._goToStep(3); return false;
     }
+
+    // ── Verificar solapamiento de reservas ───────────
+    const overlapMsg = await this._checkOverlap(ci, co, [...this._selectedUnitIds]);
+    if (overlapMsg) {
+      showToast(overlapMsg, 'error');
+      this._goToStep(2); return false;
+    }
+
     return true;
+  }
+
+  // ── Verificar reservas superpuestas ──────────────
+  async _checkOverlap(checkIn, checkOut, unitIds) {
+    if (!unitIds.length) return null;
+    try {
+      const { data } = await this.db
+        .from('bookings')
+        .select('id, check_in, check_out, guests!bookings_guest_id_fkey(first_name,last_name), booking_units(unit_id,units(name,sort_order))')
+        .eq('hotel_id', this.ctx.hotelId)
+        .neq('status', 'cancelled')
+        .not('status', 'eq', 'blocked')
+        .lt('check_in', checkOut)
+        .gt('check_out', checkIn);
+
+      if (!data?.length) return null;
+
+      // Filtrar solo las que comparten unidad con esta reserva
+      const conflicts = data.filter(b => {
+        if (this._editingId && b.id === this._editingId) return false; // permitir editar la misma
+        const bUnitIds = (b.booking_units ?? []).map(bu => bu.unit_id);
+        return bUnitIds.some(uid => unitIds.includes(uid));
+      });
+
+      if (!conflicts.length) return null;
+
+      const first = conflicts[0];
+      const unit  = (first.booking_units ?? [])[0]?.units;
+      const guest = first.guests
+        ? `${first.guests.first_name} ${first.guests.last_name}`
+        : 'Bloqueo';
+      const unitName = unit ? `${unit.name}` : 'una unidad';
+
+      return `⚠️ ${unitName} ya está reservada del ${first.check_in} al ${first.check_out} (${guest})`;
+    } catch {
+      return null; // Si falla la query, no bloquear el guardado
+    }
   }
 
   // ── Precio breakdown con comisión de canal ──────────

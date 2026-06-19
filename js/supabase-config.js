@@ -258,16 +258,19 @@ export async function loadHotelContext() {
     color: u.color ?? getDefaultColor(u.sort_order ?? 1),
   }));
 
-  // Cargar configuración del hotel
+  // Cargar configuración del hotel (tabla opcional — se crea con schema-v5-nuevas-tablas.sql)
   try {
-    const { data: cfg } = await supabase
+    const { data: cfg, error: cfgErr } = await supabase
       .from('hotel_config')
       .select('*')
       .eq('hotel_id', hotel.id);
-    if (cfg?.length) {
+    // Si la tabla no existe (404/42P01), ignorar silenciosamente
+    if (cfgErr) {
+      // No loguear — es esperado hasta que se cree la tabla hotel_config
+    } else if (cfg?.length) {
       cfg.forEach(row => { AppContext.config[row.key] = row.value; });
     }
-  } catch { /* tabla opcional */ }
+  } catch (_) { /* tabla opcional */ }
 }
 
 // Backward-compat exports que otros módulos importan
