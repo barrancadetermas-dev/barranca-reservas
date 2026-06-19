@@ -165,6 +165,8 @@ export class Calendar {
     const holidays    = getHolidaysForYear(this.year);
 
     grid.style.gridTemplateColumns = `160px repeat(${daysInMonth}, minmax(30px, 1fr))`;
+    grid.classList.add('month-grid');
+    grid.classList.remove('week-grid');
     grid.innerHTML = '';
 
     // ── Encabezados ──
@@ -755,6 +757,8 @@ export class Calendar {
     const today = new Date().toISOString().split('T')[0];
     grid.style.gridTemplateColumns = `160px repeat(7, 1fr)`;
     grid.style.minWidth = '600px';
+    grid.classList.add('week-grid');
+    grid.classList.remove('month-grid');
     grid.innerHTML = '';
 
     // Header días

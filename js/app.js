@@ -349,6 +349,8 @@ export async function navigateTo(section) {
   }
 
   currentSection = section;
+  // Persistir sección activa — sobrevive a F5
+  try { localStorage.setItem('mila_last_section', section); } catch {}
   document.querySelectorAll('.nav-item').forEach(el =>
     el.classList.toggle('active', el.dataset.section === section));
   document.querySelectorAll('.section').forEach(el => el.classList.remove('active'));

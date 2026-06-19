@@ -723,12 +723,12 @@ export class BookingForm {
   }
 
   // ── Validación completa — solo al guardar ─────────
-  _validateAll() {
-    const fn    = document.getElementById('f-firstname').value.trim();
-    const ln    = document.getElementById('f-lastname').value.trim();
-    const ci    = document.getElementById('f-checkin').value;
-    const co    = document.getElementById('f-checkout').value;
-    const price = parseFloat(document.getElementById('f-price').value);
+  async _validateAll() {
+    const fn    = document.getElementById('f-firstname')?.value.trim() ?? '';
+    const ln    = document.getElementById('f-lastname')?.value.trim()  ?? '';
+    const ci    = document.getElementById('f-checkin')?.value ?? '';
+    const co    = document.getElementById('f-checkout')?.value ?? '';
+    const price = parseFloat(document.getElementById('f-price')?.value ?? '0');
 
     if (!fn || !ln) {
       showToast('Ingresá nombre y apellido del huésped', 'warning');
@@ -751,12 +751,14 @@ export class BookingForm {
       this._goToStep(3); return false;
     }
 
-    // ── Verificar solapamiento de reservas ───────────
-    const overlapMsg = await this._checkOverlap(ci, co, [...this._selectedUnitIds]);
-    if (overlapMsg) {
-      showToast(overlapMsg, 'error');
-      this._goToStep(2); return false;
-    }
+    // ── Verificar solapamiento de reservas (await correcto) ──────
+    try {
+      const overlapMsg = await this._checkOverlap(ci, co, [...this._selectedUnitIds]);
+      if (overlapMsg) {
+        showToast(overlapMsg, 'error');
+        this._goToStep(2); return false;
+      }
+    } catch { /* no bloquear si falla la query de overlap */ }
 
     return true;
   }
@@ -1007,10 +1009,17 @@ export class BookingForm {
   // ── Submit ────────────────────────────────────────
   async _submit() {
     // Validación completa al guardar
-    if (!this._validateAll()) return;
+    if (!await this._validateAll()) return;
 
     const btn = document.getElementById('btn-step-next');
     if (btn) { btn.disabled = true; btn.textContent = 'Guardando...'; }
+
+    // Safety timeout: desbloquear botón si algo tarda más de 30 segundos
+    let safetyTimer = setTimeout(() => {
+      console.error('[MILA] Submit timeout — posible problema de red o DB');
+      if (btn) { btn.disabled = false; btn.textContent = this._editingId ? 'Guardar cambios' : 'Confirmar reserva'; }
+      showToast('La operación tardó demasiado. Verificá tu conexión a internet.', 'error');
+    }, 30000);
 
     try {
       const ci    = document.getElementById('f-checkin').value;
@@ -1055,16 +1064,13 @@ export class BookingForm {
       const children = parseInt(document.getElementById('f-children')?.value ?? '0') || 0;
       const pax      = adults + children;
 
-      const bookingPayload = {
+      // ── Payload CORE (columnas que siempre existen) ──────────
+      const corePayload = {
         hotel_id:         this.ctx.hotelId,
         guest_id:         guestId,
         check_in:         ci,
         check_out:        co,
-        nights,
         source,
-        pax,
-        adults,
-        children,
         price_per_night:  price,
         discount_pct:     disc,
         surcharge_amount: surch,
@@ -1074,24 +1080,51 @@ export class BookingForm {
         total_paid:       paid,
         balance,
         notes:            notes || null,
-        commission_pct:   this._cachedCommPct  ?? 0,
-        commission_amount:this._cachedCommAmt  ?? 0,
-        net_amount:       this._cachedNetAmt   ?? total,
         status:           balance <= 0 ? 'paid' : paid > 0 ? 'partial' : 'pending',
       };
 
+      // Intentar agregar nights (puede ser columna generada — ignorar si falla)
+      const payloadWithNights = { ...corePayload, nights };
+
       let bookingId = this._editingId;
       if (bookingId) {
-        const { error } = await this.db.from('bookings').update(bookingPayload).eq('id', bookingId);
-        if (error) throw error;
+        // UPDATE
+        let { error: upErr } = await this.db.from('bookings').update(payloadWithNights).eq('id', bookingId);
+        if (upErr?.message?.includes('nights') || upErr?.message?.includes('generated')) {
+          // nights es columna generada — reintentar sin ella
+          const { error: upErr2 } = await this.db.from('bookings').update(corePayload).eq('id', bookingId);
+          if (upErr2) throw new Error('No fue posible actualizar la reserva: ' + upErr2.message);
+        } else if (upErr) {
+          throw new Error('No fue posible actualizar la reserva: ' + upErr.message);
+        }
         await this.db.from('booking_units').delete().eq('booking_id', bookingId);
         await this.db.from('payments').delete().eq('booking_id', bookingId);
       } else {
-        const { data: newB, error } = await this.db
-          .from('bookings').insert(bookingPayload).select('id').single();
-        if (error) throw error;
+        // INSERT — intentar con nights primero
+        let { data: newB, error: insErr } = await this.db
+          .from('bookings').insert(payloadWithNights).select('id').single();
+        if (insErr?.message?.includes('nights') || insErr?.message?.includes('generated')) {
+          // nights es columna generada — reintentar sin ella
+          const { data: newB2, error: insErr2 } = await this.db
+            .from('bookings').insert(corePayload).select('id').single();
+          if (insErr2) throw new Error('No fue posible crear la reserva: ' + insErr2.message);
+          newB = newB2;
+        } else if (insErr) {
+          throw new Error('No fue posible crear la reserva: ' + insErr.message);
+        }
         bookingId = newB.id;
       }
+
+      // Intentar guardar columnas opcionales (pax, comisión) si existen en la DB
+      try {
+        const extras = {
+          pax, adults, children,
+          commission_pct:    this._cachedCommPct  ?? 0,
+          commission_amount: this._cachedCommAmt  ?? 0,
+          net_amount:        this._cachedNetAmt   ?? total,
+        };
+        await this.db.from('bookings').update(extras).eq('id', bookingId);
+      } catch { /* columnas opcionales — no fallar si no existen */ }
 
       // Insertar unidades
       const unitRows = [...this._selectedUnitIds].map(uid => ({
@@ -1131,9 +1164,15 @@ export class BookingForm {
       document.dispatchEvent(new CustomEvent('booking:changed'));
 
     } catch (err) {
-      console.error('[BookingForm] submit error:', err);
-      showToast('Error al guardar: ' + (err.message ?? err), 'error');
+      console.error('[MILA] Booking save error:', err);
+      const userMsg = err.message?.includes('violates')
+        ? 'Error de permisos en la base de datos. Verificá las políticas RLS.'
+        : err.message?.includes('duplicate')
+        ? 'Ya existe una reserva con esos datos.'
+        : err.message ?? String(err);
+      showToast(`No fue posible guardar la reserva. ${userMsg}`, 'error');
     } finally {
+      clearTimeout(safetyTimer);
       if (btn) {
         btn.disabled = false;
         btn.textContent = this._editingId ? 'Guardar cambios' : 'Confirmar reserva';

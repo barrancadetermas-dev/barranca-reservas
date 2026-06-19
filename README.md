@@ -1,101 +1,102 @@
-# 🏨 Barranca de Termas — Sistema de Gestión de Reservas
+# MILA — Sistema Inteligente para Alojamientos
 
-Sistema propio de administración hotelera para **Barranca de Termas**,
-un complejo de 7 apartamentos turísticos.
+Sistema de gestión para apartamentos turísticos. Reservas, calendario, finanzas, operaciones y CRM de huéspedes.
 
----
+## Stack
+- **Frontend:** Vanilla JS + Vite
+- **Backend:** Supabase (PostgreSQL + Auth + Realtime)
+- **Deploy:** Vercel
+- **PWA:** Instalable en iOS, Android y Desktop
 
-## ¿Qué es este sistema?
+## Instalación rápida
 
-Es una aplicación web que reemplaza las planillas de Excel o los cuadernos
-para gestionar las reservas, pagos y operativa diaria del complejo.
+```bash
+npm install
+cp .env.example .env.local
+# Editar .env.local con tus credenciales de Supabase
+npm run dev
+```
 
-Funciona desde cualquier celular, tablet o computadora con internet.
-No requiere instalar nada. Se abre desde el navegador como cualquier sitio web.
+## Variables de entorno requeridas
 
----
+```env
+VITE_SUPABASE_URL=https://tuproyecto.supabase.co
+VITE_SUPABASE_ANON_KEY=eyJhbG...
+VITE_HOTEL_SLUG=nombre-de-tu-complejo
+VITE_DEMO_EMAIL=demo@milasistema.com    # opcional
+VITE_DEMO_PASS=DemoPass2025!            # opcional
+```
 
-## ¿Qué puede hacer?
+## Base de datos
 
-### Reservas
-- Crear, editar y cancelar reservas
-- Ver disponibilidad en un calendario visual por departamento
-- Detectar solapamientos automáticamente
-- Duplicar reservas para huéspedes recurrentes
-- Filtrar por canal (Booking, Airbnb, directo, familia)
-- Exportar listado a Excel (CSV)
+Ejecutar `src/docs/mila-schema-completo.sql` en Supabase → SQL Editor.
 
-### Pagos
-- Registrar pagos parciales o totales
-- Editar y eliminar cobros registrados
-- Ver el saldo pendiente de cada reserva
-- Gestionar devoluciones al cancelar
+## Deploy en Vercel
 
-### Departamentos
-- Sistema de colores único por departamento
-- Identificación visual inmediata en todas las pantallas
-- Notas internas por unidad (solo visibles para el equipo)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new)
 
-### Huéspedes
-- Ficha completa con historial de estadías
-- Registro de mala experiencia con observaciones
-- Búsqueda rápida por nombre, DNI o teléfono
+1. Conectar repositorio GitHub
+2. Agregar variables de entorno
+3. Deploy automático
 
-### Estadísticas
-- Ocupación mensual por unidad
-- Ingresos brutos y netos por canal
-- Estado de resultados (P&L): ingresos vs gastos
-- Comisiones de Booking y Airbnb ya descontadas
+## Guía para principiantes
 
-### Operativa diaria
-- Panel con llegadas y salidas del día
-- Marcado de check-in y check-out
-- Recordatorios y tareas de mantenimiento
-- Cotización del dólar en tiempo real
+Ver `src/docs/GUIA-DEPLOY.md` — paso a paso con capturas sugeridas.
 
-### Modos de usuario
-- **Admin:** control total del sistema
-- **Staff:** operativa diaria sin acceso a finanzas globales
-- **Demo:** navegación libre con datos de ejemplo, sin guardar nada
+## Estructura del proyecto
 
-### Tecnología
-- Funciona offline (instalable como app en el celular)
-- Actualización en tiempo real entre dispositivos
-- Exportación de comprobantes por WhatsApp
-- Modo oscuro incluido
+```
+src/
+├── js/
+│   ├── app.js                 # App principal
+│   ├── supabase-config.js     # Cliente Supabase + constantes
+│   ├── auth/permissions.js    # Roles y permisos
+│   ├── components/
+│   │   ├── booking-form.js    # Formulario de reservas
+│   │   ├── calendar.js        # Calendario (mes/semana/lista)
+│   │   ├── booking-list.js    # Listado de reservas
+│   │   ├── dashboard.js       # Panel de hoy
+│   │   ├── statistics.js      # Estadísticas y P&L
+│   │   ├── guests.js          # CRM de huéspedes
+│   │   ├── operations.js      # Limpieza/Mantenimiento/Stock
+│   │   └── config-panel.js    # Configuración
+│   └── services/
+│       ├── dollar-api.js      # Cotización USD (3 fuentes)
+│       ├── price-suggester.js # Sugeridor de precio dinámico
+│       ├── arg-holidays.js    # Feriados argentinos
+│       └── whatsapp-service.js
+├── css/styles.css
+├── index.html                 # App principal
+├── landing.html               # Página de marketing
+└── docs/
+    ├── mila-schema-completo.sql
+    └── GUIA-DEPLOY.md
+```
 
----
+## Changelog
 
-## Para quién está pensado
+### v7.0 (Junio 2026)
+- Fix CRÍTICO: Formulario de reservas ahora guarda correctamente
+  - async/await corregido en `_validateAll()`
+  - Payload resiliente a columnas opcionales no creadas
+  - Safety timeout de 30 segundos anti-freeze
+  - Mensajes de error descriptivos en pantalla
+- Fix visual: Vista semanal con bordes y estructura visible
+- Fix CSS: Inputs dentro de modales con fondo distinguible
+- Navegación persiste entre secciones (localStorage)
+- Todos los canales visibles en filtros de reservas
+- Bottom nav para mobile
+- Timeline de cambios en detalle de reserva
+- Color picker para unidades en configuración
 
-Para el propietario y el personal de **Barranca de Termas**. No es un SaaS
-ni una plataforma pública. Es una herramienta interna del complejo.
+### v6.5 (Junio 2026)
+- Dólar: 3 fuentes (DolarAPI + Ámbito + Bluelytics) con promedio
+- Fix login: ojito contraseña + manejo de errores mejorado
+- SQL completo idempotente (mila-schema-completo.sql)
 
----
-
-## Documentación completa
-
-Ver la carpeta `docs/` para las guías detalladas:
-
-| Guía | Contenido |
-|---|---|
-| [GUIA-1-INSTALACION.md](docs/GUIA-1-INSTALACION.md) | GitHub + Supabase + primer usuario |
-| [GUIA-2-PUBLICACION.md](docs/GUIA-2-PUBLICACION.md) | Publicar con Vercel |
-| [GUIA-3-DOMINIO.md](docs/GUIA-3-DOMINIO.md) | Conectar dominio propio |
-| [GUIA-4-MANTENIMIENTO.md](docs/GUIA-4-MANTENIMIENTO.md) | Backups y actualizaciones |
-| [GUIA-5-PERSONALIZACION.md](docs/GUIA-5-PERSONALIZACION.md) | Adaptar para otro complejo |
-| [ARQUITECTURA.md](docs/ARQUITECTURA.md) | Análisis técnico de la arquitectura |
-
----
-
-## Stack tecnológico
-
-- **Frontend:** HTML5 + CSS3 + JavaScript ES6 (sin frameworks)
-- **Base de datos:** Supabase (PostgreSQL en la nube)
-- **Hosting:** Vercel (gratuito para este uso)
-- **Autenticación:** Supabase Auth
-- **Tiempo real:** Supabase Realtime
-
----
-
-*Sistema desarrollado para uso interno. Versión 4.1 — Junio 2026.*
+### v6.x (Mayo-Junio 2026)
+- Feriados argentinos dinámicos + días pasados oscuros
+- WhatsApp: template para encargada
+- Selector pax (adultos + menores)
+- Comisión por canal automática en breakdown
+- PWA mejorada, offline support
