@@ -1,90 +1,141 @@
 // ═══════════════════════════════════════════════════
-// sw.js — Service Worker (PWA)
-// Cache-first para assets estáticos
-// Network-first para Supabase API
-// Offline fallback con datos en caché
+// sw.js v7.0 — MILA Sistema Inteligente
+// ESTRATEGIA CORRECTA:
+//   - index.html + JS/CSS  → network-first (siempre busca la versión más nueva)
+//   - Fonts / íconos       → cache-first   (no cambian)
+//   - Supabase / APIs      → network-only  (nunca cachear datos)
+//   - Offline              → fallback a offline.html
 // ═══════════════════════════════════════════════════
 
-const CACHE_NAME    = 'bdt-pms-v6';
-const SHELL_CACHE   = 'bdt-shell-v6';
-const OFFLINE_URL   = '/offline.html';
+// ⚠️ IMPORTANTE: Cada vez que deploys, incrementá este número.
+// Eso fuerza al browser a instalar el nuevo SW y limpiar el caché viejo.
+const SW_VERSION  = '7.0.0';
 
-// Assets del shell que se cachean al instalar
-const SHELL_ASSETS = [
-  '/',
-  '/index.html',
-  '/css/styles.css',
-  '/js/app.js',
-  '/js/supabase-config.js',
-  '/js/auth/permissions.js',
-  '/js/services/mock-data.js',
-  '/js/services/export-service.js',
-  '/js/services/dollar-api.js',
-  '/js/services/whatsapp-service.js',
-  '/js/components/dashboard.js',
-  '/js/components/calendar.js',
-  '/js/components/booking-form.js',
-  '/js/components/booking-list.js',
-  '/js/components/statistics.js',
-  '/js/components/guests.js',
-  'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap',
+const CACHE_STATIC = `mila-static-${SW_VERSION}`;   // fonts e íconos
+const CACHE_APP    = `mila-app-${SW_VERSION}`;       // shell de la app
+const OFFLINE_URL  = '/offline.html';
+
+// Assets que se pre-cachean al instalar (solo los que nunca cambian)
+const PRECACHE_ASSETS = [
+  '/offline.html',
+  '/manifest.json',
 ];
 
-// ── Install: cachear el shell ─────────────────────
+// ── INSTALL ────────────────────────────────────────
 self.addEventListener('install', (e) => {
   e.waitUntil(
-    caches.open(SHELL_CACHE)
-      .then(cache => cache.addAll(SHELL_ASSETS.filter(u => !u.startsWith('http') || u.includes('fonts.googleapis'))))
-      .then(() => self.skipWaiting())
+    caches.open(CACHE_APP)
+      .then(cache => cache.addAll(PRECACHE_ASSETS))
+      .then(() => self.skipWaiting())  // activar inmediatamente sin esperar tab cerrado
+      .catch(() => self.skipWaiting())
   );
 });
 
-// ── Activate: limpiar cachés viejas ──────────────
+// ── ACTIVATE ───────────────────────────────────────
+// Elimina TODOS los cachés viejos (cualquier versión anterior)
 self.addEventListener('activate', (e) => {
   e.waitUntil(
-    caches.keys()
-      .then(keys => Promise.all(
-        keys.filter(k => k !== CACHE_NAME && k !== SHELL_CACHE)
-            .map(k => caches.delete(k))
-      ))
-      .then(() => self.clients.claim())
+    caches.keys().then(allKeys => {
+      const oldKeys = allKeys.filter(k =>
+        k.startsWith('mila-') &&
+        k !== CACHE_STATIC &&
+        k !== CACHE_APP
+      );
+      return Promise.all([
+        ...oldKeys.map(k => caches.delete(k)),
+        self.clients.claim(),  // tomar control de todos los tabs abiertos
+      ]);
+    })
   );
 });
 
-// ── Fetch: estrategia por tipo de request ────────
+// ── FETCH ──────────────────────────────────────────
 self.addEventListener('fetch', (e) => {
-  const url = new URL(e.request.url);
+  const { request } = e;
+  const url = new URL(request.url);
 
-  // Supabase API → Network-first (datos siempre frescos)
-  if (url.hostname.includes('supabase.co') || url.hostname.includes('esm.sh')) {
-    e.respondWith(networkFirst(e.request));
+  // 1. Supabase, APIs externas → SOLO RED (nunca cachear datos)
+  if (
+    url.hostname.includes('supabase.co') ||
+    url.hostname.includes('dolarapi.com') ||
+    url.hostname.includes('ambito.com') ||
+    url.hostname.includes('bluelytics.com') ||
+    url.hostname.includes('esm.sh') ||
+    url.hostname.includes('resend.com')
+  ) {
+    e.respondWith(networkOnly(request));
     return;
   }
 
-  // Google Fonts → Cache-first
-  if (url.hostname.includes('fonts.googleapis.com') || url.hostname.includes('fonts.gstatic.com')) {
-    e.respondWith(cacheFirst(e.request, CACHE_NAME));
+  // 2. Fonts de Google → cache-first (no cambian nunca)
+  if (
+    url.hostname.includes('fonts.googleapis.com') ||
+    url.hostname.includes('fonts.gstatic.com')
+  ) {
+    e.respondWith(cacheFirst(request, CACHE_STATIC));
     return;
   }
 
-  // Dollar API → Network-first con fallback a caché
-  if (url.hostname.includes('dolarapi.com') || url.hostname.includes('bluelytics.com')) {
-    e.respondWith(networkFirst(e.request, CACHE_NAME, 600000)); // caché 10min
+  // 3. index.html + JS + CSS → network-first
+  //    Siempre intenta la versión más nueva. Cae al caché solo si no hay red.
+  if (
+    request.mode === 'navigate' ||
+    url.pathname === '/' ||
+    url.pathname.endsWith('.html') ||
+    url.pathname.endsWith('.js') ||
+    url.pathname.endsWith('.css')
+  ) {
+    e.respondWith(networkFirst(request, CACHE_APP));
     return;
   }
 
-  // Shell estático → Network-first (garantiza archivos frescos)
-  if (e.request.mode === 'navigate' || url.pathname.match(/\.(css|js|html)$/)) {
-    e.respondWith(networkFirst(e.request, SHELL_CACHE, 0)); // 0 = siempre red primero
+  // 4. Imágenes, íconos, manifests → cache-first
+  if (url.pathname.match(/\.(png|ico|svg|webp|json)$/)) {
+    e.respondWith(cacheFirst(request, CACHE_STATIC));
     return;
   }
 
-  // Default → Network con fallback
-  e.respondWith(networkFirst(e.request));
+  // 5. Todo lo demás → network-first
+  e.respondWith(networkFirst(request, CACHE_APP));
 });
 
-// ── Estrategias ───────────────────────────────────
-async function cacheFirst(request, cacheName = CACHE_NAME) {
+// ── ESTRATEGIAS ─────────────────────────────────────
+
+async function networkOnly(request) {
+  try {
+    return await fetch(request);
+  } catch {
+    return new Response(
+      JSON.stringify({ error: 'sin conexión', offline: true }),
+      { status: 503, headers: { 'Content-Type': 'application/json' } }
+    );
+  }
+}
+
+async function networkFirst(request, cacheName) {
+  try {
+    const response = await fetch(request);
+    if (response.ok && cacheName) {
+      const cache = await caches.open(cacheName);
+      cache.put(request, response.clone());
+    }
+    return response;
+  } catch {
+    // Sin red → buscar en caché
+    const cached = await caches.match(request);
+    if (cached) return cached;
+    // Si es navegación → mostrar página offline
+    if (request.mode === 'navigate') {
+      return caches.match(OFFLINE_URL) ||
+        new Response('<h1>Sin conexión</h1>', {
+          headers: { 'Content-Type': 'text/html' }
+        });
+    }
+    return new Response('offline', { status: 503 });
+  }
+}
+
+async function cacheFirst(request, cacheName) {
   const cached = await caches.match(request);
   if (cached) return cached;
   try {
@@ -95,53 +146,36 @@ async function cacheFirst(request, cacheName = CACHE_NAME) {
     }
     return response;
   } catch {
-    return offlineFallback(request);
+    return new Response('offline', { status: 503 });
   }
 }
 
-async function networkFirst(request, cacheName = CACHE_NAME, maxAge = Infinity) {
-  try {
-    const response = await fetch(request);
-    if (response.ok && cacheName) {
-      const cache = await caches.open(cacheName);
-      cache.put(request, response.clone());
-    }
-    return response;
-  } catch {
-    const cached = await caches.match(request);
-    if (cached) return cached;
-    return offlineFallback(request);
-  }
-}
-
-async function offlineFallback(request) {
-  if (request.mode === 'navigate') {
-    const cached = await caches.match('/index.html');
-    if (cached) return cached;
-  }
-  return new Response(
-    JSON.stringify({ error: 'offline', message: 'Sin conexión — usando datos en caché' }),
-    { status: 503, headers: { 'Content-Type': 'application/json' } }
-  );
-}
-
-// ── Mensaje desde cliente: skipWaiting inmediato ─
+// ── MENSAJES DESDE LA APP ───────────────────────────
 self.addEventListener('message', (e) => {
-  if (e.data?.type === 'SKIP_WAITING') self.skipWaiting();
+  // La app puede pedir al SW que se actualice
+  if (e.data?.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
+  // La app puede pedir limpiar el caché manualmente
+  if (e.data?.type === 'CLEAR_CACHE') {
+    caches.keys().then(keys =>
+      Promise.all(keys.map(k => caches.delete(k)))
+    ).then(() => {
+      e.source?.postMessage({ type: 'CACHE_CLEARED' });
+    });
+  }
 });
 
-// ── Background sync: reintentar writes offline ───
+// ── BACKGROUND SYNC ─────────────────────────────────
 self.addEventListener('sync', (e) => {
   if (e.tag === 'sync-bookings') {
-    e.waitUntil(syncPendingWrites());
+    e.waitUntil(
+      self.clients.matchAll().then(clients =>
+        clients.forEach(c => c.postMessage({
+          type: 'SYNC_COMPLETE',
+          message: 'Conexión restaurada — datos sincronizados'
+        }))
+      )
+    );
   }
 });
-
-async function syncPendingWrites() {
-  // En el futuro: reintentar INSERT/UPDATE fallados offline
-  // Por ahora: notificar al usuario que está online
-  const clients = await self.clients.matchAll();
-  clients.forEach(client => {
-    client.postMessage({ type: 'SYNC_COMPLETE', message: 'Conexión restaurada — datos sincronizados' });
-  });
-}
