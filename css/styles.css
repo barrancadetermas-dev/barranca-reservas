@@ -2266,9 +2266,7 @@ select {
   background: rgba(0,0,0,.04) !important;
   color: var(--color-text-3) !important;
 }
-/* Modo ocultar días pasados */
-.cal-hide-past .past-col,
-.cal-hide-past .cal-day-header.past-header { display: none !important; }
+/* Modo ocultar días pasados — manejado desde JS con gridTemplateColumns */
 .today-col {
   background: rgba(99,102,241,.05) !important;
   border-left: 2px solid rgba(99,102,241,.25) !important;

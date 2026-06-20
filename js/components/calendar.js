@@ -519,18 +519,48 @@ export class Calendar {
     this._hidePast = false;
     document.getElementById('cal-hide-past-btn')?.addEventListener('click', () => {
       this._hidePast = !this._hidePast;
-      const grid = document.getElementById('calendar-grid');
-      const btn  = document.getElementById('cal-hide-past-btn');
+      const btn = document.getElementById('cal-hide-past-btn');
       if (this._hidePast) {
-        grid?.classList.add('cal-hide-past');
         if (btn) { btn.textContent = '▶ Mostrar pasados'; btn.classList.add('btn-primary'); btn.classList.remove('btn-outline'); }
       } else {
-        grid?.classList.remove('cal-hide-past');
         if (btn) { btn.textContent = '◀ Ocultar pasados'; btn.classList.remove('btn-primary'); btn.classList.add('btn-outline'); }
       }
+      this._applyHidePast();
     });
 
     this.setupViewToggle();
+  }
+
+  // ── Ocultar columnas pasadas recalculando el grid ──
+  _applyHidePast() {
+    const grid = document.getElementById('calendar-grid');
+    if (!grid) return;
+    const daysInMonth = new Date(this.year, this.month + 1, 0).getDate();
+    const todayISO    = new Date().toISOString().split('T')[0];
+
+    if (!this._hidePast) {
+      // Restaurar columnas normales
+      grid.style.gridTemplateColumns = `160px repeat(${daysInMonth}, minmax(30px, 1fr))`;
+      // Mostrar todos los headers y celdas
+      grid.querySelectorAll('.past-col, .cal-day-header.past-header').forEach(el => {
+        el.style.display = '';
+      });
+      return;
+    }
+
+    // Calcular qué columnas son pasadas (índice base-1 dentro del mes)
+    const cols = ['160px'];
+    for (let d = 1; d <= daysInMonth; d++) {
+      const dateISO = `${this.year}-${String(this.month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+      const isPast  = dateISO < todayISO;
+      cols.push(isPast ? '0px' : 'minmax(30px, 1fr)');
+    }
+    grid.style.gridTemplateColumns = cols.join(' ');
+
+    // Ocultar contenido de celdas pasadas para evitar overflow visual
+    grid.querySelectorAll('.past-col, .cal-day-header.past-header').forEach(el => {
+      el.style.display = 'none';
+    });
   }
 
   // ── Context Menu ──────────────────────────────────
