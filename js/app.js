@@ -266,6 +266,7 @@ async function initApp(user) {
     setupWhatsAppModal();
     setupCancelBookingModal();
     setupCheckInOutModal();
+    setupDetailModal();
 
     document.addEventListener('reminders:badge', (e) => updateReminderBadge(e.detail.count));
     document.addEventListener('booking:fullypaid', () => launchConfetti());
@@ -594,7 +595,109 @@ async function confirmCancelBooking() {
 // ══════════════════════════════════════════════════
 // CHECK-IN / CHECK-OUT
 // ══════════════════════════════════════════════════
-function setupCheckInOutModal() {}
+function setupCheckInOutModal() {} // mantenido por compatibilidad
+
+// ── Wiring completo del modal de detalle de reserva ──
+function setupDetailModal() {
+  const closeDetail = () => {
+    document.getElementById('overlay-detail')?.classList.add('hidden');
+  };
+
+  // Cerrar
+  document.getElementById('detail-close')?.addEventListener('click', closeDetail);
+  document.getElementById('overlay-detail')?.addEventListener('click', (e) => {
+    if (e.target === e.currentTarget) closeDetail();
+  });
+
+  // Helper: obtener reserva completa del modal activo
+  const getDetailBooking = async () => {
+    const id = bookingForm?._currentDetailBookingId;
+    if (!id) return null;
+    const { data } = await supabase
+      .from('bookings')
+      .select('*, guests!bookings_guest_id_fkey(*), booking_units(unit_id, units(name,sort_order,color,max_guests)), payments(*)')
+      .eq('id', id).single();
+    return data;
+  };
+
+  // Voucher WhatsApp
+  document.getElementById('detail-whatsapp')?.addEventListener('click', async () => {
+    const b = await getDetailBooking();
+    if (b) openWhatsAppVoucher(b, AppContext);
+  });
+
+  // Mensaje para encargada
+  document.getElementById('detail-manager-msg')?.addEventListener('click', async () => {
+    const b = await getDetailBooking();
+    if (b) openManagerTemplate(b, AppContext);
+  });
+
+  // Copiar link directo
+  document.getElementById('detail-copy-link')?.addEventListener('click', () => {
+    const id = bookingForm?._currentDetailBookingId;
+    if (!id) return;
+    const url = `${location.origin}${location.pathname}?booking=${id}`;
+    navigator.clipboard?.writeText(url).then(() => showToast('Link copiado ✓', 'success'))
+      .catch(() => showToast('No se pudo copiar', 'error'));
+  });
+
+  // Duplicar reserva
+  document.getElementById('detail-duplicate-btn')?.addEventListener('click', async () => {
+    if (isDemo()) { showDemoAction(null); return; }
+    const b = await getDetailBooking();
+    if (!b) return;
+    closeDetail();
+    const unitId = (b.booking_units ?? [])[0]?.unit_id;
+    bookingForm?.open({ unitId, source: b.source });
+  });
+
+  // Editar
+  document.getElementById('detail-btn-edit')?.addEventListener('click', async () => {
+    if (isDemo()) { showDemoAction(null); return; }
+    const b = await getDetailBooking();
+    if (!b) return;
+    closeDetail();
+    bookingForm?.openEdit(b.id);
+  });
+
+  // Cancelar reserva
+  document.getElementById('detail-btn-cancel-booking')?.addEventListener('click', () => {
+    const id = bookingForm?._currentDetailBookingId;
+    if (!id) return;
+    const paid = parseFloat(document.querySelector('#detail-body .text-success')?.textContent?.replace(/[^0-9]/g, '') ?? 0);
+    // Obtener total_paid de la reserva en memoria si disponible
+    getDetailBooking().then(b => {
+      if (b) openCancelModal(b.id, b.total_paid ?? 0);
+    });
+  });
+
+  // Eliminar
+  document.getElementById('detail-btn-delete')?.addEventListener('click', async () => {
+    if (!can('deleteBooking')) { showToast('🔒 Sin permiso', 'warning'); return; }
+    if (isDemo()) { showDemoAction(null); return; }
+    const id = bookingForm?._currentDetailBookingId;
+    if (!id) return;
+    if (!confirm('¿Eliminar esta reserva? Esta acción no se puede deshacer.')) return;
+    const { error } = await supabase.from('bookings').delete().eq('id', id);
+    if (error) { showToast('Error al eliminar', 'error'); return; }
+    await logAction('DELETE', 'booking', id, 'Reserva eliminada');
+    showToast('Reserva eliminada', 'success');
+    closeDetail();
+    document.dispatchEvent(new CustomEvent('booking:changed'));
+  });
+
+  // Check-in
+  document.getElementById('detail-checkin-btn')?.addEventListener('click', async () => {
+    const id = bookingForm?._currentDetailBookingId;
+    if (id) { await markCheckIn(id); closeDetail(); }
+  });
+
+  // Check-out
+  document.getElementById('detail-checkout-btn')?.addEventListener('click', async () => {
+    const id = bookingForm?._currentDetailBookingId;
+    if (id) { await markCheckOut(id); closeDetail(); }
+  });
+}
 
 export async function markCheckIn(bookingId) {
   if (!can('checkInOut')) { showToast('🔒 Sin permiso', 'warning'); return; }

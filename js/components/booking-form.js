@@ -299,6 +299,12 @@ export class BookingForm {
     if (adultsEl) adultsEl.value = '2';
     const childEl = document.getElementById('f-children');
     if (childEl) childEl.value = '0';
+    const paxNumEl = document.getElementById('pax-total-num');
+    if (paxNumEl) paxNumEl.textContent = '2';
+    const paxLblEl = document.getElementById('pax-total-label');
+    if (paxLblEl) paxLblEl.textContent = 'personas en total';
+    const paxHidEl = document.getElementById('f-pax');
+    if (paxHidEl) paxHidEl.value = '2';
     document.getElementById('guest-results')?.classList.add('hidden');
     const badAlert = document.getElementById('bad-exp-booking-alert-container');
     if (badAlert) badAlert.innerHTML = '';
@@ -374,67 +380,43 @@ export class BookingForm {
 
   // ── Selector de cantidad de personas ─────────────
   _renderPaxSelector() {
-    let paxContainer = document.getElementById('pax-selector-container');
-    if (!paxContainer) {
-      // Inyectarlo después del selector de unidades
-      const unitContainer = document.getElementById('units-selector');
-      if (!unitContainer?.parentElement) return;
-      paxContainer = document.createElement('div');
-      paxContainer.id = 'pax-selector-container';
-      paxContainer.style.cssText = 'margin-top:16px';
-      unitContainer.parentElement.insertBefore(paxContainer, unitContainer.nextSibling);
-    }
+    // El selector ya existe en el HTML estático — solo bindeamos los botones
+    // y actualizamos el total display. No inyectar HTML duplicado.
+    const updateTotal = () => {
+      const adults   = parseInt(document.getElementById('f-adults')?.value   ?? '1');
+      const children = parseInt(document.getElementById('f-children')?.value ?? '0');
+      const total    = adults + children;
+      const numEl    = document.getElementById('pax-total-num');
+      const lblEl    = document.getElementById('pax-total-label');
+      const paxHid   = document.getElementById('f-pax');
+      if (numEl) numEl.textContent = total;
+      if (lblEl) lblEl.textContent = total === 1 ? 'persona en total' : 'personas en total';
+      if (paxHid) paxHid.value = total;
+    };
 
-    paxContainer.innerHTML = `
-      <div class="form-label" style="font-size:.78rem;font-weight:700;text-transform:uppercase;
-           letter-spacing:.06em;color:var(--color-text-3);margin-bottom:8px">
-        Cantidad de personas
-      </div>
-      <div class="pax-selector">
-        <!-- Adultos -->
-        <div class="pax-field">
-          <span class="pax-icon">🧑</span>
-          <div class="pax-info">
-            <span class="pax-label">Adultos</span>
-            <span class="pax-hint">Mayores de 12 años</span>
-          </div>
-          <div class="pax-counter">
-            <button type="button" class="pax-btn" id="adults-minus">−</button>
-            <input type="number" id="f-adults" class="pax-input" value="2" min="1" max="20" readonly>
-            <button type="button" class="pax-btn" id="adults-plus">+</button>
-          </div>
-        </div>
-        <!-- Menores -->
-        <div class="pax-field">
-          <span class="pax-icon">🧒</span>
-          <div class="pax-info">
-            <span class="pax-label">Menores</span>
-            <span class="pax-hint">De 0 a 12 años (opcional)</span>
-          </div>
-          <div class="pax-counter">
-            <button type="button" class="pax-btn" id="children-minus">−</button>
-            <input type="number" id="f-children" class="pax-input" value="0" min="0" max="10" readonly>
-            <button type="button" class="pax-btn" id="children-plus">+</button>
-          </div>
-        </div>
-      </div>`;
-
-    // Bind steppers
     const bind = (btnId, inputId, delta) => {
-      document.getElementById(btnId)?.addEventListener('click', (e) => {
+      const btn = document.getElementById(btnId);
+      if (!btn) return;
+      // Clonar para evitar listeners duplicados entre aperturas del modal
+      const fresh = btn.cloneNode(true);
+      btn.parentNode.replaceChild(fresh, btn);
+      fresh.addEventListener('click', (e) => {
         e.preventDefault();
         const inp = document.getElementById(inputId);
         if (!inp) return;
         const min = parseInt(inp.min ?? '0');
         const max = parseInt(inp.max ?? '99');
-        const cur = parseInt(inp.value ?? '0');
+        const cur = parseInt(inp.value  ?? '0');
         inp.value = Math.min(max, Math.max(min, cur + delta));
+        updateTotal();
       });
     };
+
     bind('adults-minus',   'f-adults',   -1);
     bind('adults-plus',    'f-adults',   +1);
     bind('children-minus', 'f-children', -1);
     bind('children-plus',  'f-children', +1);
+    updateTotal();
   }
 
   // ── Sugeridor de precio dinámico ─────────────────

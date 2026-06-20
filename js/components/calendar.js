@@ -126,7 +126,8 @@ export class Calendar {
       (b.booking_units ?? []).forEach(({ unit_id }) => {
         if (!map[unit_id]) return;
         for (let d = 1; d <= daysInMonth; d++) {
-          const cell = new Date(this.year, this.month, d);
+          // Usar mediodía para evitar desfases por zona horaria (Argentina UTC-3)
+          const cell = new Date(this.year, this.month, d, 12, 0, 0);
           if (cell >= ci && cell < co) {
             map[unit_id][d].push({ ...b, _cellType: this._getCellType(ci, co, cell) });
           }
