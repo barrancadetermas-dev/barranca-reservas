@@ -31,6 +31,7 @@ let configPanel = null;
 let auditPanel  = null;
 let operations  = null;
 let currentSection = 'dashboard';
+let _initializedUserId = null; // evita que initApp() corra más de una vez para el mismo usuario
 
 // ══════════════════════════════════════════════════
 // PWA
@@ -67,12 +68,24 @@ if ('serviceWorker' in navigator) {
 async function boot() {
   initDarkMode();
   const { data: { session } } = await supabase.auth.getSession();
-  if (session) await initApp(session.user);
-  else showLogin();
+  if (session) {
+    _initializedUserId = session.user.id;
+    await initApp(session.user);
+  } else {
+    showLogin();
+  }
 
   supabase.auth.onAuthStateChange(async (event, session) => {
-    if (event === 'SIGNED_IN'  && session) await initApp(session.user);
-    if (event === 'SIGNED_OUT') { destroyApp(); showLogin(); }
+    if (event === 'SIGNED_IN' && session) {
+      if (_initializedUserId === session.user.id) return; // evento SIGNED_IN duplicado — ya inicializado
+      _initializedUserId = session.user.id;
+      await initApp(session.user);
+    }
+    if (event === 'SIGNED_OUT') {
+      _initializedUserId = null;
+      destroyApp();
+      showLogin();
+    }
   });
 }
 
@@ -1087,15 +1100,12 @@ function setupConnectivityIndicator() {
   window.addEventListener('online',  () => setStatus('connected'));
   window.addEventListener('offline', () => setStatus('disconnected'));
 
-  // DESPUÉS (funciona con supabase-js v2):
-supabase.channel('connectivity-watcher').subscribe((status) => {
-  if (status === 'SUBSCRIBED') {
-    setStatus('connected');
-  } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-    setStatus(navigator.onLine ? 'reconnecting' : 'disconnected');
-  }
-});
+  // Escuchar estado del canal Realtime de Supabase
+  supabase.realtime.on('connect',    () => setStatus('connected'));
+  supabase.realtime.on('reconnect',  () => setStatus('connected'));
+  supabase.realtime.on('disconnect', () => setStatus(navigator.onLine ? 'reconnecting' : 'disconnected'));
 }
+
 
 // ══════════════════════════════════════════════════
 // START — manejo de URL params especiales
