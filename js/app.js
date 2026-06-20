@@ -293,9 +293,29 @@ async function initApp(user) {
     // ── Recargar la sección activa cuando cambia una reserva (debounced) ──
     document.addEventListener('booking:changed', () => debouncedCalendarLoad(400));
 
+    // "Nueva Reserva" → abre calculadora primero como paso 0
     document.getElementById('btn-new-booking').addEventListener('click', () => {
       if (isDemo()) return showDemoAction(() => bookingForm.open());
-      bookingForm.open();
+      const overlay = document.getElementById('overlay-calculator');
+      if (overlay) {
+        // Cambiar título a "Paso 1 — Calculá el precio"
+        const title = overlay.querySelector('.calc-title');
+        if (title) title.innerHTML = '📊 Paso 1 — Calculá el precio';
+        const createBtn = document.getElementById('calc-create-booking');
+        if (createBtn) createBtn.textContent = 'Continuar con la reserva →';
+        overlay.classList.remove('hidden');
+        document.getElementById('calc-price')?.focus();
+      } else {
+        bookingForm.open();
+      }
+    });
+
+    // Restaurar título original cuando el botón de calculadora del header lo abre
+    document.getElementById('btn-calculator')?.addEventListener('mousedown', () => {
+      const title = document.querySelector('.calc-title');
+      if (title) title.innerHTML = '🧮 Calculadora de estadía';
+      const createBtn = document.getElementById('calc-create-booking');
+      if (createBtn) createBtn.textContent = 'Crear reserva con estos datos →';
     });
     document.getElementById('sidebar-toggle').addEventListener('click', () => {
       document.getElementById('sidebar').classList.toggle('open');
@@ -746,6 +766,54 @@ export async function markCheckIn(bookingId) {
   showToast('✅ Check-in registrado', 'success');
   Sound?.checkIn();
   document.dispatchEvent(new CustomEvent('booking:changed'));
+
+  // ── Ofrecer WhatsApp de bienvenida ──────────────────
+  try {
+    const { data: booking } = await supabase
+      .from('bookings')
+      .select('guests!bookings_guest_id_fkey(first_name,last_name,phone), booking_units(units(name,sort_order))')
+      .eq('id', bookingId).single();
+
+    const phone = booking?.guests?.phone?.replace(/\D/g, '');
+    if (phone) {
+      const guestName = `${booking.guests.first_name} ${booking.guests.last_name}`.trim();
+      const unitName  = (booking.booking_units ?? [])[0]?.units?.name ?? 'su departamento';
+      const config    = AppContext.config ?? {};
+      const wifi      = config.wifi_name     ? `📶 WiFi: *${config.wifi_name}* · Clave: *${config.wifi_pass ?? '—'}*` : '';
+      const checkIn   = config.checkin_hour  ?? '14:00';
+      const checkOut  = config.checkout_hour ?? '10:00';
+
+      const welcomeMsg = [
+        `¡Hola *${guestName}*! 👋`,
+        `Bienvenido/a a *Barranca de Termas*. Tu *${unitName}* ya está listo.`,
+        wifi,
+        `📋 Check-out: *${checkOut} hs*`,
+        `Cualquier consulta, estamos a tu disposición. ¡Que disfrutes la estadía! 🌿`,
+      ].filter(Boolean).join('\n\n');
+
+      // Mostrar toast con acción WhatsApp
+      const toastCont = document.getElementById('toast-container');
+      if (toastCont) {
+        const waTip = document.createElement('div');
+        waTip.className = 'toast toast-show';
+        waTip.style.cssText = 'background:#f0fdf4;border-left:3px solid #22c55e;display:flex;align-items:center;gap:10px;max-width:360px';
+        waTip.innerHTML = `
+          <span style="font-size:1.2rem">💬</span>
+          <span style="flex:1;font-size:.82rem;color:#14532d">¿Enviar bienvenida por WhatsApp a ${guestName.split(' ')[0]}?</span>
+          <a href="https://wa.me/${phone}?text=${encodeURIComponent(welcomeMsg)}" target="_blank" rel="noopener"
+             style="background:#22c55e;color:white;border:none;border-radius:6px;padding:5px 12px;
+                    font-size:.78rem;font-weight:700;cursor:pointer;text-decoration:none;white-space:nowrap"
+             onclick="this.closest('.toast')?.remove()">
+            Enviar ↗
+          </a>
+          <button style="background:none;border:none;color:#94a3b8;cursor:pointer;font-size:1rem;padding:0 2px"
+                  onclick="this.closest('.toast')?.remove()">✕</button>`;
+        toastCont.appendChild(waTip);
+        setTimeout(() => waTip.classList.remove('toast-show'), 12000);
+        setTimeout(() => waTip.remove(), 12500);
+      }
+    }
+  } catch { /* WhatsApp es opcional */ }
 }
 
 export async function markCheckOut(bookingId) {
@@ -969,50 +1037,47 @@ export function launchConfetti() {
 // COMMAND PALETTE
 // ══════════════════════════════════════════════════
 function setupGlobalShortcuts() {
+  const noField = () => !['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName);
   document.addEventListener('keydown', (e) => {
-    if ((e.ctrlKey||e.metaKey) && e.key==='k') { e.preventDefault(); toggleCommandPalette(); return; }
-
+    const mod = e.ctrlKey || e.metaKey;
+    if (mod && e.key==='k') { e.preventDefault(); toggleCommandPalette(); return; }
+    // Ctrl+N → Nueva Reserva (paso 0: calculadora)
+    if (mod && !e.shiftKey && e.key==='n' && noField()) {
+      e.preventDefault(); document.getElementById('btn-new-booking')?.click(); return;
+    }
+    // Ctrl+F → Buscar huésped
+    if (mod && !e.shiftKey && e.key==='f' && noField()) {
+      e.preventDefault();
+      navigateTo('guests').then(() => setTimeout(() => document.getElementById('guest-search-input')?.focus(), 200));
+      return;
+    }
+    // Ctrl+D → Panel de hoy
+    if (mod && !e.shiftKey && e.key==='d' && noField()) {
+      e.preventDefault(); navigateTo('dashboard'); return;
+    }
+    // Ctrl+Shift+C → Calendario
+    if (mod && e.shiftKey && (e.key==='C'||e.key==='c') && noField()) {
+      e.preventDefault(); navigateTo('calendar'); return;
+    }
     if (e.key === 'Escape') {
-      // Cerrar el modal visible más reciente — prioridad decreciente
-      if (!document.getElementById('cmd-overlay')?.classList.contains('hidden')) {
-        closeCommandPalette(); return;
-      }
-      // Modales dinámicos (operaciones, etc.) — en body como .modal-overlay
+      if (!document.getElementById('cmd-overlay')?.classList.contains('hidden')) { closeCommandPalette(); return; }
       const dynamicModals = [...document.body.querySelectorAll('.modal-overlay')]
         .filter(m => !m.id && !m.classList.contains('hidden'));
-      if (dynamicModals.length) {
-        dynamicModals[dynamicModals.length - 1].remove(); return;
-      }
-      // Modales estáticos — cerrar en orden inverso de apertura
-      const MODAL_ORDER = [
-        'overlay-whatsapp',
-        'overlay-guest-profile',
-        'overlay-season',
-        'overlay-cancel-booking',
-        'overlay-detail',
-        'overlay-booking',
-        'overlay-reminder',
-        'overlay-expense',
-      ];
+      if (dynamicModals.length) { dynamicModals[dynamicModals.length - 1].remove(); return; }
+      const MODAL_ORDER = ['overlay-whatsapp','overlay-guest-profile','overlay-season',
+        'overlay-cancel-booking','overlay-calculator','overlay-detail',
+        'overlay-booking','overlay-reminder','overlay-expense'];
       for (const id of MODAL_ORDER) {
         const el = document.getElementById(id);
-        if (el && !el.classList.contains('hidden')) {
-          el.classList.add('hidden');
-          return;
-        }
+        if (el && !el.classList.contains('hidden')) { el.classList.add('hidden'); return; }
       }
       return;
     }
-
-    // ← → navegar meses (sin foco en campos ni modales abiertos)
-    if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') &&
-        !['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName) &&
+    if ((e.key==='ArrowLeft'||e.key==='ArrowRight') && noField() &&
         !document.querySelector('.modal-overlay:not(.hidden)')) {
-      if (currentSection === 'calendar') {
-        const btn = e.key === 'ArrowLeft'
-          ? document.getElementById('cal-prev')
-          : document.getElementById('cal-next');
-        btn?.click(); e.preventDefault();
+      if (currentSection==='calendar') {
+        document.getElementById(e.key==='ArrowLeft'?'cal-prev':'cal-next')?.click();
+        e.preventDefault();
       }
     }
   });
@@ -1498,16 +1563,30 @@ function setupCalculator() {
     }
   });
 
-  // Crear reserva con estos datos
+  // Crear reserva con estos datos — paso 0 del formulario
   document.getElementById('calc-create-booking')?.addEventListener('click', () => {
-    const price = parseFloat(document.getElementById('calc-price')?.value) || 0;
+    const price   = parseFloat(document.getElementById('calc-price')?.value) || 0;
+    const nights  = parseInt(document.getElementById('calc-nights')?.value) || 1;
+    const chanVal = document.getElementById('calc-channel')?.value ?? 'direct:0';
+    const source  = chanVal.split(':')[0];
+    const discPct = parseFloat(document.getElementById('calc-discount-range')?.value) || 0;
     if (!price) { showToast('Ingresá un precio primero', 'warning'); return; }
-    close();
-    const priceEl = document.getElementById('f-price');
-    if (priceEl && bookingForm) {
-      bookingForm.open();
-      setTimeout(() => { if (priceEl) priceEl.value = price; }, 100);
-    }
+    close(); // cierra calculadora
+
+    // Calcular checkout sugerido
+    const today = new Date();
+    const co    = new Date(today);
+    co.setDate(co.getDate() + nights);
+    const checkIn  = today.toISOString().split('T')[0];
+    const checkOut = co.toISOString().split('T')[0];
+
+    bookingForm.open({
+      price,
+      source,
+      discountPct: discPct,
+      checkIn,
+      checkOut,
+    });
   });
 
   function _calcUpdate() {
@@ -1572,29 +1651,71 @@ function setupConnectivityIndicator() {
   const label = document.getElementById('conn-label');
   if (!dot || !label) return;
 
+  let _offlineQueue = JSON.parse(localStorage.getItem('mila_offline_queue') ?? '[]');
+
   function setStatus(status) {
     const states = {
-      connected:     { text: 'Conectado',     cls: 'conn-ok'   },
-      reconnecting:  { text: 'Reconectando',  cls: 'conn-warn' },
-      disconnected:  { text: 'Sin conexión',  cls: 'conn-err'  },
+      connected:    { text: 'Conectado',    cls: 'conn-ok'   },
+      reconnecting: { text: 'Reconectando', cls: 'conn-warn' },
+      disconnected: { text: 'Sin conexión', cls: 'conn-err'  },
+      syncing:      { text: 'Sincronizando',cls: 'conn-warn' },
     };
     const s = states[status] ?? states.connected;
-    dot.className   = `conn-dot ${s.cls}`;
+    dot.className     = `conn-dot ${s.cls}`;
     label.textContent = s.text;
-    label.className = `conn-label ${s.cls}`;
+    label.className   = `conn-label ${s.cls}`;
   }
 
-  // Estado inicial
   setStatus(navigator.onLine ? 'connected' : 'disconnected');
+  window.addEventListener('online',  () => {
+    setStatus('connected');
+    _syncOfflineQueue();
+  });
+  window.addEventListener('offline', () => {
+    setStatus('disconnected');
+    showToast('⚠️ Sin conexión — las acciones se guardarán para sincronizar', 'warning');
+  });
 
-  // Escuchar eventos browser
-  window.addEventListener('online',  () => setStatus('connected'));
-  window.addEventListener('offline', () => setStatus('disconnected'));
+  supabase.realtime?.on?.('connect',    () => setStatus('connected'));
+  supabase.realtime?.on?.('reconnect',  () => setStatus('connected'));
+  supabase.realtime?.on?.('disconnect', () => setStatus(navigator.onLine ? 'reconnecting' : 'disconnected'));
 
-  // Escuchar estado del canal Realtime de Supabase
-  supabase.realtime.on('connect',    () => setStatus('connected'));
-  supabase.realtime.on('reconnect',  () => setStatus('connected'));
-  supabase.realtime.on('disconnect', () => setStatus(navigator.onLine ? 'reconnecting' : 'disconnected'));
+  // Escuchar mensajes del Service Worker
+  navigator.serviceWorker?.addEventListener('message', (e) => {
+    const { type, payload, succeeded, total } = e.data ?? {};
+    if (type === 'OFFLINE') {
+      setStatus('disconnected');
+      showToast('📵 Sin conexión — acción en cola', 'warning');
+    }
+    if (type === 'ONLINE')  setStatus('connected');
+    if (type === 'QUEUE_ACTION' && payload) {
+      _offlineQueue.push(payload);
+      localStorage.setItem('mila_offline_queue', JSON.stringify(_offlineQueue));
+      const queueBadge = document.getElementById('conn-queue-badge');
+      if (queueBadge) { queueBadge.textContent = _offlineQueue.length; queueBadge.style.display = ''; }
+    }
+    if (type === 'SYNC_DONE') {
+      _offlineQueue = [];
+      localStorage.removeItem('mila_offline_queue');
+      const queueBadge = document.getElementById('conn-queue-badge');
+      if (queueBadge) queueBadge.style.display = 'none';
+      setStatus('connected');
+      if (succeeded > 0) showToast(`✅ ${succeeded} acción${succeeded!==1?'es':''} sincronizada${succeeded!==1?'s':''} ✓`, 'success');
+    }
+  });
+
+  // Sync al recuperar conexión
+  async function _syncOfflineQueue() {
+    if (!_offlineQueue.length) return;
+    setStatus('syncing');
+    const sw = await navigator.serviceWorker?.ready;
+    sw?.active?.postMessage({ type: 'SYNC_QUEUE', queue: _offlineQueue });
+  }
+
+  // Iniciar sync si hay cola pendiente al cargar
+  if (_offlineQueue.length && navigator.onLine) {
+    setTimeout(_syncOfflineQueue, 2000);
+  }
 }
 
 

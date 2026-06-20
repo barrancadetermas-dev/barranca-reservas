@@ -184,6 +184,9 @@
         <div class="conn-indicator" id="conn-indicator" title="Estado de conexión">
           <span class="conn-dot" id="conn-dot"></span>
           <span class="conn-label" id="conn-label">Conectado</span>
+          <span id="conn-queue-badge" style="display:none;background:#f97316;color:white;
+            font-size:.62rem;font-weight:700;padding:1px 5px;border-radius:99px;margin-left:4px"
+            title="Acciones pendientes de sincronización">0</span>
         </div>
 
         <!-- 🔔 Notificaciones -->
@@ -349,8 +352,12 @@
 
           <!-- Today's arrivals -->
           <div class="card widget-arrivals">
-            <div class="card-header"><h3>Llegadas de hoy</h3></div>
+            <div class="card-header"><h3>✅ Llegadas hoy</h3></div>
             <div class="arrivals-list" id="arrivals-list"><p class="empty-state-sm">Sin llegadas hoy</p></div>
+          </div>
+          <div class="card widget-arrivals">
+            <div class="card-header"><h3>👋 Salidas hoy</h3></div>
+            <div class="arrivals-list" id="departures-list"><p class="empty-state-sm">Sin salidas hoy</p></div>
           </div>
 
           <!-- Reminders -->
@@ -385,6 +392,7 @@
           <button class="btn btn-outline btn-sm" id="cal-today" style="display:none">Hoy</button>
           <button class="btn btn-outline btn-sm" id="cal-hide-past-btn" style="display:none" title="Ocultar/mostrar días anteriores">◀ Ocultar pasados</button>
           <button class="btn btn-outline btn-sm" id="cal-view-toggle" title="Cambiar vista">☰ Lista</button>
+          <button class="btn btn-outline btn-sm" id="cal-avail-toggle" title="Ver disponibilidad libre">👁 Disponibilidad</button>
           <span class="cal-block-hint" title="Arrastrá con SHIFT para bloquear fechas">
             <kbd>Shift</kbd>+arrastre = 🔒 bloqueo
           </span>
@@ -662,6 +670,7 @@
     <div class="step-content hidden" id="step-3">
       <div class="form-grid-2">
         <div class="form-group"><label>Precio por noche ($) <span class="req">*</span></label><input type="number" id="f-price" oninput="document.getElementById('price-suggestion-container') && this._runPriceSuggestion?.()" min="0" step="500" placeholder="45000"></div>
+        <div id="price-history-hint" style="margin-top:-8px;margin-bottom:4px"></div>
         <div class="form-group"><label>Noches sin cargo</label><input type="number" id="f-free-nights" min="0" value="0"></div>
       </div>
       <div class="form-grid-2">

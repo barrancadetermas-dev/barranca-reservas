@@ -444,7 +444,7 @@ export class BookingList {
           tags:                newTags,
         }).eq('id', guest.id);
 
-        await logAction(this.db, this.ctx, 'guest_flagged', { guestId: guest.id, tags: newTags });
+        await logAction('UPDATE', 'guest', guest.id, `Etiquetas actualizadas: ${newTags.join(', ')}`);
         showToast('Huésped actualizado ✓', 'success');
         close();
         await this.load();

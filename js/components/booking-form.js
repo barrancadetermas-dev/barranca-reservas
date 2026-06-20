@@ -142,8 +142,33 @@ export class BookingForm {
       if (prefill.checkOut) document.getElementById('f-checkout').value = prefill.checkOut;
       this._updateBreakdown();
     }
+    // Precarga desde calculadora (paso 0)
+    if (prefill.price) {
+      const priceEl = document.getElementById('f-price');
+      if (priceEl) priceEl.value = prefill.price;
+      this._updateBreakdown();
+    }
+    if (prefill.source) {
+      const container = document.getElementById('f-source-selector');
+      if (container) {
+        container.querySelectorAll('.src-chip').forEach(c => c.classList.remove('selected'));
+        const chip = container.querySelector(`.src-chip[data-source="${prefill.source}"]`);
+        if (chip) {
+          chip.classList.add('selected');
+          const inp = chip.querySelector('input');
+          if (inp) inp.checked = true;
+        }
+      }
+    }
+    if (prefill.discountPct !== undefined) {
+      const discEl = document.getElementById('f-discount');
+      if (discEl) discEl.value = prefill.discountPct;
+    }
 
     document.getElementById('overlay-booking').classList.remove('hidden');
+
+    // Historial de precios — se carga async en background
+    if (prefill.unitId) this._loadPriceHistory(prefill.unitId);
   }
 
   // ── Abrir para editar reserva existente ───────────
@@ -434,6 +459,8 @@ export class BookingForm {
           this._selectedUnitIds.add(uid);
           chip.classList.add('selected');
           if (cb) cb.checked = true;
+          // Cargar historial de precio para la unidad seleccionada
+          this._loadPriceHistory(uid);
         }
         this._updateBlockedDates();
         this._updateBreakdown();
@@ -798,15 +825,88 @@ export class BookingForm {
     container.classList.remove('hidden');
   }
 
+  // ── Historial de precios por unidad y mes ─────────
+  async _loadPriceHistory(unitId) {
+    if (!unitId) return;
+    const hints = document.getElementById('price-history-hint');
+    if (!hints) return;
+    hints.innerHTML = '<span style="font-size:.72rem;color:var(--color-text-3)">⟳ Buscando historial...</span>';
+
+    try {
+      const now   = new Date();
+      const month = now.getMonth() + 1;  // mes actual
+      const monthPad = String(month).padStart(2, '0');
+      // Buscar reservas de esta unidad en el mismo mes (cualquier año)
+      const { data } = await this.db
+        .from('booking_units')
+        .select('bookings!inner(price_per_night, check_in, check_out, status)')
+        .eq('unit_id', unitId)
+        .not('bookings.status', 'in', '(cancelled,blocked)')
+        .gt('bookings.price_per_night', 0)
+        .like('bookings.check_in', `%-${monthPad}-%`)
+        .limit(30);
+
+      const prices = (data ?? [])
+        .map(bu => bu.bookings?.price_per_night)
+        .filter(p => p > 0);
+
+      if (!prices.length) {
+        // Fallback: buscar precio de cualquier mes reciente para esta unidad
+        const { data: anyData } = await this.db
+          .from('booking_units')
+          .select('bookings!inner(price_per_night, check_in, status)')
+          .eq('unit_id', unitId)
+          .not('bookings.status', 'in', '(cancelled,blocked)')
+          .gt('bookings.price_per_night', 0)
+          .order('bookings.check_in', { ascending: false })
+          .limit(5);
+        const anyPrices = (anyData ?? []).map(bu => bu.bookings?.price_per_night).filter(p => p > 0);
+        if (!anyPrices.length) { hints.innerHTML = ''; return; }
+        const anyAvg = Math.round(anyPrices.reduce((a,b) => a+b,0) / anyPrices.length);
+        const fmt = n => '$' + Math.round(n).toLocaleString('es-AR');
+        const unitName = this.ctx.units.find(u => u.id === unitId)?.name ?? 'esta unidad';
+        hints.innerHTML = `<span style="font-size:.72rem;color:var(--color-primary)">
+          💡 Último precio registrado en <strong>${unitName}</strong>: <strong>${fmt(anyAvg)}</strong>/noche
+        </span>`;
+        return;
+      }
+
+      const avg      = Math.round(prices.reduce((a,b) => a+b,0) / prices.length);
+      const min      = Math.min(...prices);
+      const max      = Math.max(...prices);
+      const fmt      = n => '$' + Math.round(n).toLocaleString('es-AR');
+      const MONTHS   = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+      const unitName = this.ctx.units.find(u => u.id === unitId)?.name ?? 'esta unidad';
+
+      hints.innerHTML = `
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+          padding:6px 10px;background:var(--color-surface-2);
+          border-radius:var(--r-md);border-left:3px solid var(--color-primary)">
+          <span style="font-size:.72rem;color:var(--color-text-2)">
+            💡 <strong>${unitName}</strong> en <strong>${MONTHS[month-1]}</strong>
+            (${prices.length} reserva${prices.length!==1?'s':''} históricas):
+            prom. <strong style="color:var(--color-primary)">${fmt(avg)}</strong>/noche
+            ${min !== max ? `· rango ${fmt(min)}–${fmt(max)}` : ''}
+          </span>
+          <button style="font-size:.68rem;padding:2px 8px;border:1px solid var(--color-primary);
+            border-radius:var(--r-sm);background:transparent;color:var(--color-primary);
+            cursor:pointer" onclick="(function(){
+              var el=document.getElementById('f-price');
+              if(el){el.value=${avg};el.dispatchEvent(new Event('input',{bubbles:true}));}
+            })()">
+            Usar ${fmt(avg)}
+          </button>
+        </div>`;
+    } catch { hints.innerHTML = ''; }
+  }
+
   // ── Submit ────────────────────────────────────────
   async _submit() {
-    // Validación completa al guardar
     if (!this._validateAll()) return;
 
     const btn = document.getElementById('btn-step-next');
     if (btn) { btn.disabled = true; btn.textContent = 'Guardando...'; }
 
-    // Safety: si algo cuelga > 30s, re-habilitar el botón
     let _safetyTimer = setTimeout(() => {
       if (btn) { btn.disabled = false; btn.textContent = this._editingId ? 'Guardar cambios' : 'Confirmar reserva'; }
       showToast('La operación tardó demasiado. Verificá tu conexión.', 'error');
@@ -830,6 +930,40 @@ export class BookingForm {
       const total    = Math.max(0, subtotal - discAmt + surch);
       const paid     = this._getTotalPaid();
       const balance  = total - paid;
+
+      // ── Validar superposición de unidades ────────────
+      const selectedUnits = [...this._selectedUnitIds];
+      if (selectedUnits.length > 0 && ci && co) {
+        const { data: conflicts } = await this.db
+          .from('booking_units')
+          .select('unit_id, bookings!inner(id, check_in, check_out, status, guests!bookings_guest_id_fkey(first_name,last_name))')
+          .in('unit_id', selectedUnits)
+          .not('bookings.status', 'in', '(cancelled,blocked)')
+          .lt('bookings.check_in', co)
+          .gt('bookings.check_out', ci);
+
+        const realConflicts = (conflicts ?? []).filter(c =>
+          !this._editingId || c.bookings?.id !== this._editingId
+        );
+        if (realConflicts.length) {
+          const g = realConflicts[0].bookings?.guests;
+          const name = g ? `${g.first_name} ${g.last_name}` : 'otro huésped';
+          showToast(`⚠️ Superposición: "${name}" ya tiene esa unidad en esas fechas.`, 'error');
+          if (btn) { btn.disabled = false; btn.textContent = this._editingId ? 'Guardar cambios' : 'Confirmar reserva'; }
+          clearTimeout(_safetyTimer);
+          return;
+        }
+      }
+
+      // ── Capturar estado ANTES (para audit log) ────────
+      let bookingBefore = null;
+      if (this._editingId) {
+        const { data: prev } = await this.db
+          .from('bookings')
+          .select('check_in,check_out,price_per_night,total_amount,status,source,notes')
+          .eq('id', this._editingId).single();
+        bookingBefore = prev;
+      }
 
       // Upsert huésped
       let guestId = this._selectedGuestId;
@@ -937,12 +1071,27 @@ export class BookingForm {
       });
       if (payRows.length) await this.db.from('payments').insert(payRows);
 
-      const _logVerb = this._editingId ? 'UPDATE' : 'CREATE';
-      const _logSummary = this._editingId ? 'Reserva actualizada' : 'Reserva creada';
-      await logAction(_logVerb, 'booking', String(bookingId), _logSummary);
+      const _logVerb    = this._editingId ? 'UPDATE' : 'CREATE';
+      const _logSummary = this._editingId
+        ? `Actualizada: ${ci} → ${co}, $${price}/noche, total $${total}`
+        : `Creada: ${ci} → ${co}, $${price}/noche, total $${total}`;
+      const _changes = bookingBefore ? {
+        before: bookingBefore,
+        after:  { check_in: ci, check_out: co, price_per_night: price, total_amount: total, status: balance <= 0 ? 'paid' : paid > 0 ? 'partial' : 'pending', source, notes: notes || null },
+      } : null;
+      await logAction(_logVerb, 'booking', String(bookingId), _logSummary, _changes);
 
       showToast(this._editingId ? 'Reserva actualizada ✓' : 'Reserva creada ✓', 'success');
       Sound?.[this._editingId ? 'success' : 'newBooking']?.();
+
+      // Email de confirmación — solo en creación nueva (no edición)
+      if (!this._editingId) {
+        const guestEmail = document.getElementById('f-email')?.value?.trim();
+        // Invocar async sin bloquear el UI
+        this.db.functions?.invoke?.('booking-confirmation', {
+          body: { bookingId: String(bookingId) },
+        }).catch((err: any) => console.warn('[BookingForm] confirmation email:', err));
+      }
 
       // Invalidar cache para que el calendario traiga datos frescos
       cache.invalidate('bookings');

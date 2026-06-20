@@ -44,6 +44,8 @@ const CONFIG_SCHEMA = [
     fields: [
       { key: 'checkin_hour',  label: 'Hora estándar de check-in',  default: '14:00', type: 'time' },
       { key: 'checkout_hour', label: 'Hora estándar de check-out', default: '10:00', type: 'time' },
+      { key: 'wifi_name',     label: 'Nombre de la red WiFi',       default: '',      type: 'text' },
+      { key: 'wifi_pass',     label: 'Contraseña WiFi',             default: '',      type: 'text' },
     ],
   },
   {
@@ -240,7 +242,7 @@ export class ConfigPanel {
 
       if (error) throw error;
 
-      await logAction(this.db, this.ctx, 'config_updated', { keys: upserts.map(u => u.key) });
+      await logAction('UPDATE', 'config', this.ctx.hotelId, `Configuración actualizada: ${upserts.map(u => u.key).join(', ')}`);
       showToast('Configuración guardada ✓', 'success');
 
     } catch (err) {

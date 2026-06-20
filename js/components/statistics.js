@@ -40,9 +40,12 @@ export class Statistics {
   }
 
   init() {
-    const now = new Date();
-    document.getElementById('stats-month').value = now.getMonth();
-    document.getElementById('stats-year').value  = now.getFullYear();
+    const now    = new Date();
+    const saved  = JSON.parse(localStorage.getItem('mila_stats_period') ?? 'null');
+    const month  = saved?.month ?? now.getMonth();
+    const year   = saved?.year  ?? now.getFullYear();
+    document.getElementById('stats-month').value = month;
+    document.getElementById('stats-year').value  = year;
     this._tab = 'units';
     this.loadUnits();
   }
@@ -56,6 +59,17 @@ export class Statistics {
     for (let y = curYear - 2; y <= curYear + 1; y++) {
       yearSel.innerHTML += `<option value="${y}" ${y === curYear ? 'selected' : ''}>${y}</option>`;
     }
+    // Persistir selección al cambiar
+    const savePeriod = () => {
+      try {
+        localStorage.setItem('mila_stats_period', JSON.stringify({
+          month: parseInt(monthSel.value),
+          year:  parseInt(yearSel.value),
+        }));
+      } catch {}
+    };
+    monthSel.addEventListener('change', savePeriod);
+    yearSel.addEventListener('change', savePeriod);
     monthSel.value = now.getMonth();
   }
 

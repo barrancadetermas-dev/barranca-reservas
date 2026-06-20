@@ -15,6 +15,49 @@ export class Dashboard {
     this.ctx         = ctx;
     this.bookingForm = bookingForm;
     this._loaded     = false;
+
+    // Exponer para handlers inline de los cards de arrival/departure
+    window._dashCheckIn  = async (bookingId, rowId, guest) => {
+      if (!confirm(`Registrar check-in de ${guest}?`)) return;
+      try {
+        await this.db.from('bookings')
+          .update({ checked_in_at: new Date().toISOString() }).eq('id', bookingId);
+        const row = document.getElementById(rowId);
+        if (row) {
+          row.classList.add('done');
+          row.querySelector('.dac-btn')?.remove();
+          row.querySelector('.dac-left').insertAdjacentHTML('beforeend',
+            `<span class="dac-done-label">✓ Check-in registrado</span>`);
+          row.insertAdjacentHTML('beforeend', `<span class="dac-done-badge">✓</span>`);
+        }
+        document.dispatchEvent(new CustomEvent('show:toast', { detail: { msg: `✅ Check-in: ${guest}`, type: 'success' } }));
+        document.dispatchEvent(new CustomEvent('booking:changed'));
+        if (typeof Sound !== 'undefined') Sound?.checkIn?.();
+      } catch (e) {
+        document.dispatchEvent(new CustomEvent('show:toast', { detail: { msg: 'Error: ' + e.message, type: 'error' } }));
+      }
+    };
+
+    window._dashCheckOut = async (bookingId, rowId, guest) => {
+      if (!confirm(`Registrar check-out de ${guest}?`)) return;
+      try {
+        await this.db.from('bookings')
+          .update({ checked_out_at: new Date().toISOString() }).eq('id', bookingId);
+        const row = document.getElementById(rowId);
+        if (row) {
+          row.classList.add('done');
+          row.querySelector('.dac-btn')?.remove();
+          row.querySelector('.dac-left').insertAdjacentHTML('beforeend',
+            `<span class="dac-done-label">✓ Check-out registrado</span>`);
+          row.insertAdjacentHTML('beforeend', `<span class="dac-done-badge" style="background:var(--color-surface-2)">✓</span>`);
+        }
+        document.dispatchEvent(new CustomEvent('show:toast', { detail: { msg: `👋 Check-out: ${guest}`, type: 'success' } }));
+        document.dispatchEvent(new CustomEvent('booking:changed'));
+        if (typeof Sound !== 'undefined') Sound?.checkOut?.();
+      } catch (e) {
+        document.dispatchEvent(new CustomEvent('show:toast', { detail: { msg: 'Error: ' + e.message, type: 'error' } }));
+      }
+    };
   }
 
   // ── Entrada pública ──────────────────────────────
@@ -46,7 +89,8 @@ export class Dashboard {
       this._renderKPIs(kpis, today);
       this._renderOccupancyRing(kpis.occupiedUnits, this.ctx.units.length);
       this._renderDollar(dollar);
-      this._renderArrivals(kpis.arrivals);
+      this._renderArrivals(kpis.arrivals ?? kpis.checkins ?? []);
+      this._renderDepartures(kpis.checkouts ?? []);
       this._renderReminders(reminders);
       this._renderForecast(forecast);
 
@@ -105,8 +149,8 @@ export class Dashboard {
     const { data: checkins } = await this.db
       .from('bookings')
       .select(`
-        id, check_in, check_out,
-        guests!bookings_guest_id_fkey(first_name, last_name),
+        id, check_in, check_out, checked_in_at, total_amount, total_paid, balance,
+        guests!bookings_guest_id_fkey(first_name, last_name, phone),
         booking_units(unit_id, units(name))
       `)
       .eq('hotel_id', hotelId)
@@ -117,7 +161,7 @@ export class Dashboard {
     const { data: checkouts } = await this.db
       .from('bookings')
       .select(`
-        id, check_in, check_out,
+        id, check_in, check_out, checked_out_at,
         guests!bookings_guest_id_fkey(first_name, last_name),
         booking_units(unit_id, units(name))
       `)
@@ -433,7 +477,7 @@ export class Dashboard {
     el.textContent = formatter(target);
   }
 
-  // ── Render Arrivals ───────────────────────────────
+  // ── Render Arrivals con acciones directas ─────────
   _renderArrivals(arrivals) {
     const container = document.getElementById('arrivals-list');
     if (!container) return;
@@ -444,13 +488,49 @@ export class Dashboard {
     }
 
     container.innerHTML = arrivals.map(b => {
-      const guest     = b.guests ? `${b.guests.first_name} ${b.guests.last_name}` : 'Sin nombre';
-      const unitNames = (b.booking_units ?? []).map(bu => bu.units?.name ?? '').join(', ');
+      const guest    = b.guests ? `${b.guests.first_name} ${b.guests.last_name}` : 'Sin nombre';
+      const unitNames= (b.booking_units ?? []).map(bu => bu.units?.name ?? '').join(', ');
+      const isDone   = !!b.checked_in_at;
       return `
-        <div class="arrival-item">
-          <span class="arrival-unit">${unitNames}</span>
-          <span class="arrival-guest">${guest}</span>
-          <span style="margin-left:auto;font-size:.72rem;color:var(--color-text-3)">Check-in</span>
+        <div class="dash-action-card ${isDone ? 'done' : ''}" id="arr-${b.id}">
+          <div class="dac-left">
+            <div class="dac-unit">${unitNames}</div>
+            <div class="dac-guest">${guest}</div>
+            ${isDone ? `<span class="dac-done-label">✓ Check-in registrado</span>` : ''}
+          </div>
+          ${!isDone ? `<button class="btn btn-primary btn-sm dac-btn"
+              onclick="window._dashCheckIn('${b.id}', 'arr-${b.id}', '${guest}')">
+              ✅ Check-in
+          </button>` : `<span class="dac-done-badge">✓</span>`}
+        </div>`;
+    }).join('');
+  }
+
+  // ── Render Departures con acciones directas ────────
+  _renderDepartures(departures) {
+    const container = document.getElementById('departures-list');
+    if (!container) return;
+
+    if (!departures.length) {
+      container.innerHTML = `<p class="empty-state-sm">Sin salidas hoy</p>`;
+      return;
+    }
+
+    container.innerHTML = departures.map(b => {
+      const guest    = b.guests ? `${b.guests.first_name} ${b.guests.last_name}` : 'Sin nombre';
+      const unitNames= (b.booking_units ?? []).map(bu => bu.units?.name ?? '').join(', ');
+      const isDone   = !!b.checked_out_at;
+      return `
+        <div class="dash-action-card ${isDone ? 'done' : ''}" id="dep-${b.id}">
+          <div class="dac-left">
+            <div class="dac-unit">${unitNames}</div>
+            <div class="dac-guest">${guest}</div>
+            ${isDone ? `<span class="dac-done-label">✓ Check-out registrado</span>` : ''}
+          </div>
+          ${!isDone ? `<button class="btn btn-outline btn-sm dac-btn"
+              onclick="window._dashCheckOut('${b.id}', 'dep-${b.id}', '${guest}')">
+              👋 Check-out
+          </button>` : `<span class="dac-done-badge" style="background:var(--color-surface-2)">✓</span>`}
         </div>`;
     }).join('');
   }

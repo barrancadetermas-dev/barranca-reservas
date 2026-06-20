@@ -875,7 +875,6 @@ export class Calendar {
       const btn = document.getElementById('cal-view-toggle');
       if (btn) btn.textContent = labels[this._view];
 
-      // Limpiar drag handlers — nuevos se crearán en load()
       this._dragBound = false;
       if (this._selectionAbort) { this._selectionAbort.abort(); this._selectionAbort = null; }
 
@@ -884,6 +883,50 @@ export class Calendar {
       }
       this.load();
     });
+
+    // ── Toggle de disponibilidad ──────────────────────
+    let _availMode = false;
+    const availBtn = document.getElementById('cal-avail-toggle');
+    if (availBtn) {
+      availBtn.addEventListener('click', () => {
+        _availMode = !_availMode;
+        availBtn.textContent = _availMode ? '✕ Ocultar disponibilidad' : '👁 Disponibilidad';
+        availBtn.classList.toggle('active', _availMode);
+        const grid = document.getElementById('calendar-grid');
+        if (!grid) return;
+        if (_availMode) {
+          // Calcular ocupación por columna (día) y marcar celdas libres
+          const daysInMonth = new Date(this.year, this.month+1, 0).getDate();
+          const totalUnits  = this.ctx.units.length || 1;
+          for (let d = 1; d <= daysInMonth; d++) {
+            const dateStr = `${this.year}-${String(this.month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+            const cells   = grid.querySelectorAll(`.cal-cell[data-date="${dateStr}"]`);
+            let free = 0;
+            cells.forEach(c => { if (!c.querySelector('.bar')) free++; });
+            // Encabezado de día
+            cells.forEach(c => {
+              if (!c.querySelector('.bar')) {
+                c.classList.add('avail-free');
+              }
+            });
+            // Porcentaje en header
+            const pct = Math.round((free / totalUnits) * 100);
+            const hdrs = grid.querySelectorAll('.cal-day-header');
+            const hdr  = hdrs[d]; // índice 1-based
+            if (hdr && !hdr.querySelector('.avail-pct')) {
+              const badge = document.createElement('div');
+              badge.className = 'avail-pct';
+              badge.textContent = `${pct}%`;
+              badge.style.cssText = `font-size:.55rem;font-weight:700;color:${pct > 60 ? '#16a34a' : pct > 30 ? '#f59e0b' : '#ef4444'};line-height:1`;
+              hdr.appendChild(badge);
+            }
+          }
+        } else {
+          grid.querySelectorAll('.avail-free').forEach(c => c.classList.remove('avail-free'));
+          grid.querySelectorAll('.avail-pct').forEach(el => el.remove());
+        }
+      });
+    }
   }
 
   // ── Vista Semanal ─────────────────────────────────

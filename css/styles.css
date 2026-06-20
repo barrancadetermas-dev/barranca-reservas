@@ -4349,3 +4349,156 @@ input[type="color"].unit-color-input::-webkit-color-swatch { border: none; borde
 .header-icon-btn.icon-muted svg {
   opacity: .4;
 }
+
+/* ══════════════════════════════════════════════════
+   MILA v8 — Dashboard actions, print, avail
+   ══════════════════════════════════════════════════ */
+
+/* ── Dashboard: action cards (check-in/out) ─────── */
+.dash-action-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--r-lg);
+  background: var(--color-surface-2);
+  margin-bottom: 8px;
+  transition: all var(--t-fast);
+}
+
+.dash-action-card:hover { border-color: var(--color-primary); }
+.dash-action-card.done  { opacity: .65; }
+
+.dac-left { flex: 1; min-width: 0; }
+.dac-unit {
+  font-size: .7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: var(--color-primary);
+  margin-bottom: 2px;
+}
+.dac-guest { font-size: .85rem; font-weight: 600; color: var(--color-text); }
+.dac-done-label { font-size: .7rem; color: var(--color-success); display: block; margin-top: 2px; }
+
+.dac-btn { flex-shrink: 0; white-space: nowrap; }
+.dac-done-badge {
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  background: var(--color-primary);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: .8rem;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+/* ── Availability mode cells ─────────────────────── */
+.cal-cell.avail-free {
+  background: rgba(16,185,129,.08) !important;
+  border-top: 2px solid rgba(16,185,129,.3);
+}
+
+.avail-pct {
+  margin-top: 2px;
+  font-size: .55rem !important;
+  line-height: 1 !important;
+}
+
+/* ── Cal avail toggle active ─────────────────────── */
+#cal-avail-toggle.active {
+  background: var(--color-primary);
+  color: white;
+  border-color: var(--color-primary);
+}
+
+/* ── Price history hint ──────────────────────────── */
+#price-history-hint {
+  min-height: 18px;
+  transition: opacity .2s;
+}
+
+/* ── Offline queue badge ──────────────────────────── */
+#conn-queue-badge {
+  display: none;
+  background: #f97316;
+  color: white;
+  font-size: .65rem;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: var(--r-full);
+  margin-left: 4px;
+}
+
+/* ══════════════════════════════════════════════════
+   PRINT STYLES — Calendario imprimible
+   ══════════════════════════════════════════════════ */
+@media print {
+  /* Ocultar elementos de UI */
+  .sidebar,
+  .main-header,
+  .cal-toolbar,
+  .section-page-header,
+  .cal-legend-container,
+  .cal-block-hint,
+  #btn-notifications,
+  #btn-sound,
+  #btn-theme,
+  #btn-calculator,
+  #btn-new-booking,
+  .bnav,
+  .demo-banner,
+  [id^="overlay-"],
+  .toast-container,
+  #cmd-overlay,
+  #notif-panel,
+  #theme-panel {
+    display: none !important;
+  }
+
+  /* Mostrar solo la sección activa */
+  body, html { background: white !important; }
+  .main-wrapper { display: block !important; }
+  .main-content {
+    padding: 8px !important;
+    overflow: visible !important;
+  }
+  .section { display: none !important; }
+  .section.active { display: block !important; }
+
+  /* Calendario */
+  .cal-wrapper { overflow: visible !important; }
+  #calendar-grid {
+    font-size: 9px !important;
+    min-width: auto !important;
+  }
+
+  /* Barras de reserva visibles en blanco y negro */
+  .bar-span {
+    border: 1px solid #333 !important;
+    background: #eee !important;
+    print-color-adjust: exact;
+  }
+
+  /* Header de sección imprimible */
+  #calendar-grid::before {
+    content: 'Calendario de Ocupación — MILA';
+    display: block;
+    font-size: 14px;
+    font-weight: bold;
+    margin-bottom: 8px;
+  }
+
+  /* Colores al imprimir */
+  * { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+
+  /* Forzar A4 landscape */
+  @page {
+    size: A4 landscape;
+    margin: 1cm;
+  }
+}

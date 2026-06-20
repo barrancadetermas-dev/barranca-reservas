@@ -22,18 +22,32 @@ import { isDemo } from '../auth/permissions.js';
 export async function logAction(action, entityType, entityId, summary, changes = null) {
   if (!AppContext.hotelId || isDemo()) return;
   try {
-    await supabase.from('audit_log').insert({
+    const row = {
       hotel_id:    AppContext.hotelId,
-      user_id:     AppContext.user?.id  ?? null,
+      user_id:     AppContext.user?.id    ?? null,
       user_email:  AppContext.user?.email ?? null,
-      role:        AppContext.role       ?? 'staff',
+      role:        AppContext.role        ?? 'staff',
       action,
       entity_type: entityType,
-      entity_id:   entityId             ?? null,
-      summary,
+      entity_id:   entityId              ?? null,
+      summary,           // columna preferida
+      description: summary, // alias — por si el schema usa description
       changes:     changes ? JSON.parse(JSON.stringify(changes)) : null,
-    });
-  } catch {
-    // Silencioso — el audit log nunca debe romper el flujo principal
+    };
+    await supabase.from('audit_log').insert(row);
+  } catch (err) {
+    // Si falla por columna no existente, reintentar sin la columna problemática
+    if (err?.message?.includes('description') || err?.message?.includes('summary')) {
+      try {
+        await supabase.from('audit_log').insert({
+          hotel_id:   AppContext.hotelId,
+          user_id:    AppContext.user?.id    ?? null,
+          user_email: AppContext.user?.email ?? null,
+          role:       AppContext.role        ?? 'staff',
+          action, entity_type: entityType, entity_id: entityId ?? null,
+        });
+      } catch { /* silencioso siempre */ }
+    }
+    // El audit log nunca rompe el flujo principal
   }
 }
