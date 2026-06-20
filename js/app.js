@@ -1,6 +1,8 @@
 import { generateVoucherText, openWhatsAppVoucher, openManagerTemplate } from './services/whatsapp-service.js';
 import { Bus, EVENTS } from './services/event-bus.js';
 import { cache } from './services/supabase-cache.js';
+import { Sound } from './services/sound-service.js';
+import { NotificationService } from './services/notification-service.js';
 // ═══════════════════════════════════════════════════
 // app.js v5.0 — MILA Sistema Inteligente para Alojamientos
 // + Roles (admin/staff/demo) + Demo banner
@@ -26,6 +28,7 @@ import { OperationsModule } from './components/operations.js';
 let dashboard   = null;
 let calendar    = null;
 let bookingForm = null;
+let notifService = null;
 let bookingList = null;
 let statistics  = null;
 let guestsCRM   = null;
@@ -276,9 +279,15 @@ async function initApp(user) {
     trySetup('checkInOut',    setupCheckInOutModal);
     trySetup('detail',        setupDetailModal);
     trySetup('modalCleanup',  _ensureModalCleanup);
+    trySetup('sound',         setupSoundButton);
+    trySetup('theme',         setupThemeSystem);
+    notifService = new NotificationService(supabase);
+    trySetup('realNotif',     () => setupRealNotifications(notifService));
+    // Emitir sonido de login
+    setTimeout(() => Sound?.login(), 300);
 
     document.addEventListener('reminders:badge', (e) => updateReminderBadge(e.detail.count));
-    document.addEventListener('booking:fullypaid', () => launchConfetti());
+    document.addEventListener('booking:fullypaid', () => { launchConfetti(); Sound?.newBooking(); });
     document.addEventListener('show:toast', (e) => showToast(e.detail.msg, e.detail.type));
 
     // ── Recargar la sección activa cuando cambia una reserva (debounced) ──
@@ -346,17 +355,18 @@ function setupNavByRole() {
 // ══════════════════════════════════════════════════
 // NAVEGACIÓN
 // ══════════════════════════════════════════════════
-const SECTION_TITLES = {
-  dashboard:   'Panel de Hoy',
-  calendar:    'Calendario de Ocupación',
-  bookings:    'Reservas',
-  statistics:  'Estadísticas',
-  reminders:   'Recordatorios',
-  guests:      'Huéspedes / CRM',
-  operations:  'Operaciones',
-  audit:       'Registro de Auditoría',
-  config:      'Configuración',
+const SECTION_META = {
+  dashboard:  { title: 'Panel de Hoy',            icon: '🏠', sub: 'Resumen operativo diario' },
+  calendar:   { title: 'Calendario de Ocupación', icon: '📅', sub: 'Vista mensual · Drag & Drop · SHIFT+arrastre para bloquear' },
+  bookings:   { title: 'Reservas',                icon: '📋', sub: 'Gestión completa de reservas' },
+  statistics: { title: 'Estadísticas',            icon: '📊', sub: 'Ingresos · Ocupación · ADR · RevPAR' },
+  reminders:  { title: 'Recordatorios',           icon: '🔔', sub: 'Recordatorios y mantenimiento programado' },
+  guests:     { title: 'Huéspedes / CRM',         icon: '👥', sub: 'Historial · Notas · Antecedentes' },
+  operations: { title: 'Operaciones',             icon: '🔧', sub: 'Limpieza · Mantenimiento' },
+  audit:      { title: 'Auditoría',               icon: '📜', sub: 'Registro de acciones del sistema' },
+  config:     { title: 'Configuración',           icon: '⚙️', sub: 'Comisiones · Tarifas · Departamentos' },
 };
+const SECTION_TITLES = Object.fromEntries(Object.entries(SECTION_META).map(([k,v]) => [k, v.title]));
 
 function setupNavigation() {
   document.querySelectorAll('.nav-item[data-section]').forEach(link => {
@@ -380,13 +390,22 @@ export async function navigateTo(section) {
   }
 
   currentSection = section;
-  // Persistir sección activa — sobrevive a F5
   try { localStorage.setItem('mila_last_section', section); } catch {}
   document.querySelectorAll('.nav-item').forEach(el =>
     el.classList.toggle('active', el.dataset.section === section));
   document.querySelectorAll('.section').forEach(el => el.classList.remove('active'));
   document.getElementById(`section-${section}`)?.classList.add('active');
   document.getElementById('header-title').textContent = SECTION_TITLES[section] ?? section;
+
+  // Actualizar el header de sección (banner superior dentro del main)
+  const meta = SECTION_META[section];
+  if (meta) {
+    document.getElementById('sph-icon')?.textContent  !== undefined && (document.getElementById('sph-icon').textContent  = meta.icon);
+    document.getElementById('sph-title')?.textContent !== undefined && (document.getElementById('sph-title').textContent = meta.title);
+    document.getElementById('sph-sub')?.textContent   !== undefined && (document.getElementById('sph-sub').textContent   = meta.sub);
+  }
+
+  Sound?.click();
   updateHeaderDate();
 
   try {
@@ -722,9 +741,10 @@ export async function markCheckIn(bookingId) {
   if (isDemo()) { showDemoAction(null); return; }
   const { error } = await supabase.from('bookings')
     .update({ checked_in_at: new Date().toISOString() }).eq('id', bookingId);
-  if (error) { showToast('Error al registrar check-in', 'error'); return; }
+  if (error) { showToast('Error al registrar check-in', 'error'); Sound?.error(); return; }
   await logAction('CHECKIN', 'booking', bookingId, 'Check-in registrado');
   showToast('✅ Check-in registrado', 'success');
+  Sound?.checkIn();
   document.dispatchEvent(new CustomEvent('booking:changed'));
 }
 
@@ -733,10 +753,10 @@ export async function markCheckOut(bookingId) {
   if (isDemo()) { showDemoAction(null); return; }
   const { error } = await supabase.from('bookings')
     .update({ checked_out_at: new Date().toISOString() }).eq('id', bookingId);
-  if (error) { showToast('Error al registrar check-out', 'error'); return; }
+  if (error) { showToast('Error al registrar check-out', 'error'); Sound?.error(); return; }
   await logAction('CHECKOUT', 'booking', bookingId, 'Check-out registrado');
   showToast('👋 Check-out registrado', 'success');
-  // Auto-crear tarea de limpieza para las unidades que hicieron check-out
+  Sound?.checkOut();
   try {
     const { data: booking } = await supabase
       .from('bookings')
@@ -1278,6 +1298,147 @@ document.getElementById('season-close')?.addEventListener('click',  () => docume
 // ══════════════════════════════════════════════════
 // INDICADOR DE CONECTIVIDAD (Realtime + Online)
 // ══════════════════════════════════════════════════
+// ══════════════════════════════════════════════════
+// SONIDO
+// ══════════════════════════════════════════════════
+function setupSoundButton() {
+  const btn     = document.getElementById('btn-sound');
+  const iconOn  = document.getElementById('sound-icon-on');
+  const iconOff = document.getElementById('sound-icon-off');
+  if (!btn) return;
+
+  const updateIcon = (muted) => {
+    if (iconOn)  iconOn.style.display  = muted ? 'none' : '';
+    if (iconOff) iconOff.style.display = muted ? ''     : 'none';
+    btn.title = muted ? 'Sonidos silenciados — clic para activar' : 'Sonidos activos — clic para silenciar';
+    btn.classList.toggle('icon-muted', muted);
+  };
+
+  updateIcon(Sound.muted);
+  btn.addEventListener('click', () => {
+    const muted = Sound.toggleMute();
+    updateIcon(muted);
+    if (!muted) setTimeout(() => Sound.success(), 80);
+  });
+
+  // Sonido en apertura/cierre de modales dinámicos (body children)
+  const observer = new MutationObserver((muts) => {
+    muts.forEach(m => {
+      m.addedNodes.forEach(n => { if (n.classList?.contains('modal-overlay')) Sound?.modalOpen(); });
+      m.removedNodes.forEach(n => { if (n.classList?.contains('modal-overlay')) Sound?.modalClose(); });
+    });
+  });
+  observer.observe(document.body, { childList: true });
+
+  // Sonido en modales estáticos (overlay-booking, overlay-detail, etc.)
+  document.querySelectorAll('.modal-overlay').forEach(el => {
+    new MutationObserver(() => {
+      const isOpen = !el.classList.contains('hidden');
+      if (isOpen) Sound?.modalOpen(); else Sound?.modalClose();
+    }).observe(el, { attributes: true, attributeFilter: ['class'] });
+  });
+}
+
+// ══════════════════════════════════════════════════
+// TEMAS DE COLOR
+// ══════════════════════════════════════════════════
+const THEMES = {
+  indigo:  { primary:'#6366F1', primaryH:'#4F46E5', primaryL:'#EEF2FF', primaryT:'rgba(99,102,241,.12)',  sidebarBg:'#0F172A', sidebarActive:'#1E293B', sidebarAccent:'#818CF8' },
+  emerald: { primary:'#10b981', primaryH:'#059669', primaryL:'#d1fae5', primaryT:'rgba(16,185,129,.12)',  sidebarBg:'#064e3b', sidebarActive:'#065f46', sidebarAccent:'#34d399' },
+  ocean:   { primary:'#0891b2', primaryH:'#0e7490', primaryL:'#cffafe', primaryT:'rgba(8,145,178,.12)',   sidebarBg:'#0c4a6e', sidebarActive:'#075985', sidebarAccent:'#38bdf8' },
+  sunset:  { primary:'#f97316', primaryH:'#ea580c', primaryL:'#fff7ed', primaryT:'rgba(249,115,22,.12)',  sidebarBg:'#431407', sidebarActive:'#7c2d12', sidebarAccent:'#fb923c' },
+  cherry:  { primary:'#e11d48', primaryH:'#be123c', primaryL:'#fff1f2', primaryT:'rgba(225,29,72,.12)',   sidebarBg:'#4c0519', sidebarActive:'#881337', sidebarAccent:'#fb7185' },
+};
+
+function setupThemeSystem() {
+  const panel = document.getElementById('theme-panel');
+  const btn   = document.getElementById('btn-theme');
+  const saved = localStorage.getItem('mila_theme') ?? 'indigo';
+  applyTheme(saved);
+  markActiveSwatch(saved);
+
+  btn?.addEventListener('click', (e) => { e.stopPropagation(); panel?.classList.toggle('hidden'); });
+  document.addEventListener('click', (e) => { if (!e.target.closest('#theme-picker-wrap')) panel?.classList.add('hidden'); });
+  document.querySelectorAll('.theme-swatch').forEach(sw => {
+    sw.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const t = sw.dataset.theme;
+      applyTheme(t); markActiveSwatch(t);
+      localStorage.setItem('mila_theme', t);
+      panel?.classList.add('hidden');
+      Sound?.success();
+    });
+  });
+}
+
+function applyTheme(name) {
+  const t = THEMES[name] ?? THEMES.indigo;
+  const r = document.documentElement.style;
+  r.setProperty('--color-primary',   t.primary);
+  r.setProperty('--color-primary-h', t.primaryH);
+  r.setProperty('--color-primary-l', t.primaryL);
+  r.setProperty('--color-primary-t', t.primaryT);
+  r.setProperty('--sidebar-bg',      t.sidebarBg);
+  r.setProperty('--sidebar-active',  t.sidebarActive);
+  r.setProperty('--sidebar-accent',  t.sidebarAccent);
+  document.body.dataset.colorTheme = name;
+}
+function markActiveSwatch(name) {
+  document.querySelectorAll('.theme-swatch').forEach(sw => sw.classList.toggle('active', sw.dataset.theme === name));
+}
+
+// ══════════════════════════════════════════════════
+// NOTIFICACIONES REALES
+// ══════════════════════════════════════════════════
+async function setupRealNotifications(notifSvc) {
+  const refresh = async () => {
+    const notifs = await notifSvc.refresh();
+    const count  = notifs.length;
+    const badge  = document.getElementById('notif-badge');
+    const list   = document.getElementById('notif-list');
+
+    if (badge) {
+      badge.style.display = count > 0 ? '' : 'none';
+      badge.textContent   = count > 9 ? '9+' : String(count);
+      badge.style.background = notifs.some(n => n.priority === 'high') ? '#ef4444' : '#f97316';
+    }
+    if (list) {
+      list.innerHTML = count ? notifs.map(n => `
+        <div class="notif-item notif-${n.priority}" data-booking-id="${n.bookingId ?? ''}">
+          <span class="notif-item-icon">${n.icon}</span>
+          <div class="notif-item-body">
+            <div class="notif-item-title">${n.title}</div>
+            <div class="notif-item-sub">${n.body}</div>
+          </div>
+          ${n.action ? `<button class="notif-action-btn btn btn-primary btn-xs"
+              data-booking-id="${n.bookingId}" data-action="${n.action}">
+              ${n.action === 'checkin' ? '✅ CI' : '👋 CO'}
+            </button>` : ''}
+        </div>`).join('')
+        : `<p class="empty-state-sm" style="padding:20px">Sin notificaciones pendientes ✓</p>`;
+
+      list.querySelectorAll('.notif-action-btn').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          const bId = btn.dataset.bookingId;
+          try {
+            if (btn.dataset.action === 'checkin')  { await markCheckIn(bId);  Sound?.checkIn(); }
+            if (btn.dataset.action === 'checkout') { await markCheckOut(bId); Sound?.checkOut(); }
+            btn.textContent = '✓'; btn.disabled = true;
+            setTimeout(refresh, 600);
+          } catch (err) { showToast('Error: ' + err.message, 'error'); }
+        });
+      });
+    }
+    // Alerta sonora si hay urgentes nuevas
+    if (notifs.some(n => n.priority === 'high')) Sound?.alert();
+  };
+
+  await refresh();
+  setInterval(refresh, 5 * 60 * 1000);
+  document.addEventListener('booking:changed', () => setTimeout(refresh, 1200));
+}
+
 function setupCalculator() {
   const overlay = document.getElementById('overlay-calculator');
   if (!overlay) return;

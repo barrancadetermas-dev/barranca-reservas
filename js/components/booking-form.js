@@ -12,6 +12,7 @@ import { logAction } from '../services/audit-service.js';
 import { DateRangePicker } from './date-range-picker.js';
 import { Bus, EVENTS } from '../services/event-bus.js';
 import { cache } from '../services/supabase-cache.js';
+import { Sound } from '../services/sound-service.js';
 // PriceSuggester se carga lazy en _runPriceSuggestion()
 
 const PAYMENT_METHODS = [
@@ -941,6 +942,7 @@ export class BookingForm {
       await logAction(_logVerb, 'booking', String(bookingId), _logSummary);
 
       showToast(this._editingId ? 'Reserva actualizada ✓' : 'Reserva creada ✓', 'success');
+      Sound?.[this._editingId ? 'success' : 'newBooking']?.();
 
       // Invalidar cache para que el calendario traiga datos frescos
       cache.invalidate('bookings');

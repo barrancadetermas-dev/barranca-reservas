@@ -194,6 +194,40 @@
           <span class="notif-badge" id="notif-badge" style="display:none">0</span>
         </button>
 
+        <!-- 🔊 Sonido -->
+        <button class="header-icon-btn" id="btn-sound" title="Sonidos del sistema (clic para silenciar)" aria-label="Sonido">
+          <svg id="sound-icon-on" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+            <path d="M15.54 8.46a5 5 0 010 7.07"/>
+            <path d="M19.07 4.93a10 10 0 010 14.14"/>
+          </svg>
+          <svg id="sound-icon-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18" style="display:none">
+            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+            <line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/>
+          </svg>
+        </button>
+
+        <!-- 🎨 Tema de color -->
+        <div class="theme-picker-wrap" id="theme-picker-wrap">
+          <button class="header-icon-btn" id="btn-theme" title="Cambiar tema de color" aria-label="Tema">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+              <circle cx="12" cy="12" r="10"/>
+              <path d="M12 2a10 10 0 010 20"/>
+              <circle cx="12" cy="12" r="3" fill="currentColor" stroke="none"/>
+            </svg>
+          </button>
+          <div class="theme-panel hidden" id="theme-panel">
+            <div class="theme-panel-title">Tema de color</div>
+            <div class="theme-swatches">
+              <button class="theme-swatch active" data-theme="indigo"  title="Índigo (actual)"  style="background:#6366f1"></button>
+              <button class="theme-swatch" data-theme="emerald"  title="Esmeralda"    style="background:#10b981"></button>
+              <button class="theme-swatch" data-theme="ocean"    title="Océano"       style="background:#0891b2"></button>
+              <button class="theme-swatch" data-theme="sunset"   title="Atardecer"    style="background:#f97316"></button>
+              <button class="theme-swatch" data-theme="cherry"   title="Cereza"       style="background:#e11d48"></button>
+            </div>
+          </div>
+        </div>
+
         <!-- 🧮 Calculadora -->
         <button class="header-icon-btn" id="btn-calculator" title="Calculadora de estadía" aria-label="Calculadora">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
@@ -226,6 +260,17 @@
 
     <!-- Main Content -->
     <main class="main-content">
+      <!-- Banner de sección — se actualiza en navigateTo() -->
+      <div class="section-page-header" id="section-page-header">
+        <div class="sph-left">
+          <span class="sph-icon" id="sph-icon">🏠</span>
+          <div>
+            <h2 class="sph-title" id="sph-title">Panel de Hoy</h2>
+            <p  class="sph-sub"   id="sph-sub">Resumen operativo</p>
+          </div>
+        </div>
+        <div class="sph-right" id="sph-right"><!-- acciones contextuales --></div>
+      </div>
 
       <!-- ── SECTION: DASHBOARD ── -->
       <section id="section-dashboard" class="section active">
