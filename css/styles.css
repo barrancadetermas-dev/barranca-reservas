@@ -2276,7 +2276,7 @@ select {
 }
 .past-col .bar { filter: saturate(.4) brightness(.78) !important; }
 /* Modo ocultar días pasados — manejado desde JS con scroll */
-.today-col {
+.cal-cell.today-col {
   background: rgba(99,102,241,.05) !important;
   border-left: 2px solid rgba(99,102,241,.25) !important;
   border-right: 2px solid rgba(99,102,241,.25) !important;

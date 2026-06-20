@@ -535,23 +535,20 @@ export class Calendar {
 
   // ── Scroll al día de hoy ──────────────────────────
   _scrollToToday() {
-    const grid    = document.getElementById('calendar-grid');
     const wrapper = document.querySelector('.cal-wrapper');
-    if (!grid || !wrapper) return;
+    if (!wrapper) return;
 
     const todayDay = new Date().getDate();
-    // La columna de hoy es (todayDay) — contando desde 1 después del label (col 1)
-    // Ancho de cada columna de día
-    const dayHeaders = grid.querySelectorAll('.cal-day-header');
-    if (!dayHeaders.length) return;
+    const todayHeader = document.querySelector(
+      `#calendar-grid .cal-day-header:nth-child(${todayDay + 1})`
+    );
+    if (!todayHeader) return;
 
-    let scrollTarget = 0;
-    dayHeaders.forEach((dh, i) => {
-      if (i + 1 === todayDay) {
-        scrollTarget = dh.offsetLeft - 170; // 170 = ancho del label de unidad
-      }
-    });
-    wrapper.scrollTo({ left: Math.max(0, scrollTarget), behavior: 'smooth' });
+    const wrapperRect = wrapper.getBoundingClientRect();
+    const headerRect  = todayHeader.getBoundingClientRect();
+    // Posición del header relativa al wrapper + scroll actual, restando el ancho del label
+    const scrollTo = wrapper.scrollLeft + (headerRect.left - wrapperRect.left) - 170;
+    wrapper.scrollTo({ left: Math.max(0, scrollTo), behavior: 'smooth' });
   }
 
   // ── Context Menu ──────────────────────────────────
