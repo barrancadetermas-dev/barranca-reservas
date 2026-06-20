@@ -332,15 +332,40 @@ export class BookingList {
             <div class="booking-status-col">
               <span class="status-badge ${statusCls}">${statusLbl}</span>
             </div>
-            <div class="booking-actions-col" onclick="event.stopPropagation()">
-              <button data-action="edit"     class="btn btn-ghost btn-icon-sm" title="Editar">✏️</button>
-              <button data-action="whatsapp" class="btn btn-ghost btn-icon-sm" title="WhatsApp">💬</button>
-              <button data-action="flag"     class="btn btn-ghost btn-icon-sm" title="Marcar huésped"
-                      style="${isBad ? 'color:var(--color-danger)' : ''}">⚑</button>
+            <div class="booking-actions-cell" onclick="event.stopPropagation()">
+              <button data-action="edit"
+                class="bl-action-btn"
+                title="Editar reserva">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15">
+                  <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
+                  <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                </svg>
+              </button>
+              <button data-action="whatsapp"
+                class="bl-action-btn whatsapp"
+                title="Enviar por WhatsApp">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15">
+                  <path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z"/>
+                </svg>
+              </button>
+              <button data-action="flag"
+                class="bl-action-btn ${isBad ? 'danger' : ''}"
+                title="${isBad ? 'Huésped marcado como conflictivo' : 'Marcar huésped'}">
+                <svg viewBox="0 0 24 24" fill="${isBad ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2" width="14" height="14">
+                  <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/>
+                </svg>
+              </button>
               ${b.check_out === today && b.status !== 'cancelled'
-                ? `<button data-action="checkout" class="btn btn-ghost btn-icon-sm" title="Hacer check-out" style="color:#22c55e">✓ OUT</button>`
+                ? `<button data-action="checkout" class="bl-action-btn" title="Registrar check-out"
+                     style="color:#22c55e;border-color:#22c55e;background:rgba(34,197,94,.08)">
+                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="14" height="14"><polyline points="20 6 9 17 4 12"/></svg>
+                   </button>`
                 : ''}
-              ${can('deleteBooking') ? `<button data-action="delete" class="btn btn-ghost btn-icon-sm" title="Eliminar" style="color:var(--color-danger)">🗑️</button>` : ''}
+              ${can('deleteBooking') ? `<button data-action="delete" class="bl-action-btn danger" title="Eliminar reserva">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                  <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a1 1 0 011-1h4a1 1 0 011 1v2"/>
+                </svg>
+              </button>` : ''}
             </div>
           </div>
           ${isToday ? `<div class="booking-today-banner" style="background:${barColor}18;border-color:${barColor}">

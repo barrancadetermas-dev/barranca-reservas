@@ -3098,3 +3098,415 @@ input[type="color"].unit-color-input::-webkit-color-swatch { border: none; borde
 .detail-footer-main {
   display: flex; gap: 6px; justify-content: flex-end;
 }
+
+/* ══════════════════════════════════════════════════
+   MILA v4.0 ADDITIONS
+   ══════════════════════════════════════════════════ */
+
+/* ── CALENDAR: Ocultar botones eliminados ──────── */
+#cal-today,
+#cal-hide-past-btn {
+  display: none !important;
+}
+
+/* ── LEGEND ACCORDION ─────────────────────────── */
+.legend-accordion-wrapper {
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.legend-accordion {
+  border: 1px solid var(--color-border);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+  background: var(--color-surface);
+}
+
+.legend-acc-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 8px 12px;
+  background: var(--color-surface-2);
+  border: none;
+  cursor: pointer;
+  font-size: .75rem;
+  color: var(--color-text-2);
+  transition: background var(--t-fast);
+}
+
+.legend-acc-header:hover {
+  background: var(--color-surface-3, var(--color-surface-2));
+}
+
+.legend-acc-header.open {
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-text);
+}
+
+.legend-acc-title {
+  font-weight: 600;
+  font-size: .72rem;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+}
+
+.legend-acc-chevron {
+  color: var(--color-text-3);
+  transition: transform .2s ease;
+  flex-shrink: 0;
+}
+
+.legend-acc-header.open .legend-acc-chevron {
+  transform: rotate(180deg);
+}
+
+.legend-acc-body {
+  display: none;
+  padding: 8px 12px 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  flex-direction: row;
+}
+
+.legend-acc-body:not(.open) {
+  display: none !important;
+}
+
+.legend-acc-body.open {
+  display: flex !important;
+  animation: accOpen .15s ease;
+}
+
+@keyframes accOpen {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.legend-acc-body .legend-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: .73rem;
+  color: var(--color-text-2);
+  white-space: nowrap;
+}
+
+.legend-acc-body .legend-swatch {
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+.legend-acc-body .legend-swatch-circle {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* ── WEEK VIEW: Indicador de hoy elegante ────── */
+.week-today {
+  border-top: 2px solid var(--color-primary) !important;
+  background: var(--color-primary-t, rgba(99,102,241,.04)) !important;
+}
+
+.week-bar {
+  height: 32px;
+  display: flex;
+  align-items: center;
+  padding: 0 6px;
+  cursor: pointer;
+  transition: filter .15s;
+}
+
+.week-bar:hover {
+  filter: brightness(1.1);
+}
+
+/* Today indicator en header numérico */
+.dh-num.today-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--color-primary);
+  color: white;
+  font-size: .8rem;
+  font-weight: 700;
+}
+
+/* ── DRAG & DROP: highlights de destino ──────── */
+.cal-cell.drop-target {
+  outline: 2px dashed var(--color-primary);
+  outline-offset: -2px;
+  background: var(--color-primary-t, rgba(99,102,241,.08)) !important;
+  z-index: 2;
+}
+
+.cal-cell.drop-conflict {
+  outline: 2px dashed var(--color-danger, #ef4444);
+  outline-offset: -2px;
+  background: rgba(239,68,68,.08) !important;
+}
+
+/* ── BOOKING LIST: Botones de acción más grandes */
+.booking-actions-cell {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.bl-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--r-md);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text-2);
+  cursor: pointer;
+  font-size: 1rem;
+  transition: all var(--t-fast);
+  flex-shrink: 0;
+}
+
+.bl-action-btn:hover {
+  background: var(--color-surface-2);
+  color: var(--color-text);
+  border-color: var(--color-primary);
+  transform: translateY(-1px);
+  box-shadow: var(--sh-xs);
+}
+
+.bl-action-btn.danger:hover {
+  background: rgba(239,68,68,.1);
+  border-color: #ef4444;
+  color: #ef4444;
+}
+
+.bl-action-btn.whatsapp:hover {
+  background: rgba(34,197,94,.1);
+  border-color: #22c55e;
+  color: #22c55e;
+}
+
+/* ── DETAIL MODAL: Desglose financiero completo */
+.detail-breakdown {
+  background: var(--color-surface-2);
+  border-radius: var(--r-lg);
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.detail-breakdown-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: .82rem;
+  color: var(--color-text-2);
+}
+
+.detail-breakdown-row.total-row {
+  border-top: 1px solid var(--color-border);
+  padding-top: 8px;
+  margin-top: 4px;
+  font-weight: 700;
+  font-size: .9rem;
+  color: var(--color-text);
+}
+
+.detail-breakdown-row.paid-row {
+  color: var(--color-success, #16a34a);
+  font-weight: 600;
+}
+
+.detail-breakdown-row.balance-row {
+  font-weight: 700;
+}
+
+.detail-breakdown-row span:last-child {
+  font-weight: 600;
+}
+
+/* ── STATISTICS 3x3 DASHBOARD ─────────────────── */
+.stats-dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  padding: 4px 0;
+}
+
+.stats-dashboard-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--r-xl);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 200px;
+  box-shadow: var(--sh-xs);
+  transition: box-shadow var(--t-fast);
+}
+
+.stats-dashboard-card:hover {
+  box-shadow: var(--sh-md);
+}
+
+.sdc-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.sdc-title {
+  font-size: .72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--color-text-3);
+}
+
+.sdc-value {
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: var(--color-text);
+  line-height: 1.2;
+}
+
+.sdc-delta {
+  font-size: .72rem;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: var(--r-full);
+  background: rgba(34,197,94,.12);
+  color: #15803d;
+}
+
+.sdc-delta.down {
+  background: rgba(239,68,68,.12);
+  color: #dc2626;
+}
+
+.sdc-chart {
+  flex: 1;
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  min-height: 80px;
+}
+
+.sdc-bar {
+  flex: 1;
+  border-radius: 3px 3px 0 0;
+  min-height: 4px;
+  background: var(--color-primary);
+  opacity: .8;
+  transition: opacity var(--t-fast);
+  cursor: pointer;
+  position: relative;
+}
+
+.sdc-bar:hover {
+  opacity: 1;
+}
+
+.sdc-bar-tooltip {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--color-text);
+  color: var(--color-surface);
+  font-size: .65rem;
+  padding: 3px 6px;
+  border-radius: var(--r-sm);
+  white-space: nowrap;
+  display: none;
+  pointer-events: none;
+  z-index: 10;
+}
+
+.sdc-bar:hover .sdc-bar-tooltip {
+  display: block;
+}
+
+.sdc-donut-wrap {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.sdc-donut-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: .72rem;
+}
+
+.sdc-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--color-text-2);
+}
+
+.sdc-legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.sdc-sub {
+  font-size: .73rem;
+  color: var(--color-text-3);
+}
+
+.sdc-area-chart {
+  width: 100%;
+  height: 80px;
+}
+
+@media (max-width: 900px) {
+  .stats-dashboard-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 600px) {
+  .stats-dashboard-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ── MODAL STACKING FIX ─────────────────────────── */
+/* Asegurar que el modal más reciente esté arriba */
+.modal-overlay {
+  /* Cada modal usa su propio z-index base */
+}
+
+/* Focus ring en botones de modal para accesibilidad */
+.modal .btn:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* Transición suave al mostrar/ocultar modales */
+.modal-overlay:not(.hidden) {
+  animation: fadeIn .18s ease;
+}

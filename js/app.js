@@ -267,6 +267,7 @@ async function initApp(user) {
     setupCancelBookingModal();
     setupCheckInOutModal();
     setupDetailModal();
+    _ensureModalCleanup();
 
     document.addEventListener('reminders:badge', (e) => updateReminderBadge(e.detail.count));
     document.addEventListener('booking:fullypaid', () => launchConfetti());
@@ -895,8 +896,40 @@ export function launchConfetti() {
 // ══════════════════════════════════════════════════
 function setupGlobalShortcuts() {
   document.addEventListener('keydown', (e) => {
-    if ((e.ctrlKey||e.metaKey) && e.key==='k') { e.preventDefault(); toggleCommandPalette(); }
-    if (e.key==='Escape') closeCommandPalette();
+    if ((e.ctrlKey||e.metaKey) && e.key==='k') { e.preventDefault(); toggleCommandPalette(); return; }
+
+    if (e.key === 'Escape') {
+      // Cerrar el modal visible más reciente — prioridad decreciente
+      if (!document.getElementById('cmd-overlay')?.classList.contains('hidden')) {
+        closeCommandPalette(); return;
+      }
+      // Modales dinámicos (operaciones, etc.) — en body como .modal-overlay
+      const dynamicModals = [...document.body.querySelectorAll('.modal-overlay')]
+        .filter(m => !m.id && !m.classList.contains('hidden'));
+      if (dynamicModals.length) {
+        dynamicModals[dynamicModals.length - 1].remove(); return;
+      }
+      // Modales estáticos — cerrar en orden inverso de apertura
+      const MODAL_ORDER = [
+        'overlay-whatsapp',
+        'overlay-guest-profile',
+        'overlay-season',
+        'overlay-cancel-booking',
+        'overlay-detail',
+        'overlay-booking',
+        'overlay-reminder',
+        'overlay-expense',
+      ];
+      for (const id of MODAL_ORDER) {
+        const el = document.getElementById(id);
+        if (el && !el.classList.contains('hidden')) {
+          el.classList.add('hidden');
+          return;
+        }
+      }
+      return;
+    }
+
     // ← → navegar meses (sin foco en campos ni modales abiertos)
     if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') &&
         !['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName) &&
@@ -907,6 +940,18 @@ function setupGlobalShortcuts() {
           : document.getElementById('cal-next');
         btn?.click(); e.preventDefault();
       }
+    }
+  });
+}
+
+// ── Gestión centralizada de modales ──────────────────
+// Asegura que siempre se pueda cerrar cualquier modal
+function _ensureModalCleanup() {
+  // Fix: si el overlay-booking quedó visible sin contexto, permitir cierre con X
+  document.getElementById('overlay-booking')?.addEventListener('click', (e) => {
+    // Solo cerrar si clic directo en el backdrop (no en el modal interno)
+    if (e.target === e.currentTarget && bookingForm) {
+      bookingForm.close();
     }
   });
 }

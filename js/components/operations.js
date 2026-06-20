@@ -233,10 +233,15 @@ export class OperationsModule {
       </div>`;
 
     document.body.appendChild(modal);
-    const close = () => modal.remove();
+    modal.style.zIndex = '210'; // Por encima del modal base
+    const close = () => { modal.remove(); escHandler && document.removeEventListener('keydown', escHandler); };
+    const escHandler = (e) => { if (e.key === 'Escape') close(); };
+    document.addEventListener('keydown', escHandler);
     modal.querySelector('#cleaning-modal-close').onclick = close;
     modal.querySelector('#ct-cancel').onclick = close;
     modal.addEventListener('click', e => { if (e.target === modal) close(); });
+    // Focus en primer input
+    setTimeout(() => modal.querySelector('#ct-title')?.focus(), 80);
     modal.querySelector('#ct-save').addEventListener('click', async () => {
       const title = modal.querySelector('#ct-title').value.trim();
       const date  = modal.querySelector('#ct-date').value;
@@ -398,10 +403,14 @@ export class OperationsModule {
       </div>`;
 
     document.body.appendChild(modal);
-    const close = () => modal.remove();
+    modal.style.zIndex = '210';
+    const close = () => { modal.remove(); escHandler && document.removeEventListener('keydown', escHandler); };
+    const escHandler = (e) => { if (e.key === 'Escape') close(); };
+    document.addEventListener('keydown', escHandler);
     modal.querySelector('#maint-modal-close').onclick = close;
     modal.querySelector('#mi-cancel').onclick = close;
     modal.addEventListener('click', e => { if (e.target === modal) close(); });
+    setTimeout(() => modal.querySelector('#mi-title')?.focus(), 80);
     modal.querySelector('#mi-save').addEventListener('click', async () => {
       const title = modal.querySelector('#mi-title').value.trim();
       if (!title) { showToast('Ingresá una descripción', 'warning'); return; }

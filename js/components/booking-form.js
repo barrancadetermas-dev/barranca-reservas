@@ -213,23 +213,50 @@ export class BookingForm {
 
   // ── openDetail ────────────────────────────────────
   openDetail(booking) {
+    if (!booking?.id) return;
     this._currentDetailBookingId = booking.id;
     const overlay = document.getElementById('overlay-detail');
     const body    = document.getElementById('detail-body');
     if (!overlay || !body) return;
 
-    const guest    = booking.guests
+    const guest      = booking.guests
       ? `${booking.guests.first_name ?? ''} ${booking.guests.last_name ?? ''}`.trim()
       : 'Sin nombre';
-    const unitNames = (booking.booking_units ?? [])
+    const unitNames  = (booking.booking_units ?? [])
       .map(bu => bu.units?.name ?? '').filter(Boolean).join(', ');
-    const srcCfg   = SOURCE_CONFIG?.[booking.source] ?? { label: booking.source ?? 'Directo', dot: '#64748b' };
+    const srcCfg     = SOURCE_CONFIG?.[booking.source] ?? { label: booking.source ?? 'Directo', dot: '#64748b' };
     const badgeColor = srcCfg.dot ?? srcCfg.color ?? '#64748b';
-
     const statusLabels = { pending:'Sin seña', partial:'Con seña', paid:'Pagado',
                            cancelled:'Cancelada', blocked:'Bloqueada' };
+    const hasBadExp  = booking.guests?.bad_experience;
+
+    // Desglose financiero completo
+    const nights        = booking.nights ?? 0;
+    const pricePerNight = booking.price_per_night ?? 0;
+    const discPct       = booking.discount_pct ?? 0;
+    const surcharge     = booking.surcharge_amount ?? 0;
+    const freeNights    = booking.free_nights ?? 0;
+    const billable      = Math.max(0, nights - freeNights);
+    const subtotal      = pricePerNight * billable;
+    const discAmt       = subtotal * (discPct / 100);
+    const total         = booking.total_amount ?? Math.max(0, subtotal - discAmt + surcharge);
+    const totalPaid     = booking.total_paid ?? 0;
+    const balance       = booking.balance ?? (total - totalPaid);
+
+    // Botones check-in/out
+    const now   = new Date();
+    const ciDate = new Date(booking.check_in + 'T12:00:00');
+    const showCI = !booking.checked_in_at  && ciDate <= now && booking.status !== 'cancelled';
+    const showCO = !!booking.checked_in_at && !booking.checked_out_at && booking.status !== 'cancelled';
+    const ciBtn = document.getElementById('detail-checkin-btn');
+    const coBtn = document.getElementById('detail-checkout-btn');
+    if (ciBtn) ciBtn.style.display = showCI ? '' : 'none';
+    if (coBtn) coBtn.style.display = showCO ? '' : 'none';
 
     body.innerHTML = `
+      ${hasBadExp ? `<div style="background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.3);border-radius:var(--r-md);padding:8px 12px;font-size:.78rem;color:#dc2626">
+        ⚠️ <strong>Atención:</strong> Huésped con antecedentes de mala experiencia.
+      </div>` : ''}
       <div class="detail-header-row">
         <div>
           <div class="detail-guest-name">${guest}</div>
@@ -243,31 +270,68 @@ export class BookingForm {
         </div>
       </div>
       <div class="detail-dates">
-        <div><span class="detail-label">Check-in</span><strong>${booking.check_in}</strong></div>
+        <div>
+          <span class="detail-label">Check-in</span>
+          <strong>${booking.check_in}</strong>
+          ${booking.checked_in_at ? `<span style="font-size:.65rem;color:var(--color-success);display:block">✓ Registrado</span>` : ''}
+        </div>
         <div class="detail-nights">
-          ${booking.nights ?? '—'} noches
+          ${nights} noche${nights !== 1 ? 's' : ''}
           ${(booking.pax || booking.adults) ? `<br><span style="font-size:.72rem;color:var(--color-text-3)">👥 ${booking.adults ?? booking.pax ?? 1} adulto${(booking.adults ?? 1) !== 1 ? 's' : ''}${booking.children ? ` + ${booking.children} menor${booking.children !== 1 ? 'es' : ''}` : ''}</span>` : ''}
         </div>
-        <div><span class="detail-label">Check-out</span><strong>${booking.check_out}</strong></div>
+        <div style="text-align:right">
+          <span class="detail-label">Check-out</span>
+          <strong>${booking.check_out}</strong>
+          ${booking.checked_out_at ? `<span style="font-size:.65rem;color:var(--color-success);display:block">✓ Registrado</span>` : ''}
+        </div>
       </div>
-      <div class="detail-financials">
-        <div><span class="detail-label">Total</span><strong>${formatARS(booking.total_amount)}</strong></div>
-        <div><span class="detail-label">Abonado</span><strong class="text-success">${formatARS(booking.total_paid ?? 0)}</strong></div>
-        <div><span class="detail-label">Saldo</span><strong class="${(booking.balance ?? 0) > 0 ? 'text-warning' : 'text-success'}">${formatARS(booking.balance ?? 0)}</strong></div>
+      <div class="detail-breakdown">
+        ${pricePerNight > 0 ? `
+          <div class="detail-breakdown-row">
+            <span>Precio por noche</span>
+            <span>${formatARS(pricePerNight)}</span>
+          </div>
+          <div class="detail-breakdown-row">
+            <span>Noches${freeNights > 0 ? ` (${nights} − ${freeNights} gratis)` : ` × ${nights}`}</span>
+            <span>${billable} fact.</span>
+          </div>
+          <div class="detail-breakdown-row">
+            <span>Subtotal</span>
+            <span>${formatARS(subtotal)}</span>
+          </div>
+          ${discPct > 0 ? `<div class="detail-breakdown-row" style="color:var(--color-success)"><span>Descuento ${discPct}%</span><span>−${formatARS(discAmt)}</span></div>` : ''}
+          ${surcharge > 0 ? `<div class="detail-breakdown-row" style="color:var(--color-warning)"><span>Recargo / extra</span><span>+${formatARS(surcharge)}</span></div>` : ''}
+        ` : ''}
+        <div class="detail-breakdown-row total-row">
+          <span>Total</span>
+          <span>${formatARS(total)}</span>
+        </div>
+        ${totalPaid > 0 ? `<div class="detail-breakdown-row paid-row"><span>Pagado</span><span>${formatARS(totalPaid)}</span></div>` : ''}
+        <div class="detail-breakdown-row balance-row" style="color:${balance > 0 ? 'var(--color-warning)' : 'var(--color-success)'}">
+          <span>${balance > 0 ? '⚠ Saldo pendiente' : '✓ Saldado'}</span>
+          <span style="font-size:1.05rem">${formatARS(Math.abs(balance))}</span>
+        </div>
       </div>
       ${booking.notes ? `<div class="detail-notes"><span class="detail-label">Notas</span><p>${booking.notes}</p></div>` : ''}
     `;
 
-    // Pagos en el detalle
     if (booking.payments?.length) {
-      const payHtml = booking.payments.map(p => {
-        const pm = PAYMENT_METHODS.find(m => m.value === p.method)?.label ?? p.method;
-        return `<div class="pay-row-detail"><span>${pm}</span><span>${p.payment_date ?? ''}</span><span class="text-success">${formatARS(p.amount)}</span></div>`;
-      }).join('');
-      body.innerHTML += `<div class="detail-payments"><div class="detail-label" style="margin-bottom:6px">Pagos</div>${payHtml}</div>`;
+      const payHtml = booking.payments
+        .filter(p => p.amount !== 0)
+        .map(p => {
+          const pm    = PAYMENT_METHODS.find(m => m.value === p.method)?.label ?? p.method;
+          const isNeg = p.amount < 0;
+          return `<div class="pay-row-detail">
+            <span>${isNeg ? '↩ Devolución' : pm}</span>
+            <span style="font-size:.72rem;color:var(--color-text-3)">${p.payment_date ?? ''}</span>
+            <span style="color:${isNeg?'var(--color-warning)':'var(--color-success)'};font-weight:600">${isNeg?'−':'+'}${formatARS(Math.abs(p.amount))}</span>
+          </div>`;
+        }).join('');
+      body.innerHTML += `<div class="detail-payments"><div class="detail-label" style="margin-bottom:8px">Historial de Pagos</div>${payHtml}</div>`;
     }
 
     overlay.classList.remove('hidden');
+    requestAnimationFrame(() => document.getElementById('detail-close')?.focus());
   }
 
   close() {

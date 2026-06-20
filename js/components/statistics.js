@@ -159,6 +159,8 @@ export class Statistics {
   }
 
   _renderUnitStats(stats, month, year, daysInMonth) {
+    // Cachear para el dashboard de charts
+    this._lastUnitStats = stats;
     const container = document.getElementById('stats-units-grid');
     if (!container) return;
 
@@ -698,14 +700,14 @@ export class Statistics {
   async loadCharts() {
     const container = document.getElementById('charts-container');
     if (!container) return;
-    container.innerHTML = '<p style="padding:20px;text-align:center;color:var(--color-text-3)">Cargando gráficos...</p>';
+    container.innerHTML = '<div style="padding:40px;text-align:center;color:var(--color-text-3)">⟳ Cargando dashboard...</div>';
 
-    const month    = parseInt(document.getElementById('stats-month')?.value ?? new Date().getMonth());
-    const year     = parseInt(document.getElementById('stats-year')?.value  ?? new Date().getFullYear());
-    const hotelId  = this.ctx.hotelId;
+    const month   = parseInt(document.getElementById('stats-month')?.value ?? new Date().getMonth());
+    const year    = parseInt(document.getElementById('stats-year')?.value  ?? new Date().getFullYear());
+    const hotelId = this.ctx.hotelId;
 
     try {
-      // Últimos 12 meses de ingresos
+      // Últimos 12 meses
       const months12 = [];
       for (let i = 11; i >= 0; i--) {
         const d = new Date(year, month - i, 1);
@@ -713,201 +715,446 @@ export class Statistics {
       }
 
       const monthlyData = await Promise.all(months12.map(async ({ y, m }) => {
-        const first = `${y}-${String(m+1).padStart(2,'0')}-01`;
-        const last  = new Date(y, m+1, 0);
-        const lastStr = `${y}-${String(m+1).padStart(2,'0')}-${String(last.getDate()).padStart(2,'0')}`;
+        const first   = `${y}-${String(m+1).padStart(2,'0')}-01`;
+        const lastDay = new Date(y, m+1, 0);
+        const last    = `${y}-${String(m+1).padStart(2,'0')}-${String(lastDay.getDate()).padStart(2,'0')}`;
         const { data } = await this.db.from('bookings')
-          .select('total_amount, status, source, nights')
+          .select('total_amount, status, source, nights, price_per_night, booking_units(unit_id)')
           .eq('hotel_id', hotelId)
-          .not('status','in','(cancelled,blocked)')
-          .gte('check_in', first).lte('check_in', lastStr);
-        const bookings = data ?? [];
+          .not('status', 'in', '(cancelled,blocked)')
+          .gte('check_in', first).lte('check_in', last);
+        const bks = data ?? [];
         return {
-          label: MONTH_NAMES[m].slice(0,3),
-          revenue:    bookings.reduce((s,b) => s + (b.total_amount ?? 0), 0),
-          count:      bookings.length,
-          nights:     bookings.reduce((s,b) => s + (b.nights ?? 0), 0),
-          bySource:   bookings.reduce((acc,b) => {
-            acc[b.source ?? 'direct'] = (acc[b.source ?? 'direct'] ?? 0) + (b.total_amount ?? 0);
+          label:    MONTH_NAMES[m].slice(0,3),
+          fullLabel: `${MONTH_NAMES[m]} ${y}`,
+          revenue:  bks.reduce((s,b) => s + (b.total_amount ?? 0), 0),
+          count:    bks.length,
+          nights:   bks.reduce((s,b) => s + (b.nights ?? 0), 0),
+          avgPrice: bks.length > 0
+            ? Math.round(bks.reduce((s,b) => s + (b.price_per_night ?? 0), 0) / bks.length)
+            : 0,
+          bySource: bks.reduce((acc,b) => {
+            const src = b.source ?? 'direct';
+            acc[src] = (acc[src] ?? 0) + (b.total_amount ?? 0);
             return acc;
           }, {}),
         };
       }));
 
-      // By channel for current month
-      const curMonth  = monthlyData[11];
+      // Datos del mes actual
+      const cur = monthlyData[11];
       const totalUnits = this.ctx.units.length || 1;
+      const DAYS_IN_MONTH = new Date(year, month+1, 0).getDate();
 
-      // ── Render ──────────────────────────────────────
-      container.innerHTML = `
-        <div class="charts-grid">
+      // RevPAR para cada mes
+      const revParData = monthlyData.map(d => ({
+        label: d.label,
+        revpar: totalUnits > 0 ? Math.round(d.revenue / (totalUnits * 30)) : 0,
+      }));
 
-          ${this._chartBarIncome(monthlyData)}
-          ${this._chartChannelPie(curMonth)}
-          ${this._chartOccupancy(monthlyData, totalUnits)}
-          ${this._chartBookingCount(monthlyData)}
+      // Promedios y tendencias
+      const avgOcc = monthlyData.map(d =>
+        totalUnits > 0 ? Math.min(100, Math.round((d.nights / (totalUnits * 30)) * 100)) : 0
+      );
+      const currentOcc  = avgOcc[11];
+      const previousOcc = avgOcc[10];
+      const totalRev    = monthlyData.reduce((s,d) => s+d.revenue, 0);
+      const avgRevMonth = Math.round(totalRev / 12);
+      const curRevDelta = cur.revenue > 0 && avgRevMonth > 0
+        ? Math.round(((cur.revenue - avgRevMonth) / avgRevMonth) * 100)
+        : 0;
+      const totalBookings = monthlyData.reduce((s,d) => s+d.count, 0);
 
-        </div>`;
+      // ADR (Average Daily Rate) por mes
+      const adrData = monthlyData.map(d => ({
+        label: d.label,
+        adr: d.nights > 0 ? Math.round(d.revenue / d.nights) : 0,
+      }));
+
+      // Cancelaciones — consulta adicional
+      let cancelCount = 0;
+      try {
+        const firstOfYear = `${year}-01-01`;
+        const { count } = await this.db.from('bookings')
+          .select('id', { count: 'exact', head: true })
+          .eq('hotel_id', hotelId)
+          .eq('status', 'cancelled')
+          .gte('check_in', firstOfYear);
+        cancelCount = count ?? 0;
+      } catch { /* silencioso */ }
+
+      const fmt    = n => '$' + Math.round(n).toLocaleString('es-AR');
+      const fmtK   = n => '$' + (n >= 1000000 ? (n/1000000).toFixed(1)+'M' : Math.round(n/1000)+'K');
+
+      container.innerHTML = `<div class="stats-dashboard-grid">
+        ${this._sdcBarRevenue(monthlyData, fmtK, curRevDelta)}
+        ${this._sdcLineOccupancy(avgOcc, monthlyData)}
+        ${this._sdcDonutChannels(cur, fmt)}
+        ${this._sdcAreaADR(adrData, fmt)}
+        ${this._sdcBarCountBookings(monthlyData)}
+        ${this._sdcHorizUnits(month, year, fmt)}
+        ${this._sdcRevPAR(revParData, fmtK, totalUnits)}
+        ${this._sdcKPICard('Cancelaciones', cancelCount + ' este año', totalBookings, totalRev, fmt)}
+        ${this._sdcAreaRevPARTrend(revParData, fmtK)}
+      </div>`;
 
     } catch (err) {
-      container.innerHTML = `<p style="color:var(--color-danger);padding:20px">Error al cargar gráficos: ${err.message}</p>`;
+      console.error('[Statistics] loadCharts error:', err);
+      container.innerHTML = `<div class="error-state" style="padding:40px">
+        <span class="error-icon">⚠️</span>
+        <p>Error al cargar el dashboard: ${err.message}</p>
+        <button class="btn btn-outline btn-sm" onclick="window._statsInstance?.loadCharts()">🔄 Reintentar</button>
+      </div>`;
     }
   }
 
-  // ── Gráfico barras: Ingresos 12 meses ───────────
-  _chartBarIncome(data) {
+  // ── Card 1: Barras de Ingresos 12 meses ─────────
+  _sdcBarRevenue(data, fmtK, delta) {
     const maxVal = Math.max(...data.map(d => d.revenue), 1);
+    const total  = data.reduce((s,d) => s+d.revenue, 0);
     const bars   = data.map((d, i) => {
-      const h      = Math.max(4, Math.round((d.revenue / maxVal) * 180));
+      const h      = Math.max(3, Math.round((d.revenue / maxVal) * 100));
       const isLast = i === data.length - 1;
-      const color  = isLast ? 'var(--color-primary)' : 'rgba(99,102,241,.4)';
-      const fmt    = n => '$' + Math.round(n/1000) + 'K';
-      return `
-        <g>
-          <rect x="${i * 34 + 2}" y="${190 - h}" width="28" height="${h}"
-                rx="4" fill="${color}" style="transition:height .5s ease"/>
-          <text x="${i * 34 + 16}" y="205" text-anchor="middle"
-                font-size="8" fill="var(--color-text-3)">${d.label}</text>
-          ${isLast || d.revenue === maxVal ? `
-            <text x="${i * 34 + 16}" y="${185 - h}" text-anchor="middle"
-                  font-size="8" fill="var(--color-text-2)">${fmt(d.revenue)}</text>` : ''}
-        </g>`;
+      const color  = isLast ? 'var(--color-primary)' : 'rgba(99,102,241,.35)';
+      return `<div class="sdc-bar" style="height:${h}%;background:${color}${isLast?';opacity:1':''}">
+        <div class="sdc-bar-tooltip">${d.label}: ${fmtK(d.revenue)}</div>
+      </div>`;
     }).join('');
-
-    return `
-      <div class="chart-card">
-        <div class="chart-title">Ingresos — últimos 12 meses</div>
-        <div class="chart-total">${'$' + Math.round(data.reduce((s,d)=>s+d.revenue,0)/1000).toLocaleString('es-AR')}K total</div>
-        <svg viewBox="0 0 ${data.length * 34 + 4} 215" style="width:100%;overflow:visible">
-          ${bars}
-          <line x1="0" y1="190" x2="${data.length * 34 + 4}" y2="190" stroke="var(--color-border)" stroke-width="1"/>
-        </svg>
-      </div>`;
+    const deltaClass = delta >= 0 ? '' : 'down';
+    return `<div class="stats-dashboard-card">
+      <div class="sdc-header">
+        <div>
+          <div class="sdc-title">💰 Ingresos</div>
+          <div class="sdc-value">${fmtK(data[11].revenue)}</div>
+          <div class="sdc-sub">mes actual · ${fmtK(total)} acum. 12m</div>
+        </div>
+        <span class="sdc-delta ${deltaClass}">${delta >= 0 ? '+' : ''}${delta}%</span>
+      </div>
+      <div class="sdc-chart">${bars}</div>
+    </div>`;
   }
 
-  // ── Gráfico horizontal: Por canal ───────────────
-  _chartChannelPie(curData) {
-    if (!curData) return '';
-    const CHANNEL_COLORS = {
-      direct:'#6366f1', walkin:'#0891b2', booking:'#1d4ed8',
-      airbnb:'#ea580c', family:'#7c3aed', company:'#0f766e',
-      referral:'#b45309', despegar:'#059669', expedia:'#dc2626',
-    };
-    const entries = Object.entries(curData.bySource ?? {})
-      .sort(([,a],[,b]) => b - a).slice(0,7);
-    const maxVal  = entries[0]?.[1] ?? 1;
-    const fmt     = n => '$' + Math.round(n).toLocaleString('es-AR');
-
-    const rows = entries.map(([src, val]) => {
-      const pct   = Math.round((val / maxVal) * 100);
-      const color = CHANNEL_COLORS[src] ?? '#94a3b8';
-      const label = SOURCE_LABELS[src] ?? src;
-      return `
-        <div class="ch-row">
-          <div class="ch-label">
-            <span class="ch-dot" style="background:${color}"></span>${label}
-          </div>
-          <div class="ch-bar-track">
-            <div class="ch-bar-fill" style="width:${pct}%;background:${color}"></div>
-          </div>
-          <div class="ch-val">${fmt(val)}</div>
-        </div>`;
-    }).join('') || '<p style="color:var(--color-text-3);font-size:.8rem;padding:8px">Sin reservas en este período</p>';
-
-    return `
-      <div class="chart-card">
-        <div class="chart-title">Ingresos por canal — ${curData.label ?? 'mes actual'}</div>
-        <div style="margin-top:8px">${rows}</div>
-      </div>`;
-  }
-
-  // ── Gráfico de línea: Reservas por mes ──────────
-  _chartBookingCount(data) {
-    const maxVal = Math.max(...data.map(d => d.count), 1);
-    const w = 34, pad = 20;
-    const points = data.map((d, i) => {
-      const x = i * w + pad;
-      const y = 120 - Math.round((d.count / maxVal) * 100);
-      return `${x},${y}`;
+  // ── Card 2: Línea de Ocupación ───────────────────
+  _sdcLineOccupancy(occPct, monthlyData) {
+    const avg  = Math.round(occPct.reduce((s,v) => s+v, 0) / occPct.length);
+    const cur  = occPct[11];
+    const prev = occPct[10];
+    const delta = cur - prev;
+    const W = 240, H = 90, pad = 10;
+    const pts = occPct.map((v, i) => {
+      const x = pad + (i / (occPct.length-1)) * (W - pad*2);
+      const y = H - pad - (v/100) * (H - pad*2);
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
     }).join(' ');
-    const dots = data.map((d, i) => {
-      const x = i * w + pad;
-      const y = 120 - Math.round((d.count / maxVal) * 100);
-      const isLast = i === data.length - 1;
-      return `
-        <circle cx="${x}" cy="${y}" r="${isLast ? 5 : 3}"
-                fill="${isLast ? 'var(--color-primary)' : 'rgba(99,102,241,.6)'}"/>
-        ${isLast || d.count === maxVal ? `
-          <text x="${x}" y="${y - 8}" text-anchor="middle"
-                font-size="9" fill="var(--color-text-2)">${d.count}</text>` : ''}
-        <text x="${x}" y="132" text-anchor="middle"
-              font-size="8" fill="var(--color-text-3)">${d.label}</text>`;
-    }).join('');
-    const totalCount = data.reduce((s,d) => s+d.count, 0);
-
-    return `
-      <div class="chart-card">
-        <div class="chart-title">Cantidad de reservas — 12 meses</div>
-        <div class="chart-total">${totalCount} reservas en el año</div>
-        <svg viewBox="0 0 ${data.length * w + pad * 2} 145" style="width:100%">
-          <polyline points="${points}" fill="none"
-                    stroke="rgba(99,102,241,.5)" stroke-width="2" stroke-linejoin="round"/>
-          ${dots}
-          <line x1="${pad}" y1="122" x2="${data.length * w + pad}" y2="122"
-                stroke="var(--color-border)" stroke-width="1"/>
-        </svg>
-      </div>`;
-  }
-
-  // ── Gráfico de línea: Ocupación mensual ─────────
-  _chartOccupancy(data, totalUnits) {
-    const daysInMonths = data.map(d => {
-      const [y, m] = [2000 + parseInt(d.label), 0]; // placeholder - use actual data
-      return 30; // approx
-    });
-    const occupancyData = data.map((d, i) => ({
-      label: d.label,
-      pct: totalUnits > 0 ? Math.min(100, Math.round((d.nights / (totalUnits * 30)) * 100)) : 0,
-    }));
-    const maxPct = 100;
-    const w = 34, pad = 20;
-    const points = occupancyData.map((d, i) => {
-      const x = i * w + pad;
-      const y = 110 - Math.round((d.pct / maxPct) * 90);
-      return `${x},${y}`;
-    }).join(' ');
-    const dots = occupancyData.map((d, i) => {
-      const x = i * w + pad;
-      const y = 110 - Math.round((d.pct / maxPct) * 90);
-      const isLast = i === occupancyData.length - 1;
-      const color = d.pct >= 80 ? '#22c55e' : d.pct >= 50 ? '#f59e0b' : '#ef4444';
-      return `
-        <circle cx="${x}" cy="${y}" r="${isLast ? 5 : 3}" fill="${color}"/>
-        ${(isLast || i % 3 === 0) ? `
-          <text x="${x}" y="${y - 8}" text-anchor="middle"
-                font-size="9" fill="var(--color-text-2)">${d.pct}%</text>` : ''}
-        <text x="${x}" y="122" text-anchor="middle"
-              font-size="8" fill="var(--color-text-3)">${d.label}</text>`;
-    }).join('');
-    const avgOcc = Math.round(occupancyData.reduce((s,d) => s+d.pct, 0) / occupancyData.length);
-
-    return `
-      <div class="chart-card">
-        <div class="chart-title">Ocupación mensual</div>
-        <div class="chart-total">Promedio: ${avgOcc}% — ${totalUnits} departamentos</div>
-        <svg viewBox="0 0 ${occupancyData.length * w + pad * 2} 135" style="width:100%">
+    const areaPath = `M${pad},${H-pad} ` +
+      occPct.map((v, i) => {
+        const x = pad + (i/(occPct.length-1)) * (W-pad*2);
+        const y = H - pad - (v/100) * (H-pad*2);
+        return `L${x.toFixed(1)},${y.toFixed(1)}`;
+      }).join(' ') +
+      ` L${W-pad},${H-pad} Z`;
+    const deltaClass = delta >= 0 ? '' : 'down';
+    return `<div class="stats-dashboard-card">
+      <div class="sdc-header">
+        <div>
+          <div class="sdc-title">📊 Ocupación</div>
+          <div class="sdc-value">${cur}%</div>
+          <div class="sdc-sub">mes actual · prom. ${avg}%</div>
+        </div>
+        <span class="sdc-delta ${deltaClass}">${delta >= 0 ? '+' : ''}${delta}%</span>
+      </div>
+      <div style="flex:1;display:flex;align-items:flex-end">
+        <svg class="sdc-area-chart" viewBox="0 0 ${W} ${H}" style="overflow:visible">
+          <defs><linearGradient id="occGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="var(--color-primary)" stop-opacity=".3"/>
+            <stop offset="100%" stop-color="var(--color-primary)" stop-opacity=".02"/>
+          </linearGradient></defs>
           <!-- Meta 80% -->
-          <line x1="${pad}" y1="${110 - 72}" x2="${occupancyData.length * w + pad}" y2="${110 - 72}"
-                stroke="rgba(34,197,94,.25)" stroke-width="1" stroke-dasharray="4,3"/>
-          <text x="${pad - 2}" y="${110 - 70}" text-anchor="end" font-size="7"
-                fill="rgba(34,197,94,.6)">80%</text>
-          <polyline points="${points}" fill="none"
-                    stroke="rgba(99,102,241,.5)" stroke-width="2" stroke-linejoin="round"/>
-          ${dots}
-          <line x1="${pad}" y1="112" x2="${occupancyData.length * w + pad}" y2="112"
-                stroke="var(--color-border)" stroke-width="1"/>
+          <line x1="${pad}" y1="${H-pad-(0.8*(H-pad*2)).toFixed(0)}" x2="${W-pad}" y2="${H-pad-(0.8*(H-pad*2)).toFixed(0)}"
+                stroke="rgba(34,197,94,.3)" stroke-width="1" stroke-dasharray="3,2"/>
+          <path d="${areaPath}" fill="url(#occGrad)"/>
+          <polyline points="${pts}" fill="none" stroke="var(--color-primary)" stroke-width="2" stroke-linejoin="round"/>
+          ${occPct.map((v, i) => {
+            if (i !== 11 && i % 3 !== 0) return '';
+            const x = pad + (i/(occPct.length-1))*(W-pad*2);
+            const y = H - pad - (v/100)*(H-pad*2);
+            return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${i===11?4:2.5}" fill="${i===11?'var(--color-primary)':'rgba(99,102,241,.5)'}"/>`;
+          }).join('')}
         </svg>
+      </div>
+    </div>`;
+  }
+
+  // ── Card 3: Dona de canales ──────────────────────
+  _sdcDonutChannels(cur, fmt) {
+    const COLORS = {
+      direct:'#6366f1',walkin:'#0891b2',booking:'#1d4ed8',
+      airbnb:'#ea580c',family:'#7c3aed',company:'#0f766e',
+      referral:'#b45309',despegar:'#059669',expedia:'#dc2626',
+    };
+    const NAMES = {
+      direct:'Directo',walkin:'Espontáneo',booking:'Booking',
+      airbnb:'Airbnb',family:'Familia',company:'Empresa',
+      referral:'Referido',despegar:'Despegar',expedia:'Expedia',
+    };
+    const entries = Object.entries(cur?.bySource ?? {})
+      .filter(([,v]) => v > 0)
+      .sort(([,a],[,b]) => b - a).slice(0, 6);
+    const total = entries.reduce((s,[,v]) => s+v, 0) || 1;
+
+    // SVG donut
+    const R = 36, r = 22, cx = 45, cy = 45;
+    let startAngle = -Math.PI/2;
+    const segments = entries.map(([src, val]) => {
+      const frac  = val / total;
+      const sweep = frac * 2 * Math.PI;
+      const x1 = cx + R * Math.cos(startAngle);
+      const y1 = cy + R * Math.sin(startAngle);
+      const x2 = cx + R * Math.cos(startAngle + sweep);
+      const y2 = cy + R * Math.sin(startAngle + sweep);
+      const x3 = cx + r * Math.cos(startAngle + sweep);
+      const y3 = cy + r * Math.sin(startAngle + sweep);
+      const x4 = cx + r * Math.cos(startAngle);
+      const y4 = cy + r * Math.sin(startAngle);
+      const large = sweep > Math.PI ? 1 : 0;
+      const path = `M${x1.toFixed(1)},${y1.toFixed(1)} A${R},${R} 0 ${large},1 ${x2.toFixed(1)},${y2.toFixed(1)} L${x3.toFixed(1)},${y3.toFixed(1)} A${r},${r} 0 ${large},0 ${x4.toFixed(1)},${y4.toFixed(1)} Z`;
+      const seg = `<path d="${path}" fill="${COLORS[src]??'#94a3b8'}" opacity=".85">
+        <title>${NAMES[src]??src}: ${fmt(val)}</title></path>`;
+      startAngle += sweep;
+      return { seg, src, val };
+    });
+
+    const donut = `<svg viewBox="0 0 90 90" width="90" height="90">
+      ${segments.map(s => s.seg).join('')}
+      <text x="${cx}" y="${cy+3}" text-anchor="middle" font-size="9" font-weight="700" fill="var(--color-text)">${fmt(total).replace('$','$')}</text>
+    </svg>`;
+
+    const legend = segments.slice(0, 4).map(({src, val}) =>
+      `<div class="sdc-legend-item">
+        <div class="sdc-legend-dot" style="background:${COLORS[src]??'#94a3b8'}"></div>
+        <span style="flex:1">${NAMES[src]??src}</span>
+        <strong>${Math.round((val/total)*100)}%</strong>
+      </div>`
+    ).join('');
+
+    return `<div class="stats-dashboard-card">
+      <div class="sdc-header"><div>
+        <div class="sdc-title">🔗 Canales</div>
+        <div class="sdc-sub">mes actual</div>
+      </div></div>
+      <div class="sdc-donut-wrap">
+        ${total > 0 ? donut : '<div style="color:var(--color-text-3);font-size:.8rem;padding:16px">Sin datos</div>'}
+        <div class="sdc-donut-legend">${legend}</div>
+      </div>
+    </div>`;
+  }
+
+  // ── Card 4: Área ADR 12 meses ────────────────────
+  _sdcAreaADR(adrData, fmt) {
+    const maxADR = Math.max(...adrData.map(d => d.adr), 1);
+    const curADR = adrData[11].adr;
+    const W = 240, H = 90, pad = 10;
+    const pts = adrData.map((d, i) => {
+      const x = pad + (i / (adrData.length-1)) * (W-pad*2);
+      const y = H - pad - (d.adr / maxADR) * (H-pad*2);
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    }).join(' ');
+    const areaPath = `M${pad},${H-pad} ` +
+      adrData.map((d, i) => {
+        const x = pad + (i/(adrData.length-1))*(W-pad*2);
+        const y = H - pad - (d.adr/maxADR)*(H-pad*2);
+        return `L${x.toFixed(1)},${y.toFixed(1)}`;
+      }).join(' ') + ` L${W-pad},${H-pad} Z`;
+
+    return `<div class="stats-dashboard-card">
+      <div class="sdc-header"><div>
+        <div class="sdc-title">💵 ADR — Tarifa Diaria</div>
+        <div class="sdc-value">${fmt(curADR)}</div>
+        <div class="sdc-sub">por noche ocupada</div>
+      </div></div>
+      <div style="flex:1;display:flex;align-items:flex-end">
+        <svg class="sdc-area-chart" viewBox="0 0 ${W} ${H}">
+          <defs><linearGradient id="adrGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#f59e0b" stop-opacity=".4"/>
+            <stop offset="100%" stop-color="#f59e0b" stop-opacity=".02"/>
+          </linearGradient></defs>
+          <path d="${areaPath}" fill="url(#adrGrad)"/>
+          <polyline points="${pts}" fill="none" stroke="#f59e0b" stroke-width="2" stroke-linejoin="round"/>
+          ${adrData.map((d, i) => {
+            if (i !== 11) return '';
+            const x = pad + (i/(adrData.length-1))*(W-pad*2);
+            const y = H - pad - (d.adr/maxADR)*(H-pad*2);
+            return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="4" fill="#f59e0b"/>`;
+          }).join('')}
+        </svg>
+      </div>
+    </div>`;
+  }
+
+  // ── Card 5: Barras de cantidad de reservas ───────
+  _sdcBarCountBookings(data) {
+    const maxVal = Math.max(...data.map(d => d.count), 1);
+    const total  = data.reduce((s,d) => s+d.count, 0);
+    const avgMonth = Math.round(total / data.length);
+    const bars = data.map((d, i) => {
+      const h     = Math.max(3, Math.round((d.count / maxVal) * 100));
+      const isLast = i === data.length - 1;
+      const color  = d.count >= avgMonth ? '#22c55e' : '#94a3b8';
+      return `<div class="sdc-bar" style="height:${h}%;background:${isLast ? color : color + '80'}">
+        <div class="sdc-bar-tooltip">${d.label}: ${d.count} reservas</div>
       </div>`;
+    }).join('');
+    return `<div class="stats-dashboard-card">
+      <div class="sdc-header"><div>
+        <div class="sdc-title">📋 Reservas</div>
+        <div class="sdc-value">${data[11].count}</div>
+        <div class="sdc-sub">este mes · ${total} en 12 meses</div>
+      </div></div>
+      <div class="sdc-chart">${bars}</div>
+    </div>`;
+  }
+
+  // ── Card 6: Horizontal — top departamentos ───────
+  _sdcHorizUnits(month, year, fmt) {
+    // Usar datos ya en memoria si están disponibles
+    const unitStats = (this.ctx.units ?? []).map(u => ({
+      name: u.name, color: getUnitColor(u), rev: 0, nights: 0,
+    }));
+    // Si hay datos en caché de loadUnits, usarlos
+    const cached = this._lastUnitStats;
+    if (cached?.length) {
+      cached.forEach((s, i) => {
+        if (unitStats[i]) { unitStats[i].rev = s.revenue; unitStats[i].nights = s.nightsOcc; }
+      });
+    }
+    const sorted = [...unitStats].sort((a,b) => b.rev - a.rev);
+    const maxRev = sorted[0]?.rev ?? 1;
+
+    if (!maxRev) {
+      return `<div class="stats-dashboard-card">
+        <div class="sdc-header"><div>
+          <div class="sdc-title">🛏️ Departamentos</div>
+          <div class="sdc-sub">Cargá primero la pestaña Unidades</div>
+        </div></div>
+        <div style="flex:1;display:flex;align-items:center;justify-content:center;color:var(--color-text-3);font-size:.8rem">
+          Sin datos — cargá la pestaña Unidades primero
+        </div>
+      </div>`;
+    }
+
+    const bars = sorted.map(u => {
+      const pct = Math.max(2, Math.round((u.rev / maxRev) * 100));
+      return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+        <div style="width:80px;font-size:.7rem;color:var(--color-text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${u.name}</div>
+        <div style="flex:1;height:8px;background:var(--color-surface-2);border-radius:4px;overflow:hidden">
+          <div style="height:100%;width:${pct}%;background:${u.color};border-radius:4px;transition:width .6s"></div>
+        </div>
+        <div style="width:60px;text-align:right;font-size:.7rem;font-weight:700;color:${u.color}">${fmt(u.rev)}</div>
+      </div>`;
+    }).join('');
+
+    return `<div class="stats-dashboard-card">
+      <div class="sdc-header"><div>
+        <div class="sdc-title">🛏️ Ingreso por Depto.</div>
+        <div class="sdc-sub">mes seleccionado</div>
+      </div></div>
+      <div style="flex:1;padding-top:8px">${bars || '<div style="color:var(--color-text-3);font-size:.8rem">Sin datos</div>'}</div>
+    </div>`;
+  }
+
+  // ── Card 7: RevPAR 12 meses ──────────────────────
+  _sdcRevPAR(data, fmtK, totalUnits) {
+    const maxVal = Math.max(...data.map(d => d.revpar), 1);
+    const curVal = data[11].revpar;
+    const W = 240, H = 70, pad = 8;
+    const pts = data.map((d, i) => {
+      const x = pad + (i/(data.length-1))*(W-pad*2);
+      const y = H - pad - (d.revpar/maxVal)*(H-pad*2);
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    }).join(' ');
+    return `<div class="stats-dashboard-card">
+      <div class="sdc-header"><div>
+        <div class="sdc-title">📈 RevPAR</div>
+        <div class="sdc-value">${fmtK(curVal)}</div>
+        <div class="sdc-sub">ingreso por hab. disp. · ${totalUnits} deptos.</div>
+      </div></div>
+      <div style="flex:1;display:flex;align-items:flex-end">
+        <svg class="sdc-area-chart" viewBox="0 0 ${W} ${H}" style="height:70px">
+          <defs><linearGradient id="rpGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#8b5cf6" stop-opacity=".4"/>
+            <stop offset="100%" stop-color="#8b5cf6" stop-opacity=".02"/>
+          </linearGradient></defs>
+          <path d="M${pad},${H-pad} ${data.map((d,i) => {
+            const x = pad+(i/(data.length-1))*(W-pad*2);
+            const y = H-pad-(d.revpar/maxVal)*(H-pad*2);
+            return `L${x.toFixed(1)},${y.toFixed(1)}`;
+          }).join(' ')} L${W-pad},${H-pad} Z" fill="url(#rpGrad)"/>
+          <polyline points="${pts}" fill="none" stroke="#8b5cf6" stroke-width="2" stroke-linejoin="round"/>
+        </svg>
+      </div>
+    </div>`;
+  }
+
+  // ── Card 8: KPI Cancelaciones + estadías prom. ───
+  _sdcKPICard(title, value, totalBookings, totalRev, fmt) {
+    const avgRev = totalBookings > 0 ? Math.round(totalRev / totalBookings) : 0;
+    return `<div class="stats-dashboard-card">
+      <div class="sdc-header"><div>
+        <div class="sdc-title">❌ Cancelaciones</div>
+        <div class="sdc-value" style="color:var(--color-danger)">${value}</div>
+        <div class="sdc-sub">en el año calendario</div>
+      </div></div>
+      <div style="flex:1;display:flex;flex-direction:column;justify-content:flex-end;gap:12px">
+        <div style="background:var(--color-surface-2);border-radius:var(--r-md);padding:12px">
+          <div style="font-size:.7rem;color:var(--color-text-3);margin-bottom:4px">TICKET PROMEDIO</div>
+          <div style="font-size:1.1rem;font-weight:700">${fmt(avgRev)}</div>
+          <div style="font-size:.72rem;color:var(--color-text-3)">${totalBookings} reservas · 12 meses</div>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  // ── Card 9: Tendencia RevPAR con área ────────────
+  _sdcAreaRevPARTrend(data, fmtK) {
+    const maxVal = Math.max(...data.map(d => d.revpar), 1);
+    const total  = data.reduce((s,d) => s+d.revpar, 0);
+    const W = 240, H = 90, pad = 10;
+    const areaPath = `M${pad},${H-pad} ` +
+      data.map((d,i) => {
+        const x = pad+(i/(data.length-1))*(W-pad*2);
+        const y = H-pad-(d.revpar/maxVal)*(H-pad*2);
+        return `L${x.toFixed(1)},${y.toFixed(1)}`;
+      }).join(' ') + ` L${W-pad},${H-pad} Z`;
+    const pts = data.map((d,i) => {
+      const x = pad+(i/(data.length-1))*(W-pad*2);
+      const y = H-pad-(d.revpar/maxVal)*(H-pad*2);
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    }).join(' ');
+    const labels = data.filter((_,i) => i % 3 === 0 || i === data.length-1);
+    return `<div class="stats-dashboard-card">
+      <div class="sdc-header"><div>
+        <div class="sdc-title">📉 Evolución RevPAR</div>
+        <div class="sdc-value">${fmtK(Math.round(total/12))}</div>
+        <div class="sdc-sub">promedio mensual 12 meses</div>
+      </div></div>
+      <div style="flex:1;display:flex;align-items:flex-end">
+        <svg class="sdc-area-chart" viewBox="0 0 ${W} ${H}">
+          <defs><linearGradient id="rpEvGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#06b6d4" stop-opacity=".4"/>
+            <stop offset="100%" stop-color="#06b6d4" stop-opacity=".02"/>
+          </linearGradient></defs>
+          <path d="${areaPath}" fill="url(#rpEvGrad)"/>
+          <polyline points="${pts}" fill="none" stroke="#06b6d4" stroke-width="2.5" stroke-linejoin="round"/>
+          ${data.map((d,i) => {
+            if (i !== data.length-1 && i % 3 !== 0) return '';
+            const x = pad+(i/(data.length-1))*(W-pad*2);
+            const y = H-pad-(d.revpar/maxVal)*(H-pad*2);
+            return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${i===data.length-1?4:2}" fill="#06b6d4"/>
+              <text x="${x.toFixed(1)}" y="${H}" text-anchor="middle" font-size="7" fill="var(--color-text-3)">${d.label}</text>`;
+          }).join('')}
+        </svg>
+      </div>
+    </div>`;
   }
 
 
