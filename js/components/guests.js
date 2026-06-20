@@ -195,6 +195,9 @@ export class GuestsCRM {
       this._currentGuest = guest;
       body.innerHTML = this._buildProfileHTML(guest);
 
+      // Cargar notas internas
+      await this._loadGuestNotes(guest.id, body);
+
       // Bind action buttons
       this._bindProfileActions(guest);
 
@@ -503,6 +506,148 @@ export class GuestsCRM {
     if (error) { showToast('Error al eliminar', 'error'); return; }
     showToast('Antecedente eliminado', 'success');
     await this._openProfile(guestId);
+  }
+
+  // ══════════════════════════════════════════════════
+  // NOTAS INTERNAS DEL HUÉSPED
+  // ══════════════════════════════════════════════════
+  async _loadGuestNotes(guestId, body) {
+    // Crear contenedor de notas si no existe
+    let notesSection = body.querySelector('#guest-notes-section');
+    if (!notesSection) {
+      notesSection = document.createElement('div');
+      notesSection.id = 'guest-notes-section';
+      body.appendChild(notesSection);
+    }
+
+    notesSection.innerHTML = `<div style="margin-top:20px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <h4 style="font-size:.78rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--color-text-3)">
+          📝 Notas internas del equipo
+        </h4>
+        <button class="btn btn-outline btn-xs" id="btn-add-guest-note">+ Agregar nota</button>
+      </div>
+      <div id="guest-notes-list"><div style="font-size:.8rem;color:var(--color-text-3);padding:8px 0">Cargando...</div></div>
+      <div id="guest-note-form" style="display:none;margin-top:12px">
+        ${this._noteFormHTML()}
+      </div>
+    </div>`;
+
+    // Cargar notas
+    try {
+      const { data: notes } = await this.db
+        .from('guest_notes')
+        .select('*')
+        .eq('guest_id', guestId)
+        .eq('hotel_id', this.ctx.hotelId)
+        .order('created_at', { ascending: false });
+
+      this._renderNotesList(notesSection, notes ?? [], guestId);
+    } catch {
+      notesSection.querySelector('#guest-notes-list').innerHTML =
+        '<div style="font-size:.8rem;color:var(--color-text-3)">Tabla no creada aún — ejecutá la migración</div>';
+    }
+
+    // Bind: abrir formulario
+    notesSection.querySelector('#btn-add-guest-note')?.addEventListener('click', () => {
+      const form = notesSection.querySelector('#guest-note-form');
+      form.style.display = form.style.display === 'none' ? 'block' : 'none';
+      if (form.style.display === 'block') form.querySelector('textarea')?.focus();
+    });
+
+    // Bind: guardar nota
+    notesSection.querySelector('#btn-save-guest-note')?.addEventListener('click', async () => {
+      const body_text = notesSection.querySelector('#note-body')?.value.trim();
+      const category  = notesSection.querySelector('#note-category')?.value;
+      if (!body_text) { showToast('Escribí algo antes de guardar', 'warning'); return; }
+
+      try {
+        const { data: me } = await this.db.auth.getUser();
+        await this.db.from('guest_notes').insert({
+          hotel_id:    this.ctx.hotelId,
+          guest_id:    guestId,
+          author_id:   me?.user?.id ?? null,
+          author_name: me?.user?.email?.split('@')[0] ?? 'Staff',
+          body:        body_text,
+          category,
+        });
+        showToast('Nota guardada ✓', 'success');
+        notesSection.querySelector('#note-body').value = '';
+        notesSection.querySelector('#guest-note-form').style.display = 'none';
+        await this._loadGuestNotes(guestId, document.getElementById('guest-profile-body'));
+      } catch (err) {
+        showToast('Error al guardar nota', 'error');
+      }
+    });
+
+    // Bind: cancelar
+    notesSection.querySelector('#btn-cancel-guest-note')?.addEventListener('click', () => {
+      notesSection.querySelector('#guest-note-form').style.display = 'none';
+    });
+  }
+
+  _noteFormHTML() {
+    const CATS = [
+      { value: 'general',     label: '💬 General' },
+      { value: 'preferencia', label: '⭐ Preferencia' },
+      { value: 'pedido',      label: '📋 Pedido especial' },
+      { value: 'positivo',    label: '👍 Comentario positivo' },
+      { value: 'incidente',   label: '⚠️ Incidente' },
+    ];
+    return `
+      <div style="background:var(--color-surface-2);border-radius:var(--r-lg);padding:14px;border:1px solid var(--color-border)">
+        <select id="note-category" class="form-control" style="margin-bottom:10px;font-size:.8rem">
+          ${CATS.map(c => `<option value="${c.value}">${c.label}</option>`).join('')}
+        </select>
+        <textarea id="note-body" rows="3" class="form-control"
+          placeholder="Ej: Prefiere habitación alejada del ascensor. Viaja siempre con su perro pequeño..."
+          style="font-size:.82rem;resize:vertical"></textarea>
+        <div style="display:flex;gap:8px;margin-top:10px;justify-content:flex-end">
+          <button class="btn btn-outline btn-sm" id="btn-cancel-guest-note">Cancelar</button>
+          <button class="btn btn-primary btn-sm" id="btn-save-guest-note">Guardar nota</button>
+        </div>
+      </div>`;
+  }
+
+  _renderNotesList(section, notes, guestId) {
+    const ICONS = { general:'💬', preferencia:'⭐', pedido:'📋', positivo:'👍', incidente:'⚠️' };
+    const list  = section.querySelector('#guest-notes-list');
+    if (!list) return;
+
+    if (!notes.length) {
+      list.innerHTML = `<div style="font-size:.8rem;color:var(--color-text-3);padding:6px 0;font-style:italic">
+        Sin notas todavía. Agregá preferencias, pedidos especiales o cualquier observación útil para el equipo.
+      </div>`;
+      return;
+    }
+
+    list.innerHTML = notes.map(n => {
+      const icon = ICONS[n.category] ?? '💬';
+      const date = new Date(n.created_at).toLocaleDateString('es-AR',
+        { day:'2-digit', month:'short', year:'numeric' });
+      return `<div class="guest-note-card" data-note-id="${n.id}">
+        <div class="gnc-header">
+          <span class="gnc-icon">${icon}</span>
+          <span class="gnc-author">${n.author_name ?? 'Staff'}</span>
+          <span class="gnc-date">${date}</span>
+          <button class="gnc-delete btn btn-ghost btn-xs" data-id="${n.id}" title="Eliminar nota">🗑️</button>
+        </div>
+        <div class="gnc-body">${n.body}</div>
+      </div>`;
+    }).join('');
+
+    // Bind delete
+    list.querySelectorAll('.gnc-delete').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        if (!confirm('¿Eliminar esta nota?')) return;
+        try {
+          await this.db.from('guest_notes').delete().eq('id', btn.dataset.id);
+          btn.closest('.guest-note-card').remove();
+          showToast('Nota eliminada', 'success');
+        } catch { showToast('Error al eliminar', 'error'); }
+      });
+    });
   }
 
   openBookingForGuest(guestId) {

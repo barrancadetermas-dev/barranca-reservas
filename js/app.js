@@ -1,4 +1,6 @@
 import { generateVoucherText, openWhatsAppVoucher, openManagerTemplate } from './services/whatsapp-service.js';
+import { Bus, EVENTS } from './services/event-bus.js';
+import { cache } from './services/supabase-cache.js';
 // ═══════════════════════════════════════════════════
 // app.js v5.0 — MILA Sistema Inteligente para Alojamientos
 // + Roles (admin/staff/demo) + Demo banner
@@ -834,16 +836,53 @@ function setupRealtime() {
 }
 
 function handleBookingChange(payload) {
+  const { eventType, new: newRecord, old: oldRecord } = payload;
+
+  // Invalidar cache para que el próximo load traiga datos frescos
+  cache.invalidate('bookings', 'reminders');
+
+  // Emitir en el bus con información granular
+  Bus.emit(EVENTS.BOOKING_CHANGED, payload);
   document.dispatchEvent(new CustomEvent('booking:changed', { detail: payload }));
-  if (payload.new?.id) {
-    const bar = document.querySelector(`[data-booking-id="${payload.new.id}"]`);
-    bar?.classList.add('bar-realtime-pulse');
-    setTimeout(() => bar?.classList.remove('bar-realtime-pulse'), 1600);
+
+  // Actualización granular de la barra en el calendario
+  if (newRecord?.id) {
+    const bar = document.querySelector(`.bar[data-booking-id="${newRecord.id}"]`);
+
+    if (eventType === 'INSERT') {
+      // Nueva reserva → pulsar al cargar
+      Bus.emit(EVENTS.CAL_PULSE_BAR, { bookingId: newRecord.id });
+    }
+
+    if (eventType === 'UPDATE' && bar) {
+      // Pulso en la barra existente sin full-reload
+      bar.classList.add('bar-realtime-pulse');
+      setTimeout(() => bar?.classList.remove('bar-realtime-pulse'), 1600);
+
+      // Si cambió el estado, actualizar color sin reload
+      if (oldRecord?.status !== newRecord.status) {
+        debouncedCalendarLoad(300);
+      }
+    }
+
+    if (eventType === 'DELETE' && oldRecord?.id) {
+      // Desvanecer la barra eliminada
+      const delBar = document.querySelector(`.bar[data-booking-id="${oldRecord.id}"]`);
+      if (delBar) {
+        delBar.style.transition = 'opacity .3s, transform .3s';
+        delBar.style.opacity = '0';
+        delBar.style.transform = 'scaleY(0)';
+        setTimeout(() => debouncedCalendarLoad(400), 350);
+        return; // evitar el reload duplicado
+      }
+    }
   }
-  if (payload.new?.status === 'paid' && payload.old?.status !== 'paid') {
+
+  if (newRecord?.status === 'paid' && oldRecord?.status !== 'paid') {
     document.dispatchEvent(new CustomEvent('booking:fullypaid'));
   }
-  debouncedCalendarLoad(500); // Realtime: esperar un poco más
+
+  debouncedCalendarLoad(500);
 }
 
 function handlePaymentChange(payload) {

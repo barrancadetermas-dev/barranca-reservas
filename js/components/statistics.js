@@ -1,5 +1,6 @@
 import { isDemo, can } from '../auth/permissions.js';
 import { formatARS, showToast, getUnitLabel, getUnitColor, getUnitChipHTML, AppContext } from '../supabase-config.js';
+import { RevenuePanel } from './revenue-panel.js';
 
 // ══════════════════════════════════════════════════
 // statistics.js v5.1 — MILA
@@ -27,9 +28,11 @@ const SOURCE_LABELS = {
 
 export class Statistics {
   constructor(supabase, ctx) {
-    this.db   = supabase;
-    this.ctx  = ctx;
-    this._tab = 'units';
+    this.db           = supabase;
+    this.ctx          = ctx;
+    this._tab         = 'units';
+    this._revenuePanel = new RevenuePanel(supabase, ctx);
+    window._revenuePanel = this._revenuePanel;
     this._initPeriodSelectors();
     this._bindTabs();
     this._bindButtons();
@@ -68,12 +71,13 @@ export class Statistics {
         if (this._tab === 'pl')       this.loadPL();
         if (this._tab === 'heatmap')  this.loadHeatmap();
         if (this._tab === 'charts')   this.loadCharts();
+        if (this._tab === 'revenue')  this._revenuePanel?.load();
       });
     });
   }
 
   _showPanel(tab) {
-    ['units','expenses','pl','heatmap','charts'].forEach(t => {
+    ['units','expenses','pl','heatmap','charts','revenue'].forEach(t => {
       document.getElementById(`stats-${t}-panel`)?.classList.toggle('hidden', t !== tab);
     });
   }
@@ -110,10 +114,10 @@ export class Statistics {
       return;
     }
 
-    const firstDay   = `${year}-${String(month+1).padStart(2,'0')}-01`;
-    const lastDay    = new Date(year, month + 1, 0);
-    const lastDayStr = `${year}-${String(month+1).padStart(2,'0')}-${String(lastDay.getDate()).padStart(2,'0')}`;
-    const daysInMonth = lastDay.getDate();
+    const firstDay    = `${year}-${String(month+1).padStart(2,'0')}-01`;
+    const lastDayObj  = new Date(year, month + 1, 0);
+    const lastDayStr  = `${year}-${String(month+1).padStart(2,'0')}-${String(lastDayObj.getDate()).padStart(2,'0')}`;
+    const daysInMonth = lastDayObj.getDate();
 
     try {
       const { data: bookings } = await this.db
@@ -123,12 +127,52 @@ export class Statistics {
         .neq('status', 'cancelled').neq('status', 'blocked')
         .lte('check_in', lastDayStr).gt('check_out', firstDay);
 
-      const stats = this._computeUnitStats(bookings ?? [], firstDay, lastDayStr, daysInMonth);
+      // Usar Web Worker para cálculos pesados si está disponible
+      let stats;
+      if (typeof Worker !== 'undefined') {
+        stats = await this._computeViaWorker(bookings ?? [], firstDay, lastDayStr, daysInMonth);
+      } else {
+        stats = this._computeUnitStats(bookings ?? [], firstDay, lastDayStr, daysInMonth);
+      }
       this._renderUnitStats(stats, month, year, daysInMonth);
     } catch (err) {
       console.error('[Statistics] loadUnits error:', err);
       showToast('Error al cargar estadísticas', 'error');
     }
+  }
+
+  /** Delegar cálculo al Web Worker */
+  _computeViaWorker(bookings, firstDay, lastDay, daysInMonth) {
+    return new Promise((resolve, reject) => {
+      // Lazy-init worker
+      if (!this._worker) {
+        try {
+          this._worker = new Worker(new URL('../workers/stats-worker.js', import.meta.url), { type: 'module' });
+        } catch {
+          // Fallback sincrónico si el worker no carga
+          resolve(this._computeUnitStats(bookings, firstDay, lastDay, daysInMonth));
+          return;
+        }
+      }
+      const id = Date.now();
+      const handler = ({ data }) => {
+        if (data.id !== id) return;
+        this._worker.removeEventListener('message', handler);
+        if (data.error) reject(new Error(data.error));
+        else resolve(data.result);
+      };
+      this._worker.addEventListener('message', handler);
+      this._worker.postMessage({
+        type: 'UNIT_STATS',
+        id,
+        payload: { bookings, units: this.ctx.units, firstDay, lastDay, daysInMonth },
+      });
+      // Timeout de seguridad
+      setTimeout(() => {
+        this._worker?.removeEventListener('message', handler);
+        resolve(this._computeUnitStats(bookings, firstDay, lastDay, daysInMonth));
+      }, 5000);
+    });
   }
 
   _computeUnitStats(bookings, firstDay, lastDay, daysInMonth) {

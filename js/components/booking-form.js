@@ -10,6 +10,8 @@ import { can, isDemo } from '../auth/permissions.js';
 import { formatARS, toISODate, showToast, getUnitLabel, getUnitColor, getUnitChipHTML, SOURCE_CONFIG } from '../supabase-config.js';
 import { logAction } from '../services/audit-service.js';
 import { DateRangePicker } from './date-range-picker.js';
+import { Bus, EVENTS } from '../services/event-bus.js';
+import { cache } from '../services/supabase-cache.js';
 // PriceSuggester se carga lazy en _runPriceSuggestion()
 
 const PAYMENT_METHODS = [
@@ -940,7 +942,12 @@ export class BookingForm {
 
       showToast(this._editingId ? 'Reserva actualizada ✓' : 'Reserva creada ✓', 'success');
 
-      // Disparar confetti si pagó todo
+      // Invalidar cache para que el calendario traiga datos frescos
+      cache.invalidate('bookings');
+
+      // Micro-animación: pulso en la barra nueva/editada
+      Bus.emit(EVENTS.CAL_PULSE_BAR, { bookingId: String(bookingId) });
+
       if (balance <= 0 && paid > 0) {
         document.dispatchEvent(new CustomEvent('booking:fullypaid'));
       }

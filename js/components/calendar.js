@@ -16,6 +16,8 @@ import {
 import { can } from '../auth/permissions.js';
 import { getHolidaysForYear, isWeekend } from '../services/arg-holidays.js';
 import { logAction } from '../services/audit-service.js';
+import { cachedQuery, cache } from '../services/supabase-cache.js';
+import { Bus, EVENTS } from '../services/event-bus.js';
 
 const DAY_NAMES   = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
 const MONTH_NAMES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio',
@@ -52,6 +54,16 @@ export class Calendar {
     this._setupControls();
     this._setupContextMenu();
     this._setupDocumentEvents();
+
+    // Micro-animaciones: IDs de reservas recién creadas/movidas
+    this._pendingPulse = new Set();
+
+    // Escuchar eventos del Bus para pulso en barras nuevas
+    Bus.on(EVENTS.CAL_PULSE_BAR, ({ bookingId }) => {
+      this._pendingPulse.add(bookingId);
+    });
+
+    Bus.on(EVENTS.CAL_RELOAD, () => this.load());
   }
 
   // ── Carga del calendario ──────────────────────────
@@ -88,13 +100,14 @@ export class Calendar {
     }
   }
 
-  // ── Fetch reservas ────────────────────────────────
+  // ── Fetch reservas (con cache 30s) ───────────────
   async _fetchBookings() {
     const firstDay = `${this.year}-${String(this.month+1).padStart(2,'0')}-01`;
     const lastDay  = toISODate(new Date(this.year, this.month+1, 0));
-    const { data, error } = await this.db
-      .from('bookings')
-      .select(`
+    const params   = { hotelId: this.ctx.hotelId, firstDay, lastDay };
+
+    return cachedQuery(this.db, 'bookings', params, () =>
+      this.db.from('bookings').select(`
         id, check_in, check_out, status, source, is_blocked, block_reason,
         total_amount, total_paid, balance, nights, pax, adults, children, notes,
         price_per_night,
@@ -103,10 +116,9 @@ export class Calendar {
       `)
       .eq('hotel_id', this.ctx.hotelId)
       .neq('status', 'cancelled')
-      .lte('check_in',  lastDay)
-      .gt('check_out',  firstDay);
-    if (error) throw error;
-    return data ?? [];
+      .lte('check_in', lastDay)
+      .gt('check_out', firstDay)
+    );
   }
 
   // ── Fetch recordatorios ───────────────────────────
@@ -274,7 +286,27 @@ export class Calendar {
     });
   }
 
-  // ── Barra única ───────────────────────────────────
+  // ── Helper: avatar de iniciales ───────────────────
+  static _guestAvatar(guest, size = 18) {
+    if (!guest) return '';
+    const fn = guest.first_name ?? '';
+    const ln = guest.last_name  ?? '';
+    if (!fn && !ln) return '';
+    const initials = ((fn[0] ?? '') + (ln[0] ?? '')).toUpperCase();
+    const str   = (fn + ln).toLowerCase();
+    let hash    = 0;
+    for (let i = 0; i < str.length; i++) hash = str.charCodeAt(i) + ((hash << 5) - hash);
+    const hue   = Math.abs(hash) % 360;
+    return `<span class="bar-avatar" style="
+      display:inline-flex;align-items:center;justify-content:center;
+      width:${size}px;height:${size}px;min-width:${size}px;border-radius:50%;
+      background:hsl(${hue},55%,88%);color:hsl(${hue},55%,28%);
+      font-size:${Math.max(8, Math.round(size*0.44))}px;font-weight:800;
+      flex-shrink:0;line-height:1;margin-right:5px;
+    ">${initials}</span>`;
+  }
+
+  // ── Barra única con avatar ────────────────────────
   _renderSingleBar(cell, booking) {
     if (booking._cellType !== 'start' && booking._cellType !== 'solo') return;
 
@@ -283,6 +315,7 @@ export class Calendar {
     const lastName  = booking.guests?.last_name  ?? '';
     const blockText = booking.block_reason ?? 'Bloqueo';
     const guestFull = booking.guests ? `${lastName} ${firstName}`.trim() : blockText;
+    const isBlock   = booking.status === 'blocked' || booking.is_blocked;
 
     const ci = new Date(booking.check_in  + 'T12:00:00');
     const co = new Date(booking.check_out + 'T12:00:00');
@@ -298,35 +331,49 @@ export class Calendar {
 
     const bar = document.createElement('div');
     bar.className = 'bar bar-span';
+    // Pending pulse: si esta reserva fue recién creada, añadir clase
+    if (this._pendingPulse.has(booking.id)) {
+      bar.classList.add('bar-new-bounce');
+      this._pendingPulse.delete(booking.id);
+      // Remover la clase de animación después
+      setTimeout(() => bar.classList.remove('bar-new-bounce'), 1200);
+    }
     bar.style.cssText = `
       background: ${color};
       position: absolute; top: 6px; bottom: 6px; left: 4px;
       width: calc(${nights} * 100% - 8px);
       z-index: 3; border-radius: 6px;
-      display: flex; align-items: center; padding: 0 10px;
+      display: flex; align-items: center; padding: 0 8px;
       overflow: hidden; white-space: nowrap;
-      cursor: grab; transition: filter .15s, transform .15s;
+      cursor: grab; transition: filter .15s, transform .15s, box-shadow .15s;
     `;
     bar.dataset.bookingId = booking.id;
 
-    bar.innerHTML = `<span style="color:${textColor};font-size:.7rem;font-weight:700;
-      overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0">${guestFull}</span>`;
+    const avatar = !isBlock ? Calendar._guestAvatar(booking.guests, 16) : '';
+
+    bar.innerHTML = `
+      ${avatar}
+      <span style="color:${textColor};font-size:.68rem;font-weight:700;
+        overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0">
+        ${guestFull}
+      </span>`;
     bar.title = `${guestFull} | ${booking.check_in} → ${booking.check_out}`;
 
     bar.addEventListener('mouseenter', (e) => {
       if (!this._barDrag.active) {
-        bar.style.filter='brightness(1.12)';
-        bar.style.transform='scaleY(1.05)';
+        bar.style.filter    = 'brightness(1.12)';
+        bar.style.transform = 'scaleY(1.05)';
+        bar.style.boxShadow = '0 2px 8px rgba(0,0,0,.25)';
       }
       this._showTooltip(booking, e);
     });
     bar.addEventListener('mousemove',  (e) => this._moveTooltip(e));
     bar.addEventListener('mouseleave', () => {
-      bar.style.filter='';
-      bar.style.transform='';
+      bar.style.filter    = '';
+      bar.style.transform = '';
+      bar.style.boxShadow = '';
       this._hideTooltip();
     });
-    // NO click listener aquí — se maneja desde el sistema de drag (onMouseUp)
 
     cell.appendChild(bar);
   }
@@ -1032,6 +1079,15 @@ export class Calendar {
       await logAction('UPDATE', 'booking', booking.id,
         `Drag: ${booking.check_in}→${newCI}, unidad: ${sourceUnitId}→${targetUnitId}`);
 
+      // Animación de deslizamiento antes del reload
+      this._animateDragBar(booking.id, newCI);
+
+      // Invalidar cache del mes actual
+      cache.invalidate('bookings');
+
+      // Emitir en el bus para que otros módulos reaccionen
+      Bus.emit(EVENTS.BOOKING_DRAG_DONE, { bookingId: booking.id, oldCI: booking.check_in, newCI });
+
       showToast(`✓ Reserva movida a ${newCI} → ${newCO}`, 'success');
       document.dispatchEvent(new CustomEvent('booking:changed'));
       this.load();
@@ -1108,6 +1164,18 @@ export class Calendar {
       document.addEventListener('touchmove', onTouchMove, { passive: false, signal: sig });
       document.addEventListener('touchend', onTouchEnd, { signal: sig });
     }, { passive: false, signal: sig });
+  }
+
+  // ── Animación: la barra se desvanece y reaparece ──
+  _animateDragBar(bookingId, newCI) {
+    const bar = document.querySelector(`.bar[data-booking-id="${bookingId}"]`);
+    if (!bar) return;
+    // Fade out rápido — el reload trae la barra en nueva posición
+    bar.style.transition = 'opacity .25s, transform .25s';
+    bar.style.opacity    = '0';
+    bar.style.transform  = 'scaleX(0.8)';
+    // Añadir la nueva reserva al set de pendientes para el pulso de entrada
+    this._pendingPulse.add(bookingId);
   }
 
   _addDays(isoDate, n) {
