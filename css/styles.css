@@ -2244,8 +2244,8 @@ select {
 
 /* ── 1. CALENDAR: Días pasados ────────────────────── */
 .cal-day-header.past-header {
-  opacity: .38;
-  background: var(--color-surface-2) !important;
+  opacity: .45;
+  background: rgba(0,0,0,.04) !important;
   color: var(--color-text-3) !important;
 }
 .cal-day-header.past-header .day-name { color: var(--color-text-3) !important; }
@@ -2258,22 +2258,31 @@ select {
 }
 .cal-day-header.today .day-name { color: var(--color-primary) !important; font-weight: 600; }
 .past-col {
-  background: rgba(0,0,0,.055) !important;
-  opacity: .82;
+  background: rgba(0,0,0,.07) !important;
+  opacity: 1;
 }
-.past-col .bar { filter: saturate(.45) brightness(.82) !important; }
-.cal-day-header.past-header {
-  background: rgba(0,0,0,.04) !important;
-  color: var(--color-text-3) !important;
+.past-col::after {
+  content: '';
+  position: absolute; inset: 0;
+  background: repeating-linear-gradient(
+    135deg,
+    transparent,
+    transparent 4px,
+    rgba(0,0,0,.025) 4px,
+    rgba(0,0,0,.025) 5px
+  );
+  pointer-events: none;
+  z-index: 1;
 }
-/* Modo ocultar días pasados — manejado desde JS con gridTemplateColumns */
+.past-col .bar { filter: saturate(.4) brightness(.78) !important; }
+/* Modo ocultar días pasados — manejado desde JS con scroll */
 .today-col {
   background: rgba(99,102,241,.05) !important;
   border-left: 2px solid rgba(99,102,241,.25) !important;
   border-right: 2px solid rgba(99,102,241,.25) !important;
 }
-[data-theme="dark"] .past-col { background: rgba(0,0,0,.22) !important; }
-[data-theme="dark"] .cal-day-header.past-header { background: #0a1220 !important; }
+[data-theme="dark"] .past-col { background: rgba(0,0,0,.28) !important; }
+[data-theme="dark"] .cal-day-header.past-header { background: rgba(0,0,0,.18) !important; }
 
 /* ── 2. CALENDARIO: Altura de celda 44 → 52px ──────── */
 .cal-cell { height: 52px !important; }

@@ -522,45 +522,36 @@ export class Calendar {
       const btn = document.getElementById('cal-hide-past-btn');
       if (this._hidePast) {
         if (btn) { btn.textContent = '▶ Mostrar pasados'; btn.classList.add('btn-primary'); btn.classList.remove('btn-outline'); }
+        this._scrollToToday();
       } else {
         if (btn) { btn.textContent = '◀ Ocultar pasados'; btn.classList.remove('btn-primary'); btn.classList.add('btn-outline'); }
+        // Scroll al inicio
+        document.querySelector('.cal-wrapper')?.scrollTo({ left: 0, behavior: 'smooth' });
       }
-      this._applyHidePast();
     });
 
     this.setupViewToggle();
   }
 
-  // ── Ocultar columnas pasadas recalculando el grid ──
-  _applyHidePast() {
-    const grid = document.getElementById('calendar-grid');
-    if (!grid) return;
-    const daysInMonth = new Date(this.year, this.month + 1, 0).getDate();
-    const todayISO    = new Date().toISOString().split('T')[0];
+  // ── Scroll al día de hoy ──────────────────────────
+  _scrollToToday() {
+    const grid    = document.getElementById('calendar-grid');
+    const wrapper = document.querySelector('.cal-wrapper');
+    if (!grid || !wrapper) return;
 
-    if (!this._hidePast) {
-      // Restaurar columnas normales
-      grid.style.gridTemplateColumns = `160px repeat(${daysInMonth}, minmax(30px, 1fr))`;
-      // Mostrar todos los headers y celdas
-      grid.querySelectorAll('.past-col, .cal-day-header.past-header').forEach(el => {
-        el.style.display = '';
-      });
-      return;
-    }
+    const todayDay = new Date().getDate();
+    // La columna de hoy es (todayDay) — contando desde 1 después del label (col 1)
+    // Ancho de cada columna de día
+    const dayHeaders = grid.querySelectorAll('.cal-day-header');
+    if (!dayHeaders.length) return;
 
-    // Calcular qué columnas son pasadas (índice base-1 dentro del mes)
-    const cols = ['160px'];
-    for (let d = 1; d <= daysInMonth; d++) {
-      const dateISO = `${this.year}-${String(this.month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-      const isPast  = dateISO < todayISO;
-      cols.push(isPast ? '0px' : 'minmax(30px, 1fr)');
-    }
-    grid.style.gridTemplateColumns = cols.join(' ');
-
-    // Ocultar contenido de celdas pasadas para evitar overflow visual
-    grid.querySelectorAll('.past-col, .cal-day-header.past-header').forEach(el => {
-      el.style.display = 'none';
+    let scrollTarget = 0;
+    dayHeaders.forEach((dh, i) => {
+      if (i + 1 === todayDay) {
+        scrollTarget = dh.offsetLeft - 170; // 170 = ancho del label de unidad
+      }
     });
+    wrapper.scrollTo({ left: Math.max(0, scrollTarget), behavior: 'smooth' });
   }
 
   // ── Context Menu ──────────────────────────────────
