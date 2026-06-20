@@ -472,8 +472,8 @@ svg { flex-shrink: 0; }
   transition: background var(--t-fast);
 }
 .cal-cell:hover { background: var(--color-primary-l); }
-.cal-cell.today-col { background: rgba(99,102,241,.04); }
-.cal-cell.today-col:hover { background: rgba(99,102,241,.08); }
+.cal-cell:not(.week-cell).today-col { background: rgba(99,102,241,.04); }
+.cal-cell:not(.week-cell).today-col:hover { background: rgba(99,102,241,.08); }
 .cal-cell.selecting { background: rgba(99,102,241,.15) !important; }
 
 /* Booking bars inside cells */
@@ -2257,26 +2257,27 @@ select {
   opacity: 1 !important;
 }
 .cal-day-header.today .day-name { color: var(--color-primary) !important; font-weight: 600; }
-.past-col {
-  background: rgba(0,0,0,.07) !important;
+/* ── DÍAS PASADOS — vista mes ────────────────────── */
+.cal-cell:not(.week-cell).past-col {
+  background: rgba(0,0,0,.065) !important;
   opacity: 1;
 }
-.past-col::after {
+.cal-cell:not(.week-cell).past-col::after {
   content: '';
   position: absolute; inset: 0;
   background: repeating-linear-gradient(
     135deg,
     transparent,
-    transparent 4px,
-    rgba(0,0,0,.025) 4px,
-    rgba(0,0,0,.025) 5px
+    transparent 5px,
+    rgba(0,0,0,.03) 5px,
+    rgba(0,0,0,.03) 6px
   );
   pointer-events: none;
   z-index: 1;
 }
-.past-col .bar { filter: saturate(.4) brightness(.78) !important; }
+.cal-cell:not(.week-cell).past-col .bar { filter: saturate(.4) brightness(.75) !important; }
 /* Modo ocultar días pasados — manejado desde JS con scroll */
-.cal-cell.today-col {
+.cal-cell:not(.week-cell).today-col {
   background: rgba(99,102,241,.05) !important;
   border-left: 2px solid rgba(99,102,241,.25) !important;
   border-right: 2px solid rgba(99,102,241,.25) !important;
@@ -2710,7 +2711,7 @@ input[type="color"].unit-color-input::-webkit-color-swatch { border: none; borde
   color: var(--color-primary) !important;
 }
 .cal-day-header.today .dh-num { font-weight: 800 !important; }
-.cal-day-header.past-header { opacity: .45; }
+
 .cal-day-header.weekend { background: rgba(99,102,241,.05) !important; color: var(--color-primary) !important; }
 
 /* Número del día en header */
@@ -2720,11 +2721,8 @@ input[type="color"].unit-color-input::-webkit-color-swatch { border: none; borde
 
 /* ── CALENDARIO MES: días pasados ─────────────────── */
 .cal-cell { transition: background .12s, opacity .12s; }
-.cal-cell.past-col {
-  background: rgba(0,0,0,.018) !important;
-  opacity: .65 !important;
-}
-.cal-cell.today-col {
+
+.cal-cell:not(.week-cell).today-col {
   background: rgba(99,102,241,.07) !important;
   border-left: 2px solid rgba(99,102,241,.35) !important;
   border-right: 2px solid rgba(99,102,241,.35) !important;
@@ -2888,18 +2886,8 @@ input[type="color"].unit-color-input::-webkit-color-swatch { border: none; borde
 .pax-input::-webkit-outer-spin-button { -webkit-appearance: none; }
 
 /* ── CALENDARIO: días pasados ─────────────────────── */
-.cal-cell.past-col {
-  opacity: .6;
-  background: rgba(0,0,0,.015) !important;
-}
-.cal-cell.past-col .bar {
-  filter: saturate(.5) brightness(.88) !important;
-  opacity: .8 !important;
-}
-.cal-day-header.past-header {
-  opacity: .45;
-  background: transparent !important;
-}
+
+
 
 /* ── HOY: borde y fondo ───────────────────────────── */
 .cal-day-header.today {
@@ -2908,7 +2896,7 @@ input[type="color"].unit-color-input::-webkit-color-swatch { border: none; borde
   color: var(--color-primary) !important;
   font-weight: 800 !important;
 }
-.cal-cell.today-col {
+.cal-cell:not(.week-cell).today-col {
   background: rgba(99,102,241,.05) !important;
   box-shadow: inset 2px 0 0 var(--color-primary),
               inset -2px 0 0 var(--color-primary);
@@ -2962,7 +2950,7 @@ input[type="color"].unit-color-input::-webkit-color-swatch { border: none; borde
 
 /* ── DARK MODE: calendario ────────────────────────── */
 [data-theme="dark"] .cal-day-header.today    { background: rgba(99,102,241,.2) !important; }
-[data-theme="dark"] .cal-cell.today-col       { background: rgba(99,102,241,.1) !important; }
+[data-theme="dark"] .cal-cell:not(.week-cell).today-col { background: rgba(99,102,241,.1) !important; }
 [data-theme="dark"] .cal-day-header.weekend   { background: rgba(99,102,241,.15) !important; }
 [data-theme="dark"] .weekend-col              { background: rgba(99,102,241,.05) !important; }
 [data-theme="dark"] .holiday-col              { background: rgba(239,68,68,.08) !important; }
