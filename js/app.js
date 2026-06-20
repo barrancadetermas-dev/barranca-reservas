@@ -1087,12 +1087,15 @@ function setupConnectivityIndicator() {
   window.addEventListener('online',  () => setStatus('connected'));
   window.addEventListener('offline', () => setStatus('disconnected'));
 
-  // Escuchar estado del canal Realtime de Supabase
-  supabase.realtime.on('connect',    () => setStatus('connected'));
-  supabase.realtime.on('reconnect',  () => setStatus('connected'));
-  supabase.realtime.on('disconnect', () => setStatus(navigator.onLine ? 'reconnecting' : 'disconnected'));
+  // DESPUÉS (funciona con supabase-js v2):
+supabase.channel('connectivity-watcher').subscribe((status) => {
+  if (status === 'SUBSCRIBED') {
+    setStatus('connected');
+  } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+    setStatus(navigator.onLine ? 'reconnecting' : 'disconnected');
+  }
+});
 }
-
 
 // ══════════════════════════════════════════════════
 // START — manejo de URL params especiales
