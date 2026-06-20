@@ -2258,17 +2258,24 @@ select {
 }
 .cal-day-header.today .day-name { color: var(--color-primary) !important; font-weight: 600; }
 .past-col {
-  background: rgba(0,0,0,.016) !important;
-  opacity: .72;
+  background: rgba(0,0,0,.055) !important;
+  opacity: .82;
 }
-.past-col .bar { filter: saturate(.55) brightness(.9) !important; }
+.past-col .bar { filter: saturate(.45) brightness(.82) !important; }
+.cal-day-header.past-header {
+  background: rgba(0,0,0,.04) !important;
+  color: var(--color-text-3) !important;
+}
+/* Modo ocultar días pasados */
+.cal-hide-past .past-col,
+.cal-hide-past .cal-day-header.past-header { display: none !important; }
 .today-col {
   background: rgba(99,102,241,.05) !important;
   border-left: 2px solid rgba(99,102,241,.25) !important;
   border-right: 2px solid rgba(99,102,241,.25) !important;
 }
-[data-theme="dark"] .past-col { background: rgba(0,0,0,.12) !important; }
-[data-theme="dark"] .cal-day-header.past-header { background: #0d1621 !important; }
+[data-theme="dark"] .past-col { background: rgba(0,0,0,.22) !important; }
+[data-theme="dark"] .cal-day-header.past-header { background: #0a1220 !important; }
 
 /* ── 2. CALENDARIO: Altura de celda 44 → 52px ──────── */
 .cal-cell { height: 52px !important; }

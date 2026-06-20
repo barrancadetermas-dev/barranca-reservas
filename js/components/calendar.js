@@ -270,44 +270,64 @@ export class Calendar {
     });
   }
 
-  // ── Barra única ───────────────────────────────────
+  // ── Barra única — cubre todas las noches con un solo elemento ──
   _renderSingleBar(cell, booking) {
+    // Solo la celda de INICIO coloca la barra; el resto la ignoran
+    // (salvo el recambio split que lo maneja _renderSplitCell)
+    if (booking._cellType !== 'start' && booking._cellType !== 'solo') return;
+
     const { color, textColor } = getBookingBarColor(booking);
-    const type  = booking._cellType;
     const firstName = booking.guests?.first_name ?? '';
     const lastName  = booking.guests?.last_name  ?? '';
     const blockText = booking.block_reason ?? 'Bloqueo';
-
-    // Formato: "Apellido Nombre" — el apellido siempre completo, nombre hasta donde quepa
     const guestFull = booking.guests ? `${lastName} ${firstName}`.trim() : blockText;
-    const guestShort = booking.guests ? lastName || firstName : blockText;
+
+    // Calcular cuántos días cubre dentro de este mes
+    const ci = new Date(booking.check_in  + 'T12:00:00');
+    const co = new Date(booking.check_out + 'T12:00:00');
+    const daysInMonth = new Date(this.year, this.month + 1, 0).getDate();
+
+    // Primer día visible de la barra en este mes
+    const startDay = Math.max(ci.getDate(), 1);
+    // Último día visible: checkout es el día de salida, la barra llega hasta co-1
+    const endDay   = Math.min(co.getDate() - 1, daysInMonth);
+    // Si checkout cae en otro mes, la barra llega hasta fin de mes
+    const coMonth  = co.getMonth();
+    const coYear   = co.getFullYear();
+    const isCoNextMonth = (coYear > this.year) || (coYear === this.year && coMonth > this.month);
+    const lastDay  = isCoNextMonth ? daysInMonth : endDay;
+
+    const nights = Math.max(1, lastDay - startDay + 1);
 
     const bar = document.createElement('div');
-    bar.className  = `bar bar-${type}`;
-    bar.style.background  = color;
+    bar.className = 'bar bar-span';
+    bar.style.cssText = `
+      background: ${color};
+      position: absolute;
+      top: 6px; bottom: 6px;
+      left: 4px;
+      width: calc(${nights} * 100% - 8px);
+      z-index: 3;
+      border-radius: 6px;
+      display: flex; align-items: center;
+      padding: 0 10px;
+      overflow: hidden; white-space: nowrap;
+      cursor: pointer;
+      transition: filter .15s, transform .15s;
+    `;
     bar.dataset.bookingId = booking.id;
 
-    // Mostrar nombre en start, middle y end (no solo start)
-    // En start: apellido + nombre. En middle/end: solo apellido (más compacto)
-    if (type === 'start' || type === 'middle' || type === 'end') {
-      const label = type === 'start' ? guestFull : guestShort;
-      bar.innerHTML = `<span style="color:${textColor};font-size:.68rem;font-weight:700;
-        overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;
-        min-width:0;display:block">${label}</span>`;
-    }
+    bar.innerHTML = `<span style="color:${textColor};font-size:.7rem;font-weight:700;
+      overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0">${guestFull}</span>`;
 
     bar.title = `${guestFull} | ${booking.check_in} → ${booking.check_out}`;
-    bar.addEventListener('mouseenter', (e) => this._showTooltip(booking, e));
+
+    bar.addEventListener('mouseenter', (e) => { bar.style.filter='brightness(1.12)'; bar.style.transform='scaleY(1.05)'; this._showTooltip(booking, e); });
     bar.addEventListener('mousemove',  (e) => this._moveTooltip(e));
-    bar.addEventListener('mouseleave', ()  => this._hideTooltip());
-    bar.addEventListener('click', (e) => {
-      e.stopPropagation();
-      this._openBookingDetail(booking.id);
-    });
-    bar.addEventListener('contextmenu', (e) => {
-      e.preventDefault(); e.stopPropagation();
-      this._openBookingDetail(booking.id);
-    });
+    bar.addEventListener('mouseleave', ()  => { bar.style.filter=''; bar.style.transform=''; this._hideTooltip(); });
+    bar.addEventListener('click', (e) => { e.stopPropagation(); this._openBookingDetail(booking.id); });
+    bar.addEventListener('contextmenu', (e) => { e.preventDefault(); e.stopPropagation(); this._openBookingDetail(booking.id); });
+
     cell.appendChild(bar);
   }
 
@@ -494,6 +514,22 @@ export class Calendar {
       this._weekStart = this._getWeekStart(n);
       this.load();
     });
+
+    // ── Ocultar / mostrar días pasados ──
+    this._hidePast = false;
+    document.getElementById('cal-hide-past-btn')?.addEventListener('click', () => {
+      this._hidePast = !this._hidePast;
+      const grid = document.getElementById('calendar-grid');
+      const btn  = document.getElementById('cal-hide-past-btn');
+      if (this._hidePast) {
+        grid?.classList.add('cal-hide-past');
+        if (btn) { btn.textContent = '▶ Mostrar pasados'; btn.classList.add('btn-primary'); btn.classList.remove('btn-outline'); }
+      } else {
+        grid?.classList.remove('cal-hide-past');
+        if (btn) { btn.textContent = '◀ Ocultar pasados'; btn.classList.remove('btn-primary'); btn.classList.add('btn-outline'); }
+      }
+    });
+
     this.setupViewToggle();
   }
 
