@@ -1421,28 +1421,37 @@ const THEMES = {
 function setupThemeSystem() {
   const panel = document.getElementById('theme-panel');
   const btn   = document.getElementById('btn-theme');
+  if (!panel || !btn) return;
+
   const saved = localStorage.getItem('mila_theme') ?? 'indigo';
   applyTheme(saved);
   markActiveSwatch(saved);
 
-  const showPanel = () => { if (panel) panel.style.display = 'block'; };
-  const hidePanel = () => { if (panel) panel.style.display = 'none';  };
-
-  btn?.addEventListener('click', (e) => {
+  // Toggle panel on button click
+  btn.addEventListener('click', (e) => {
     e.stopPropagation();
-    panel?.style.display === 'block' ? hidePanel() : showPanel();
+    const isVisible = panel.style.display === 'block';
+    panel.style.display = isVisible ? 'none' : 'block';
   });
+
+  // Close panel when clicking outside
   document.addEventListener('click', (e) => {
-    if (!e.target.closest('#theme-picker-wrap')) hidePanel();
+    if (!e.target.closest('#theme-picker-wrap')) {
+      panel.style.display = 'none';
+    }
   });
+
+  // Swatch selection
   document.querySelectorAll('.theme-swatch').forEach(sw => {
     sw.addEventListener('click', (e) => {
       e.stopPropagation();
       const t = sw.dataset.theme;
-      applyTheme(t); markActiveSwatch(t);
+      if (!t) return;
+      applyTheme(t);
+      markActiveSwatch(t);
       localStorage.setItem('mila_theme', t);
-      hidePanel();
-      Sound?.success();
+      panel.style.display = 'none';
+      Sound?.success?.();
     });
   });
 }

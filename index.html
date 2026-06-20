@@ -189,17 +189,6 @@
             title="Acciones pendientes de sincronización">0</span>
         </div>
 
-        <!-- 🔔 Notificaciones -->
-        <button class="header-icon-btn" id="btn-notifications"
-                title="Notificaciones" aria-label="Notificaciones"
-                style="position:relative;display:flex;align-items:center;justify-content:center;width:34px;height:34px;border:none;background:transparent;border-radius:8px;color:var(--color-text-2,#94a3b8);cursor:pointer;flex-shrink:0">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
-            <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/>
-          </svg>
-          <span class="notif-badge" id="notif-badge"
-                style="display:none;position:absolute;top:2px;right:2px;min-width:16px;height:16px;border-radius:99px;background:#ef4444;color:white;font-size:.6rem;font-weight:800;align-items:center;justify-content:center;padding:0 3px">0</span>
-        </button>
-
         <!-- 🔊 Sonido -->
         <button class="header-icon-btn" id="btn-sound"
                 title="Sonidos activos — clic para silenciar" aria-label="Sonido"
@@ -507,8 +496,7 @@
 
       <!-- ── SECTION: REMINDERS ── -->
       <section id="section-reminders" class="section">
-        <div class="section-header-row">
-          <h3>Recordatorios y Mantenimiento</h3>
+        <div style="display:flex;justify-content:flex-end;margin-bottom:16px">
           <button class="btn btn-primary btn-sm" id="btn-add-reminder-main">+ Nuevo Recordatorio</button>
         </div>
         <div id="reminders-full-list"></div>

@@ -164,7 +164,6 @@ export class ConfigPanel {
     return `
       <div class="section-header-row" style="margin-bottom:20px">
         <div>
-          <h3>Configuración del Sistema</h3>
           <p style="font-size:.78rem;color:var(--color-text-3);margin-top:3px">
             🔒 Solo administradores · Cambios se guardan en la base de datos
           </p>

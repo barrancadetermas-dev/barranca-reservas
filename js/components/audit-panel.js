@@ -59,8 +59,7 @@ export class AuditPanel {
     return `
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px">
         <div>
-          <h3 style="margin:0">Registro de Auditoría</h3>
-          <p style="font-size:.78rem;color:var(--color-text-3);margin:2px 0 0">
+          <p style="font-size:.78rem;color:var(--color-text-3);margin:0">
             🔒 Solo administradores
           </p>
         </div>

@@ -49,7 +49,7 @@ export class OperationsModule {
   _renderShell() {
     return `
       <div class="section-header-row" style="margin-bottom:20px">
-        <h3>Operaciones</h3>
+        <div></div>
         <div id="ops-header-actions"></div>
       </div>
       <div class="tabs-bar">
@@ -246,18 +246,25 @@ export class OperationsModule {
       const title = modal.querySelector('#ct-title').value.trim();
       const date  = modal.querySelector('#ct-date').value;
       if (!title || !date) { showToast('Título y fecha requeridos', 'warning'); return; }
+      const saveBtn = modal.querySelector('#ct-save');
+      if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Guardando...'; }
       try {
-        await this.db.from('cleaning_tasks').insert({
+        const { error } = await this.db.from('cleaning_tasks').insert({
           hotel_id:     this.ctx.hotelId,
           unit_id:      modal.querySelector('#ct-unit').value || null,
           title, scheduled_date: date, status: 'pending',
           assigned_to:  modal.querySelector('#ct-assigned').value.trim() || null,
           notes:        modal.querySelector('#ct-notes').value.trim() || null,
         });
-        showToast('Tarea creada ✓', 'success');
+        if (error) throw error;
+        showToast('Tarea de limpieza creada ✓', 'success');
         close();
         await this.load();
-      } catch { showToast('Error al crear tarea', 'error'); }
+      } catch (err) {
+        console.error('[Operations] cleaning insert:', err);
+        showToast('Error: ' + (err?.message ?? 'Verificá que hayas corrido migration_complete_v8.sql en Supabase'), 'error');
+        if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Guardar'; }
+      }
     });
   }
 
@@ -414,19 +421,25 @@ export class OperationsModule {
     modal.querySelector('#mi-save').addEventListener('click', async () => {
       const title = modal.querySelector('#mi-title').value.trim();
       if (!title) { showToast('Ingresá una descripción', 'warning'); return; }
+      const saveBtn = modal.querySelector('#mi-save');
+      if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Guardando...'; }
       try {
-        await this.db.from('maintenance_issues').insert({
+        const { error } = await this.db.from('maintenance_issues').insert({
           hotel_id:    this.ctx.hotelId,
           unit_id:     modal.querySelector('#mi-unit').value || null,
-          category:    modal.querySelector('#mi-cat').value,
-          title, status: 'pending',
-          priority:    modal.querySelector('#mi-priority').value,
-          assigned_to: modal.querySelector('#mi-assigned').value.trim() || null,
+          title, status: 'open',
+          priority:    modal.querySelector('#mi-priority').value ?? 'normal',
+          reported_by: modal.querySelector('#mi-assigned').value.trim() || null,
         });
+        if (error) throw error;
         showToast('Incidencia registrada ✓', 'success');
         close();
         await this.load();
-      } catch { showToast('Error al registrar', 'error'); }
+      } catch (err) {
+        console.error('[Operations] maintenance insert:', err);
+        showToast('Error: ' + (err?.message ?? 'No se pudo guardar. ¿Corriste la migración SQL?'), 'error');
+        if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Guardar'; }
+      }
     });
   }
 
