@@ -1,63 +1,60 @@
 // ═══════════════════════════════════════════════════
-// sw.js v8.0 — MILA Service Worker
-// • Cache de assets estáticos
-// • Cola offline para actions de Supabase
-// • Indicador de estado real al cliente
+// sw.js v8.2.0 — MILA Service Worker
+// HTML siempre de red, assets cacheados, offline queue
 // ═══════════════════════════════════════════════════
 
-const V  = '8.1.0';
+const V  = '8.2.0';
 const CA = `mila-app-${V}`;
-const CS = `mila-static-${V}`;
-const OFFLINE_QUEUE_KEY = 'mila_offline_queue';
 
-// ── Install ──────────────────────────────────────
 self.addEventListener('install', e => {
-  e.waitUntil(
-    caches.open(CA)
-      .then(c => c.add('/offline.html').catch(() => {}))
-      .then(() => self.skipWaiting())
-      .catch(() => self.skipWaiting())
-  );
+  // Tomar control inmediatamente sin esperar cierre de tabs
+  self.skipWaiting();
 });
 
-// ── Activate ─────────────────────────────────────
 self.addEventListener('activate', e => {
   e.waitUntil(
     caches.keys().then(keys =>
-      Promise.all([
-        ...keys.filter(k => k.startsWith('mila-') && k !== CA && k !== CS).map(k => caches.delete(k)),
-        self.clients.claim(),
-      ])
-    )
+      Promise.all(
+        keys.filter(k => k.startsWith('mila-') && k !== CA)
+            .map(k => caches.delete(k))
+      )
+    ).then(() => self.clients.claim())
   );
 });
 
-// ── Fetch ─────────────────────────────────────────
 self.addEventListener('fetch', e => {
   const u = new URL(e.request.url);
 
-  // Supabase / APIs externas — network only, pero cola si offline
-  if (u.hostname.includes('supabase.co')) {
+  // 1. Supabase, APIs externas → network only, sin interceptar
+  if (
+    u.hostname.includes('supabase.co') ||
+    u.hostname.includes('dolarapi')    ||
+    u.hostname.includes('ambito')      ||
+    u.hostname.includes('bluelytics')  ||
+    u.hostname.includes('esm.sh')      ||
+    u.hostname.includes('resend.com')
+  ) {
     if (e.request.method !== 'GET') {
       e.respondWith(networkWithOfflineQueue(e.request));
     }
-    // GETs a Supabase pasan siempre (no cachear datos de negocio)
     return;
   }
 
-  // APIs de cotización dollar — network only
-  if (u.hostname.includes('dolarapi') || u.hostname.includes('ambito') ||
-      u.hostname.includes('bluelytics') || u.hostname.includes('esm.sh')) {
-    return; // sin manejo → browser normal
+  // 2. HTML / navegación → SIEMPRE de red, nunca cacheado
+  if (e.request.mode === 'navigate' || u.pathname.endsWith('.html') || u.pathname === '/') {
+    e.respondWith(
+      fetch(e.request).catch(() => caches.match('/offline.html'))
+    );
+    return;
   }
 
-  // Google fonts — cache first
+  // 3. Google fonts → cache first
   if (u.hostname.includes('gstatic') || u.hostname.includes('googleapis')) {
     e.respondWith(cacheFirst(e.request));
     return;
   }
 
-  // Assets del app — network first con fallback a cache
+  // 4. Assets estáticos (JS, CSS, imágenes) → network first, fallback cache
   e.respondWith(networkFirst(e.request));
 });
 
@@ -71,13 +68,7 @@ async function networkFirst(req) {
     return res;
   } catch {
     const cached = await caches.match(req);
-    if (cached) return cached;
-    if (req.mode === 'navigate') {
-      // Notificar al cliente que está offline
-      notifyClients({ type: 'OFFLINE' });
-      return caches.match('/offline.html');
-    }
-    return new Response('', { status: 503 });
+    return cached || new Response('', { status: 503 });
   }
 }
 
@@ -85,58 +76,42 @@ async function cacheFirst(req) {
   return (await caches.match(req)) || networkFirst(req);
 }
 
-// ── Cola offline para mutaciones a Supabase ────────
+// ── Cola offline para mutaciones POST a Supabase ──
 async function networkWithOfflineQueue(req) {
   try {
     const res = await fetch(req.clone());
-    if (res.ok) notifyClients({ type: 'ONLINE' });
+    notifyClients({ type: 'ONLINE' });
     return res;
   } catch {
-    // Guardar en cola para reintentar cuando haya conexión
     const body = await req.clone().text().catch(() => '');
-    const queued = {
-      url:     req.url,
-      method:  req.method,
-      headers: Object.fromEntries(req.headers.entries()),
-      body,
-      ts:      Date.now(),
-    };
-    // Comunicar al cliente para que persista en localStorage
-    notifyClients({ type: 'QUEUE_ACTION', payload: queued });
+    notifyClients({
+      type: 'QUEUE_ACTION',
+      payload: { url: req.url, method: req.method, body, ts: Date.now() }
+    });
     notifyClients({ type: 'OFFLINE' });
-    // Devolver respuesta de error suave (no crash)
     return new Response(JSON.stringify({ error: 'offline', queued: true }), {
       status: 503,
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json' }
     });
   }
 }
 
-// ── Mensajes desde el cliente ──────────────────────
 self.addEventListener('message', e => {
   if (e.data?.type === 'SKIP_WAITING') self.skipWaiting();
-  if (e.data?.type === 'SYNC_QUEUE')  syncQueue(e.data.queue);
-  if (e.data?.type === 'PING')        e.ports[0]?.postMessage({ type: 'PONG' });
+  if (e.data?.type === 'SYNC_QUEUE')   syncQueue(e.data.queue);
 });
 
-// ── Background Sync ───────────────────────────────
 self.addEventListener('sync', e => {
-  if (e.tag === 'mila-sync') {
-    e.waitUntil(notifyClients({ type: 'TRIGGER_SYNC' }));
-  }
+  if (e.tag === 'mila-sync') e.waitUntil(notifyClients({ type: 'TRIGGER_SYNC' }));
 });
 
 async function syncQueue(queue) {
   if (!queue?.length) return;
   const results = await Promise.allSettled(
-    queue.map(item => fetch(item.url, {
-      method:  item.method,
-      headers: item.headers,
-      body:    item.body || undefined,
-    }))
+    queue.map(item => fetch(item.url, { method: item.method, body: item.body || undefined }))
   );
-  const succeeded = results.filter(r => r.status === 'fulfilled' && r.value.ok).length;
-  notifyClients({ type: 'SYNC_DONE', succeeded, total: queue.length });
+  const ok = results.filter(r => r.status === 'fulfilled' && r.value?.ok).length;
+  notifyClients({ type: 'SYNC_DONE', succeeded: ok, total: queue.length });
 }
 
 async function notifyClients(msg) {
