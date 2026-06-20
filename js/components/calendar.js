@@ -507,19 +507,20 @@ export class Calendar {
     this._renderAccordionLegend();
   }
 
-  // ── Drag selection (crear reserva) ────────────────
+  // ── Drag selection (crear reserva o bloqueo) ────────
   _setupDragSelection(grid) {
     let startUnit = null, startDate = null, endDate = null;
+    let isBlocking = false; // SHIFT = modo bloqueo
 
     const onMouseDown = (e) => {
-      // Si el click es sobre una barra, no iniciar drag de selección
       if (e.target.closest('.bar')) return;
       const cell = e.target.closest('.cal-cell');
       if (!cell) return;
+      isBlocking = e.shiftKey;
       startUnit  = cell.dataset.unitId;
       startDate  = cell.dataset.date;
-      this._drag = { active: true, unitId: startUnit, startDay: parseInt(cell.dataset.day), moved: false };
-      cell.classList.add('selecting');
+      this._drag = { active: true, unitId: startUnit, startDay: parseInt(cell.dataset.day), moved: false, blocking: isBlocking };
+      cell.classList.add(isBlocking ? 'blocking' : 'selecting');
       e.preventDefault();
     };
 
@@ -534,37 +535,51 @@ export class Calendar {
         const d1 = new Date(Math.min(new Date(startDate), new Date(endDate)));
         const d2 = new Date(Math.max(new Date(startDate), new Date(endDate)));
         const nights = Math.round((d2-d1)/86400000)+1;
-        this._ghost.textContent = `${d1.toLocaleDateString('es-AR',{day:'2-digit',month:'short'})} → ${d2.toLocaleDateString('es-AR',{day:'2-digit',month:'short'})} · ${nights} noche${nights!==1?'s':''}`;
-        this._ghost.style.left = `${e.clientX}px`;
-        this._ghost.style.top  = `${e.clientY}px`;
+        const modeLabel = isBlocking ? '🔒 Bloquear:' : '';
+        this._ghost.textContent = `${modeLabel} ${d1.toLocaleDateString('es-AR',{day:'2-digit',month:'short'})} → ${d2.toLocaleDateString('es-AR',{day:'2-digit',month:'short'})} · ${nights} día${nights!==1?'s':''}`;
+        this._ghost.style.left  = `${e.clientX}px`;
+        this._ghost.style.top   = `${e.clientY}px`;
+        this._ghost.style.borderLeft = isBlocking ? '3px solid #ef4444' : '3px solid var(--color-primary)';
         this._ghost.classList.remove('hidden');
       }
 
-      grid.querySelectorAll('.cal-cell.selecting').forEach(c => c.classList.remove('selecting'));
+      const selClass = isBlocking ? 'blocking' : 'selecting';
+      grid.querySelectorAll(`.cal-cell.selecting, .cal-cell.blocking`).forEach(c => c.classList.remove('selecting','blocking'));
       const sd = this._drag.startDay, ed = parseInt(cell.dataset.day);
       const [mn, mx] = [Math.min(sd,ed), Math.max(sd,ed)];
       grid.querySelectorAll(`.cal-cell[data-unit-id="${startUnit}"]`).forEach(c => {
-        if (parseInt(c.dataset.day) >= mn && parseInt(c.dataset.day) <= mx) c.classList.add('selecting');
+        if (parseInt(c.dataset.day) >= mn && parseInt(c.dataset.day) <= mx) c.classList.add(selClass);
       });
     };
 
-    const onMouseUp = () => {
+    const onMouseUp = async () => {
       if (!this._drag.active) return;
-      const hadDrag = this._drag.moved;
-      grid.querySelectorAll('.cal-cell.selecting').forEach(c => c.classList.remove('selecting'));
+      const hadDrag   = this._drag.moved;
+      const wasBlock  = this._drag.blocking;
+      grid.querySelectorAll('.cal-cell.selecting, .cal-cell.blocking').forEach(c => c.classList.remove('selecting','blocking'));
       this._drag.active = false;
       this._ghost.classList.add('hidden');
+      this._ghost.style.borderLeft = '';
 
       if (hadDrag && startDate && endDate) {
         const dates = [startDate, endDate].sort();
         const last  = new Date(dates[1]+'T12:00:00');
         last.setDate(last.getDate()+1);
-        this.bookingForm.open({ unitId: startUnit, checkIn: dates[0], checkOut: toISODate(last) });
+
+        if (wasBlock) {
+          // Modo bloqueo: pedir motivo y bloquear
+          const reason = prompt('Motivo del bloqueo (mantenimiento, uso propio, reparación...):', 'Mantenimiento');
+          if (reason !== null) {
+            await this._blockRange(startUnit, dates[0], toISODate(last), reason.trim() || 'Bloqueo');
+          }
+        } else {
+          // Modo reserva: abrir formulario
+          this.bookingForm.open({ unitId: startUnit, checkIn: dates[0], checkOut: toISODate(last) });
+        }
       }
-      startUnit = null; startDate = null; endDate = null;
+      startUnit = null; startDate = null; endDate = null; isBlocking = false;
     };
 
-    // Usar AbortController para cleanup limpio
     if (this._selectionAbort) this._selectionAbort.abort();
     this._selectionAbort = new AbortController();
     const sig = this._selectionAbort.signal;
@@ -572,6 +587,38 @@ export class Calendar {
     grid.addEventListener('mousedown', onMouseDown, { signal: sig });
     document.addEventListener('mousemove', onMouseMove, { signal: sig });
     document.addEventListener('mouseup', onMouseUp, { signal: sig });
+  }
+
+  // ── Bloquear rango de fechas ──────────────────────
+  async _blockRange(unitId, checkIn, checkOut, reason) {
+    const unit = this.ctx.units.find(u => u.id === unitId);
+    const unitName = unit?.name ?? 'unidad';
+
+    const nights = Math.round((new Date(checkOut) - new Date(checkIn)) / 86400000);
+    if (!confirm(`Bloquear ${unitName} del ${checkIn} al ${checkOut} (${nights} noche${nights!==1?'s':''})?\nMotivo: ${reason}`)) return;
+
+    try {
+      const { data: bk, error } = await this.db.from('bookings').insert({
+        hotel_id:     this.ctx.hotelId,
+        check_in:     checkIn,
+        check_out:    checkOut,
+        status:       'blocked',
+        is_blocked:   true,
+        block_reason: reason,
+        price_per_night: 0,
+        nights,
+      }).select('id').single();
+
+      if (error) throw error;
+      if (bk) await this.db.from('booking_units').insert({ booking_id: bk.id, unit_id: unitId });
+
+      showToast(`🔒 ${unitName} bloqueado ${checkIn} → ${checkOut}`, 'success');
+      cache.invalidate('bookings');
+      this.load();
+    } catch (err) {
+      console.error('[Calendar] blockRange error:', err);
+      showToast('Error al crear el bloqueo: ' + (err.message ?? err), 'error');
+    }
   }
 
   // ── Controles de navegación ───────────────────────

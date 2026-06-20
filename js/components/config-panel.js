@@ -94,66 +94,81 @@ export class ConfigPanel {
   }
 
   _renderPanel() {
-    // Unidades configurables
+    // ── Unidades ─────────────────────────────────────
     const unitsHTML = `
-      <div class="config-group">
-        <div class="config-group-header">
-          <span class="config-group-icon">🏠</span>
-          <h4>Departamentos / Unidades</h4>
-        </div>
-        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;padding:4px 0">
-          ${(this.ctx.units ?? []).map(u => `
-            <div style="display:flex;flex-direction:column;gap:6px;padding:10px 12px;
-              border:1px solid var(--color-border);border-radius:var(--r-lg);
-              background:var(--color-surface-2)">
-              <div style="display:flex;align-items:center;gap:8px">
-                <input type="color" class="unit-color-input" data-unit-id="${u.id}"
-                       value="${u.color || '#6366F1'}"
-                       style="width:28px;height:28px;border:none;border-radius:6px;
-                              cursor:pointer;padding:2px;background:none;flex-shrink:0">
-                <div style="min-width:0">
-                  <div style="font-size:.78rem;font-weight:700;color:var(--color-text);
-                    white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${u.name}</div>
-                  <div style="font-size:.65rem;color:var(--color-text-3)">#${u.sort_order ?? '?'} · ${u.max_guests ?? '?'} pers.</div>
+      <div class="config-group" id="cfg-acc-units">
+        <button class="config-acc-header open" data-acc="units">
+          <span><span class="config-acc-icon">🏠</span> Departamentos / Unidades</span>
+          <svg class="config-acc-chevron" style="transform:rotate(180deg)" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="14" height="14"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="config-acc-body open" id="cfg-body-units">
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px">
+            ${(this.ctx.units ?? []).map(u => `
+              <div style="padding:10px 12px;border:1px solid var(--color-border);
+                border-radius:var(--r-lg);background:var(--color-surface-2)">
+                <div style="display:flex;align-items:center;gap:8px">
+                  <input type="color" class="unit-color-input" data-unit-id="${u.id}"
+                         value="${u.color || '#6366F1'}"
+                         style="width:26px;height:26px;border:none;border-radius:5px;
+                                cursor:pointer;padding:2px;background:none;flex-shrink:0">
+                  <div style="min-width:0">
+                    <div style="font-size:.76rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${u.name}</div>
+                    <div style="font-size:.63rem;color:var(--color-text-3)">#${u.sort_order ?? '?'} · ${u.max_guests ?? '?'} pers.</div>
+                  </div>
                 </div>
-              </div>
-            </div>`).join('') || '<div style="padding:8px;color:var(--color-text-3);font-size:.8rem">Sin unidades configuradas.</div>'}
+              </div>`).join('') || '<div style="padding:8px;color:var(--color-text-3);font-size:.8rem">Sin unidades configuradas.</div>'}
+          </div>
         </div>
       </div>`;
 
-    const groupsHTML = CONFIG_SCHEMA.map(group => `
-      <div class="config-group">
-        <div class="config-group-header">
-          <span class="config-group-icon">${group.icon}</span>
-          <h4>${group.group}</h4>
-        </div>
-        <div class="config-fields">
-          ${group.fields.map(f => {
-            const val = this._getValue(f.key, f.default);
-            const inputAttrs = f.type === 'number'
-              ? `type="number" min="${f.min}" max="${f.max}" step="${f.step}" value="${val}"`
-              : `type="${f.type}" value="${val}"`;
-            return `
-              <div class="config-field">
-                <label for="cfg-${f.key}">${f.label}</label>
-                <input id="cfg-${f.key}" class="config-input" ${inputAttrs}
-                       data-key="${f.key}" data-default="${f.default}">
-                ${f.type === 'number' && f.max === 100 ? '<span class="cfg-unit">%</span>' : ''}
-              </div>`;
-          }).join('')}
-        </div>
-      </div>`).join('');
+    // ── Grupos con accordion ──────────────────────────
+    const OPEN_DEFAULT = new Set(['Comisiones por canal (%)', 'Operación', 'Reservas']);
+
+    const groupsHTML = CONFIG_SCHEMA.map((group, gi) => {
+      const accId  = `cfg-acc-${gi}`;
+      const bodyId = `cfg-body-${gi}`;
+      const isOpen = OPEN_DEFAULT.has(group.group);
+      return `
+        <div class="config-group" id="${accId}">
+          <button class="config-acc-header ${isOpen ? 'open' : ''}" data-acc="${gi}">
+            <span><span class="config-acc-icon">${group.icon}</span> ${group.group}</span>
+            <svg class="config-acc-chevron" style="transform:${isOpen ? 'rotate(180deg)' : ''}"
+                 viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="14" height="14">
+              <polyline points="6 9 12 15 18 9"/>
+            </svg>
+          </button>
+          <div class="config-acc-body ${isOpen ? 'open' : ''}" id="${bodyId}">
+            <div class="config-fields">
+              ${group.fields.map(f => {
+                const val = this._getValue(f.key, f.default);
+                const inputAttrs = f.type === 'number'
+                  ? `type="number" min="${f.min}" max="${f.max}" step="${f.step}" value="${val}"`
+                  : `type="${f.type}" value="${val}"`;
+                return `
+                  <div class="config-field">
+                    <label for="cfg-${f.key}">${f.label}</label>
+                    <div style="display:flex;align-items:center;gap:4px">
+                      <input id="cfg-${f.key}" class="config-input" ${inputAttrs}
+                             data-key="${f.key}" data-default="${f.default}">
+                      ${f.type === 'number' && f.max === 100 ? '<span class="cfg-unit">%</span>' : ''}
+                    </div>
+                  </div>`;
+              }).join('')}
+            </div>
+          </div>
+        </div>`;
+    }).join('');
 
     return `
-      <div class="section-header-row" style="margin-bottom:24px">
+      <div class="section-header-row" style="margin-bottom:20px">
         <div>
           <h3>Configuración del Sistema</h3>
-          <p style="font-size:.825rem;color:var(--color-text-3);margin-top:4px">
-            🔒 Solo administradores · Los cambios se guardan en la base de datos
+          <p style="font-size:.78rem;color:var(--color-text-3);margin-top:3px">
+            🔒 Solo administradores · Cambios se guardan en la base de datos
           </p>
         </div>
         <button class="btn btn-primary" id="btn-save-config">
-          Guardar configuración
+          💾 Guardar cambios
         </button>
       </div>
       <div class="config-groups">${groupsHTML}${unitsHTML}</div>
@@ -162,6 +177,18 @@ export class ConfigPanel {
 
   _bindSave(container) {
     container.querySelector('#btn-save-config')?.addEventListener('click', () => this._save(container));
+
+    // Accordion toggle
+    container.querySelectorAll('.config-acc-header').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const body    = btn.nextElementSibling;
+        const chevron = btn.querySelector('.config-acc-chevron');
+        const isOpen  = body.classList.contains('open');
+        body.classList.toggle('open', !isOpen);
+        btn.classList.toggle('open', !isOpen);
+        if (chevron) chevron.style.transform = isOpen ? '' : 'rotate(180deg)';
+      });
+    });
 
     // Live preview al cambiar color
     container.querySelectorAll('.unit-color-input').forEach(input => {

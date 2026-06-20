@@ -682,17 +682,26 @@ function setupDetailModal() {
 
   // Eliminar
   document.getElementById('detail-btn-delete')?.addEventListener('click', async () => {
-    if (!can('deleteBooking')) { showToast('🔒 Sin permiso', 'warning'); return; }
+    if (!can('deleteBooking')) { showToast('🔒 Sin permiso para eliminar', 'warning'); return; }
     if (isDemo()) { showDemoAction(null); return; }
     const id = bookingForm?._currentDetailBookingId;
-    if (!id) return;
-    if (!confirm('¿Eliminar esta reserva? Esta acción no se puede deshacer.')) return;
-    const { error } = await supabase.from('bookings').delete().eq('id', id);
-    if (error) { showToast('Error al eliminar', 'error'); return; }
-    await logAction('DELETE', 'booking', id, 'Reserva eliminada');
-    showToast('Reserva eliminada', 'success');
-    closeDetail();
-    document.dispatchEvent(new CustomEvent('booking:changed'));
+    if (!id) { showToast('No se pudo identificar la reserva', 'error'); return; }
+    if (!confirm('¿Eliminar esta reserva?\nEsta acción no se puede deshacer.')) return;
+
+    const btn = document.getElementById('detail-btn-delete');
+    if (btn) { btn.disabled = true; btn.textContent = 'Eliminando...'; }
+    try {
+      const { error } = await supabase.from('bookings').delete().eq('id', id);
+      if (error) throw error;
+      closeDetail();
+      showToast('Reserva eliminada ✓', 'success');
+      await logAction('DELETE', 'booking', id, 'Eliminada desde detalle');
+      document.dispatchEvent(new CustomEvent('booking:changed'));
+    } catch (err) {
+      console.error('[detail-delete] error:', err);
+      showToast('Error al eliminar: ' + (err.message ?? 'desconocido'), 'error');
+      if (btn) { btn.disabled = false; btn.textContent = 'Eliminar'; }
+    }
   });
 
   // Check-in
