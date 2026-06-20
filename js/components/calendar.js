@@ -898,12 +898,16 @@ export class Calendar {
           const guest = b.guests ? `${b.guests.first_name} ${b.guests.last_name}` : (b.block_reason ?? 'Bloqueo');
           const isStart = b.check_in  === iso;
           const isEnd   = new Date(b.check_out + 'T12:00:00').setDate(new Date(b.check_out + 'T12:00:00').getDate() - 1) === d.setHours(12,0,0,0);
+          // Días pasados: mantener el color pero oscurecer/desaturar
+          const barStyle = wcIsPast
+            ? `background:${color};filter:saturate(.45) brightness(.72);`
+            : `background:${color};`;
           cell.innerHTML = `
-            <div style="background:${color};border-radius:${isStart?'6px 0 0 6px':'0'};
+            <div style="${barStyle}border-radius:${isStart?'6px 0 0 6px':'0'};
               height:32px;display:flex;align-items:center;padding:0 6px;cursor:pointer"
               onclick="window._calInstance._openDetailById('${b.id}')">
               ${isStart ? `<span style="color:${textColor};font-size:.68rem;font-weight:700;
-                overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${guest}</span>` : ''}
+                overflow:hidden;text-overflow:ellipsis;white-space:nowrap;opacity:${wcIsPast?'.75':'1'}">${guest}</span>` : ''}
             </div>`;
           cell.addEventListener('mouseenter', (e) => this._showTooltip(b, e));
           cell.addEventListener('mousemove',  (e) => this._moveTooltip(e));
