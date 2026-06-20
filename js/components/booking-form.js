@@ -1090,7 +1090,7 @@ export class BookingForm {
         // Invocar async sin bloquear el UI
         this.db.functions?.invoke?.('booking-confirmation', {
           body: { bookingId: String(bookingId) },
-        }).catch((err: any) => console.warn('[BookingForm] confirmation email:', err));
+        }).catch((err) => console.warn('[BookingForm] confirmation email:', err));
       }
 
       // Invalidar cache para que el calendario traiga datos frescos
