@@ -5,7 +5,7 @@
 // • Indicador de estado real al cliente
 // ═══════════════════════════════════════════════════
 
-const V  = '8.0.0';
+const V  = '8.1.0';
 const CA = `mila-app-${V}`;
 const CS = `mila-static-${V}`;
 const OFFLINE_QUEUE_KEY = 'mila_offline_queue';
