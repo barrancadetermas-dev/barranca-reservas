@@ -10,7 +10,6 @@ import { can, isDemo } from '../auth/permissions.js';
 import { formatARS, toISODate, showToast, getUnitLabel, getUnitColor, getUnitChipHTML, SOURCE_CONFIG } from '../supabase-config.js';
 import { logAction } from '../services/audit-service.js';
 import { DateRangePicker } from './date-range-picker.js';
-import { getChannelCommission } from '../services/config-service.js';
 // PriceSuggester se carga lazy en _runPriceSuggestion()
 
 const PAYMENT_METHODS = [
@@ -25,17 +24,12 @@ const PAYMENT_METHODS = [
 ];
 
 // Canales de origen disponibles (en orden visual)
-const SOURCE_OPTIONS = [
-  { value: 'direct',   label: 'Directo',    color: '#64748B' },
-  { value: 'walkin',   label: 'Espontáneo', color: '#0891B2' },
-  { value: 'booking',  label: 'Booking',    color: '#1D4ED8' },
-  { value: 'airbnb',   label: 'Airbnb',     color: '#EA580C' },
-  { value: 'family',   label: 'Familia',    color: '#7C3AED' },
-  { value: 'company',  label: 'Empresa',    color: '#0F766E' },
-  { value: 'referral', label: 'Referido',   color: '#B45309' },
-  { value: 'despegar', label: 'Despegar',   color: '#059669' },
-  { value: 'expedia',  label: 'Expedia',    color: '#DC2626' },
-];
+// Generado dinámicamente desde SOURCE_CONFIG — única fuente de verdad
+const SOURCE_OPTIONS = Object.entries(SOURCE_CONFIG).map(([value, cfg]) => ({
+  value,
+  label: cfg.label,
+  color: cfg.dot ?? cfg.color ?? '#64748B',
+}));
 
 export class BookingForm {
   constructor(supabase, ctx) {
@@ -81,9 +75,6 @@ export class BookingForm {
       guestSearchTimer = setTimeout(() => this._searchGuests(e.target.value.trim()), 300);
     });
 
-    // ── Contadores de personas ───────────────────────
-    this._bindPaxCounters();
-
     // Navegación libre: clic en step indicator
     document.querySelectorAll('.step-item').forEach((el, i) => {
       el.style.cursor = 'pointer';
@@ -95,70 +86,18 @@ export class BookingForm {
   }
 
   // ── Renderizar selector de canal (compacto, sin emojis) ──
-  // ── Contadores de adultos / menores ──────────────
-  _bindPaxCounters() {
-    const updateTotal = () => {
-      const adults   = parseInt(document.getElementById('f-adults')?.value  ?? '1') || 1;
-      const children = parseInt(document.getElementById('f-children')?.value ?? '0') || 0;
-      const total    = adults + children;
-      const hiddenEl = document.getElementById('f-pax');
-      const totalNum = document.getElementById('pax-total-num');
-      const totalLbl = document.getElementById('pax-total-label');
-      if (hiddenEl)  hiddenEl.value      = total;
-      if (totalNum)  totalNum.textContent = total;
-      const lbl = document.getElementById('pax-total-display');
-      if (lbl) {
-        const span = lbl.querySelector('.pax-total-label');
-        if (span) span.textContent = total === 1 ? 'persona en total' : 'personas en total';
-      }
-    };
-
-    const makeCounter = (minusId, plusId, inputId, min = 0, max = 20) => {
-      const minus = document.getElementById(minusId);
-      const plus  = document.getElementById(plusId);
-      const input = document.getElementById(inputId);
-      if (!minus || !plus || !input) return;
-      minus.addEventListener('click', (e) => {
-        e.preventDefault();
-        const v = parseInt(input.value) || 0;
-        if (v > min) { input.value = v - 1; updateTotal(); }
-      });
-      plus.addEventListener('click', (e) => {
-        e.preventDefault();
-        const v = parseInt(input.value) || 0;
-        if (v < max) { input.value = v + 1; updateTotal(); }
-      });
-    };
-
-    makeCounter('adults-minus',   'adults-plus',   'f-adults',   1, 20);
-    makeCounter('children-minus', 'children-plus', 'f-children', 0, 20);
-    updateTotal();
-  }
-
   _renderSourceSelector(value = 'direct') {
     const container = document.getElementById('f-source-selector');
     if (!container) return;
 
-    // Si ya tiene src-chips del HTML estático, solo re-bind los eventos
-    const existing = container.querySelectorAll('.src-chip');
-    if (existing.length === 0) {
-      // Renderizar desde JS
-      container.innerHTML = SOURCE_OPTIONS.map(s => `
-        <label class="src-chip" data-source="${s.value}" style="--src-color:${s.color}">
-          <input type="radio" name="booking-source" value="${s.value}"
-                 ${s.value === value ? 'checked' : ''} style="display:none">
-          <span class="src-dot" style="background:${s.color}"></span>
-          <span class="src-label">${s.label}</span>
-        </label>`).join('');
-    }
-
-    // Bind eventos en todos los chips (HTML estático o generados)
-    const allChips = container.querySelectorAll('.src-chip[data-source]');
-    allChips.forEach(chip => {
-      // Limpiar eventos anteriores clonando el nodo
-      const fresh = chip.cloneNode(true);
-      chip.replaceWith(fresh);
-    });
+    // Siempre regenerar desde SOURCE_OPTIONS (única fuente de verdad)
+    container.innerHTML = SOURCE_OPTIONS.map(s => `
+      <label class="src-chip" data-source="${s.value}" style="--src-color:${s.color}">
+        <input type="radio" name="booking-source" value="${s.value}"
+               ${s.value === value ? 'checked' : ''} style="display:none">
+        <span class="src-dot" style="background:${s.color}"></span>
+        <span class="src-label">${s.label}</span>
+      </label>`).join('');
 
     container.querySelectorAll('.src-chip[data-source]').forEach(chip => {
       chip.addEventListener('click', (e) => {
@@ -191,7 +130,7 @@ export class BookingForm {
     document.getElementById('btn-step-next').textContent = 'Continuar →';
 
     if (prefill.unitId) {
-      this._selectedUnitIds.add(prefill.unitId);
+      this._selectedUnitIds.add(String(prefill.unitId));
       this._renderUnitSelector();
     }
     if (prefill.checkIn || prefill.checkOut) {
@@ -235,7 +174,7 @@ export class BookingForm {
       }
 
       // Unidades
-      this._selectedUnitIds = new Set((b.booking_units ?? []).map(bu => bu.unit_id));
+      this._selectedUnitIds = new Set((b.booking_units ?? []).map(bu => String(bu.unit_id)));
       this._renderUnitSelector();
 
       // Fechas
@@ -245,16 +184,6 @@ export class BookingForm {
       if (b.check_in)  document.getElementById('f-checkin').value  = b.check_in;
       if (b.check_out) document.getElementById('f-checkout').value = b.check_out;
 
-      // Pre-fill pax
-      const adultsEd   = document.getElementById('f-adults');
-      const childrenEd = document.getElementById('f-children');
-      if (adultsEd)   adultsEd.value   = b.adults   ?? b.pax ?? '1';
-      if (childrenEd) childrenEd.value = b.children ?? '0';
-      // Trigger total update
-      const paxEvt = document.getElementById('f-adults');
-      if (paxEvt) paxEvt.dispatchEvent(new Event('input'));
-      this._bindPaxCounters();
-
       const setVal = (id, v) => { const el = document.getElementById(id); if (el) el.value = v ?? ''; };
       setVal('f-price',       b.price_per_night ?? '');
       setVal('f-discount',    b.discount_pct    ?? 0);
@@ -263,6 +192,9 @@ export class BookingForm {
       setVal('f-deposit',     b.deposit_amount  ?? 0);
       setVal('f-notes',       b.notes           ?? '');
       document.getElementById('notes-count').textContent = (b.notes ?? '').length;
+      // Pax
+      if (document.getElementById('f-adults'))   document.getElementById('f-adults').value   = b.adults   ?? b.pax ?? 2;
+      if (document.getElementById('f-children')) document.getElementById('f-children').value = b.children ?? 0;
 
       this._updateBreakdown();
       this._updateBlockedDates();
@@ -312,18 +244,12 @@ export class BookingForm {
       </div>
       <div class="detail-dates">
         <div><span class="detail-label">Check-in</span><strong>${booking.check_in}</strong></div>
-        <div class="detail-nights">${booking.nights ?? '—'} noches</div>
+        <div class="detail-nights">
+          ${booking.nights ?? '—'} noches
+          ${(booking.pax || booking.adults) ? `<br><span style="font-size:.72rem;color:var(--color-text-3)">👥 ${booking.adults ?? booking.pax ?? 1} adulto${(booking.adults ?? 1) !== 1 ? 's' : ''}${booking.children ? ` + ${booking.children} menor${booking.children !== 1 ? 'es' : ''}` : ''}</span>` : ''}
+        </div>
         <div><span class="detail-label">Check-out</span><strong>${booking.check_out}</strong></div>
       </div>
-      ${(booking.pax || booking.adults) ? `
-      <div class="detail-pax">
-        <span class="detail-label">Personas</span>
-        <div class="detail-pax-badges">
-          ${booking.adults ? `<span class="pax-badge">🧑 ${booking.adults} adulto${booking.adults !== 1 ? 's' : ''}</span>` : ''}
-          ${booking.children ? `<span class="pax-badge">🧒 ${booking.children} menor${booking.children !== 1 ? 'es' : ''}</span>` : ''}
-          <span class="pax-badge pax-total">👥 ${booking.pax ?? ((booking.adults??0)+(booking.children??0))} en total</span>
-        </div>
-      </div>` : ''}
       <div class="detail-financials">
         <div><span class="detail-label">Total</span><strong>${formatARS(booking.total_amount)}</strong></div>
         <div><span class="detail-label">Abonado</span><strong class="text-success">${formatARS(booking.total_paid ?? 0)}</strong></div>
@@ -341,106 +267,7 @@ export class BookingForm {
       body.innerHTML += `<div class="detail-payments"><div class="detail-label" style="margin-bottom:6px">Pagos</div>${payHtml}</div>`;
     }
 
-    // ── Timeline de cambios (audit_log) ──────────────
-    this._loadBookingTimeline(booking.id, body);
-
     overlay.classList.remove('hidden');
-
-    // ── Bindear botones del footer del detalle ─────────
-    // Cerrar
-    document.getElementById('detail-close')?.addEventListener('click', () => {
-      overlay.classList.add('hidden');
-    });
-    // Editar
-    document.getElementById('detail-edit')?.addEventListener('click', () => {
-      overlay.classList.add('hidden');
-      this.openEdit(booking.id);
-    });
-    // WhatsApp voucher (al huésped)
-    document.getElementById('detail-whatsapp')?.addEventListener('click', () => {
-      import('../services/whatsapp-service.js').then(mod => {
-        mod.openWhatsAppVoucher(booking, this.ctx);
-      });
-    });
-    // Mensaje para la encargada
-    document.getElementById('detail-manager-msg')?.addEventListener('click', () => {
-      import('../services/whatsapp-service.js').then(mod => {
-        mod.openManagerTemplate(booking, this.ctx);
-      });
-    });
-    // Copiar link de reserva al portapapeles
-    document.getElementById('detail-copy-link')?.addEventListener('click', () => {
-      const url = `${window.location.origin}${window.location.pathname}?booking=${booking.id}`;
-      navigator.clipboard?.writeText(url).then(() => showToast('Link copiado ✓', 'success'));
-    });
-    // Clic fuera del modal → cerrar
-    overlay.onclick = (e) => { if (e.target === overlay) overlay.classList.add('hidden'); };
-  }
-
-  async _loadBookingTimeline(bookingId, body) {
-    try {
-      const { data: logs } = await this.db
-        .from('audit_log')
-        .select('action, description, user_email, created_at, meta')
-        .eq('hotel_id', this.ctx.hotelId)
-        .eq('entity_type', 'booking')
-        .eq('entity_id',   bookingId)
-        .order('created_at', { ascending: true })
-        .limit(20);
-
-      if (!logs?.length) return;
-
-      const COLORS = {
-        booking_created: '#22c55e',
-        booking_updated: '#3b82f6',
-        payment_added:   '#22c55e',
-        payment_deleted: '#ef4444',
-        checkout:        '#8b5cf6',
-        checkin:         '#0ea5e9',
-        booking_cancelled: '#ef4444',
-      };
-
-      const LABELS = {
-        booking_created:   'Reserva creada',
-        booking_updated:   'Reserva editada',
-        payment_added:     'Pago registrado',
-        payment_deleted:   'Pago eliminado',
-        checkout:          'Check-out',
-        checkin:           'Check-in',
-        booking_cancelled: 'Cancelada',
-      };
-
-      const timelineHTML = `
-        <div class="detail-timeline" style="margin-top:16px">
-          <div class="detail-label" style="margin-bottom:8px">Historial de cambios</div>
-          <div class="tl-list">
-            ${logs.map(log => {
-              const color = COLORS[log.action] ?? '#64748b';
-              const label = LABELS[log.action] ?? log.action;
-              const dt    = log.created_at
-                ? new Date(log.created_at).toLocaleString('es-AR', {
-                    day:'2-digit',month:'2-digit',year:'2-digit',
-                    hour:'2-digit',minute:'2-digit'
-                  })
-                : '—';
-              const user = log.user_email?.split('@')[0] ?? 'Sistema';
-              return `
-                <div class="tl-row">
-                  <div class="tl-dot-wrap">
-                    <div class="tl-dot" style="background:${color}"></div>
-                  </div>
-                  <div class="tl-content">
-                    <div class="tl-action">${label}</div>
-                    <div class="tl-meta">${user} · ${dt}</div>
-                    ${log.description ? `<div class="tl-desc">${log.description}</div>` : ''}
-                  </div>
-                </div>`;
-            }).join('')}
-          </div>
-        </div>`;
-
-      body?.insertAdjacentHTML('beforeend', timelineHTML);
-    } catch { /* audit_log opcional */ }
   }
 
   close() {
@@ -457,21 +284,6 @@ export class BookingForm {
     this._payRowCount     = 0;
     this._cachedTotal     = 0;
 
-    // Reset pax counters
-    const adultsEl   = document.getElementById('f-adults');
-    const childrenEl = document.getElementById('f-children');
-    const paxEl      = document.getElementById('f-pax');
-    const paxNum     = document.getElementById('pax-total-num');
-    const paxLabel   = document.getElementById('pax-total-display');
-    if (adultsEl)   adultsEl.value   = '1';
-    if (childrenEl) childrenEl.value = '0';
-    if (paxEl)      paxEl.value      = '1';
-    if (paxNum)     paxNum.textContent = '1';
-    if (paxLabel) {
-      const s = paxLabel.querySelector('.pax-total-label');
-      if (s) s.textContent = 'persona en total';
-    }
-
     ['f-firstname','f-lastname','f-dni','f-phone','f-email','f-notes',
      'f-price','f-discount','f-surcharge','f-free-nights','f-deposit',
      'f-checkin','f-checkout'].forEach(id => {
@@ -482,6 +294,11 @@ export class BookingForm {
 
     document.getElementById('notes-count').textContent  = '0';
     document.getElementById('guest-search').value       = '';
+    // Reset pax
+    const adultsEl = document.getElementById('f-adults');
+    if (adultsEl) adultsEl.value = '2';
+    const childEl = document.getElementById('f-children');
+    if (childEl) childEl.value = '0';
     document.getElementById('guest-results')?.classList.add('hidden');
     const badAlert = document.getElementById('bad-exp-booking-alert-container');
     if (badAlert) badAlert.innerHTML = '';
@@ -518,7 +335,7 @@ export class BookingForm {
       return;
     }
     container.innerHTML = this.ctx.units.map(u => {
-      const selected = this._selectedUnitIds.has(u.id);
+      const selected = this._selectedUnitIds.has(String(u.id));
       const color    = u.color ?? '#6366f1';
       return `
         <label class="unit-option ${selected ? 'selected' : ''}"
@@ -534,7 +351,7 @@ export class BookingForm {
     container.querySelectorAll('.unit-option[data-unit-id]').forEach(chip => {
       chip.addEventListener('click', (e) => {
         e.preventDefault();
-        const uid = chip.dataset.unitId;
+        const uid = String(chip.dataset.unitId);
         const cb  = chip.querySelector('input[type="checkbox"]');
         if (this._selectedUnitIds.has(uid)) {
           this._selectedUnitIds.delete(uid);
@@ -548,57 +365,79 @@ export class BookingForm {
         this._updateBlockedDates();
         this._updateBreakdown();
         this._triggerPriceSuggestion();
-        // Pre-cargar precio con ADR del mes actual si el campo está vacío
-        if (!document.getElementById('f-price')?.value) {
-          this._prefillPrice([...this._selectedUnitIds]);
-        }
       });
     });
+
+    // Render pax selector si hay contenedor
+    this._renderPaxSelector();
+  }
+
+  // ── Selector de cantidad de personas ─────────────
+  _renderPaxSelector() {
+    let paxContainer = document.getElementById('pax-selector-container');
+    if (!paxContainer) {
+      // Inyectarlo después del selector de unidades
+      const unitContainer = document.getElementById('units-selector');
+      if (!unitContainer?.parentElement) return;
+      paxContainer = document.createElement('div');
+      paxContainer.id = 'pax-selector-container';
+      paxContainer.style.cssText = 'margin-top:16px';
+      unitContainer.parentElement.insertBefore(paxContainer, unitContainer.nextSibling);
+    }
+
+    paxContainer.innerHTML = `
+      <div class="form-label" style="font-size:.78rem;font-weight:700;text-transform:uppercase;
+           letter-spacing:.06em;color:var(--color-text-3);margin-bottom:8px">
+        Cantidad de personas
+      </div>
+      <div class="pax-selector">
+        <!-- Adultos -->
+        <div class="pax-field">
+          <span class="pax-icon">🧑</span>
+          <div class="pax-info">
+            <span class="pax-label">Adultos</span>
+            <span class="pax-hint">Mayores de 12 años</span>
+          </div>
+          <div class="pax-counter">
+            <button type="button" class="pax-btn" id="adults-minus">−</button>
+            <input type="number" id="f-adults" class="pax-input" value="2" min="1" max="20" readonly>
+            <button type="button" class="pax-btn" id="adults-plus">+</button>
+          </div>
+        </div>
+        <!-- Menores -->
+        <div class="pax-field">
+          <span class="pax-icon">🧒</span>
+          <div class="pax-info">
+            <span class="pax-label">Menores</span>
+            <span class="pax-hint">De 0 a 12 años (opcional)</span>
+          </div>
+          <div class="pax-counter">
+            <button type="button" class="pax-btn" id="children-minus">−</button>
+            <input type="number" id="f-children" class="pax-input" value="0" min="0" max="10" readonly>
+            <button type="button" class="pax-btn" id="children-plus">+</button>
+          </div>
+        </div>
+      </div>`;
+
+    // Bind steppers
+    const bind = (btnId, inputId, delta) => {
+      document.getElementById(btnId)?.addEventListener('click', (e) => {
+        e.preventDefault();
+        const inp = document.getElementById(inputId);
+        if (!inp) return;
+        const min = parseInt(inp.min ?? '0');
+        const max = parseInt(inp.max ?? '99');
+        const cur = parseInt(inp.value ?? '0');
+        inp.value = Math.min(max, Math.max(min, cur + delta));
+      });
+    };
+    bind('adults-minus',   'f-adults',   -1);
+    bind('adults-plus',    'f-adults',   +1);
+    bind('children-minus', 'f-children', -1);
+    bind('children-plus',  'f-children', +1);
   }
 
   // ── Sugeridor de precio dinámico ─────────────────
-  async _prefillPrice(unitIds) {
-    if (!unitIds.length) return;
-    const priceEl = document.getElementById('f-price');
-    if (!priceEl || priceEl.value) return; // ya tiene precio, no sobreescribir
-    try {
-      const today    = new Date();
-      const month    = today.getMonth();
-      const year     = today.getFullYear();
-      const firstDay = `${year}-${String(month+1).padStart(2,'0')}-01`;
-      const { data } = await this.db
-        .from('bookings')
-        .select('price_per_night, booking_units(unit_id)')
-        .eq('hotel_id', this.ctx.hotelId)
-        .not('status','in','(cancelled,blocked)')
-        .gte('check_in', firstDay)
-        .gt('price_per_night', 0);
-
-      const relevant = (data ?? []).filter(b =>
-        (b.booking_units ?? []).some(bu => unitIds.includes(bu.unit_id)) &&
-        b.price_per_night > 0
-      );
-
-      if (!relevant.length) return;
-
-      const adr = Math.round(
-        relevant.reduce((s, b) => s + b.price_per_night, 0) / relevant.length / 1000
-      ) * 1000; // redondear al millar
-
-      if (adr > 0) {
-        priceEl.value = adr;
-        priceEl.dispatchEvent(new Event('input'));
-        // Highlight sutil para avisar que fue pre-cargado
-        priceEl.style.borderColor = '#22c55e';
-        priceEl.style.boxShadow   = '0 0 0 3px rgba(34,197,94,.15)';
-        setTimeout(() => {
-          priceEl.style.borderColor = '';
-          priceEl.style.boxShadow   = '';
-        }, 2500);
-      }
-    } catch (_) {}
-  }
-
   _triggerPriceSuggestion() {
     clearTimeout(this._suggestTimer);
     this._suggestTimer = setTimeout(() => this._runPriceSuggestion(), 500);
@@ -723,12 +562,12 @@ export class BookingForm {
   }
 
   // ── Validación completa — solo al guardar ─────────
-  async _validateAll() {
-    const fn    = document.getElementById('f-firstname')?.value.trim() ?? '';
-    const ln    = document.getElementById('f-lastname')?.value.trim()  ?? '';
-    const ci    = document.getElementById('f-checkin')?.value ?? '';
-    const co    = document.getElementById('f-checkout')?.value ?? '';
-    const price = parseFloat(document.getElementById('f-price')?.value ?? '0');
+  _validateAll() {
+    const fn    = document.getElementById('f-firstname').value.trim();
+    const ln    = document.getElementById('f-lastname').value.trim();
+    const ci    = document.getElementById('f-checkin').value;
+    const co    = document.getElementById('f-checkout').value;
+    const price = parseFloat(document.getElementById('f-price').value);
 
     if (!fn || !ln) {
       showToast('Ingresá nombre y apellido del huésped', 'warning');
@@ -750,57 +589,10 @@ export class BookingForm {
       showToast('Ingresá el precio por noche', 'warning');
       this._goToStep(3); return false;
     }
-
-    // ── Verificar solapamiento de reservas (await correcto) ──────
-    try {
-      const overlapMsg = await this._checkOverlap(ci, co, [...this._selectedUnitIds]);
-      if (overlapMsg) {
-        showToast(overlapMsg, 'error');
-        this._goToStep(2); return false;
-      }
-    } catch { /* no bloquear si falla la query de overlap */ }
-
     return true;
   }
 
-  // ── Verificar reservas superpuestas ──────────────
-  async _checkOverlap(checkIn, checkOut, unitIds) {
-    if (!unitIds.length) return null;
-    try {
-      const { data } = await this.db
-        .from('bookings')
-        .select('id, check_in, check_out, guests!bookings_guest_id_fkey(first_name,last_name), booking_units(unit_id,units(name,sort_order))')
-        .eq('hotel_id', this.ctx.hotelId)
-        .neq('status', 'cancelled')
-        .not('status', 'eq', 'blocked')
-        .lt('check_in', checkOut)
-        .gt('check_out', checkIn);
-
-      if (!data?.length) return null;
-
-      // Filtrar solo las que comparten unidad con esta reserva
-      const conflicts = data.filter(b => {
-        if (this._editingId && b.id === this._editingId) return false; // permitir editar la misma
-        const bUnitIds = (b.booking_units ?? []).map(bu => bu.unit_id);
-        return bUnitIds.some(uid => unitIds.includes(uid));
-      });
-
-      if (!conflicts.length) return null;
-
-      const first = conflicts[0];
-      const unit  = (first.booking_units ?? [])[0]?.units;
-      const guest = first.guests
-        ? `${first.guests.first_name} ${first.guests.last_name}`
-        : 'Bloqueo';
-      const unitName = unit ? `${unit.name}` : 'una unidad';
-
-      return `⚠️ ${unitName} ya está reservada del ${first.check_in} al ${first.check_out} (${guest})`;
-    } catch {
-      return null; // Si falla la query, no bloquear el guardado
-    }
-  }
-
-  // ── Precio breakdown con comisión de canal ──────────
+  // ── Precio breakdown ──────────────────────────────
   _updateBreakdown() {
     const ci    = document.getElementById('f-checkin').value;
     const co    = document.getElementById('f-checkout').value;
@@ -809,18 +601,9 @@ export class BookingForm {
     const surch = parseFloat(document.getElementById('f-surcharge').value) || 0;
     const freeN = parseInt(document.getElementById('f-free-nights').value) || 0;
 
-    // Canal de origen actualmente seleccionado
-    const source = document.querySelector('input[name="booking-source"]:checked')?.value ?? 'direct';
-
-    const set     = (id, text) => { const el = document.getElementById(id); if (el) el.textContent = text; };
-    const show    = (id, show) => document.getElementById(id)?.style.setProperty('display', show ? '' : 'none');
-
     if (!ci || !co || !price) {
-      ['pb-nights','pb-subtotal','pb-discount','pb-surcharge','pb-total',
-       'pb-free-nights','pb-commission','pb-net']
+      ['pb-nights','pb-subtotal','pb-discount','pb-surcharge','pb-total','pb-free-nights']
         .forEach(id => { const el = document.getElementById(id); if (el) el.textContent = '—'; });
-      show('pbr-commission', false);
-      show('pbr-net', false);
       return;
     }
 
@@ -830,47 +613,19 @@ export class BookingForm {
     const discAmt  = subtotal * (disc / 100);
     const total    = Math.max(0, subtotal - discAmt + surch);
 
-    // Comisión del canal (desde AppContext.config vía config-service)
-    const commPct  = getChannelCommission(source);   // 0 si no hay comisión
-    const commAmt  = total * (commPct / 100);
-    const netAmt   = total - commAmt;
-
-    // Nombres de canales con comisión
-    const CHANNEL_NAMES = {
-      booking:'Booking.com', airbnb:'Airbnb',
-      despegar:'Despegar', expedia:'Expedia',
-    };
-
-    set('pb-nights',      `${nights} noche${nights !== 1 ? 's' : ''}`);
-    set('pb-subtotal',    formatARS(subtotal));
+    const set = (id, text) => { const el = document.getElementById(id); if (el) el.textContent = text; };
+    set('pb-nights',     `${nights} noche${nights !== 1 ? 's' : ''}`);
+    set('pb-subtotal',   formatARS(subtotal));
     set('pb-free-nights', freeN > 0 ? `−${formatARS(price * freeN)}` : '—');
-    set('pb-discount',    disc  > 0 ? `−${formatARS(discAmt)} (${disc}%)` : '—');
-    set('pb-surcharge',   surch > 0 ? `+${formatARS(surch)}` : '—');
-    set('pb-total',       formatARS(total));
+    set('pb-discount',   disc > 0 ? `−${formatARS(discAmt)} (${disc}%)` : '—');
+    set('pb-surcharge',  surch > 0 ? `+${formatARS(surch)}` : '—');
+    set('pb-total',      formatARS(total));
 
-    show('pbr-free-nights', freeN > 0);
-    show('pbr-discount',    disc  > 0);
-    show('pbr-surcharge',   surch > 0);
+    document.getElementById('pbr-free-nights')?.style.setProperty('display', freeN > 0 ? '' : 'none');
+    document.getElementById('pbr-discount')?.style.setProperty('display',    disc > 0 ? '' : 'none');
+    document.getElementById('pbr-surcharge')?.style.setProperty('display',   surch > 0 ? '' : 'none');
 
-    // Mostrar comisión solo si el canal la tiene
-    if (commPct > 0) {
-      const label = document.getElementById('pb-commission-label');
-      if (label) label.textContent = `Comisión ${CHANNEL_NAMES[source] ?? source} (${commPct}%)`;
-      set('pb-commission', `−${formatARS(commAmt)}`);
-      set('pb-net', formatARS(netAmt));
-      show('pbr-commission', true);
-      show('pbr-net', true);
-    } else {
-      show('pbr-commission', false);
-      show('pbr-net', false);
-    }
-
-    // Guardar para submit
-    this._cachedTotal      = total;
-    this._cachedCommPct    = commPct;
-    this._cachedCommAmt    = commAmt;
-    this._cachedNetAmt     = netAmt;
-
+    this._cachedTotal = total;
     this._updatePaymentSummary();
   }
 
@@ -944,17 +699,8 @@ export class BookingForm {
   // ── Búsqueda de huéspedes ─────────────────────────
   async _searchGuests(q) {
     const container = document.getElementById('guest-results');
-    const searchEl  = document.getElementById('guest-search');
     if (!container) return;
     if (q.length < 2) { container.classList.add('hidden'); return; }
-
-    // Typing indicator
-    const existingSpinner = searchEl?.parentElement?.querySelector('.guest-searching');
-    if (!existingSpinner && searchEl) {
-      const spinner = document.createElement('div');
-      spinner.className = 'guest-searching';
-      searchEl.parentElement?.appendChild(spinner);
-    }
 
     const { data } = await this.db
       .from('guests')
@@ -964,9 +710,6 @@ export class BookingForm {
       .limit(6);
 
     if (!data?.length) { container.classList.add('hidden'); return; }
-
-    // Remove spinner
-    searchEl?.parentElement?.querySelector('.guest-searching')?.remove();
 
     container.innerHTML = data.map(g => {
       const isBad = g.bad_experience || (g.tags ?? []).includes('no_recomendar');
@@ -1009,16 +752,15 @@ export class BookingForm {
   // ── Submit ────────────────────────────────────────
   async _submit() {
     // Validación completa al guardar
-    if (!await this._validateAll()) return;
+    if (!this._validateAll()) return;
 
     const btn = document.getElementById('btn-step-next');
     if (btn) { btn.disabled = true; btn.textContent = 'Guardando...'; }
 
-    // Safety timeout: desbloquear botón si algo tarda más de 30 segundos
-    let safetyTimer = setTimeout(() => {
-      console.error('[MILA] Submit timeout — posible problema de red o DB');
+    // Safety: si algo cuelga > 30s, re-habilitar el botón
+    let _safetyTimer = setTimeout(() => {
       if (btn) { btn.disabled = false; btn.textContent = this._editingId ? 'Guardar cambios' : 'Confirmar reserva'; }
-      showToast('La operación tardó demasiado. Verificá tu conexión a internet.', 'error');
+      showToast('La operación tardó demasiado. Verificá tu conexión.', 'error');
     }, 30000);
 
     try {
@@ -1060,22 +802,17 @@ export class BookingForm {
         guestId = newGuest.id;
       }
 
-      const adults   = parseInt(document.getElementById('f-adults')?.value   ?? '1') || 1;
-      const children = parseInt(document.getElementById('f-children')?.value ?? '0') || 0;
-      const pax      = adults + children;
-
-      // ── Payload CORE (columnas que siempre existen) ──────────
+      // ── Columnas CORE (siempre existen en la DB) ──────────────
       const corePayload = {
         hotel_id:         this.ctx.hotelId,
         guest_id:         guestId,
         check_in:         ci,
         check_out:        co,
+        // nights: GENERATED ALWAYS AS en PostgreSQL — nunca insertar
         source,
         price_per_night:  price,
         discount_pct:     disc,
         surcharge_amount: surch,
-        free_nights:      freeN,
-        deposit_amount:   dep,
         total_amount:     total,
         total_paid:       paid,
         balance,
@@ -1083,15 +820,20 @@ export class BookingForm {
         status:           balance <= 0 ? 'paid' : paid > 0 ? 'partial' : 'pending',
       };
 
-      // Intentar agregar nights (puede ser columna generada — ignorar si falla)
-      const payloadWithNights = { ...corePayload, nights };
+      // ── Columnas opcionales — se agregan en UPDATE separado ──────
+      const pax      = (parseInt(document.getElementById('f-adults')?.value) || 1)
+                     + (parseInt(document.getElementById('f-children')?.value) || 0);
+      const adults   = parseInt(document.getElementById('f-adults')?.value)   || 1;
+      const children = parseInt(document.getElementById('f-children')?.value) || 0;
 
       let bookingId = this._editingId;
       if (bookingId) {
-        // UPDATE
-        let { error: upErr } = await this.db.from('bookings').update(payloadWithNights).eq('id', bookingId);
-        if (upErr?.message?.includes('nights') || upErr?.message?.includes('generated')) {
-          // nights es columna generada — reintentar sin ella
+        // UPDATE — intentar con free_nights primero
+        let { error: upErr } = await this.db.from('bookings').update({
+          ...corePayload, free_nights: freeN
+        }).eq('id', bookingId);
+        if (upErr?.message?.includes('free_nights')) {
+          // Columna no existe aún → guardar sin ella
           const { error: upErr2 } = await this.db.from('bookings').update(corePayload).eq('id', bookingId);
           if (upErr2) throw new Error('No fue posible actualizar la reserva: ' + upErr2.message);
         } else if (upErr) {
@@ -1100,11 +842,12 @@ export class BookingForm {
         await this.db.from('booking_units').delete().eq('booking_id', bookingId);
         await this.db.from('payments').delete().eq('booking_id', bookingId);
       } else {
-        // INSERT — intentar con nights primero
+        // INSERT — intentar con free_nights primero
         let { data: newB, error: insErr } = await this.db
-          .from('bookings').insert(payloadWithNights).select('id').single();
-        if (insErr?.message?.includes('nights') || insErr?.message?.includes('generated')) {
-          // nights es columna generada — reintentar sin ella
+          .from('bookings').insert({ ...corePayload, free_nights: freeN })
+          .select('id').single();
+        if (insErr?.message?.includes('free_nights') || insErr?.message?.includes('does not exist')) {
+          // Columna no existe → reintentar sin ella
           const { data: newB2, error: insErr2 } = await this.db
             .from('bookings').insert(corePayload).select('id').single();
           if (insErr2) throw new Error('No fue posible crear la reserva: ' + insErr2.message);
@@ -1115,16 +858,10 @@ export class BookingForm {
         bookingId = newB.id;
       }
 
-      // Intentar guardar columnas opcionales (pax, comisión) si existen en la DB
+      // ── Columnas opcionales (pax, comisiones) — silencioso si no existen ──
       try {
-        const extras = {
-          pax, adults, children,
-          commission_pct:    this._cachedCommPct  ?? 0,
-          commission_amount: this._cachedCommAmt  ?? 0,
-          net_amount:        this._cachedNetAmt   ?? total,
-        };
-        await this.db.from('bookings').update(extras).eq('id', bookingId);
-      } catch { /* columnas opcionales — no fallar si no existen */ }
+        await this.db.from('bookings').update({ pax, adults, children }).eq('id', bookingId);
+      } catch { /* columnas opcionales */ }
 
       // Insertar unidades
       const unitRows = [...this._selectedUnitIds].map(uid => ({
@@ -1151,7 +888,9 @@ export class BookingForm {
       });
       if (payRows.length) await this.db.from('payments').insert(payRows);
 
-      await logAction(this.db, this.ctx, bookingId ? 'booking_updated' : 'booking_created', { bookingId });
+      const _logVerb = this._editingId ? 'UPDATE' : 'CREATE';
+      const _logSummary = this._editingId ? 'Reserva actualizada' : 'Reserva creada';
+      await logAction(_logVerb, 'booking', String(bookingId), _logSummary);
 
       showToast(this._editingId ? 'Reserva actualizada ✓' : 'Reserva creada ✓', 'success');
 
@@ -1172,7 +911,7 @@ export class BookingForm {
         : err.message ?? String(err);
       showToast(`No fue posible guardar la reserva. ${userMsg}`, 'error');
     } finally {
-      clearTimeout(safetyTimer);
+      clearTimeout(_safetyTimer);
       if (btn) {
         btn.disabled = false;
         btn.textContent = this._editingId ? 'Guardar cambios' : 'Confirmar reserva';

@@ -222,7 +222,15 @@ async function initApp(user) {
     // ── Nav: mostrar/ocultar secciones por rol ──
     setupNavByRole();
 
-    await navigateTo('dashboard');
+    // Restaurar última sección visitada (persiste entre recargas)
+    let _startSection = 'dashboard';
+    try {
+      const _saved = localStorage.getItem('mila_last_section');
+      if (_saved && ['dashboard','calendar','bookings','statistics','guests','reminders','operations','audit','config'].includes(_saved)) {
+        _startSection = _saved;
+      }
+    } catch {}
+    await navigateTo(_startSection);
 
     loadDollarBadge();
     updateOperationsBadge();
@@ -243,9 +251,6 @@ async function initApp(user) {
     setupExpenseModal();
     setupGuestProfileModal();
     setupWhatsAppModal();
-    setupCalculator();
-    setupNotifications();
-    setupAvailabilityGrid();
     setupCancelBookingModal();
     setupCheckInOutModal();
 
@@ -685,6 +690,18 @@ async function loadDollarBadge() {
 // REALTIME + PULSE
 // ══════════════════════════════════════════════════
 let _realtimeChannel = null;
+// Debounced reload — evita múltiples recargas simultáneas
+let _calLoadTimer = null;
+function debouncedCalendarLoad(delay = 400) {
+  clearTimeout(_calLoadTimer);
+  _calLoadTimer = setTimeout(() => {
+    if (currentSection === 'calendar')    calendar?.load();
+    if (currentSection === 'dashboard')   dashboard?.load();
+    if (currentSection === 'bookings')    bookingList?.load();
+    if (currentSection === 'statistics')  statistics?.loadUnits?.();
+  }, delay);
+}
+
 function setupRealtime() {
   if (!AppContext.hotelId || isDemo()) return;
   // Evitar doble subscribe si initApp corre más de una vez
@@ -1108,335 +1125,3 @@ function setupConnectivityIndicator() {
   }
   boot();
 })();
-
-
-// ══════════════════════════════════════════════════
-// CALCULADORA DE ESTADÍA
-// ══════════════════════════════════════════════════
-function setupCalculator() {
-  const overlay = document.getElementById('overlay-calculator');
-  const btn     = document.getElementById('btn-calculator');
-  const closeBtn= document.getElementById('calc-close');
-  if (!overlay || !btn) return;
-
-  const open  = () => { overlay.classList.remove('hidden'); calcRecalc(); };
-  const close = () => overlay.classList.add('hidden');
-
-  btn.addEventListener('click',  (e) => { e.stopPropagation(); overlay.classList.contains('hidden') ? open() : close(); });
-  closeBtn?.addEventListener('click', close);
-  document.addEventListener('click', (e) => {
-    if (!overlay.classList.contains('hidden') && !overlay.contains(e.target) && e.target !== btn) close();
-  });
-
-  // Stepper noches
-  document.getElementById('calc-nights-minus')?.addEventListener('click', () => {
-    const el = document.getElementById('calc-nights');
-    if (el && parseInt(el.value) > 1) { el.value = parseInt(el.value) - 1; calcRecalc(); }
-  });
-  document.getElementById('calc-nights-plus')?.addEventListener('click', () => {
-    const el = document.getElementById('calc-nights');
-    if (el) { el.value = parseInt(el.value) + 1; calcRecalc(); }
-  });
-
-  // Precio en USD
-  document.getElementById('calc-use-dollar')?.addEventListener('click', () => {
-    const blueSell = parseFloat(document.getElementById('dol-bl-sell')?.textContent?.replace(/[$.,]/g,'').replace(',','.')) || 0;
-    if (!blueSell) { showToast('Dólar no disponible todavía', 'warning'); return; }
-    const priceEl = document.getElementById('calc-price');
-    if (priceEl) {
-      const usd = parseFloat(prompt('Precio en USD:', '100') || '0');
-      if (usd > 0) { priceEl.value = Math.round(usd * blueSell); calcRecalc(); }
-    }
-  });
-
-  // Descuento range
-  document.getElementById('calc-discount-range')?.addEventListener('input', (e) => {
-    const label = document.getElementById('calc-discount-label');
-    if (label) label.textContent = e.target.value + '%';
-    calcRecalc();
-  });
-
-  // Canal
-  document.getElementById('calc-channel')?.addEventListener('change', calcRecalc);
-  document.getElementById('calc-price')?.addEventListener('input', calcRecalc);
-
-  // Crear reserva
-  document.getElementById('calc-create-booking')?.addEventListener('click', () => {
-    const price   = parseFloat(document.getElementById('calc-price')?.value) || 0;
-    const nights  = parseInt(document.getElementById('calc-nights')?.value)  || 1;
-    const channel = document.getElementById('calc-channel')?.value?.split(':')[0] ?? 'direct';
-    close();
-    bookingForm?.open({ prefillPrice: price, prefillSource: channel, prefillNights: nights });
-  });
-
-  calcRecalc();
-}
-
-function calcRecalc() {
-  const price    = parseFloat(document.getElementById('calc-price')?.value) || 0;
-  const nights   = parseInt(document.getElementById('calc-nights')?.value)  || 1;
-  const discPct  = parseInt(document.getElementById('calc-discount-range')?.value) || 0;
-  const chanVal  = document.getElementById('calc-channel')?.value ?? 'direct:0';
-  const commPct  = parseFloat(chanVal.split(':')[1] ?? '0');
-
-  const subtotal = price * nights;
-  const discAmt  = subtotal * (discPct / 100);
-  const afterDisc= subtotal - discAmt;
-  const commAmt  = afterDisc * (commPct / 100);
-  const neto     = afterDisc - commAmt;
-
-  const fmt = n => '$' + Math.round(n).toLocaleString('es-AR');
-
-  const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
-  const show = (id, visible) => { const el = document.getElementById(id); if (el) el.style.display = visible ? '' : 'none'; };
-
-  set('cr-subtotal', fmt(subtotal));
-  set('cr-total',    fmt(afterDisc));
-  set('cr-net',      fmt(neto));
-
-  show('cr-disc-row', discPct > 0);
-  if (discPct > 0) {
-    set('cr-disc-label', `Descuento ${discPct}%`);
-    set('cr-disc', `−${fmt(discAmt)}`);
-  }
-
-  show('cr-comm-row', commPct > 0);
-  if (commPct > 0) {
-    set('cr-comm-label', `Comisión ${commPct}%`);
-    set('cr-comm', `−${fmt(commAmt)}`);
-  }
-  show('cr-net-row', commPct > 0);
-
-  // USD
-  try {
-    const blueText = document.getElementById('dol-bl-sell')?.textContent ?? '';
-    const blueSell = parseFloat(blueText.replace(/[^0-9.,]/g,'').replace(',','.').replace('.','')) || 0;
-    if (blueSell > 100) {
-      set('cr-usd', 'USD ' + (afterDisc / blueSell).toFixed(0));
-    } else {
-      set('cr-usd', '— (dólar no disponible)');
-    }
-  } catch { set('cr-usd', '—'); }
-}
-
-// ══════════════════════════════════════════════════
-// NOTIFICACIONES IN-APP
-// ══════════════════════════════════════════════════
-async function setupNotifications() {
-  const btn     = document.getElementById('btn-notifications');
-  const panel   = document.getElementById('notif-panel');
-  const backdrop= document.getElementById('notif-backdrop');
-  const closeBtn= document.getElementById('notif-close');
-  if (!btn || !panel) return;
-
-  const open  = () => { panel.classList.remove('hidden'); backdrop.classList.remove('hidden'); loadNotifications(); };
-  const close = () => { panel.classList.add('hidden');    backdrop.classList.add('hidden'); };
-
-  btn.addEventListener('click',  (e) => { e.stopPropagation(); panel.classList.contains('hidden') ? open() : close(); });
-  closeBtn?.addEventListener('click',  close);
-  backdrop?.addEventListener('click',  close);
-  document.getElementById('notif-mark-all')?.addEventListener('click', () => {
-    document.querySelectorAll('.notif-item').forEach(el => el.style.opacity = '.5');
-    document.getElementById('notif-badge').style.display = 'none';
-  });
-
-  // Load initial count
-  await refreshNotifBadge();
-}
-
-async function loadNotifications() {
-  const list = document.getElementById('notif-list');
-  if (!list || !AppContext.hotelId) return;
-
-  const today = new Date().toISOString().split('T')[0];
-  const next7 = new Date(); next7.setDate(next7.getDate() + 7);
-  const next7str = next7.toISOString().split('T')[0];
-
-  const notifs = [];
-
-  try {
-    // 1. Reservas con saldo pendiente y check-in en los próximos 3 días
-    const { data: pending } = await supabase.from('bookings')
-      .select('id, check_in, balance, guests!bookings_guest_id_fkey(first_name,last_name)')
-      .eq('hotel_id', AppContext.hotelId)
-      .in('status', ['partial','pending'])
-      .gt('balance', 0)
-      .gte('check_in', today)
-      .lte('check_in', new Date(+new Date(today) + 3*86400000).toISOString().split('T')[0]);
-    (pending ?? []).forEach(b => {
-      const g = b.guests;
-      const name = g ? `${g.first_name} ${g.last_name}` : 'Sin nombre';
-      notifs.push({
-        icon: '💰',
-        title: `Saldo pendiente — ${name}`,
-        desc: `Check-in ${b.check_in} · Debe $${Math.round(b.balance).toLocaleString('es-AR')}`,
-        type: 'warning',
-        time: 'Próximos 3 días',
-      });
-    });
-
-    // 2. Recordatorios vencidos
-    const { data: reminders } = await supabase.from('reminders')
-      .select('title, scheduled_date')
-      .eq('hotel_id', AppContext.hotelId)
-      .eq('completed', false)
-      .lt('scheduled_date', today)
-      .limit(5);
-    (reminders ?? []).forEach(r => {
-      notifs.push({
-        icon: '🔔',
-        title: `Recordatorio vencido`,
-        desc: r.title + ' · ' + r.scheduled_date,
-        type: 'error',
-        time: 'Vencido',
-      });
-    });
-
-    // 3. Limpiezas pendientes hoy
-    try {
-      const { count: cleanCount } = await supabase.from('cleaning_tasks')
-        .select('id', { count: 'exact', head: true })
-        .eq('hotel_id', AppContext.hotelId).eq('status','pending').eq('scheduled_date', today);
-      if (cleanCount > 0) {
-        notifs.push({
-          icon: '🧹',
-          title: `${cleanCount} limpieza${cleanCount !== 1 ? 's' : ''} pendiente${cleanCount !== 1 ? 's' : ''} hoy`,
-          desc: 'Asignar al personal antes del próximo check-in',
-          type: 'info',
-          time: 'Hoy',
-        });
-      }
-    } catch {}
-
-    // 4. Check-ins de hoy sin pago completo
-    const { data: todayCI } = await supabase.from('bookings')
-      .select('guests!bookings_guest_id_fkey(first_name,last_name), balance')
-      .eq('hotel_id', AppContext.hotelId)
-      .eq('check_in', today).neq('status','cancelled');
-    (todayCI ?? []).filter(b => (b.balance ?? 0) > 0).forEach(b => {
-      const g = b.guests;
-      notifs.push({
-        icon: '🏨',
-        title: `Check-in hoy — ${g ? g.first_name + ' ' + g.last_name : 'Huésped'}`,
-        desc: `Saldo al ingreso: $${Math.round(b.balance).toLocaleString('es-AR')}`,
-        type: 'info',
-        time: 'Hoy',
-      });
-    });
-
-  } catch (err) {
-    console.warn('[MILA] Notif load error:', err.message);
-  }
-
-  // Render
-  const typeColors = { warning: '#f59e0b', error: '#ef4444', info: '#6366f1', success: '#22c55e' };
-  if (!notifs.length) {
-    list.innerHTML = '<p class="empty-state-sm" style="padding:20px;text-align:center">✓ Sin notificaciones pendientes</p>';
-  } else {
-    list.innerHTML = notifs.map(n => `
-      <div class="notif-item">
-        <div class="notif-icon">${n.icon}</div>
-        <div class="notif-body">
-          <div class="notif-title" style="color:${typeColors[n.type] ?? 'var(--color-text)'}">${n.title}</div>
-          <div class="notif-desc">${n.desc}</div>
-          <div class="notif-time">${n.time}</div>
-        </div>
-      </div>`).join('');
-  }
-
-  // Update badge
-  const badge = document.getElementById('notif-badge');
-  if (badge) {
-    if (notifs.length > 0) { badge.textContent = notifs.length; badge.style.display = 'flex'; }
-    else badge.style.display = 'none';
-  }
-}
-
-async function refreshNotifBadge() {
-  if (!AppContext.hotelId) return;
-  const today = new Date().toISOString().split('T')[0];
-  try {
-    const [{ count: remCount }, { count: pendCount }] = await Promise.all([
-      supabase.from('reminders').select('id',{count:'exact',head:true}).eq('hotel_id',AppContext.hotelId).eq('completed',false).lt('scheduled_date',today),
-      supabase.from('bookings').select('id',{count:'exact',head:true}).eq('hotel_id',AppContext.hotelId).in('status',['partial','pending']).eq('check_in',today),
-    ]);
-    const total = (remCount ?? 0) + (pendCount ?? 0);
-    const badge = document.getElementById('notif-badge');
-    if (badge) { badge.style.display = total > 0 ? 'flex' : 'none'; badge.textContent = total; }
-  } catch {}
-}
-
-// ══════════════════════════════════════════════════
-// MINI GRILLA DE DISPONIBILIDAD (30 días)
-// ══════════════════════════════════════════════════
-async function setupAvailabilityGrid() {
-  if (!AppContext.hotelId) return;
-  const grid    = document.getElementById('avail-grid');
-  const totalU  = AppContext.units?.length ?? 0;
-  if (!grid || !totalU) return;
-
-  const today    = new Date();
-  const todayStr = today.toISOString().split('T')[0];
-  const end      = new Date(); end.setDate(end.getDate() + 30);
-  const endStr   = end.toISOString().split('T')[0];
-
-  try {
-    const { data: bookings } = await supabase.from('bookings')
-      .select('check_in, check_out, booking_units(unit_id)')
-      .eq('hotel_id', AppContext.hotelId)
-      .neq('status','cancelled')
-      .lte('check_in', endStr)
-      .gt('check_out', todayStr);
-
-    // Build occupied-count per day
-    const occupied = {};
-    (bookings ?? []).forEach(b => {
-      let d = new Date(b.check_in + 'T12:00:00');
-      const co = new Date(b.check_out + 'T12:00:00');
-      const n = (b.booking_units ?? []).length || 1;
-      while (d < co) {
-        const k = d.toISOString().split('T')[0];
-        occupied[k] = (occupied[k] ?? 0) + n;
-        d.setDate(d.getDate() + 1);
-      }
-    });
-
-    // Render
-    const days = [];
-    for (let i = 0; i <= 30; i++) {
-      const d = new Date(today); d.setDate(d.getDate() + i);
-      const ds = d.toISOString().split('T')[0];
-      const occ = occupied[ds] ?? 0;
-      const free = Math.max(0, totalU - occ);
-      const isPast = ds < todayStr;
-      const isToday = ds === todayStr;
-
-      let cls = 'avail-day ';
-      if (isPast)        cls += 'avail-past';
-      else if (isToday)  cls += 'avail-today';
-      else if (free === 0) cls += 'avail-full';
-      else if (free < totalU) cls += 'avail-free-some';
-      else               cls += 'avail-free-all';
-
-      const dayNum = d.getDate();
-      const monStr = d.toLocaleDateString('es-AR', { month:'short' }).replace('.','');
-
-      days.push(`
-        <div class="${cls}" data-date="${ds}" title="${isToday ? '→ HOY' : ds} — ${free === 0 ? 'Completo' : free + ' libre' + (free!==1?'s':'')}"
-             ${!isPast && free > 0 ? `onclick="window._availClick('${ds}', ${free})"` : ''}>
-          <span class="avail-num">${dayNum}</span>
-          ${i === 0 || dayNum === 1 ? `<span class="avail-free" style="font-size:.5rem">${monStr}</span>` : ''}
-          ${!isPast && free > 0 && free < totalU ? `<span class="avail-free">${free}</span>` : ''}
-        </div>`);
-    }
-
-    grid.innerHTML = days.join('');
-  } catch (err) {
-    grid.innerHTML = `<p style="font-size:.75rem;color:var(--color-danger)">Error al cargar disponibilidad</p>`;
-  }
-}
-
-window._availClick = (date, freeCount) => {
-  const msg = `${freeCount} departamento${freeCount!==1?'s':''} libre${freeCount!==1?'s':''} el ${date}\n\n¿Crear reserva?`;
-  if (confirm(msg)) bookingForm?.open({ prefillCheckIn: date });
-};

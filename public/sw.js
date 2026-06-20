@@ -1,4 +1,4 @@
-const V='7.2.0',CA=`mila-app-${V}`,CS=`mila-static-${V}`;
+const V='7.0.1',CA=`mila-app-${V}`,CS=`mila-static-${V}`;
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CA).then(c=>c.add('/offline.html').catch(()=>{})).then(()=>self.skipWaiting()).catch(()=>self.skipWaiting()));});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(k=>Promise.all([...k.filter(x=>x.startsWith('mila-')&&x!==CA&&x!==CS).map(x=>caches.delete(x)),self.clients.claim()])));});
 self.addEventListener('fetch',e=>{const u=new URL(e.request.url);if(u.hostname.includes('supabase.co')||u.hostname.includes('dolarapi')||u.hostname.includes('ambito')||u.hostname.includes('bluelytics')||u.hostname.includes('esm.sh'))return;if(u.hostname.includes('gstatic')||u.hostname.includes('googleapis')){e.respondWith(cf(e.request));return;}e.respondWith(nf(e.request));});
