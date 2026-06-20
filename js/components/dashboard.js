@@ -144,12 +144,57 @@ export class Dashboard {
       });
     }
 
+    // Revenue del mes actual
+    const monthStart = today.slice(0,7) + '-01';
+    const monthEnd   = new Date(new Date(monthStart).getFullYear(),
+                         new Date(monthStart).getMonth()+1, 0)
+                         .toISOString().slice(0,10);
+    const { data: monthBookings } = await this.db
+      .from('bookings')
+      .select('total_amount, total_paid, balance, status')
+      .eq('hotel_id', hotelId)
+      .not('status','in','(cancelled,blocked)')
+      .gte('check_in', monthStart)
+      .lte('check_in', monthEnd);
+
+    const revenue = {
+      total:  (monthBookings ?? []).reduce((s,b) => s + (b.total_amount ?? 0), 0),
+      paid:   (monthBookings ?? []).reduce((s,b) => s + (b.total_paid  ?? 0), 0),
+      count:  (monthBookings ?? []).length,
+    };
+
+    // Próximas llegadas (7 días)
+    const next7 = new Date(today);
+    next7.setDate(next7.getDate() + 7);
+    const next7str = next7.toISOString().slice(0,10);
+    const { data: upcoming } = await this.db
+      .from('bookings')
+      .select('check_in, check_out, guests!bookings_guest_id_fkey(first_name,last_name), booking_units(units(name,color))')
+      .eq('hotel_id', hotelId)
+      .neq('status', 'cancelled')
+      .gt('check_in', today)
+      .lte('check_in', next7str)
+      .order('check_in', { ascending: true })
+      .limit(8);
+
+    // Limpiezas pendientes hoy
+    let pendingClean = 0;
+    try {
+      const { count } = await this.db.from('cleaning_tasks')
+        .select('id', { count: 'exact', head: true })
+        .eq('hotel_id', hotelId).eq('status','pending').eq('scheduled_date', today);
+      pendingClean = count ?? 0;
+    } catch {}
+
     return {
       checkins:      checkins ?? [],
       checkouts:     checkouts ?? [],
       recambios,
       occupiedUnits: occupiedUnitIds.size,
       arrivals:      checkins ?? [],
+      revenue,
+      upcoming:      upcoming ?? [],
+      pendingClean,
     };
   }
 
@@ -191,11 +236,73 @@ export class Dashboard {
     this._setKPI('kpi-guests-val', kpis.occupiedUnits);
     this._animateCounter(guEl, kpis.occupiedUnits);
 
-    // Micro sparklines para los 4 KPIs
-    this._renderSparkline('kpi-checkins',  kpis.weeklyCheckins   ?? []);
-    this._renderSparkline('kpi-checkouts', kpis.weeklyCheckouts  ?? []);
-    this._renderSparkline('kpi-recambios', kpis.weeklyRecambios  ?? []);
-    this._renderSparkline('kpi-guests',    kpis.weeklyOccupancy  ?? []);
+    // Nuevos widgets
+    this._renderRevenueCard(kpis.revenue ?? {});
+    this._renderUpcoming(kpis.upcoming  ?? []);
+    this._renderPendingOps(kpis.pendingClean ?? 0);
+  }
+
+  _renderRevenueCard(rev) {
+    const el = document.getElementById('dashboard-revenue');
+    if (!el) return;
+    const fmt = n => '$' + Math.round(n).toLocaleString('es-AR');
+    const pct = rev.total > 0 ? Math.round((rev.paid / rev.total) * 100) : 0;
+    const today = new Date();
+    const daysInMonth = new Date(today.getFullYear(), today.getMonth()+1, 0).getDate();
+    const daysPassed  = today.getDate();
+    const runRate     = rev.paid > 0 ? Math.round((rev.paid / daysPassed) * daysInMonth) : 0;
+    el.innerHTML = `
+      <div class="dash-revenue-card">
+        <div class="dash-rev-header">
+          <span class="dash-rev-label">Ingresos este mes</span>
+          <span class="dash-rev-count">${rev.count ?? 0} reserva${rev.count !== 1 ? 's' : ''}</span>
+        </div>
+        <div class="dash-rev-total">${fmt(rev.total)}</div>
+        <div class="dash-rev-bar-wrap">
+          <div class="dash-rev-bar" style="width:${Math.min(100,pct)}%"></div>
+        </div>
+        <div class="dash-rev-sub">
+          <span style="color:var(--color-success)">✓ Cobrado: ${fmt(rev.paid)}</span>
+          <span style="color:var(--color-text-3)">Pendiente: ${fmt(Math.max(0,(rev.total??0)-(rev.paid??0)))}</span>
+        </div>
+        ${runRate > 0 ? `<div class="dash-rev-rate">A este ritmo: ${fmt(runRate)}/mes</div>` : ''}
+      </div>`;
+  }
+
+  _renderUpcoming(bookings) {
+    const el = document.getElementById('dashboard-upcoming');
+    if (!el) return;
+    if (!bookings.length) {
+      el.innerHTML = '<p class="empty-state-sm">Sin llegadas en los próximos 7 días</p>';
+      return;
+    }
+    const fmt = iso => new Date(iso+'T12:00:00').toLocaleDateString('es-AR',{weekday:'short',day:'numeric',month:'short'});
+    el.innerHTML = bookings.map(b => {
+      const guest = b.guests ? `${b.guests.first_name} ${b.guests.last_name}` : 'Sin nombre';
+      const unit  = b.booking_units?.[0]?.units;
+      const color = unit?.color ?? '#6366f1';
+      const nights = Math.round((new Date(b.check_out+'T12:00:00') - new Date(b.check_in+'T12:00:00')) / 86400000);
+      return `
+        <div class="upcoming-item">
+          <div class="upcoming-dot" style="background:${color}"></div>
+          <div class="upcoming-body">
+            <div class="upcoming-date">${fmt(b.check_in)}</div>
+            <div class="upcoming-guest">${guest}</div>
+            <div class="upcoming-unit">${unit?.name ?? '—'} · ${nights} noche${nights!==1?'s':''}</div>
+          </div>
+        </div>`;
+    }).join('');
+  }
+
+  _renderPendingOps(count) {
+    const el = document.getElementById('dashboard-ops-badge');
+    if (!el) return;
+    if (count > 0) {
+      el.textContent = `🧹 ${count} limpieza${count !== 1 ? 's' : ''} pendiente${count !== 1 ? 's' : ''} hoy`;
+      el.style.display = 'block';
+    } else {
+      el.style.display = 'none';
+    }
   }
 
   _renderSparkline(cardId, data7) {

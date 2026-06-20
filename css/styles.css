@@ -2789,3 +2789,295 @@ input[type="color"].unit-color-input::-webkit-color-swatch { border: none; borde
   .modal { max-width: 100vw !important; border-radius: 16px 16px 0 0 !important; }
   .form-grid-2 { grid-template-columns: 1fr !important; }
 }
+
+/* ══════════════════════════════════════════════════
+   MILA — Dashboard mejorado + Gráficos + Drag
+   ══════════════════════════════════════════════════ */
+
+/* ── REVENUE CARD ─────────────────────────────────── */
+.dash-revenue-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--r-lg, 12px);
+  padding: 14px 16px;
+}
+.dash-rev-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; }
+.dash-rev-label  { font-size:.78rem; font-weight:600; color:var(--color-text-2); }
+.dash-rev-count  { font-size:.7rem; color:var(--color-text-3); }
+.dash-rev-total  { font-size:1.5rem; font-weight:800; color:var(--color-text); margin-bottom:8px; line-height:1.2; }
+.dash-rev-bar-wrap { height:6px; background:var(--color-surface-2); border-radius:99px; overflow:hidden; margin-bottom:8px; }
+.dash-rev-bar    { height:100%; background:var(--color-primary); border-radius:99px; transition:width .6s ease; }
+.dash-rev-sub    { display:flex; justify-content:space-between; font-size:.72rem; margin-bottom:6px; }
+.dash-rev-rate   { font-size:.7rem; color:var(--color-text-3); font-style:italic; }
+
+/* ── UPCOMING BOOKINGS ────────────────────────────── */
+.upcoming-item { display:flex; align-items:flex-start; gap:10px; padding:8px 0; border-bottom:.5px solid var(--color-border-tertiary); }
+.upcoming-item:last-child { border-bottom:none; }
+.upcoming-dot { width:10px; height:10px; border-radius:50%; flex-shrink:0; margin-top:4px; }
+.upcoming-body { flex:1; min-width:0; }
+.upcoming-date  { font-size:.7rem; font-weight:700; color:var(--color-primary); text-transform:capitalize; }
+.upcoming-guest { font-size:.825rem; font-weight:600; color:var(--color-text); }
+.upcoming-unit  { font-size:.72rem; color:var(--color-text-3); margin-top:1px; }
+
+/* ── OPS ALERT ────────────────────────────────────── */
+.dash-ops-alert {
+  background: rgba(245,158,11,.1); color: #92400e;
+  border: 1px solid rgba(245,158,11,.3);
+  border-radius: var(--r-md, 8px); padding: 8px 14px;
+  font-size: .8rem; font-weight: 600; margin-top: 10px;
+}
+[data-theme="dark"] .dash-ops-alert { background: rgba(245,158,11,.15); color: #fde68a; }
+
+/* ── CHARTS TAB ───────────────────────────────────── */
+.charts-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+  padding: 4px;
+}
+.chart-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--r-lg, 12px);
+  padding: 16px;
+}
+.chart-title { font-size: .825rem; font-weight: 700; color: var(--color-text); margin-bottom: 4px; }
+.chart-total { font-size: .72rem; color: var(--color-text-3); margin-bottom: 10px; }
+
+/* SVG text inherits color */
+.chart-card svg text { fill: var(--color-text-3); }
+
+/* Channel chart rows */
+.ch-row   { display:flex; align-items:center; gap:8px; margin-bottom:8px; }
+.ch-label { display:flex; align-items:center; gap:6px; font-size:.75rem; width:90px; flex-shrink:0; color:var(--color-text-2); }
+.ch-dot   { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+.ch-bar-track { flex:1; height:10px; background:var(--color-surface-2); border-radius:99px; overflow:hidden; }
+.ch-bar-fill  { height:100%; border-radius:99px; transition:width .5s ease; }
+.ch-val       { font-size:.72rem; font-weight:700; width:80px; text-align:right; color:var(--color-text); }
+
+/* ── CALENDAR DRAG ────────────────────────────────── */
+.drag-ghost {
+  position: fixed; z-index: 9999; pointer-events: none;
+  background: rgba(99,102,241,.92); color: #fff;
+  font-size: .78rem; font-weight: 700;
+  padding: 5px 12px; border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0,0,0,.25);
+  white-space: nowrap;
+  transform: translate(-50%, -100%);
+  transition: none;
+}
+.drag-ghost.hidden { display: none; }
+.bar { cursor: grab !important; }
+.bar:active, .bar.dragging { cursor: grabbing !important; opacity: .85; }
+
+/* ── DARK MODE: charts ────────────────────────────── */
+[data-theme="dark"] .chart-card { background: #1e293b; border-color: #334155; }
+[data-theme="dark"] .dash-revenue-card { background: #1e293b; border-color: #334155; }
+
+/* ══════════════════════════════════════════════════
+   MILA v7.2 — Calculadora + Notificaciones + Avail
+   ══════════════════════════════════════════════════ */
+
+/* ── HEADER ICON BUTTONS ──────────────────────────── */
+.header-icon-btn {
+  position: relative;
+  width: 36px; height: 36px;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--r-md, 8px);
+  cursor: pointer; color: var(--color-text-2);
+  transition: all .15s;
+  flex-shrink: 0;
+}
+.header-icon-btn:hover { background: var(--color-primary-l); color: var(--color-primary); border-color: var(--color-primary); }
+[data-theme="dark"] .header-icon-btn { background: #1e293b; border-color: #334155; color: #94a3b8; }
+
+/* ── NOTIF BADGE ──────────────────────────────────── */
+.notif-badge {
+  position: absolute; top: -4px; right: -4px;
+  background: #ef4444; color: #fff;
+  font-size: .6rem; font-weight: 800;
+  min-width: 16px; height: 16px; border-radius: 99px;
+  display: flex; align-items: center; justify-content: center;
+  padding: 0 3px; border: 2px solid var(--color-background-primary);
+  animation: notif-pulse 2s ease-in-out infinite;
+}
+@keyframes notif-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(239,68,68,.4); }
+  50%       { box-shadow: 0 0 0 5px rgba(239,68,68,0); }
+}
+
+/* ── NOTIFICATION PANEL ───────────────────────────── */
+.notif-panel {
+  position: fixed; top: 64px; right: 16px; z-index: 500;
+  width: 340px; max-height: 480px;
+  background: var(--color-background-primary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--r-lg, 12px);
+  box-shadow: 0 20px 60px rgba(0,0,0,.18);
+  display: flex; flex-direction: column;
+  animation: slideDown .2s ease;
+}
+.notif-panel.hidden { display: none; }
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.notif-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 16px; border-bottom: 1px solid var(--color-border);
+  font-size: .875rem; font-weight: 700;
+}
+.notif-close-btn {
+  background: none; border: none; cursor: pointer;
+  font-size: .875rem; color: var(--color-text-3); padding: 2px 6px;
+  border-radius: 6px; transition: background .12s;
+}
+.notif-close-btn:hover { background: var(--color-surface-2); }
+.notif-list { flex: 1; overflow-y: auto; }
+.notif-item {
+  display: flex; gap: 10px; padding: 12px 16px;
+  border-bottom: .5px solid var(--color-border-tertiary);
+  transition: background .12s; cursor: default;
+}
+.notif-item:hover { background: var(--color-surface-2); }
+.notif-icon { font-size: 1.2rem; flex-shrink: 0; }
+.notif-body { flex: 1; min-width: 0; }
+.notif-title { font-size: .8rem; font-weight: 600; color: var(--color-text); }
+.notif-desc  { font-size: .72rem; color: var(--color-text-3); margin-top: 2px; line-height: 1.4; }
+.notif-time  { font-size: .65rem; color: var(--color-text-3); margin-top: 3px; }
+.notif-footer {
+  padding: 10px 16px; border-top: 1px solid var(--color-border);
+  display: flex; justify-content: center;
+}
+.notif-backdrop {
+  position: fixed; inset: 0; z-index: 499;
+  background: transparent;
+}
+.notif-backdrop.hidden { display: none; }
+
+/* ── CALCULADORA FLOTANTE ─────────────────────────── */
+.calc-overlay {
+  position: fixed; top: 64px; right: 16px; z-index: 500;
+  animation: slideDown .2s ease;
+}
+.calc-overlay.hidden { display: none; }
+.calc-panel {
+  width: 320px;
+  background: var(--color-background-primary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--r-lg, 12px);
+  box-shadow: 0 20px 60px rgba(0,0,0,.18);
+}
+.calc-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 16px; border-bottom: 1px solid var(--color-border);
+  font-size: .875rem; font-weight: 700;
+}
+.calc-title { color: var(--color-text); }
+.calc-body  { padding: 14px 16px; display: flex; flex-direction: column; gap: 12px; }
+.calc-field label {
+  display: block; font-size: .72rem; font-weight: 600;
+  color: var(--color-text-2); margin-bottom: 5px;
+  text-transform: uppercase; letter-spacing: .04em;
+}
+.calc-input {
+  width: 100%; padding: 8px 11px;
+  border: 1.5px solid var(--color-border-2);
+  border-radius: var(--r-md, 8px);
+  background: var(--color-surface-2); color: var(--color-text);
+  font-size: .875rem; outline: none; transition: border-color .15s;
+}
+.calc-input:focus { border-color: var(--color-primary); background: var(--color-surface); }
+.calc-stepper { display: flex; align-items: center; }
+.calc-btn-small {
+  padding: 7px 10px; border: 1.5px solid var(--color-border-2);
+  border-radius: var(--r-md, 8px); background: var(--color-surface-2);
+  color: var(--color-primary); font-size: .72rem; font-weight: 700;
+  cursor: pointer; white-space: nowrap; flex-shrink: 0;
+  transition: all .12s;
+}
+.calc-btn-small:hover { background: var(--color-primary-l); border-color: var(--color-primary); }
+
+/* Results */
+.calc-results {
+  background: var(--color-surface-2);
+  border-radius: var(--r-md, 8px);
+  padding: 10px 12px;
+  display: flex; flex-direction: column; gap: 6px;
+}
+.calc-result-row {
+  display: flex; justify-content: space-between; align-items: center;
+  font-size: .8rem; color: var(--color-text-2);
+}
+.calc-result-row strong { font-size: .875rem; color: var(--color-text); font-weight: 700; }
+.calc-deduct { color: #92400e; }
+.calc-deduct strong { color: #92400e; }
+.calc-total { padding-top: 6px; border-top: 1.5px solid var(--color-border); font-weight: 700; }
+.calc-total strong { font-size: 1.05rem; color: var(--color-primary); }
+.calc-net strong { color: #22c55e; font-size: 1rem; }
+.calc-usd { color: var(--color-text-3); }
+.calc-usd strong { font-size: .8rem; }
+[data-theme="dark"] .calc-panel { background: #1e293b; }
+[data-theme="dark"] .notif-panel { background: #1e293b; }
+[data-theme="dark"] .calc-results { background: #0f172a; }
+
+/* ── DISPONIBILIDAD 30 DÍAS ───────────────────────── */
+.avail-card { overflow: hidden; }
+.avail-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(30px, 1fr));
+  gap: 3px;
+  padding: 4px 0;
+}
+.avail-day {
+  aspect-ratio: 1;
+  border-radius: 5px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  font-size: .6rem; font-weight: 700; cursor: pointer;
+  transition: all .15s; position: relative;
+  min-height: 30px;
+}
+.avail-day:hover { transform: scale(1.15); z-index: 1; box-shadow: 0 3px 12px rgba(0,0,0,.15); }
+.avail-day .avail-num { font-size: .65rem; font-weight: 800; }
+.avail-day .avail-free { font-size: .55rem; opacity: .75; }
+.avail-free-all   { background: rgba(34,197,94,.15); color: #15803d; }
+.avail-free-some  { background: rgba(245,158,11,.15); color: #92400e; }
+.avail-full       { background: rgba(239,68,68,.08);  color: #991b1b; cursor: default; }
+.avail-today      { background: rgba(99,102,241,.2);  color: var(--color-primary); border: 2px solid var(--color-primary); }
+.avail-past       { background: rgba(0,0,0,.04); color: var(--color-text-3); cursor: default; opacity: .5; }
+[data-theme="dark"] .avail-free-all  { background: rgba(34,197,94,.2);  color: #4ade80; }
+[data-theme="dark"] .avail-free-some { background: rgba(245,158,11,.2); color: #fde68a; }
+[data-theme="dark"] .avail-full      { background: rgba(239,68,68,.12); color: #fca5a5; }
+[data-theme="dark"] .avail-today     { background: rgba(99,102,241,.25); }
+[data-theme="dark"] .avail-past      { background: rgba(255,255,255,.03); }
+
+/* ── DÓLAR BADGE pulse cuando actualiza ──────────── */
+.dollar-badge.updating { animation: dollarPulse .6s ease; }
+@keyframes dollarPulse {
+  0%   { background: rgba(99,102,241,.2); }
+  50%  { background: rgba(99,102,241,.35); }
+  100% { background: rgba(99,102,241,.15); }
+}
+
+/* ── ANIMACIONES DE ENTRADA en secciones ─────────── */
+.section { animation: sectionIn .22s ease both; }
+@keyframes sectionIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.kpi-card { animation: cardIn .3s ease both; }
+.kpi-card:nth-child(2) { animation-delay: .05s; }
+.kpi-card:nth-child(3) { animation-delay: .1s; }
+.kpi-card:nth-child(4) { animation-delay: .15s; }
+@keyframes cardIn {
+  from { opacity: 0; transform: scale(.97) translateY(6px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+/* ── RESPONSIVE CALCULATOR ────────────────────────── */
+@media (max-width: 640px) {
+  .calc-panel, .notif-panel { width: calc(100vw - 32px); right: 16px; }
+  .calc-overlay { right: 0; top: 56px; padding: 0 16px; width: 100%; }
+}

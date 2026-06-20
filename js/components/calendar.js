@@ -932,6 +932,55 @@ export class Calendar {
       this.load();
     };
 
+    // ── Mouse + Touch drag en barras ──────────────────
+    const startDrag = (clientX, bar, e) => {
+      const cell = bar.closest('.cal-cell');
+      e?.preventDefault();
+      bar.style.cursor = 'grabbing';
+
+      this._barDrag = {
+        active: true, booking: null,
+        unitId: cell?.dataset.unitId ?? null,
+        startX: clientX, moved: false,
+      };
+      const bookingId = bar.dataset.bookingId;
+      this._lastRenderedBookings?.forEach(b => { if (b.id === bookingId) this._barDrag.booking = b; });
+      if (!this._barDrag.booking) {
+        this.db.from('bookings').select('id,check_in,check_out,nights,guests(first_name,last_name),booking_units(unit_id)')
+          .eq('id', bookingId).single()
+          .then(({ data }) => { if (data) this._barDrag.booking = data; });
+      }
+    };
+
+    grid.addEventListener('touchstart', (e) => {
+      const bar = e.target.closest('.bar');
+      if (!bar || !bar.dataset.bookingId) return;
+      startDrag(e.touches[0].clientX, bar, e);
+      const onTouchMove = (te) => {
+        if (!this._barDrag.active) return;
+        const dx = Math.abs(te.touches[0].clientX - this._barDrag.startX);
+        if (dx > 8) this._barDrag.moved = true;
+        if (!this._barDrag.moved) return;
+        const dayWidth = grid.offsetWidth / new Date(this.year, this.month+1, 0).getDate();
+        const daysDiff = Math.round((te.touches[0].clientX - this._barDrag.startX) / dayWidth);
+        const b = this._barDrag.booking;
+        if (b) {
+          this._ghost.textContent = `${this._addDays(b.check_in, daysDiff)} → ${this._addDays(b.check_out, daysDiff)}`;
+          this._ghost.style.left = `${te.touches[0].clientX + 12}px`;
+          this._ghost.style.top  = `${te.touches[0].clientY - 40}px`;
+          this._ghost.classList.remove('hidden');
+        }
+      };
+      const onTouchEnd = (te) => {
+        document.removeEventListener('touchmove', onTouchMove);
+        document.removeEventListener('touchend', onTouchEnd);
+        this._ghost.classList.add('hidden');
+        onMouseUp({ clientX: te.changedTouches[0].clientX });
+      };
+      document.addEventListener('touchmove', onTouchMove, { passive: false });
+      document.addEventListener('touchend', onTouchEnd);
+    }, { passive: false });
+
     // Interceptar mousedown en barras — diferenciando drag vs click
     grid.addEventListener('mousedown', (e) => {
       const bar = e.target.closest('.bar');
@@ -941,7 +990,7 @@ export class Calendar {
 
       this._barDrag = {
         active:    true,
-        booking:   null, // se carga abajo
+        booking:   null,
         unitId:    cell?.dataset.unitId ?? null,
         startX:    e.clientX,
         moved:     false,
@@ -954,7 +1003,6 @@ export class Calendar {
         if (b.id === bookingId) this._barDrag.booking = b;
       });
       if (!this._barDrag.booking) {
-        // fallback: load from DB
         this.db.from('bookings').select('id,check_in,check_out,nights,guests(first_name,last_name),booking_units(unit_id)')
           .eq('id', bookingId).single()
           .then(({ data }) => { if (data) this._barDrag.booking = data; });

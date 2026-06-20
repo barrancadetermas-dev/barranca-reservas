@@ -185,6 +185,25 @@
           <span class="conn-dot" id="conn-dot"></span>
           <span class="conn-label" id="conn-label">Conectado</span>
         </div>
+
+        <!-- 🔔 Notificaciones -->
+        <button class="header-icon-btn" id="btn-notifications" title="Notificaciones" aria-label="Notificaciones">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+            <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/>
+          </svg>
+          <span class="notif-badge" id="notif-badge" style="display:none">0</span>
+        </button>
+
+        <!-- 🧮 Calculadora -->
+        <button class="header-icon-btn" id="btn-calculator" title="Calculadora de estadía" aria-label="Calculadora">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+            <rect x="4" y="2" width="16" height="20" rx="2"/>
+            <line x1="8" y1="6" x2="16" y2="6"/><line x1="8" y1="10" x2="10" y2="10"/>
+            <line x1="14" y1="10" x2="16" y2="10"/><line x1="8" y1="14" x2="10" y2="14"/>
+            <line x1="14" y1="14" x2="16" y2="14"/><line x1="8" y1="18" x2="10" y2="18"/>
+            <line x1="14" y1="18" x2="16" y2="18"/>
+          </svg>
+        </button>
                 <div class="dollar-badge" id="dollar-header-badge" title="Cotización USD Oficial">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15">
             <line x1="12" y1="1" x2="12" y2="23"/>
@@ -390,9 +409,10 @@
           <button class="btn btn-primary btn-sm" id="btn-load-stats">Generar Reporte</button>
         </div>
         <div class="tabs-bar">
-          <button class="tab active" data-tab="units">Rendimiento por Unidad</button>
-          <button class="tab" data-tab="expenses">Gastos Operativos</button>
-          <button class="tab" data-tab="pl">P&L del Período</button>
+          <button class="tab active" data-tab="units">Rendimiento</button>
+          <button class="tab" data-tab="charts">📊 Gráficos</button>
+          <button class="tab" data-tab="expenses">Gastos</button>
+          <button class="tab" data-tab="pl">P&L</button>
         </div>
         <div id="stats-units-panel" class="stats-panel">
           <div id="stats-units-grid" class="stats-units-grid"></div>
@@ -405,6 +425,13 @@
           <div id="expenses-list"></div>
         </div>
         <div id="stats-pl-panel" class="stats-panel hidden"></div>
+        <div id="stats-charts-panel" class="stats-panel hidden">
+          <div id="charts-container">
+            <p class="empty-state-sm" style="padding:40px;text-align:center">
+              Seleccioná un período y hacé clic en <strong>Cargar</strong>
+            </p>
+          </div>
+        </div>
       </section>
 
       <!-- ── SECTION: REMINDERS ── -->
@@ -864,5 +891,112 @@
     <span>CRM</span>
   </button>
 </nav>
+
+<!-- ═══════════════════════════════════════
+     CALCULADORA DE ESTADÍA
+═══════════════════════════════════════ -->
+<div id="overlay-calculator" class="calc-overlay hidden" role="dialog" aria-label="Calculadora de estadía">
+  <div class="calc-panel">
+    <div class="calc-header">
+      <span class="calc-title">🧮 Calculadora de estadía</span>
+      <button class="modal-close" id="calc-close">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="18" height="18">
+          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
+    </div>
+
+    <div class="calc-body">
+      <!-- Inputs -->
+      <div class="calc-field">
+        <label>Precio por noche</label>
+        <div style="display:flex;gap:6px">
+          <input type="number" id="calc-price" class="calc-input" value="50000"
+                 min="0" step="1000" placeholder="45.000">
+          <button class="calc-btn-small" id="calc-use-dollar" title="Calcular en dólares">$USD</button>
+        </div>
+      </div>
+      <div class="calc-field">
+        <label>Noches</label>
+        <div class="calc-stepper">
+          <button type="button" class="pax-btn" id="calc-nights-minus">−</button>
+          <input type="number" id="calc-nights" class="pax-input" value="3" min="1" max="90" readonly>
+          <button type="button" class="pax-btn" id="calc-nights-plus">+</button>
+        </div>
+      </div>
+      <div class="calc-field">
+        <label>Canal de reserva</label>
+        <select id="calc-channel" class="calc-input">
+          <option value="direct:0">Directo — sin comisión</option>
+          <option value="walkin:0">Espontáneo — sin comisión</option>
+          <option value="booking:15">Booking.com — 15%</option>
+          <option value="airbnb:18">Airbnb — 18%</option>
+          <option value="family:0">Familia — sin comisión</option>
+          <option value="company:0">Empresa — sin comisión</option>
+          <option value="despegar:12">Despegar — 12%</option>
+          <option value="expedia:15">Expedia — 15%</option>
+        </select>
+      </div>
+      <div class="calc-field">
+        <label>Descuento</label>
+        <div style="display:flex;align-items:center;gap:8px">
+          <input type="range" id="calc-discount-range" min="0" max="40" value="0"
+                 style="flex:1;accent-color:var(--color-primary)">
+          <span id="calc-discount-label" style="font-weight:700;width:32px;font-size:.875rem">0%</span>
+        </div>
+      </div>
+
+      <!-- Results -->
+      <div class="calc-results">
+        <div class="calc-result-row">
+          <span>Subtotal</span>
+          <strong id="cr-subtotal">—</strong>
+        </div>
+        <div class="calc-result-row calc-deduct" id="cr-disc-row" style="display:none">
+          <span id="cr-disc-label">Descuento</span>
+          <strong id="cr-disc">—</strong>
+        </div>
+        <div class="calc-result-row calc-deduct" id="cr-comm-row" style="display:none">
+          <span id="cr-comm-label">Comisión canal</span>
+          <strong id="cr-comm">—</strong>
+        </div>
+        <div class="calc-result-row calc-total">
+          <span>Total al huésped</span>
+          <strong id="cr-total">—</strong>
+        </div>
+        <div class="calc-result-row calc-net" id="cr-net-row" style="display:none">
+          <span>Neto para el complejo</span>
+          <strong id="cr-net">—</strong>
+        </div>
+        <div class="calc-result-row calc-usd" id="cr-usd-row">
+          <span>Equiv. USD blue</span>
+          <strong id="cr-usd">—</strong>
+        </div>
+      </div>
+
+      <button class="btn btn-primary" id="calc-create-booking" style="width:100%;margin-top:8px">
+        Crear reserva con estos datos →
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════
+     PANEL DE NOTIFICACIONES
+═══════════════════════════════════════ -->
+<div id="notif-panel" class="notif-panel hidden" role="dialog" aria-label="Notificaciones">
+  <div class="notif-header">
+    <span>Notificaciones</span>
+    <button id="notif-close" class="notif-close-btn">✕</button>
+  </div>
+  <div id="notif-list" class="notif-list">
+    <p class="empty-state-sm" style="padding:20px">Sin notificaciones pendientes ✓</p>
+  </div>
+  <div class="notif-footer">
+    <button id="notif-mark-all" class="btn btn-outline btn-sm">Marcar todo como visto</button>
+  </div>
+</div>
+<div id="notif-backdrop" class="notif-backdrop hidden"></div>
+
 </body>
 </html>

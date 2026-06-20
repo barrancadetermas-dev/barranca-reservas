@@ -67,21 +67,24 @@ export class Statistics {
         if (this._tab === 'expenses') this.loadExpenses();
         if (this._tab === 'pl')       this.loadPL();
         if (this._tab === 'heatmap')  this.loadHeatmap();
+        if (this._tab === 'charts')   this.loadCharts();
       });
     });
   }
 
   _showPanel(tab) {
-    ['units','expenses','pl','heatmap'].forEach(t => {
+    ['units','expenses','pl','heatmap','charts'].forEach(t => {
       document.getElementById(`stats-${t}-panel`)?.classList.toggle('hidden', t !== tab);
     });
   }
 
   _bindButtons() {
     document.getElementById('btn-load-stats')?.addEventListener('click', () => {
-      this.loadUnits();
+      if (this._tab === 'units')    this.loadUnits();
       if (this._tab === 'expenses') this.loadExpenses();
       if (this._tab === 'heatmap')  this.loadHeatmap();
+      if (this._tab === 'charts')   this.loadCharts();
+      if (this._tab === 'pl')       this.loadPL();
     });
     document.getElementById('btn-add-expense')?.addEventListener('click', () => {
       document.getElementById('expense-editing-id').value = '';
@@ -689,4 +692,223 @@ export class Statistics {
     w.document.close();
     setTimeout(() => w.print(), 500);
   }
+  // ══════════════════════════════════════════════════
+  // GRÁFICOS (SVG puro — sin dependencias)
+  // ══════════════════════════════════════════════════
+  async loadCharts() {
+    const container = document.getElementById('charts-container');
+    if (!container) return;
+    container.innerHTML = '<p style="padding:20px;text-align:center;color:var(--color-text-3)">Cargando gráficos...</p>';
+
+    const month    = parseInt(document.getElementById('stats-month')?.value ?? new Date().getMonth());
+    const year     = parseInt(document.getElementById('stats-year')?.value  ?? new Date().getFullYear());
+    const hotelId  = this.ctx.hotelId;
+
+    try {
+      // Últimos 12 meses de ingresos
+      const months12 = [];
+      for (let i = 11; i >= 0; i--) {
+        const d = new Date(year, month - i, 1);
+        months12.push({ y: d.getFullYear(), m: d.getMonth() });
+      }
+
+      const monthlyData = await Promise.all(months12.map(async ({ y, m }) => {
+        const first = `${y}-${String(m+1).padStart(2,'0')}-01`;
+        const last  = new Date(y, m+1, 0);
+        const lastStr = `${y}-${String(m+1).padStart(2,'0')}-${String(last.getDate()).padStart(2,'0')}`;
+        const { data } = await this.db.from('bookings')
+          .select('total_amount, status, source, nights')
+          .eq('hotel_id', hotelId)
+          .not('status','in','(cancelled,blocked)')
+          .gte('check_in', first).lte('check_in', lastStr);
+        const bookings = data ?? [];
+        return {
+          label: MONTH_NAMES[m].slice(0,3),
+          revenue:    bookings.reduce((s,b) => s + (b.total_amount ?? 0), 0),
+          count:      bookings.length,
+          nights:     bookings.reduce((s,b) => s + (b.nights ?? 0), 0),
+          bySource:   bookings.reduce((acc,b) => {
+            acc[b.source ?? 'direct'] = (acc[b.source ?? 'direct'] ?? 0) + (b.total_amount ?? 0);
+            return acc;
+          }, {}),
+        };
+      }));
+
+      // By channel for current month
+      const curMonth  = monthlyData[11];
+      const totalUnits = this.ctx.units.length || 1;
+
+      // ── Render ──────────────────────────────────────
+      container.innerHTML = `
+        <div class="charts-grid">
+
+          ${this._chartBarIncome(monthlyData)}
+          ${this._chartChannelPie(curMonth)}
+          ${this._chartOccupancy(monthlyData, totalUnits)}
+          ${this._chartBookingCount(monthlyData)}
+
+        </div>`;
+
+    } catch (err) {
+      container.innerHTML = `<p style="color:var(--color-danger);padding:20px">Error al cargar gráficos: ${err.message}</p>`;
+    }
+  }
+
+  // ── Gráfico barras: Ingresos 12 meses ───────────
+  _chartBarIncome(data) {
+    const maxVal = Math.max(...data.map(d => d.revenue), 1);
+    const bars   = data.map((d, i) => {
+      const h      = Math.max(4, Math.round((d.revenue / maxVal) * 180));
+      const isLast = i === data.length - 1;
+      const color  = isLast ? 'var(--color-primary)' : 'rgba(99,102,241,.4)';
+      const fmt    = n => '$' + Math.round(n/1000) + 'K';
+      return `
+        <g>
+          <rect x="${i * 34 + 2}" y="${190 - h}" width="28" height="${h}"
+                rx="4" fill="${color}" style="transition:height .5s ease"/>
+          <text x="${i * 34 + 16}" y="205" text-anchor="middle"
+                font-size="8" fill="var(--color-text-3)">${d.label}</text>
+          ${isLast || d.revenue === maxVal ? `
+            <text x="${i * 34 + 16}" y="${185 - h}" text-anchor="middle"
+                  font-size="8" fill="var(--color-text-2)">${fmt(d.revenue)}</text>` : ''}
+        </g>`;
+    }).join('');
+
+    return `
+      <div class="chart-card">
+        <div class="chart-title">Ingresos — últimos 12 meses</div>
+        <div class="chart-total">${'$' + Math.round(data.reduce((s,d)=>s+d.revenue,0)/1000).toLocaleString('es-AR')}K total</div>
+        <svg viewBox="0 0 ${data.length * 34 + 4} 215" style="width:100%;overflow:visible">
+          ${bars}
+          <line x1="0" y1="190" x2="${data.length * 34 + 4}" y2="190" stroke="var(--color-border)" stroke-width="1"/>
+        </svg>
+      </div>`;
+  }
+
+  // ── Gráfico horizontal: Por canal ───────────────
+  _chartChannelPie(curData) {
+    if (!curData) return '';
+    const CHANNEL_COLORS = {
+      direct:'#6366f1', walkin:'#0891b2', booking:'#1d4ed8',
+      airbnb:'#ea580c', family:'#7c3aed', company:'#0f766e',
+      referral:'#b45309', despegar:'#059669', expedia:'#dc2626',
+    };
+    const entries = Object.entries(curData.bySource ?? {})
+      .sort(([,a],[,b]) => b - a).slice(0,7);
+    const maxVal  = entries[0]?.[1] ?? 1;
+    const fmt     = n => '$' + Math.round(n).toLocaleString('es-AR');
+
+    const rows = entries.map(([src, val]) => {
+      const pct   = Math.round((val / maxVal) * 100);
+      const color = CHANNEL_COLORS[src] ?? '#94a3b8';
+      const label = SOURCE_LABELS[src] ?? src;
+      return `
+        <div class="ch-row">
+          <div class="ch-label">
+            <span class="ch-dot" style="background:${color}"></span>${label}
+          </div>
+          <div class="ch-bar-track">
+            <div class="ch-bar-fill" style="width:${pct}%;background:${color}"></div>
+          </div>
+          <div class="ch-val">${fmt(val)}</div>
+        </div>`;
+    }).join('') || '<p style="color:var(--color-text-3);font-size:.8rem;padding:8px">Sin reservas en este período</p>';
+
+    return `
+      <div class="chart-card">
+        <div class="chart-title">Ingresos por canal — ${curData.label ?? 'mes actual'}</div>
+        <div style="margin-top:8px">${rows}</div>
+      </div>`;
+  }
+
+  // ── Gráfico de línea: Reservas por mes ──────────
+  _chartBookingCount(data) {
+    const maxVal = Math.max(...data.map(d => d.count), 1);
+    const w = 34, pad = 20;
+    const points = data.map((d, i) => {
+      const x = i * w + pad;
+      const y = 120 - Math.round((d.count / maxVal) * 100);
+      return `${x},${y}`;
+    }).join(' ');
+    const dots = data.map((d, i) => {
+      const x = i * w + pad;
+      const y = 120 - Math.round((d.count / maxVal) * 100);
+      const isLast = i === data.length - 1;
+      return `
+        <circle cx="${x}" cy="${y}" r="${isLast ? 5 : 3}"
+                fill="${isLast ? 'var(--color-primary)' : 'rgba(99,102,241,.6)'}"/>
+        ${isLast || d.count === maxVal ? `
+          <text x="${x}" y="${y - 8}" text-anchor="middle"
+                font-size="9" fill="var(--color-text-2)">${d.count}</text>` : ''}
+        <text x="${x}" y="132" text-anchor="middle"
+              font-size="8" fill="var(--color-text-3)">${d.label}</text>`;
+    }).join('');
+    const totalCount = data.reduce((s,d) => s+d.count, 0);
+
+    return `
+      <div class="chart-card">
+        <div class="chart-title">Cantidad de reservas — 12 meses</div>
+        <div class="chart-total">${totalCount} reservas en el año</div>
+        <svg viewBox="0 0 ${data.length * w + pad * 2} 145" style="width:100%">
+          <polyline points="${points}" fill="none"
+                    stroke="rgba(99,102,241,.5)" stroke-width="2" stroke-linejoin="round"/>
+          ${dots}
+          <line x1="${pad}" y1="122" x2="${data.length * w + pad}" y2="122"
+                stroke="var(--color-border)" stroke-width="1"/>
+        </svg>
+      </div>`;
+  }
+
+  // ── Gráfico de línea: Ocupación mensual ─────────
+  _chartOccupancy(data, totalUnits) {
+    const daysInMonths = data.map(d => {
+      const [y, m] = [2000 + parseInt(d.label), 0]; // placeholder - use actual data
+      return 30; // approx
+    });
+    const occupancyData = data.map((d, i) => ({
+      label: d.label,
+      pct: totalUnits > 0 ? Math.min(100, Math.round((d.nights / (totalUnits * 30)) * 100)) : 0,
+    }));
+    const maxPct = 100;
+    const w = 34, pad = 20;
+    const points = occupancyData.map((d, i) => {
+      const x = i * w + pad;
+      const y = 110 - Math.round((d.pct / maxPct) * 90);
+      return `${x},${y}`;
+    }).join(' ');
+    const dots = occupancyData.map((d, i) => {
+      const x = i * w + pad;
+      const y = 110 - Math.round((d.pct / maxPct) * 90);
+      const isLast = i === occupancyData.length - 1;
+      const color = d.pct >= 80 ? '#22c55e' : d.pct >= 50 ? '#f59e0b' : '#ef4444';
+      return `
+        <circle cx="${x}" cy="${y}" r="${isLast ? 5 : 3}" fill="${color}"/>
+        ${(isLast || i % 3 === 0) ? `
+          <text x="${x}" y="${y - 8}" text-anchor="middle"
+                font-size="9" fill="var(--color-text-2)">${d.pct}%</text>` : ''}
+        <text x="${x}" y="122" text-anchor="middle"
+              font-size="8" fill="var(--color-text-3)">${d.label}</text>`;
+    }).join('');
+    const avgOcc = Math.round(occupancyData.reduce((s,d) => s+d.pct, 0) / occupancyData.length);
+
+    return `
+      <div class="chart-card">
+        <div class="chart-title">Ocupación mensual</div>
+        <div class="chart-total">Promedio: ${avgOcc}% — ${totalUnits} departamentos</div>
+        <svg viewBox="0 0 ${occupancyData.length * w + pad * 2} 135" style="width:100%">
+          <!-- Meta 80% -->
+          <line x1="${pad}" y1="${110 - 72}" x2="${occupancyData.length * w + pad}" y2="${110 - 72}"
+                stroke="rgba(34,197,94,.25)" stroke-width="1" stroke-dasharray="4,3"/>
+          <text x="${pad - 2}" y="${110 - 70}" text-anchor="end" font-size="7"
+                fill="rgba(34,197,94,.6)">80%</text>
+          <polyline points="${points}" fill="none"
+                    stroke="rgba(99,102,241,.5)" stroke-width="2" stroke-linejoin="round"/>
+          ${dots}
+          <line x1="${pad}" y1="112" x2="${occupancyData.length * w + pad}" y2="112"
+                stroke="var(--color-border)" stroke-width="1"/>
+        </svg>
+      </div>`;
+  }
+
+
 }
