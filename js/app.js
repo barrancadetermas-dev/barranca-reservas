@@ -100,9 +100,9 @@ async function boot() {
 function initDarkMode() {
   const saved = localStorage.getItem('pms-theme') ??
     (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
-  applyTheme(saved);
+  applyDarkMode(saved);
 }
-function applyTheme(theme) {
+function applyDarkMode(theme) {
   document.documentElement.setAttribute('data-theme', theme);
   localStorage.setItem('pms-theme', theme);
   document.getElementById('dark-icon-sun')?.classList.toggle('hidden',  theme === 'dark');
@@ -420,9 +420,12 @@ export async function navigateTo(section) {
   // Actualizar el header de sección (banner superior dentro del main)
   const meta = SECTION_META[section];
   if (meta) {
-    document.getElementById('sph-icon')?.textContent  !== undefined && (document.getElementById('sph-icon').textContent  = meta.icon);
-    document.getElementById('sph-title')?.textContent !== undefined && (document.getElementById('sph-title').textContent = meta.title);
-    document.getElementById('sph-sub')?.textContent   !== undefined && (document.getElementById('sph-sub').textContent   = meta.sub);
+    const icon  = document.getElementById('sph-icon');
+    const title = document.getElementById('sph-title');
+    const sub   = document.getElementById('sph-sub');
+    if (icon)  icon.textContent  = meta.icon;
+    if (title) title.textContent = meta.title;
+    if (sub)   sub.textContent   = meta.sub;
   }
 
   Sound?.click();
@@ -1154,7 +1157,7 @@ async function renderCommandResults(query) {
 function setupDarkModeToggle() {
   document.getElementById('dark-mode-toggle')?.addEventListener('click', () => {
     const cur = document.documentElement.getAttribute('data-theme')?? 'light';
-    applyTheme(cur==='dark'?'light':'dark');
+    applyDarkMode(cur==='dark'?'light':'dark');
   });
 }
 
