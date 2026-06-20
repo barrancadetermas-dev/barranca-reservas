@@ -161,3 +161,123 @@ CREATE INDEX IF NOT EXISTS idx_reminders_hotel_date    ON reminders(hotel_id, sc
 -- ── FIN ───────────────────────────────────────────
 -- Verificar las tablas creadas:
 -- SELECT table_name FROM information_schema.tables WHERE table_schema='public' ORDER BY table_name;
+
+-- ── 10. Tabla cleaning_tasks ───────────────────────
+CREATE TABLE IF NOT EXISTS cleaning_tasks (
+  id             uuid        DEFAULT gen_random_uuid() PRIMARY KEY,
+  hotel_id       uuid        NOT NULL REFERENCES hotels(id) ON DELETE CASCADE,
+  unit_id        uuid        REFERENCES units(id) ON DELETE SET NULL,
+  title          text        NOT NULL,
+  scheduled_date date        NOT NULL,
+  status         text        DEFAULT 'pending'
+                 CHECK (status IN ('pending','in_progress','done','skipped')),
+  assigned_to    text,
+  notes          text,
+  completed_at   timestamptz,
+  created_at     timestamptz DEFAULT now(),
+  updated_at     timestamptz DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_cleaning_hotel_date ON cleaning_tasks(hotel_id, scheduled_date);
+CREATE INDEX IF NOT EXISTS idx_cleaning_unit       ON cleaning_tasks(unit_id);
+
+ALTER TABLE cleaning_tasks ENABLE ROW LEVEL SECURITY;
+DO $$ BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE tablename='cleaning_tasks' AND policyname='hotel_staff_cleaning'
+  ) THEN
+    CREATE POLICY hotel_staff_cleaning ON cleaning_tasks
+      USING (hotel_id IN (
+        SELECT hotel_id FROM hotel_users WHERE user_id = auth.uid()
+      ));
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname='cleaning_tasks_updated_at') THEN
+    CREATE TRIGGER cleaning_tasks_updated_at
+      BEFORE UPDATE ON cleaning_tasks
+      FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+  END IF;
+END $$;
+
+-- ── 11. Tabla maintenance_issues ──────────────────
+CREATE TABLE IF NOT EXISTS maintenance_issues (
+  id             uuid        DEFAULT gen_random_uuid() PRIMARY KEY,
+  hotel_id       uuid        NOT NULL REFERENCES hotels(id) ON DELETE CASCADE,
+  unit_id        uuid        REFERENCES units(id) ON DELETE SET NULL,
+  title          text        NOT NULL,
+  description    text,
+  priority       text        DEFAULT 'normal'
+                 CHECK (priority IN ('low','normal','high','urgent')),
+  status         text        DEFAULT 'open'
+                 CHECK (status IN ('open','in_progress','resolved','closed')),
+  reported_by    text,
+  resolved_at    timestamptz,
+  created_at     timestamptz DEFAULT now(),
+  updated_at     timestamptz DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_maint_hotel_status ON maintenance_issues(hotel_id, status);
+
+ALTER TABLE maintenance_issues ENABLE ROW LEVEL SECURITY;
+DO $$ BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE tablename='maintenance_issues' AND policyname='hotel_staff_maint'
+  ) THEN
+    CREATE POLICY hotel_staff_maint ON maintenance_issues
+      USING (hotel_id IN (
+        SELECT hotel_id FROM hotel_users WHERE user_id = auth.uid()
+      ));
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname='maintenance_issues_updated_at') THEN
+    CREATE TRIGGER maintenance_issues_updated_at
+      BEFORE UPDATE ON maintenance_issues
+      FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+  END IF;
+END $$;
+
+-- ── 12. audit_log — si no existe aún ─────────────
+CREATE TABLE IF NOT EXISTS audit_log (
+  id          uuid        DEFAULT gen_random_uuid() PRIMARY KEY,
+  hotel_id    uuid        REFERENCES hotels(id) ON DELETE CASCADE,
+  user_id     uuid        REFERENCES auth.users(id) ON DELETE SET NULL,
+  user_email  text,
+  role        text,
+  action      text        NOT NULL,
+  entity_type text,
+  entity_id   text,
+  summary     text,
+  description text,
+  changes     jsonb,
+  created_at  timestamptz DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_audit_log_hotel  ON audit_log(hotel_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_log_entity ON audit_log(entity_type, entity_id);
+
+ALTER TABLE audit_log ENABLE ROW LEVEL SECURITY;
+DO $$ BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE tablename='audit_log' AND policyname='audit_admin_only'
+  ) THEN
+    CREATE POLICY audit_admin_only ON audit_log FOR ALL
+      USING (hotel_id IN (
+        SELECT hotel_id FROM hotel_users WHERE user_id = auth.uid() AND role = 'admin'
+      ));
+  END IF;
+END $$;
+
+-- ── FIN ───────────────────────────────────────────
+-- Tablas existentes después de esta migración:
+-- hotels, hotel_users, units, guests, bookings, booking_units,
+-- payments, expenses, reminders, exchange_rates,
+-- hotel_config, guest_notes, hotel_stock,
+-- cleaning_tasks, maintenance_issues, audit_log,
+-- season_pricing, channel_commissions
