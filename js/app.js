@@ -1425,15 +1425,23 @@ function setupThemeSystem() {
   applyTheme(saved);
   markActiveSwatch(saved);
 
-  btn?.addEventListener('click', (e) => { e.stopPropagation(); panel?.classList.toggle('hidden'); });
-  document.addEventListener('click', (e) => { if (!e.target.closest('#theme-picker-wrap')) panel?.classList.add('hidden'); });
+  const showPanel = () => { if (panel) panel.style.display = 'block'; };
+  const hidePanel = () => { if (panel) panel.style.display = 'none';  };
+
+  btn?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    panel?.style.display === 'block' ? hidePanel() : showPanel();
+  });
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('#theme-picker-wrap')) hidePanel();
+  });
   document.querySelectorAll('.theme-swatch').forEach(sw => {
     sw.addEventListener('click', (e) => {
       e.stopPropagation();
       const t = sw.dataset.theme;
       applyTheme(t); markActiveSwatch(t);
       localStorage.setItem('mila_theme', t);
-      panel?.classList.add('hidden');
+      hidePanel();
       Sound?.success();
     });
   });
