@@ -190,7 +190,7 @@ export function generateManagerText(booking, ctx) {
     `- Fecha Ingreso: ${fmt(booking.check_in)}`,
     `- Fecha Salida: ${fmt(booking.check_out)}`,
     `- Noches: ${booking.nights ?? '—'}`,
-    `- Cant de Pers: ${booking.pax ?? ''}${booking.adults ? ` (${booking.adults} adultos${booking.children ? `, ${booking.children} menores` : ''})` : ''}`,"
+    `- Cant de Pers: ${booking.pax ?? ''}${booking.adults ? ` (${booking.adults} adultos${booking.children ? `, ${booking.children} menores` : ''})` : ''}`,
 
     ``,
     `Abonan al ingreso $: ${saldo > 0 ? saldoFmt : '✅ Pagado'}`,
