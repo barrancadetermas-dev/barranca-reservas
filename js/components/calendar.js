@@ -274,21 +274,29 @@ export class Calendar {
   _renderSingleBar(cell, booking) {
     const { color, textColor } = getBookingBarColor(booking);
     const type  = booking._cellType;
-    const guest = booking.guests
-      ? `${booking.guests.first_name} ${booking.guests.last_name}`
-      : (booking.block_reason ?? 'Bloqueo');
+    const firstName = booking.guests?.first_name ?? '';
+    const lastName  = booking.guests?.last_name  ?? '';
+    const blockText = booking.block_reason ?? 'Bloqueo';
+
+    // Formato: "Apellido Nombre" — el apellido siempre completo, nombre hasta donde quepa
+    const guestFull = booking.guests ? `${lastName} ${firstName}`.trim() : blockText;
+    const guestShort = booking.guests ? lastName || firstName : blockText;
 
     const bar = document.createElement('div');
     bar.className  = `bar bar-${type}`;
     bar.style.background  = color;
     bar.dataset.bookingId = booking.id;
 
-    if (type === 'start') {
-      bar.innerHTML = `<span style="color:${textColor};font-size:.7rem;font-weight:700;
-        overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">${guest}</span>`;
+    // Mostrar nombre en start, middle y end (no solo start)
+    // En start: apellido + nombre. En middle/end: solo apellido (más compacto)
+    if (type === 'start' || type === 'middle' || type === 'end') {
+      const label = type === 'start' ? guestFull : guestShort;
+      bar.innerHTML = `<span style="color:${textColor};font-size:.68rem;font-weight:700;
+        overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;
+        min-width:0;display:block">${label}</span>`;
     }
 
-    bar.title = `${guest} | ${booking.check_in} → ${booking.check_out}`;
+    bar.title = `${guestFull} | ${booking.check_in} → ${booking.check_out}`;
     bar.addEventListener('mouseenter', (e) => this._showTooltip(booking, e));
     bar.addEventListener('mousemove',  (e) => this._moveTooltip(e));
     bar.addEventListener('mouseleave', ()  => this._hideTooltip());
