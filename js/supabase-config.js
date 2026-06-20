@@ -121,7 +121,8 @@ export function getBookingColor(status, checkOut) {
 /** Color de un unit: prioridad DB > color default por índice */
 export function getUnitColor(unit) {
   if (!unit) return '#6366F1';
-  return unit.color ?? getDefaultColor(unit.sort_order ?? 1);
+  // Usar || en lugar de ?? para manejar strings vacíos "" además de null/undefined
+  return unit.color || getDefaultColor(unit.sort_order ?? 1);
 }
 
 /** Formato estándar: "#1 · Nombre Unidad" */
@@ -255,7 +256,7 @@ export async function loadHotelContext() {
 
   AppContext.units = (units ?? []).map(u => ({
     ...u,
-    color: u.color ?? getDefaultColor(u.sort_order ?? 1),
+    color: u.color || getDefaultColor(u.sort_order ?? 1),
   }));
 
   // Cargar configuración del hotel (tabla opcional — se crea con schema-v5-nuevas-tablas.sql)

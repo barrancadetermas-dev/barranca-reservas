@@ -219,25 +219,27 @@ async function initApp(user) {
     // ── Demo banner ──
     if (AppContext.IS_DEMO) setupDemoBanner();
 
-    // ── Componentes ──
-    bookingForm = new BookingForm(supabase, AppContext);
+    // ── Componentes — cada uno en su propio try/catch para no bloquear los demás ──
+    const tryInit = (name, fn) => { try { return fn(); } catch(e) { console.error(`[MILA] Error init ${name}:`, e); return null; } };
+
+    bookingForm = tryInit('BookingForm', () => new BookingForm(supabase, AppContext));
     window._bookingFormInstance = bookingForm;
-    dashboard   = new Dashboard(supabase, AppContext, bookingForm);
-    calendar    = new Calendar(supabase, AppContext, bookingForm);
-    bookingList = new BookingList(supabase, AppContext, bookingForm);
-    statistics  = new Statistics(supabase, AppContext);
-    guestsCRM   = new GuestsCRM(supabase, AppContext, bookingForm);
-    configPanel = new ConfigPanel(supabase, AppContext);
-    auditPanel  = new AuditPanel(supabase, AppContext);
-    operations  = new OperationsModule(supabase, AppContext);
-    window._guestsCRM   = guestsCRM;
+    dashboard   = tryInit('Dashboard',  () => new Dashboard(supabase, AppContext, bookingForm));
+    calendar    = tryInit('Calendar',   () => new Calendar(supabase, AppContext, bookingForm));
+    bookingList = tryInit('BookingList',() => new BookingList(supabase, AppContext, bookingForm));
+    statistics  = tryInit('Statistics', () => new Statistics(supabase, AppContext));
+    guestsCRM   = tryInit('GuestsCRM',  () => new GuestsCRM(supabase, AppContext, bookingForm));
+    configPanel = tryInit('ConfigPanel',() => new ConfigPanel(supabase, AppContext));
+    auditPanel  = tryInit('AuditPanel', () => new AuditPanel(supabase, AppContext));
+    operations  = tryInit('Operations', () => new OperationsModule(supabase, AppContext));
+    window._guestsCRM    = guestsCRM;
     window._statsInstance = statistics;
-    window._operations  = operations;
+    window._operations   = operations;
 
     // ── Nav: mostrar/ocultar secciones por rol ──
     setupNavByRole();
 
-    // Restaurar última sección visitada (persiste entre recargas)
+    // Restaurar última sección visitada
     let _startSection = 'dashboard';
     try {
       const _saved = localStorage.getItem('mila_last_section');
@@ -261,15 +263,19 @@ async function initApp(user) {
     document.getElementById('bnav-fab')?.addEventListener('click', () => {
       document.getElementById('btn-new-booking')?.click();
     });
-    setupConnectivityIndicator();
-    setupReminderModal();
-    setupExpenseModal();
-    setupGuestProfileModal();
-    setupWhatsAppModal();
-    setupCancelBookingModal();
-    setupCheckInOutModal();
-    setupDetailModal();
-    _ensureModalCleanup();
+
+    // ── Setup modales — cada uno aislado ──
+    const trySetup = (name, fn) => { try { fn(); } catch(e) { console.error(`[MILA] Error setup ${name}:`, e); } };
+    trySetup('connectivity',  setupConnectivityIndicator);
+    trySetup('calculator',    setupCalculator);
+    trySetup('reminder',      setupReminderModal);
+    trySetup('expense',       setupExpenseModal);
+    trySetup('guestProfile',  setupGuestProfileModal);
+    trySetup('whatsapp',      setupWhatsAppModal);
+    trySetup('cancelBooking', setupCancelBookingModal);
+    trySetup('checkInOut',    setupCheckInOutModal);
+    trySetup('detail',        setupDetailModal);
+    trySetup('modalCleanup',  _ensureModalCleanup);
 
     document.addEventListener('reminders:badge', (e) => updateReminderBadge(e.detail.count));
     document.addEventListener('booking:fullypaid', () => launchConfetti());
@@ -1263,6 +1269,134 @@ document.getElementById('season-close')?.addEventListener('click',  () => docume
 // ══════════════════════════════════════════════════
 // INDICADOR DE CONECTIVIDAD (Realtime + Online)
 // ══════════════════════════════════════════════════
+function setupCalculator() {
+  const overlay = document.getElementById('overlay-calculator');
+  if (!overlay) return;
+
+  // Abrir al hacer clic en el botón del header
+  document.getElementById('btn-calculator')?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const isOpen = !overlay.classList.contains('hidden');
+    if (isOpen) { overlay.classList.add('hidden'); return; }
+    overlay.classList.remove('hidden');
+    _calcUpdate();
+    document.getElementById('calc-price')?.focus();
+  });
+
+  // Cerrar
+  const close = () => overlay.classList.add('hidden');
+  document.getElementById('calc-close')?.addEventListener('click', close);
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !overlay.classList.contains('hidden')) close();
+  });
+
+  // Stepper noches
+  document.getElementById('calc-nights-minus')?.addEventListener('click', () => {
+    const el = document.getElementById('calc-nights');
+    if (el && parseInt(el.value) > 1) { el.value = parseInt(el.value) - 1; _calcUpdate(); }
+  });
+  document.getElementById('calc-nights-plus')?.addEventListener('click', () => {
+    const el = document.getElementById('calc-nights');
+    if (el) { el.value = Math.min(90, parseInt(el.value) + 1); _calcUpdate(); }
+  });
+
+  // Inputs → recalcular
+  ['calc-price','calc-channel','calc-discount-range'].forEach(id => {
+    document.getElementById(id)?.addEventListener('input', _calcUpdate);
+    document.getElementById(id)?.addEventListener('change', _calcUpdate);
+  });
+
+  // Descuento label
+  document.getElementById('calc-discount-range')?.addEventListener('input', (e) => {
+    const lbl = document.getElementById('calc-discount-label');
+    if (lbl) lbl.textContent = e.target.value + '%';
+  });
+
+  // Precio en USD
+  document.getElementById('calc-use-dollar')?.addEventListener('click', () => {
+    const dollarEl = document.getElementById('dollar-badge-value');
+    const rateText = dollarEl?.textContent?.replace(/[^0-9]/g, '');
+    const rate = parseInt(rateText);
+    if (!rate) { showToast('No hay cotización disponible', 'warning'); return; }
+    const priceEl = document.getElementById('calc-price');
+    if (priceEl) {
+      const usdAmount = prompt('¿Cuántos dólares por noche?', '50');
+      if (!usdAmount) return;
+      priceEl.value = Math.round(parseFloat(usdAmount) * rate);
+      _calcUpdate();
+    }
+  });
+
+  // Crear reserva con estos datos
+  document.getElementById('calc-create-booking')?.addEventListener('click', () => {
+    const price = parseFloat(document.getElementById('calc-price')?.value) || 0;
+    if (!price) { showToast('Ingresá un precio primero', 'warning'); return; }
+    close();
+    const priceEl = document.getElementById('f-price');
+    if (priceEl && bookingForm) {
+      bookingForm.open();
+      setTimeout(() => { if (priceEl) priceEl.value = price; }, 100);
+    }
+  });
+
+  function _calcUpdate() {
+    const price    = parseFloat(document.getElementById('calc-price')?.value) || 0;
+    const nights   = parseInt(document.getElementById('calc-nights')?.value) || 1;
+    const discPct  = parseFloat(document.getElementById('calc-discount-range')?.value) || 0;
+    const chanVal  = document.getElementById('calc-channel')?.value ?? 'direct:0';
+    const commPct  = parseFloat(chanVal.split(':')[1]) || 0;
+
+    if (!price) {
+      ['cr-subtotal','cr-disc','cr-comm','cr-total','cr-net','cr-usd'].forEach(id => {
+        const el = document.getElementById(id); if (el) el.textContent = '—';
+      });
+      return;
+    }
+
+    const subtotal  = price * nights;
+    const discAmt   = subtotal * (discPct / 100);
+    const total     = subtotal - discAmt;
+    const commAmt   = total * (commPct / 100);
+    const net       = total - commAmt;
+
+    // USD blue
+    const dollarEl  = document.getElementById('dollar-badge-value');
+    const rateText  = dollarEl?.textContent?.replace(/[^0-9]/g, '');
+    const blueRate  = parseInt(rateText) || 0;
+    const usdEq     = blueRate > 0 ? (total / blueRate).toFixed(0) : null;
+
+    const fmt = n => '$' + Math.round(n).toLocaleString('es-AR');
+
+    const set = (id, text) => { const el = document.getElementById(id); if (el) el.textContent = text; };
+
+    set('cr-subtotal', `${fmt(price)} × ${nights} noche${nights !== 1 ? 's' : ''} = ${fmt(subtotal)}`);
+
+    const discRow = document.getElementById('cr-disc-row');
+    if (discRow) discRow.style.display = discPct > 0 ? '' : 'none';
+    set('cr-disc-label', `Descuento ${discPct}%`);
+    set('cr-disc', `−${fmt(discAmt)}`);
+
+    const commRow = document.getElementById('cr-comm-row');
+    if (commRow) commRow.style.display = commPct > 0 ? '' : 'none';
+    set('cr-comm-label', `Comisión canal ${commPct}%`);
+    set('cr-comm', `−${fmt(commAmt)}`);
+
+    set('cr-total', fmt(total));
+
+    const netRow = document.getElementById('cr-net-row');
+    if (netRow) netRow.style.display = commPct > 0 ? '' : 'none';
+    set('cr-net', fmt(net));
+
+    const usdRow = document.getElementById('cr-usd-row');
+    if (usdRow) usdRow.style.display = usdEq ? '' : 'none';
+    set('cr-usd', usdEq ? `≈ USD ${parseInt(usdEq).toLocaleString('es-AR')}` : '—');
+  }
+
+  // Calcular al abrir
+  _calcUpdate();
+}
+
 function setupConnectivityIndicator() {
   const dot   = document.getElementById('conn-dot');
   const label = document.getElementById('conn-label');

@@ -101,22 +101,23 @@ export class ConfigPanel {
           <span class="config-group-icon">🏠</span>
           <h4>Departamentos / Unidades</h4>
         </div>
-        <div class="config-fields">
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;padding:4px 0">
           ${(this.ctx.units ?? []).map(u => `
-            <div class="config-field" style="grid-column:unset;flex-direction:row;align-items:center;gap:10px;padding:10px 16px">
-              <input type="color" class="unit-color-input" data-unit-id="${u.id}"
-                     value="${u.color ?? '#6366F1'}"
-                     style="width:34px;height:34px;border:none;border-radius:8px;cursor:pointer;
-                            padding:2px;background:none">
-              <div style="flex:1">
-                <div style="font-size:.875rem;font-weight:600">${u.name}</div>
-                <div style="font-size:.72rem;color:var(--color-text-3)">
-                  ${u.max_guests ? `Hasta ${u.max_guests} pers.` : ''} · Orden: #${u.sort_order ?? '?'}
+            <div style="display:flex;flex-direction:column;gap:6px;padding:10px 12px;
+              border:1px solid var(--color-border);border-radius:var(--r-lg);
+              background:var(--color-surface-2)">
+              <div style="display:flex;align-items:center;gap:8px">
+                <input type="color" class="unit-color-input" data-unit-id="${u.id}"
+                       value="${u.color || '#6366F1'}"
+                       style="width:28px;height:28px;border:none;border-radius:6px;
+                              cursor:pointer;padding:2px;background:none;flex-shrink:0">
+                <div style="min-width:0">
+                  <div style="font-size:.78rem;font-weight:700;color:var(--color-text);
+                    white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${u.name}</div>
+                  <div style="font-size:.65rem;color:var(--color-text-3)">#${u.sort_order ?? '?'} · ${u.max_guests ?? '?'} pers.</div>
                 </div>
               </div>
-              <div class="unit-color-preview" style="width:10px;height:10px;border-radius:50%;
-                   background:${u.color ?? '#6366F1'};border:2px solid rgba(255,255,255,.2)"></div>
-            </div>`).join('') || '<div style="padding:16px;color:var(--color-text-3);font-size:.825rem">Sin unidades configuradas.</div>'}
+            </div>`).join('') || '<div style="padding:8px;color:var(--color-text-3);font-size:.8rem">Sin unidades configuradas.</div>'}
         </div>
       </div>`;
 

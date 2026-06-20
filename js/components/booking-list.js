@@ -47,7 +47,7 @@ export class BookingList {
     this._bindSourceFilters();
     this._populateUnitFilter();
 
-    // Event delegation — acciones en la lista
+    // Event delegation en capture phase para evitar que stopPropagation de hijos bloquee
     document.getElementById('bookings-list')?.addEventListener('click', (e) => {
       const btn = e.target.closest('[data-action]');
       const row = e.target.closest('.booking-row');
@@ -55,11 +55,14 @@ export class BookingList {
       const id = row.dataset.bookingId;
 
       if (!btn) {
-        // Clic en la fila → ver detalle
-        this._openDetail(id);
+        // Clic en la fila (fuera de botones) → ver detalle
+        if (!e.target.closest('.booking-actions-cell')) {
+          this._openDetail(id);
+        }
         return;
       }
 
+      e.stopPropagation(); // evitar que el clic en botón abra el detalle
       const action = btn.dataset.action;
       if (action === 'view')      this._openDetail(id);
       if (action === 'edit')      this.bookingForm.openEdit(id);
@@ -68,8 +71,7 @@ export class BookingList {
       if (action === 'checkout')  this._doCheckout(id);
       if (action === 'flag')      this._openFlagModal(id, row);
       if (action === 'duplicate') this._duplicateBooking(id);
-      e.stopPropagation();
-    });
+    }, true); // ← capture phase: recibe el evento ANTES de que los hijos llamen stopPropagation
 
     document.addEventListener('booking:changed', () => {
       if (document.getElementById('section-bookings')?.classList.contains('active')) {

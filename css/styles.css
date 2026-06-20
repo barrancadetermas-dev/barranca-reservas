@@ -3726,3 +3726,257 @@ input[type="color"].unit-color-input::-webkit-color-swatch { border: none; borde
   vertical-align: middle;
   margin-right: 6px;
 }
+
+/* ══════════════════════════════════════════════════
+   MILA v4.2 — Calculadora, Auditoría mejorada
+   ══════════════════════════════════════════════════ */
+
+/* ── CALCULADORA DE ESTADÍA ─────────────────────── */
+.calc-overlay {
+  position: fixed;
+  top: 56px;           /* debajo del header */
+  right: 12px;
+  z-index: 500;
+  width: 320px;
+  max-height: calc(100vh - 72px);
+  overflow-y: auto;
+}
+
+.calc-panel {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--r-xl);
+  box-shadow: var(--sh-lg);
+  overflow: hidden;
+  animation: fadeIn .15s ease;
+}
+
+.calc-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface-2);
+}
+
+.calc-title {
+  font-size: .9rem;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.calc-body {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.calc-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.calc-field label {
+  font-size: .72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: var(--color-text-3);
+}
+
+.calc-input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--r-md);
+  background: var(--color-surface-2);
+  color: var(--color-text);
+  font-size: .88rem;
+}
+
+.calc-input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px var(--color-primary-t, rgba(99,102,241,.15));
+}
+
+.calc-stepper {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--r-md);
+  overflow: hidden;
+  background: var(--color-surface-2);
+}
+
+.calc-stepper .pax-btn {
+  width: 36px;
+  height: 36px;
+  border: none;
+  background: transparent;
+  color: var(--color-text);
+  font-size: 1.1rem;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background var(--t-fast);
+}
+.calc-stepper .pax-btn:hover { background: var(--color-surface-3, var(--color-border)); }
+
+.calc-stepper .pax-input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  text-align: center;
+  font-size: .9rem;
+  font-weight: 700;
+  color: var(--color-text);
+  min-width: 0;
+}
+
+.calc-btn-small {
+  padding: 6px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--r-md);
+  background: var(--color-surface-2);
+  color: var(--color-text-2);
+  font-size: .72rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all var(--t-fast);
+}
+.calc-btn-small:hover {
+  background: var(--color-primary);
+  color: white;
+  border-color: var(--color-primary);
+}
+
+.calc-results {
+  background: var(--color-surface-2);
+  border-radius: var(--r-lg);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.calc-result-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: .8rem;
+  color: var(--color-text-2);
+}
+
+.calc-result-row strong {
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.calc-deduct strong { color: var(--color-warning, #f59e0b); }
+
+.calc-total {
+  border-top: 1px solid var(--color-border);
+  padding-top: 7px;
+  margin-top: 2px;
+  font-size: .92rem;
+  font-weight: 700;
+  color: var(--color-text) !important;
+}
+.calc-total strong { font-size: 1rem; color: var(--color-primary) !important; }
+
+.calc-net strong { color: var(--color-success, #16a34a) !important; }
+
+.calc-usd {
+  font-size: .75rem;
+  opacity: .75;
+}
+
+/* ── AUDITORÍA: grupos colapsables por día ────────── */
+.audit-day-group {
+  margin-bottom: 8px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+}
+
+.audit-day-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 10px 14px;
+  background: var(--color-surface-2);
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  font-size: .78rem;
+  color: var(--color-text-2);
+  transition: background var(--t-fast);
+}
+
+.audit-day-header:hover { background: var(--color-surface-3, var(--color-border)); }
+.audit-day-header.open  { border-bottom: 1px solid var(--color-border); color: var(--color-text); }
+
+.audit-day-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.audit-day-count {
+  font-size: .7rem;
+  padding: 1px 7px;
+  border-radius: var(--r-full);
+  background: var(--color-surface);
+  color: var(--color-text-3);
+  border: 1px solid var(--color-border);
+}
+
+.audit-day-chevron {
+  color: var(--color-text-3);
+  transition: transform .18s ease;
+  flex-shrink: 0;
+}
+
+.audit-day-body {
+  display: none;
+}
+
+.audit-day-body.open {
+  display: block;
+}
+
+.audit-day-body .audit-row {
+  border: none;
+  border-bottom: 1px solid var(--color-border);
+  border-radius: 0;
+  background: transparent;
+}
+
+.audit-day-body .audit-row:last-child {
+  border-bottom: none;
+}
+
+.audit-time {
+  font-size: .7rem;
+  color: var(--color-text-3);
+}
+
+/* ── CALCULADORA: botón activo en header ─────────── */
+#btn-calculator.active,
+#btn-calculator[aria-expanded="true"] {
+  color: var(--color-primary);
+  background: var(--color-primary-t, rgba(99,102,241,.1));
+}
+
+@media (max-width: 480px) {
+  .calc-overlay {
+    width: calc(100vw - 24px);
+    right: 12px;
+  }
+}
