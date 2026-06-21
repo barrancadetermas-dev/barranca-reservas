@@ -283,8 +283,19 @@ async function initApp(user) {
     trySetup('theme',         setupThemeSystem);
     notifService = new NotificationService(supabase);
     trySetup('realNotif',     () => setupRealNotifications(notifService));
-    // Emitir sonido de login
-    setTimeout(() => Sound?.login(), 300);
+    // Emitir sonido de login — defer until first user interaction (iOS Safari requires it)
+    const playLoginSound = () => {
+      Sound?.login?.();
+      document.removeEventListener('click',     playLoginSound);
+      document.removeEventListener('touchstart', playLoginSound);
+    };
+    // Si ya hubo interacción (desktop), tocar inmediato; sino esperar el primer tap
+    if (document.hasFocus() && !navigator.userAgent.match(/iPhone|iPad|iPod/i)) {
+      setTimeout(() => Sound?.login?.(), 400);
+    } else {
+      document.addEventListener('click',     playLoginSound, { once: true });
+      document.addEventListener('touchstart', playLoginSound, { once: true, passive: true });
+    }
 
     document.addEventListener('reminders:badge', (e) => updateReminderBadge(e.detail.count));
     document.addEventListener('booking:fullypaid', () => { launchConfetti(); Sound?.newBooking(); });
@@ -416,17 +427,6 @@ export async function navigateTo(section) {
   document.querySelectorAll('.section').forEach(el => el.classList.remove('active'));
   document.getElementById(`section-${section}`)?.classList.add('active');
   document.getElementById('header-title').textContent = SECTION_TITLES[section] ?? section;
-
-  // Actualizar el header de sección (banner superior dentro del main)
-  const meta = SECTION_META[section];
-  if (meta) {
-    const icon  = document.getElementById('sph-icon');
-    const title = document.getElementById('sph-title');
-    const sub   = document.getElementById('sph-sub');
-    if (icon)  icon.textContent  = meta.icon;
-    if (title) title.textContent = meta.title;
-    if (sub)   sub.textContent   = meta.sub;
-  }
 
   Sound?.click();
   updateHeaderDate();
@@ -1051,7 +1051,15 @@ function setupGlobalShortcuts() {
     // Ctrl+F → Buscar huésped
     if (mod && !e.shiftKey && e.key==='f' && noField()) {
       e.preventDefault();
-      navigateTo('guests').then(() => setTimeout(() => document.getElementById('guest-search-input')?.focus(), 200));
+      navigateTo('guests').then(() => {
+        // ID correcto: guests-search-input (en guests.js) o guest-search (en HTML estático)
+        setTimeout(() => {
+          const el = document.getElementById('guests-search-input')
+                  ?? document.getElementById('guest-search');
+          el?.focus();
+          el?.select();
+        }, 200);
+      });
       return;
     }
     // Ctrl+D → Panel de hoy
@@ -1419,29 +1427,51 @@ const THEMES = {
 };
 
 function setupThemeSystem() {
-  const panel = document.getElementById('theme-panel');
-  const btn   = document.getElementById('btn-theme');
-  if (!panel || !btn) return;
+  const btn = document.getElementById('btn-theme');
+  if (!btn) { console.warn('[Theme] btn-theme not found'); return; }
 
+  // Move panel to body to escape ALL stacking contexts (overflow:hidden, z-index, etc.)
+  const panel = document.getElementById('theme-panel');
+  if (panel && panel.parentElement !== document.body) {
+    document.body.appendChild(panel);
+  }
+
+  // Apply saved theme immediately
   const saved = localStorage.getItem('mila_theme') ?? 'indigo';
   applyTheme(saved);
   markActiveSwatch(saved);
 
-  // Toggle panel on button click
+  let open = false;
+
+  const show = () => {
+    if (!panel) return;
+    // Position relative to btn
+    const rect = btn.getBoundingClientRect();
+    panel.style.top    = `${rect.bottom + 8}px`;
+    panel.style.right  = `${window.innerWidth - rect.right}px`;
+    panel.style.left   = 'auto';
+    panel.style.display = 'block';
+    open = true;
+  };
+
+  const hide = () => {
+    if (panel) panel.style.display = 'none';
+    open = false;
+  };
+
+  hide();
+
   btn.addEventListener('click', (e) => {
     e.stopPropagation();
-    const isVisible = panel.style.display === 'block';
-    panel.style.display = isVisible ? 'none' : 'block';
+    open ? hide() : show();
   });
 
-  // Close panel when clicking outside
   document.addEventListener('click', (e) => {
-    if (!e.target.closest('#theme-picker-wrap')) {
-      panel.style.display = 'none';
+    if (open && e.target !== btn && !e.target.closest('#theme-panel')) {
+      hide();
     }
   });
 
-  // Swatch selection
   document.querySelectorAll('.theme-swatch').forEach(sw => {
     sw.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -1450,7 +1480,7 @@ function setupThemeSystem() {
       applyTheme(t);
       markActiveSwatch(t);
       localStorage.setItem('mila_theme', t);
-      panel.style.display = 'none';
+      hide();
       Sound?.success?.();
     });
   });
@@ -1469,7 +1499,13 @@ function applyTheme(name) {
   document.body.dataset.colorTheme = name;
 }
 function markActiveSwatch(name) {
-  document.querySelectorAll('.theme-swatch').forEach(sw => sw.classList.toggle('active', sw.dataset.theme === name));
+  document.querySelectorAll('.theme-swatch').forEach(sw => {
+    const isActive = sw.dataset.theme === name;
+    sw.classList.toggle('active', isActive);
+    sw.style.border = isActive ? '3px solid white' : '3px solid transparent';
+    sw.style.boxShadow = isActive ? `0 0 0 2px ${sw.style.background}` : 'none';
+    sw.style.transform = isActive ? 'scale(1.1)' : '';
+  });
 }
 
 // ══════════════════════════════════════════════════

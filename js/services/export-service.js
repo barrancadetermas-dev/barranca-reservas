@@ -119,7 +119,63 @@ export function exportPaymentsCSV(payments, filename = 'pagos') {
   showToast(`✓ Exportado: ${payments.length} pagos`, 'success');
 }
 
-// ── Helpers internos ──────────────────────────────
+// ── Reservas → Excel (SheetJS via CDN) ───────────
+export async function exportBookingsExcel(bookings, filename = 'reservas') {
+  if (isDemo()) { showToast('🎭 Exportación no disponible en modo demo', 'warning'); return; }
+  if (!can('exportData')) { showToast('🔒 Sin permiso para exportar', 'warning'); return; }
+  if (!bookings?.length) { showToast('Sin reservas para exportar', 'warning'); return; }
+
+  try {
+    // Cargar SheetJS dinámicamente desde CDN
+    if (!window.XLSX) {
+      await new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+        script.onload = resolve;
+        script.onerror = reject;
+        document.head.appendChild(script);
+      });
+    }
+    const XLSX = window.XLSX;
+
+    const rows = bookings.map(b => {
+      const units = (b.booking_units ?? []).map(bu => bu.units?.name ?? '').join(' + ');
+      const g     = b.guests;
+      return {
+        'Huésped':      g ? `${g.first_name} ${g.last_name}` : (b.block_reason ?? 'Bloqueo'),
+        'DNI':          g?.dni     ?? '',
+        'Teléfono':     g?.phone   ?? '',
+        'Email':        g?.email   ?? '',
+        'Unidades':     units,
+        'Check-in':     b.check_in  ?? '',
+        'Check-out':    b.check_out ?? '',
+        'Noches':       b.nights    ?? '',
+        'Canal':        SOURCE_CONFIG[b.source ?? 'direct']?.label ?? 'Directo',
+        'Estado':       STATUS_LABELS[b.status] ?? b.status,
+        'Precio/noche': b.price_per_night ?? '',
+        'Total':        b.total_amount    ?? '',
+        'Abonado':      b.total_paid      ?? '',
+        'Saldo':        b.balance         ?? '',
+        'Notas':        (b.notes ?? '').replace(/\n/g, ' '),
+      };
+    });
+
+    const ws  = XLSX.utils.json_to_sheet(rows);
+    const wb  = XLSX.utils.book_new();
+    // Ancho de columnas
+    ws['!cols'] = [24,12,14,22,18,12,12,8,12,10,14,12,12,12,30].map(w => ({ wch: w }));
+    XLSX.utils.book_append_sheet(wb, ws, 'Reservas');
+    XLSX.writeFile(wb, `${filename}_${_dateTag()}.xlsx`);
+    showToast(`✓ Excel exportado: ${bookings.length} reservas`, 'success');
+  } catch (err) {
+    console.error('[Export] Excel error:', err);
+    // Fallback a CSV si SheetJS falla
+    exportBookingsCSV(bookings, filename);
+    showToast('Exportado como CSV (fallback)', 'warning');
+  }
+}
+
+
 function _toCSV(headers, rows) {
   const escape = (v) => `"${String(v ?? '').replace(/"/g,'""').replace(/\n/g,' ')}"`;
   return [headers, ...rows].map(r => r.map(escape).join(',')).join('\r\n');

@@ -181,7 +181,9 @@
         </div>
       </div>
       <div class="header-right">
-        <div class="conn-indicator" id="conn-indicator" title="Estado de conexión">
+        <!-- Hidden notification badge for JS reference -->
+          <span id="notif-badge" style="display:none;position:fixed;top:-9999px">0</span>
+          <div class="conn-indicator" id="conn-indicator" title="Estado de conexión">
           <span class="conn-dot" id="conn-dot"></span>
           <span class="conn-label" id="conn-label">Conectado</span>
           <span id="conn-queue-badge" style="display:none;background:#f97316;color:white;
@@ -215,15 +217,15 @@
               <circle cx="12" cy="12" r="3" fill="currentColor" stroke="none"/>
             </svg>
           </button>
-          <div class="theme-panel hidden" id="theme-panel"
-               style="display:none;position:absolute;top:calc(100% + 10px);right:0;background:var(--color-surface,#fff);border:1px solid var(--color-border,#e2e8f0);border-radius:16px;padding:14px 16px;box-shadow:0 10px 40px rgba(0,0,0,.15);z-index:600;min-width:210px">
-            <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#94a3b8;margin-bottom:12px">Tema de color</div>
-            <div style="display:flex;gap:10px;justify-content:center">
-              <button class="theme-swatch active" data-theme="indigo"  title="Índigo"    style="width:30px;height:30px;border-radius:50%;border:3px solid white;background:#6366f1;cursor:pointer;box-shadow:0 0 0 2px #6366f1"></button>
-              <button class="theme-swatch"        data-theme="emerald" title="Esmeralda" style="width:30px;height:30px;border-radius:50%;border:3px solid transparent;background:#10b981;cursor:pointer"></button>
-              <button class="theme-swatch"        data-theme="ocean"   title="Océano"    style="width:30px;height:30px;border-radius:50%;border:3px solid transparent;background:#0891b2;cursor:pointer"></button>
-              <button class="theme-swatch"        data-theme="sunset"  title="Atardecer" style="width:30px;height:30px;border-radius:50%;border:3px solid transparent;background:#f97316;cursor:pointer"></button>
-              <button class="theme-swatch"        data-theme="cherry"  title="Cereza"    style="width:30px;height:30px;border-radius:50%;border:3px solid transparent;background:#e11d48;cursor:pointer"></button>
+          <div id="theme-panel"
+               style="display:none">
+            <div class="theme-panel-title">Tema de color</div>
+            <div class="theme-swatches">
+              <button class="theme-swatch active" data-theme="indigo"  title="Índigo"    style="background:#6366f1"></button>
+              <button class="theme-swatch"        data-theme="emerald" title="Esmeralda" style="background:#10b981"></button>
+              <button class="theme-swatch"        data-theme="ocean"   title="Océano"    style="background:#0891b2"></button>
+              <button class="theme-swatch"        data-theme="sunset"  title="Atardecer" style="background:#f97316"></button>
+              <button class="theme-swatch"        data-theme="cherry"  title="Cereza"    style="background:#e11d48"></button>
             </div>
           </div>
         </div>
@@ -260,21 +262,16 @@
 
     <!-- Main Content -->
     <main class="main-content">
-      <!-- Banner de sección — se actualiza en navigateTo() -->
-      <div class="section-page-header" id="section-page-header">
-        <div class="sph-left">
-          <span class="sph-icon" id="sph-icon">🏠</span>
-          <div>
-            <h2 class="sph-title" id="sph-title">Panel de Hoy</h2>
-            <p  class="sph-sub"   id="sph-sub">Resumen operativo</p>
-          </div>
-        </div>
-        <div class="sph-right" id="sph-right"><!-- acciones contextuales --></div>
-      </div>
 
       <!-- ── SECTION: DASHBOARD ── -->
       <section id="section-dashboard" class="section active">
-        <div class="kpi-grid">
+        <div class="section-page-header">
+          <div class="sph-left">
+            <span class="sph-icon">🏠</span>
+            <div><h2 class="sph-title">Panel de Hoy</h2><p class="sph-sub">Resumen operativo diario</p></div>
+          </div>
+        </div>
+        <div class="kpi-grid" id="kpi-grid">
           <div class="kpi-card kpi-blue" id="kpi-checkins">
             <div class="kpi-icon-wrap"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22"><path d="M15 3h4a2 2 0 012 2v14a2 2 0 01-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg></div>
             <div class="kpi-body"><span class="kpi-label">Check-ins hoy</span><span class="kpi-value" id="kpi-checkins-val">—</span></div>
@@ -357,6 +354,21 @@
             <div class="arrivals-list" id="departures-list"><p class="empty-state-sm">Sin salidas hoy</p></div>
           </div>
 
+          <!-- Revenue this month -->
+          <div class="card" id="dashboard-revenue"></div>
+
+          <!-- Upcoming arrivals (7 days) -->
+          <div class="card widget-upcoming">
+            <div class="card-header"><h3>Próximas llegadas</h3><span class="badge badge-today">7 días</span></div>
+            <div id="dashboard-upcoming"><p class="empty-state-sm">Sin llegadas próximas</p></div>
+          </div>
+
+          <!-- Ops badge (cleaning tasks) -->
+          <div id="dashboard-ops-badge" style="display:none"></div>
+
+          <!-- Forecast -->
+          <div id="dashboard-forecast"></div>
+
           <!-- Reminders -->
           <div class="card widget-reminders">
             <div class="card-header">
@@ -370,6 +382,12 @@
 
       <!-- ── SECTION: CALENDAR ── -->
       <section id="section-calendar" class="section">
+        <div class="section-page-header">
+          <div class="sph-left">
+            <span class="sph-icon">📅</span>
+            <div><h2 class="sph-title">Calendario</h2><p class="sph-sub">Vista mensual · Drag &amp; Drop · <kbd>Shift</kbd>+arrastre para bloquear</p></div>
+          </div>
+        </div>
         <div class="cal-toolbar">
           <div class="cal-nav">
             <button class="btn btn-ghost btn-icon" id="cal-prev" title="Mes anterior">
@@ -405,7 +423,14 @@
       </section>
 
       <!-- ── SECTION: BOOKINGS ── -->
+      <!-- ── SECTION: BOOKINGS ── -->
       <section id="section-bookings" class="section">
+        <div class="section-page-header">
+          <div class="sph-left">
+            <span class="sph-icon">📋</span>
+            <div><h2 class="sph-title">Reservas</h2><p class="sph-sub">Gestión completa de reservas</p></div>
+          </div>
+        </div>
         <div class="card search-card">
           <div class="search-bar">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="17" height="17" class="search-icon"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
@@ -421,8 +446,22 @@
               <option value="blocked">Bloqueada</option>
             </select>
             <select id="filter-unit" class="filter-select"><option value="">Todas las unidades</option></select>
-            <input type="date" id="filter-date-from" class="filter-input">
-            <input type="date" id="filter-date-to" class="filter-input">
+            <div class="filter-date-wrap">
+              <input type="date" id="filter-date-from" class="filter-input" title="Check-in desde">
+              <span style="font-size:.72rem;color:var(--color-text-3)">→</span>
+              <input type="date" id="filter-date-to"   class="filter-input" title="Check-out hasta">
+              <button class="bl-date-clear" id="filter-date-clear" title="Limpiar fechas" style="display:none">✕</button>
+            </div>
+          </div>
+          <!-- Presets de fecha rápidos -->
+          <div class="date-preset-row" id="date-preset-row">
+            <span style="font-size:.7rem;color:var(--color-text-3);font-weight:600">Período:</span>
+            <button class="date-preset-btn" data-preset="today">Hoy</button>
+            <button class="date-preset-btn" data-preset="week">Esta semana</button>
+            <button class="date-preset-btn" data-preset="month">Este mes</button>
+            <button class="date-preset-btn" data-preset="last-month">Mes anterior</button>
+            <button class="date-preset-btn" data-preset="next-month">Mes siguiente</button>
+            <button class="date-preset-btn" data-preset="year">Este año</button>
           </div>
           <!-- Filtros de origen -->
           <div class="source-filter-row" id="source-filter-row">
@@ -451,7 +490,14 @@
       </section>
 
       <!-- ── SECTION: STATISTICS ── -->
+      <!-- ── SECTION: STATISTICS ── -->
       <section id="section-statistics" class="section">
+        <div class="section-page-header">
+          <div class="sph-left">
+            <span class="sph-icon">📊</span>
+            <div><h2 class="sph-title">Estadísticas</h2><p class="sph-sub">Ingresos · Ocupación · ADR · RevPAR</p></div>
+          </div>
+        </div>
         <div class="stats-toolbar">
           <div class="stats-period-selectors">
             <select id="stats-month" class="filter-select"></select>
@@ -496,7 +542,11 @@
 
       <!-- ── SECTION: REMINDERS ── -->
       <section id="section-reminders" class="section">
-        <div style="display:flex;justify-content:flex-end;margin-bottom:16px">
+        <div class="section-page-header">
+          <div class="sph-left">
+            <span class="sph-icon">🔔</span>
+            <div><h2 class="sph-title">Recordatorios</h2><p class="sph-sub">Recordatorios y mantenimiento programado</p></div>
+          </div>
           <button class="btn btn-primary btn-sm" id="btn-add-reminder-main">+ Nuevo Recordatorio</button>
         </div>
         <div id="reminders-full-list"></div>
@@ -504,21 +554,45 @@
 
       <!-- ── SECTION: GUESTS CRM ── -->
       <section id="section-guests" class="section">
+        <div class="section-page-header">
+          <div class="sph-left">
+            <span class="sph-icon">👥</span>
+            <div><h2 class="sph-title">Huéspedes / CRM</h2><p class="sph-sub">Historial · Notas · Antecedentes</p></div>
+          </div>
+        </div>
         <div id="guests-container"></div>
       </section>
 
       <!-- ── SECTION: OPERATIONS ── -->
       <section id="section-operations" class="section">
+        <div class="section-page-header">
+          <div class="sph-left">
+            <span class="sph-icon">🔧</span>
+            <div><h2 class="sph-title">Operaciones</h2><p class="sph-sub">Limpieza · Mantenimiento · Stock</p></div>
+          </div>
+        </div>
         <div id="operations-container"></div>
       </section>
 
             <!-- ── SECTION: AUDIT LOG (Admin only) ── -->
       <section id="section-audit" class="section">
+        <div class="section-page-header">
+          <div class="sph-left">
+            <span class="sph-icon">📜</span>
+            <div><h2 class="sph-title">Auditoría</h2><p class="sph-sub">Registro de acciones del sistema</p></div>
+          </div>
+        </div>
         <div id="audit-container"></div>
       </section>
 
       <!-- ── SECTION: CONFIG (Admin only) ── -->
       <section id="section-config" class="section">
+        <div class="section-page-header">
+          <div class="sph-left">
+            <span class="sph-icon">⚙️</span>
+            <div><h2 class="sph-title">Configuración</h2><p class="sph-sub">Comisiones · Tarifas · Departamentos</p></div>
+          </div>
+        </div>
         <div id="config-container"></div>
       </section>
 
@@ -644,7 +718,7 @@
           </div>
           <div class="pax-total" id="pax-total-display">
             <span class="pax-total-num" id="pax-total-num">1</span>
-            <span class="pax-total-label">persona en total</span>
+            <span class="pax-total-label" id="pax-total-label">persona en total</span>
           </div>
         </div>
         <input type="hidden" id="f-pax" value="1">

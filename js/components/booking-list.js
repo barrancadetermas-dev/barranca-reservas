@@ -173,7 +173,73 @@ export class BookingList {
         const key = '_' + id.replace('filter-', '').replace(/-([a-z])/g, (_, c) => c.toUpperCase());
         this[key] = e.target.value;
         this._page = 1;
+        this._updateDateClearBtn();
         this._render(new Date().toISOString().split('T')[0]);
+      });
+    });
+
+    // Limpiar fechas
+    document.getElementById('filter-date-clear')?.addEventListener('click', () => {
+      document.getElementById('filter-date-from').value = '';
+      document.getElementById('filter-date-to').value   = '';
+      this._dateFrom = '';
+      this._dateTo   = '';
+      this._updateDateClearBtn();
+      this._clearActivePreset();
+      this._page = 1;
+      this._render(new Date().toISOString().split('T')[0]);
+    });
+
+    // Presets de fecha rápidos
+    document.querySelectorAll('.date-preset-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const now   = new Date();
+        const y     = now.getFullYear();
+        const m     = now.getMonth();
+        let from, to;
+
+        switch (btn.dataset.preset) {
+          case 'today':
+            from = to = now.toISOString().split('T')[0];
+            break;
+          case 'week': {
+            const day  = now.getDay() || 7;
+            const mon  = new Date(now); mon.setDate(now.getDate() - day + 1);
+            const sun  = new Date(mon); sun.setDate(mon.getDate() + 6);
+            from = mon.toISOString().split('T')[0];
+            to   = sun.toISOString().split('T')[0];
+            break;
+          }
+          case 'month':
+            from = `${y}-${String(m+1).padStart(2,'0')}-01`;
+            to   = new Date(y, m+1, 0).toISOString().split('T')[0];
+            break;
+          case 'last-month':
+            from = new Date(y, m-1, 1).toISOString().split('T')[0];
+            to   = new Date(y, m, 0).toISOString().split('T')[0];
+            break;
+          case 'next-month':
+            from = new Date(y, m+1, 1).toISOString().split('T')[0];
+            to   = new Date(y, m+2, 0).toISOString().split('T')[0];
+            break;
+          case 'year':
+            from = `${y}-01-01`;
+            to   = `${y}-12-31`;
+            break;
+        }
+
+        if (from && to) {
+          document.getElementById('filter-date-from').value = from;
+          document.getElementById('filter-date-to').value   = to;
+          this._dateFrom = from;
+          this._dateTo   = to;
+          this._updateDateClearBtn();
+          // Marcar preset activo visualmente
+          document.querySelectorAll('.date-preset-btn').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          this._page = 1;
+          this._render(new Date().toISOString().split('T')[0]);
+        }
       });
     });
 
@@ -182,6 +248,15 @@ export class BookingList {
       this._page++;
       this._render(new Date().toISOString().split('T')[0]);
     });
+  }
+
+  _updateDateClearBtn() {
+    const btn = document.getElementById('filter-date-clear');
+    if (btn) btn.style.display = (this._dateFrom || this._dateTo) ? '' : 'none';
+  }
+
+  _clearActivePreset() {
+    document.querySelectorAll('.date-preset-btn').forEach(b => b.classList.remove('active'));
   }
 
   _populateUnitFilter() {
