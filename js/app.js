@@ -1618,7 +1618,17 @@ function setupCalculator() {
         else if (k === '=') {
           try {
             const safe = _normExpr.replace(/×/g,'*').replace(/÷/g,'/').replace(/−/g,'-');
-            const result = Function(`"use strict"; return (${safe})`)();
+            // Safe eval using basic parser (no Function() - blocked by some CSP)
+          let result = NaN;
+          try {
+            const m = safe.match(/^(-?[\d.]+)\s*([+\-*/])\s*(-?[\d.]+)$/);
+            if (m) {
+              const a = parseFloat(m[1]), op = m[2], b = parseFloat(m[3]);
+              result = op==='+' ? a+b : op==='-' ? a-b : op==='*' ? a*b : op==='/' ? a/b : NaN;
+            } else {
+              result = parseFloat(safe) || 0;
+            }
+          } catch { result = NaN; }
             _normDisplay = String(parseFloat(result.toFixed(10)));
             _normExpr = _normDisplay;
             _normHasResult = true;
