@@ -39,7 +39,7 @@ export class BookingForm {
     this.db  = supabase;
     this.ctx = ctx;
     this._currentStep = 1;
-    this._totalSteps  = 4;
+    this._totalSteps  = 5;
     this._editingId   = null;
     this._selectedGuestId = null;
     this._selectedUnitIds = new Set();
@@ -178,11 +178,12 @@ export class BookingForm {
     this._editingId = bookingId;
 
     try {
-      const { data: b } = await this.db
+      const { data: b, error } = await this.db
         .from('bookings')
-        .select('*, guests(*), booking_units(unit_id), payments(*)')
+        .select('*, guests!bookings_guest_id_fkey(*), booking_units(unit_id), payments(*)')
         .eq('id', bookingId).single();
 
+      if (error) throw error;
       if (!b) { showToast('No se encontró la reserva', 'error'); return; }
 
       // Rellenar huésped
@@ -653,22 +654,29 @@ export class BookingForm {
       el.classList.toggle('completed', i + 1 < step);
     });
 
-    const backBtn = document.getElementById('btn-step-back');
-    const nextBtn = document.getElementById('btn-step-next');
-    if (backBtn) backBtn.style.visibility = step > 1 ? 'visible' : 'hidden';
-    if (nextBtn) nextBtn.textContent = step === this._totalSteps
-      ? (this._editingId ? 'Guardar cambios' : 'Confirmar reserva')
+    const backBtn  = document.getElementById('btn-step-back');
+    const nextBtn  = document.getElementById('btn-step-next');
+    const footer   = document.querySelector('.modal-footer');
+
+    // En paso 5 (voucher): ocultar footer normal, mostrar acciones del voucher
+    const onVoucher = step === 5;
+    if (footer) footer.style.display = onVoucher ? 'none' : '';
+    if (backBtn) backBtn.style.visibility = (step > 1 && !onVoucher) ? 'visible' : 'hidden';
+    if (nextBtn) nextBtn.textContent = step === 4
+      ? 'Ver Resumen →'
+      : step < 4
+      ? 'Continuar →'
       : 'Continuar →';
 
     if (step === 4) this._updatePaymentSummary();
+    if (step === 5) this._renderVoucher();
   }
 
-  // Continuar → siguiente paso O guardar (sin validación hasta guardar)
+  // Continuar → siguiente paso O mostrar voucher en paso 5
   _nextStep() {
     if (this._currentStep < this._totalSteps) {
+      if (this._currentStep === 4 && !this._validateAll()) return; // validar antes del voucher
       this._goToStep(this._currentStep + 1);
-    } else {
-      this._submit();
     }
   }
 
@@ -956,6 +964,172 @@ export class BookingForm {
   }
 
   // ── Submit ────────────────────────────────────────
+  // ── Voucher — Paso 5 ─────────────────────────────
+  _renderVoucher() {
+    const el = document.getElementById('booking-voucher');
+    if (!el) return;
+
+    // Collect data from previous steps
+    const fn     = document.getElementById('f-firstname')?.value?.trim() ?? '';
+    const ln     = document.getElementById('f-lastname')?.value?.trim()  ?? '';
+    const dni    = document.getElementById('f-dni')?.value?.trim()       ?? '';
+    const phone  = document.getElementById('f-phone')?.value?.trim()     ?? '';
+    const email  = document.getElementById('f-email')?.value?.trim()     ?? '';
+    const ci     = document.getElementById('f-checkin')?.value  ?? '';
+    const co     = document.getElementById('f-checkout')?.value ?? '';
+    const price  = parseFloat(document.getElementById('f-price')?.value  ?? 0);
+    const notes  = document.getElementById('f-notes')?.value?.trim() ?? '';
+    const adults   = parseInt(document.getElementById('f-adults')?.value   ?? 1);
+    const children = parseInt(document.getElementById('f-children')?.value ?? 0);
+
+    // Units
+    const unitNames = (this.ctx?.units ?? [])
+      .filter(u => this._selectedUnitIds.has(String(u.id)))
+      .map(u => u.name).join(', ');
+
+    // Source
+    const selectedChip = document.querySelector('#f-source-selector .src-chip.selected');
+    const source = selectedChip?.dataset?.source ?? 'direct';
+
+    // Nights & financials
+    const nightsN    = ci && co ? Math.round((new Date(co) - new Date(ci)) / 86400000) : 0;
+    const discPct    = parseFloat(document.getElementById('f-discount')?.value    ?? 0);
+    const surcharge  = parseFloat(document.getElementById('f-surcharge')?.value   ?? 0);
+    const freeNights = parseInt(document.getElementById('f-free-nights')?.value ?? 0);
+    const billable   = Math.max(0, nightsN - freeNights);
+    const subtotal   = billable * price;
+    const discount   = subtotal * discPct / 100;
+    const total      = subtotal - discount + surcharge;
+    const paid       = this._getTotalPaid();
+    const balance    = total - paid;
+    const fmt = n => '$' + Math.round(n).toLocaleString('es-AR');
+    const fmtDate = d => d ? new Date(d + 'T12:00:00').toLocaleDateString('es-AR', {weekday:'short',day:'numeric',month:'short'}) : '—';
+
+    // Payment rows
+    const payRows = [];
+    document.querySelectorAll('.payment-row').forEach(row => {
+      const amt  = parseFloat(row.querySelector('.pay-amount')?.value) || 0;
+      const meth = row.querySelector('.pay-method')?.value;
+      const date = row.querySelector('.pay-date')?.value;
+      const note = row.querySelector('.pay-note')?.value ?? '';
+      if (amt > 0) {
+        const labels = { cash:'Efectivo', transfer:'Transferencia', mercadopago:'MercadoPago',
+          naranjax:'Naranja X', uala:'Ualá', debit_card:'Tarjeta Débito',
+          credit_card:'Tarjeta Crédito (+10%)', credit_note:'Nota de Crédito / Voucher' };
+        payRows.push({ label: labels[meth] ?? meth, amount: meth === 'credit_card' ? amt * 1.10 : amt, date, note });
+      }
+    });
+
+    const statusText = paid <= 0 ? 'Sin seña' : balance <= 0 ? 'Pagado total' : 'Con seña';
+    const statusColor = paid <= 0 ? '#f59e0b' : balance <= 0 ? '#16a34a' : '#fb7185';
+
+    el.innerHTML = `
+      <div class="voucher-header">
+        <div class="voucher-hotel">${this.ctx?.hotel?.name ?? 'Barranca de Termas'}</div>
+        <div class="voucher-title">${this._editingId ? 'Actualización de Reserva' : 'Nueva Reserva'}</div>
+        <span class="voucher-status-pill" style="background:${statusColor}20;color:${statusColor};border:1px solid ${statusColor}40">${statusText}</span>
+      </div>
+
+      <div class="voucher-section">
+        <div class="voucher-section-title">👤 Huésped</div>
+        <div class="voucher-row"><strong>${(fn + ' ' + ln).trim() || '—'}</strong></div>
+        ${dni   ? `<div class="voucher-row-sm">DNI: ${dni}</div>` : ''}
+        ${phone ? `<div class="voucher-row-sm">📱 ${phone}</div>` : ''}
+        ${email ? `<div class="voucher-row-sm">✉️ ${email}</div>` : ''}
+      </div>
+
+      <div class="voucher-section">
+        <div class="voucher-section-title">🛏️ Estadía</div>
+        <div class="voucher-dates-grid">
+          <div><div class="voucher-label">CHECK-IN</div><div class="voucher-date-val">${fmtDate(ci)}</div></div>
+          <div style="text-align:center;color:var(--color-text-3);font-size:1.2rem">→</div>
+          <div><div class="voucher-label">CHECK-OUT</div><div class="voucher-date-val">${fmtDate(co)}</div></div>
+        </div>
+        <div class="voucher-row-sm" style="margin-top:6px">
+          🌙 ${nightsN} noche${nightsN !== 1 ? 's' : ''}&nbsp;·&nbsp;
+          👥 ${adults} adulto${adults !== 1 ? 's' : ''}${children ? ` + ${children} menor${children !== 1 ? 'es' : ''}` : ''}
+        </div>
+        <div class="voucher-row-sm">🏠 ${unitNames || '—'}</div>
+      </div>
+
+      <div class="voucher-section">
+        <div class="voucher-section-title">💰 Finanzas</div>
+        <div class="voucher-fin-row"><span>Precio por noche</span><span>${fmt(price)}</span></div>
+        <div class="voucher-fin-row"><span>Noches facturadas (${billable})</span><span>${fmt(subtotal)}</span></div>
+        ${discPct > 0   ? `<div class="voucher-fin-row voucher-disc"><span>Descuento ${discPct}%</span><span>−${fmt(discount)}</span></div>` : ''}
+        ${surcharge > 0 ? `<div class="voucher-fin-row"><span>Recargo</span><span>+${fmt(surcharge)}</span></div>` : ''}
+        ${freeNights > 0 ? `<div class="voucher-fin-row voucher-disc"><span>Noches sin cargo (${freeNights})</span><span>✓</span></div>` : ''}
+        <div class="voucher-fin-row voucher-total"><span><strong>TOTAL</strong></span><span><strong>${fmt(total)}</strong></span></div>
+        ${payRows.map(p => `
+          <div class="voucher-fin-row" style="font-size:.78rem;color:var(--color-text-2)">
+            <span>↳ ${p.label}${p.date ? ' · ' + p.date : ''}${p.note ? ' · ' + p.note : ''}</span>
+            <span>${fmt(p.amount)}</span>
+          </div>`).join('')}
+        <div class="voucher-fin-row" style="margin-top:6px">
+          <span>Abonado</span><span style="color:#16a34a;font-weight:600">${fmt(paid)}</span>
+        </div>
+        <div class="voucher-fin-row ${balance > 0 ? 'voucher-saldo-pending' : 'voucher-saldo-ok'}">
+          <span><strong>${balance > 0 ? '⚠️ Saldo pendiente' : '✅ Sin saldo'}</strong></span>
+          <span><strong>${balance > 0 ? fmt(balance) : '—'}</strong></span>
+        </div>
+      </div>
+
+      ${notes ? `<div class="voucher-section">
+        <div class="voucher-section-title">📝 Observaciones</div>
+        <div class="voucher-notes">${notes}</div>
+      </div>` : ''}`;
+
+    // Wire voucher action buttons
+    document.getElementById('btn-voucher-confirm')?.addEventListener('click', () => this._submit(), { once: true });
+    document.getElementById('btn-voucher-pdf')?.addEventListener('click', () => this._exportVoucherPDF());
+    document.getElementById('btn-voucher-whatsapp')?.addEventListener('click', () => this._sendVoucherToManager());
+  }
+
+  _exportVoucherPDF() {
+    const el = document.getElementById('booking-voucher');
+    if (!el) return;
+    // Simple print-based PDF export
+    const fn  = document.getElementById('f-firstname')?.value?.trim() ?? '';
+    const ln  = document.getElementById('f-lastname')?.value?.trim()  ?? '';
+    const win = window.open('', '_blank');
+    win.document.write(`
+      <!DOCTYPE html><html><head>
+        <meta charset="utf-8">
+        <title>Reserva – ${fn} ${ln}</title>
+        <style>
+          body { font-family: sans-serif; max-width: 560px; margin: 0 auto; padding: 24px; color: #1e293b; }
+          h1 { font-size: 1.1rem; font-weight: 700; margin: 0 0 4px; }
+          .section { margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid #e2e8f0; }
+          .label { font-size: .65rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: #94a3b8; margin-bottom: 2px; }
+          .row { display: flex; justify-content: space-between; font-size: .85rem; margin-bottom: 3px; }
+          .total { font-weight: 700; border-top: 2px solid #1e293b; padding-top: 6px; margin-top: 4px; }
+          @media print { body { padding: 0; } }
+        </style>
+      </head><body>${el.innerHTML}</body></html>`);
+    win.document.close();
+    setTimeout(() => win.print(), 300);
+  }
+
+  _sendVoucherToManager() {
+    const fn   = document.getElementById('f-firstname')?.value?.trim() ?? '';
+    const ln   = document.getElementById('f-lastname')?.value?.trim()  ?? '';
+    const ci   = document.getElementById('f-checkin')?.value  ?? '';
+    const co   = document.getElementById('f-checkout')?.value ?? '';
+    const unit = (this.ctx?.units ?? []).filter(u => this._selectedUnitIds.has(String(u.id))).map(u => u.name).join(', ');
+    const wifiName = this.ctx?.config?.wifi_name ?? '';
+    const wifiPass = this.ctx?.config?.wifi_pass ?? '';
+    const msg = encodeURIComponent(
+      `*Nueva Reserva* 🏨\n\n` +
+      `👤 Huésped: *${(fn + ' ' + ln).trim()}*\n` +
+      `🏠 Unidad: ${unit || '—'}\n` +
+      `📅 Ingreso: ${ci}\n📅 Salida: ${co}\n` +
+      (wifiName ? `📶 WiFi: ${wifiName} / ${wifiPass}\n` : '') +
+      `\n_Enviado desde MILA_`
+    );
+    const managerPhone = this.ctx?.config?.manager_phone ?? '';
+    window.open(`https://wa.me/${managerPhone.replace(/\D/g, '')}?text=${msg}`, '_blank');
+  }
+
   async _submit() {
     if (!this._validateAll()) return;
 

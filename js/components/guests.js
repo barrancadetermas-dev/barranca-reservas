@@ -264,11 +264,11 @@ export class GuestsCRM {
         </div>
         <div class="tag-checkboxes" style="display:flex;flex-wrap:wrap;gap:8px">
           ${[
-            ['vip',         '⭐ VIP'],
-            ['frecuente',   '♺ Frecuente'],
-            ['empresa',     '🏢 Empresa'],
-            ['referido',    '👥 Referido'],
-            ['no_recomendar','⛔ No recomendar'],
+            ['vip',        '👑 VIP / Preferencial'],
+            ['frecuente',  '🔄 Huésped frecuente'],
+            ['empresa',    '🏢 Cliente empresa'],
+            ['referido',   '👥 Referido'],
+            ['sin_cargo',  '🎁 Estadía sin cargo'],
           ].map(([key, label]) => `
             <label class="tag-toggle ${(g.tags??[]).includes(key) ? 'active' : ''}" data-tag="${key}">
               <input type="checkbox" style="display:none" ${(g.tags??[]).includes(key) ? 'checked' : ''}>
@@ -303,11 +303,12 @@ export class GuestsCRM {
 
   _buildTagBadges(tags) {
     const MAP = {
-      vip:           ['⭐ VIP',       'gtag-vip'],
-      frecuente:     ['♺ Frecuente',  'gtag-frecuente'],
-      empresa:       ['🏢 Empresa',   'gtag-empresa'],
-      referido:      ['👥 Referido',  'gtag-referido'],
-      no_recomendar: ['⛔ No recomendar','gtag-norec'],
+      vip:          ['👑 VIP',            'gtag-vip'],
+      frecuente:    ['🔄 Frecuente',      'gtag-frecuente'],
+      empresa:      ['🏢 Empresa',        'gtag-empresa'],
+      referido:     ['👥 Referido',       'gtag-referido'],
+      sin_cargo:    ['🎁 Sin cargo',      'gtag-sincargo'],
+      no_recomendar:['⚠️ Mala exp.',      'gtag-bad'],   // legacy
     };
     if (!tags?.length) return '<span style="font-size:.75rem;color:var(--color-text-3)">Sin etiquetas</span>';
     return tags.map(t => {

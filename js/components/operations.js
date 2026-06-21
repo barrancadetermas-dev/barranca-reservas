@@ -91,12 +91,14 @@ export class OperationsModule {
 
     try {
       const today = toISODate(new Date());
-      const { data } = await this.db
+      const { data, error } = await this.db
         .from('cleaning_tasks')
-        .select('*,units(name)')
+        .select('*')   // sin units() join — puede fallar si FK no está en cache
         .eq('hotel_id', this.ctx.hotelId)
         .order('scheduled_date', { ascending: true })
         .limit(100);
+
+      if (error) throw error;
 
       if (!data?.length) {
         panel.innerHTML = `
@@ -275,12 +277,14 @@ export class OperationsModule {
     header.querySelector('#btn-add-maint')?.addEventListener('click', () => this._openMaintenanceModal());
 
     try {
-      const { data } = await this.db
+      const { data, error: listErr } = await this.db
         .from('maintenance_issues')
-        .select('*,units(name)')
+        .select('*')   // sin units() join
         .eq('hotel_id', this.ctx.hotelId)
         .order('created_at', { ascending: false })
         .limit(100);
+
+      if (listErr) throw listErr;
 
       if (!data?.length) {
         panel.innerHTML = `
