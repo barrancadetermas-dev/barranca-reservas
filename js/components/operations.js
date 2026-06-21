@@ -48,14 +48,11 @@ export class OperationsModule {
 
   _renderShell() {
     return `
-      <div class="section-header-row" style="margin-bottom:20px">
-        <div></div>
-        <div id="ops-header-actions"></div>
-      </div>
-      <div class="tabs-bar">
+      <div class="tabs-bar ops-tabs">
         <button class="tab active" data-ops-tab="cleaning">🧹 Limpieza</button>
         <button class="tab" data-ops-tab="maintenance">🔧 Mantenimiento</button>
         <button class="tab" data-ops-tab="stock">📦 Stock</button>
+        <div class="ops-tab-actions" id="ops-header-actions"></div>
       </div>
       <div id="ops-panel"></div>
     `;

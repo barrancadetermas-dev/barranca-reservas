@@ -4244,3 +4244,126 @@ input[type="color"].unit-color-input::-webkit-color-swatch { border: none; borde
 [data-theme="dark"] .status-partial  { background: rgba(239,68,68,.12);  color: #f87171; }
 [data-theme="dark"] .status-paid     { background: rgba(34,197,94,.12);  color: #4ade80; }
 [data-theme="dark"] .status-cancelled{ background: rgba(148,163,184,.1); color: #94a3b8; }
+
+/* ══════════════════════════════════════════════════
+   MILA — Form fixes: pax grid, channel chips,
+   field errors, ops tabs layout
+   ══════════════════════════════════════════════════ */
+
+/* ── Pax selector — 2-column grid ───────────────── */
+.pax-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.pax-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--r-lg);
+  background: var(--color-surface-2);
+}
+
+.pax-col-label {
+  font-size: .78rem;
+  font-weight: 600;
+  color: var(--color-text-2);
+  white-space: nowrap;
+}
+
+.pax-total-bar {
+  text-align: center;
+  padding: 6px 0 2px;
+  font-size: .8rem;
+  color: var(--color-text-2);
+}
+
+.pax-total-bar #pax-total-num {
+  font-weight: 800;
+  color: var(--color-primary);
+  font-size: 1rem;
+  margin-right: 4px;
+}
+
+/* ── Source channel chips — compact one row ──────── */
+#f-source-selector {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 5px !important;
+}
+
+.src-chip {
+  padding: 4px 9px !important;
+  font-size: .7rem !important;
+  gap: 4px !important;
+  border-radius: var(--r-sm) !important;
+  min-width: 0 !important;
+  white-space: nowrap;
+}
+
+.src-dot {
+  width: 6px !important;
+  height: 6px !important;
+  flex-shrink: 0;
+}
+
+.src-label { font-size: .7rem !important; }
+
+/* ── Field error highlight ───────────────────────── */
+.field-error,
+input.field-error,
+textarea.field-error,
+select.field-error {
+  border-color: #ef4444 !important;
+  box-shadow: 0 0 0 3px rgba(239,68,68,.15) !important;
+  animation: shake .25s ease;
+}
+
+@keyframes shake {
+  0%,100% { transform: translateX(0); }
+  25%      { transform: translateX(-4px); }
+  75%      { transform: translateX(4px); }
+}
+
+/* ── Operations: tabs with action button inline ──── */
+.ops-tabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border-bottom: 1px solid var(--color-border);
+  margin-bottom: 16px;
+  padding-bottom: 0;
+}
+
+.ops-tab-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ── Section page header compact ─────────────────── */
+.section-page-header {
+  padding-bottom: 12px !important;
+  margin-bottom: 16px !important;
+}
+
+/* ── Form groups more compact ─────────────────────── */
+.form-group {
+  margin-bottom: 14px !important;
+}
+
+.step-content {
+  gap: 14px !important;
+}
+
+/* ── Modal compact on small screens ─────────────── */
+@media (max-height: 700px) {
+  .booking-modal-body { max-height: calc(100vh - 200px) !important; }
+  .form-group { margin-bottom: 10px !important; }
+  .pax-col { padding: 8px !important; }
+}

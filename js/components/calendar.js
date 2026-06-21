@@ -76,22 +76,16 @@ export class Calendar {
       ]);
       this._lastRenderedBookings = bookings;
 
-      if (this._view === 'list') {
-        this._renderListView(bookings);
-      } else if (this._view === 'week') {
-        this._renderWeekView(bookings);
-      } else {
-        const cellMap     = this._buildCellMap(bookings);
-        const reminderMap = this._buildReminderMap(reminders);
-        this._render(cellMap, reminderMap);
-        this._renderAccordionLegend();
-        if (!this._dragBound) {
-          const grid = document.getElementById('calendar-grid');
-          if (grid) {
-            this._setupDragSelection(grid);
-            this._setupBarDrag(grid);
-            this._dragBound = true;
-          }
+      const cellMap     = this._buildCellMap(bookings);
+      const reminderMap = this._buildReminderMap(reminders);
+      this._render(cellMap, reminderMap);
+      this._renderAccordionLegend();
+      if (!this._dragBound) {
+        const grid = document.getElementById('calendar-grid');
+        if (grid) {
+          this._setupDragSelection(grid);
+          this._setupBarDrag(grid);
+          this._dragBound = true;
         }
       }
     } catch (err) {
@@ -591,33 +585,34 @@ export class Calendar {
 
   // ── Bloquear rango de fechas ──────────────────────
   async _blockRange(unitId, checkIn, checkOut, reason) {
-    const unit = this.ctx.units.find(u => u.id === unitId);
+    const unit     = this.ctx.units.find(u => u.id === unitId);
     const unitName = unit?.name ?? 'unidad';
-
-    const nights = Math.round((new Date(checkOut) - new Date(checkIn)) / 86400000);
-    if (!confirm(`Bloquear ${unitName} del ${checkIn} al ${checkOut} (${nights} noche${nights!==1?'s':''})?\nMotivo: ${reason}`)) return;
-
     try {
+      // Omitir 'nights' — puede ser GENERATED ALWAYS en PostgreSQL
       const { data: bk, error } = await this.db.from('bookings').insert({
-        hotel_id:     this.ctx.hotelId,
-        check_in:     checkIn,
-        check_out:    checkOut,
-        status:       'blocked',
-        is_blocked:   true,
-        block_reason: reason,
+        hotel_id:        this.ctx.hotelId,
+        check_in:        checkIn,
+        check_out:       checkOut,
+        status:          'blocked',
+        is_blocked:      true,
+        block_reason:    reason,
         price_per_night: 0,
-        nights,
       }).select('id').single();
 
       if (error) throw error;
-      if (bk) await this.db.from('booking_units').insert({ booking_id: bk.id, unit_id: unitId });
+      if (!bk?.id) throw new Error('No se obtuvo ID del bloqueo');
 
-      showToast(`🔒 ${unitName} bloqueado ${checkIn} → ${checkOut}`, 'success');
+      const { error: buErr } = await this.db
+        .from('booking_units')
+        .insert({ booking_id: bk.id, unit_id: unitId });
+      if (buErr) throw buErr;
+
+      showToast(`🔒 ${unitName} bloqueado — ${checkIn} → ${checkOut}`, 'success');
       cache.invalidate('bookings');
-      this.load();
+      await this.load();
     } catch (err) {
       console.error('[Calendar] blockRange error:', err);
-      showToast('Error al crear el bloqueo: ' + (err.message ?? err), 'error');
+      showToast('Error al crear el bloqueo: ' + (err?.message ?? String(err)), 'error');
     }
   }
 
@@ -867,22 +862,7 @@ export class Calendar {
 
   // ── Setup toggle Mes/Semana/Lista ─────────────────
   setupViewToggle() {
-    document.getElementById('cal-view-toggle')?.addEventListener('click', () => {
-      const views = ['month', 'week', 'list'];
-      const idx   = views.indexOf(this._view);
-      this._view  = views[(idx + 1) % views.length];
-      const labels = { month: '☰ Lista', week: '📅 Mes', list: '📆 Semana' };
-      const btn = document.getElementById('cal-view-toggle');
-      if (btn) btn.textContent = labels[this._view];
-
-      this._dragBound = false;
-      if (this._selectionAbort) { this._selectionAbort.abort(); this._selectionAbort = null; }
-
-      if (this._view !== 'week') {
-        const now = new Date(); this.month = now.getMonth(); this.year = now.getFullYear();
-      }
-      this.load();
-    });
+    // Vista sólo mensual
 
     // ── Toggle de disponibilidad ──────────────────────
     let _availMode = false;

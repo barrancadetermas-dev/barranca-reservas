@@ -474,34 +474,65 @@ export class BookingForm {
 
   // ── Selector de cantidad de personas ─────────────
   _renderPaxSelector() {
-    // El selector ya existe en el HTML estático — solo bindeamos los botones
-    // y actualizamos el total display. No inyectar HTML duplicado.
+    const getMaxPax = () => {
+      // Usar la capacidad máxima de la unidad seleccionada
+      const selectedUnit = [...(this._selectedUnitIds ?? [])][0];
+      if (selectedUnit) {
+        const unit = this._units?.find(u => u.id === selectedUnit);
+        if (unit?.max_guests) return unit.max_guests;
+      }
+      return 99; // sin límite si no hay unidad
+    };
+
     const updateTotal = () => {
       const adults   = parseInt(document.getElementById('f-adults')?.value   ?? '1');
       const children = parseInt(document.getElementById('f-children')?.value ?? '0');
       const total    = adults + children;
+      const maxPax   = getMaxPax();
       const numEl    = document.getElementById('pax-total-num');
       const lblEl    = document.getElementById('pax-total-label');
       const paxHid   = document.getElementById('f-pax');
+      const capHint  = document.getElementById('pax-cap-hint');
       if (numEl) numEl.textContent = total;
       if (lblEl) lblEl.textContent = total === 1 ? 'persona en total' : 'personas en total';
       if (paxHid) paxHid.value = total;
+      if (capHint && maxPax < 99) {
+        const over = total > maxPax;
+        capHint.textContent = over
+          ? `⚠️ Excede el máximo (${maxPax})`
+          : `máx. ${maxPax}`;
+        capHint.style.color = over ? '#ef4444' : '';
+      }
     };
 
     const bind = (btnId, inputId, delta) => {
       const btn = document.getElementById(btnId);
       if (!btn) return;
-      // Clonar para evitar listeners duplicados entre aperturas del modal
       const fresh = btn.cloneNode(true);
       btn.parentNode.replaceChild(fresh, btn);
       fresh.addEventListener('click', (e) => {
         e.preventDefault();
-        const inp = document.getElementById(inputId);
+        const inp      = document.getElementById(inputId);
         if (!inp) return;
-        const min = parseInt(inp.min ?? '0');
-        const max = parseInt(inp.max ?? '99');
-        const cur = parseInt(inp.value  ?? '0');
-        inp.value = Math.min(max, Math.max(min, cur + delta));
+        const min      = parseInt(inp.min ?? '0');
+        const maxPax   = getMaxPax();
+        const isAdults = inputId === 'f-adults';
+        const other    = isAdults
+          ? parseInt(document.getElementById('f-children')?.value ?? '0')
+          : parseInt(document.getElementById('f-adults')?.value   ?? '1');
+        const cur      = parseInt(inp.value ?? '0');
+        const next     = Math.max(min, cur + delta);
+        // Enforce total cap
+        if (delta > 0 && (next + other) > maxPax) {
+          const capHint = document.getElementById('pax-cap-hint');
+          if (capHint) {
+            capHint.textContent = `⚠️ Máximo ${maxPax} huéspedes`;
+            capHint.style.color = '#ef4444';
+            setTimeout(() => { capHint.textContent = `máx. ${maxPax}`; capHint.style.color = ''; }, 1500);
+          }
+          return;
+        }
+        inp.value = next;
         updateTotal();
       });
     };
@@ -511,6 +542,9 @@ export class BookingForm {
     bind('children-minus', 'f-children', -1);
     bind('children-plus',  'f-children', +1);
     updateTotal();
+
+    // Re-run when unit selection changes to update cap
+    this._updatePaxCap = updateTotal;
   }
 
   // ── Sugeridor de precio dinámico ─────────────────
@@ -639,31 +673,47 @@ export class BookingForm {
 
   // ── Validación completa — solo al guardar ─────────
   _validateAll() {
+    // Clear previous errors
+    document.querySelectorAll('.field-error').forEach(el => {
+      el.classList.remove('field-error');
+    });
+
     const fn    = document.getElementById('f-firstname').value.trim();
     const ln    = document.getElementById('f-lastname').value.trim();
     const ci    = document.getElementById('f-checkin').value;
     const co    = document.getElementById('f-checkout').value;
     const price = parseFloat(document.getElementById('f-price').value);
 
-    if (!fn || !ln) {
-      showToast('Ingresá nombre y apellido del huésped', 'warning');
-      this._goToStep(1); return false;
-    }
+    // Collect all errors, navigate to first failing step
+    let firstStep = null;
+    const fail = (id, stepNum, msg) => {
+      const el = document.getElementById(id);
+      if (el) { el.classList.add('field-error'); el.focus?.(); }
+      if (!firstStep || stepNum < firstStep.step) {
+        firstStep = { step: stepNum, msg };
+      }
+    };
+
+    if (!fn) fail('f-firstname', 1, 'Nombre requerido');
+    if (!ln) fail('f-lastname',  1, 'Apellido requerido');
     if (!this._selectedUnitIds.size) {
-      showToast('Seleccioná al menos una unidad', 'warning');
-      this._goToStep(2); return false;
+      // Units selector — highlight the container
+      const sel = document.getElementById('units-selector');
+      if (sel) sel.classList.add('field-error');
+      if (!firstStep || 2 < firstStep.step) firstStep = { step: 2, msg: 'Seleccioná al menos una unidad' };
     }
-    if (!ci || !co) {
-      showToast('Seleccioná las fechas de estadía', 'warning');
-      this._goToStep(2); return false;
+    if (!ci) fail('f-date-picker', 2, 'Seleccioná fechas de estadía');
+    if (!co) fail('f-date-picker', 2, 'Seleccioná fechas de estadía');
+    if (ci && co && ci >= co) {
+      fail('f-date-picker', 2, 'El check-out debe ser posterior al check-in');
     }
-    if (ci >= co) {
-      showToast('El check-out debe ser posterior al check-in', 'warning');
-      this._goToStep(2); return false;
-    }
-    if (!price || price <= 0) {
-      showToast('Ingresá el precio por noche', 'warning');
-      this._goToStep(3); return false;
+    if (!price || price <= 0) fail('f-price', 3, 'Ingresá el precio por noche');
+
+    if (firstStep) {
+      this._goToStep(firstStep.step);
+      showToast(firstStep.msg, 'warning');
+      Sound?.error?.();
+      return false;
     }
     return true;
   }

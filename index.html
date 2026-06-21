@@ -406,7 +406,6 @@
           </div>
           <button class="btn btn-outline btn-sm" id="cal-today" style="display:none">Hoy</button>
           <button class="btn btn-outline btn-sm" id="cal-hide-past-btn" style="display:none" title="Ocultar/mostrar días anteriores">◀ Ocultar pasados</button>
-          <button class="btn btn-outline btn-sm" id="cal-view-toggle" title="Cambiar vista">☰ Lista</button>
           <button class="btn btn-outline btn-sm" id="cal-avail-toggle" title="Ver disponibilidad libre">👁 Disponibilidad</button>
           <span class="cal-block-hint" title="Arrastrá con SHIFT para bloquear fechas">
             <kbd>Shift</kbd>+arrastre = 🔒 bloqueo
@@ -690,36 +689,30 @@
       </div>
       <!-- Cantidad de personas -->
       <div class="form-group">
-        <label>Cantidad de personas</label>
-        <div class="pax-selector">
-          <div class="pax-field">
-            <div class="pax-icon">🧑</div>
-            <div class="pax-info">
-              <span class="pax-label">Adultos</span>
-              <span class="pax-hint">+13 años</span>
-            </div>
+        <label>Cantidad de personas <span id="pax-cap-hint" style="font-size:.72rem;color:var(--color-text-3);font-weight:400"></span></label>
+        <div class="pax-grid">
+          <!-- Adultos -->
+          <div class="pax-col">
+            <span class="pax-col-label">🧑 Adultos <span style="font-size:.68rem;opacity:.6">+13</span></span>
             <div class="pax-counter">
-              <button type="button" class="pax-btn" id="adults-minus" aria-label="Menos adultos">−</button>
+              <button type="button" class="pax-btn" id="adults-minus">−</button>
               <input type="number" id="f-adults" class="pax-input" value="1" min="1" max="20" readonly>
-              <button type="button" class="pax-btn" id="adults-plus" aria-label="Más adultos">+</button>
+              <button type="button" class="pax-btn" id="adults-plus">+</button>
             </div>
           </div>
-          <div class="pax-field">
-            <div class="pax-icon">🧒</div>
-            <div class="pax-info">
-              <span class="pax-label">Menores</span>
-              <span class="pax-hint">0–12 años</span>
-            </div>
+          <!-- Menores -->
+          <div class="pax-col">
+            <span class="pax-col-label">🧒 Menores <span style="font-size:.68rem;opacity:.6">0-12</span></span>
             <div class="pax-counter">
-              <button type="button" class="pax-btn" id="children-minus" aria-label="Menos menores">−</button>
+              <button type="button" class="pax-btn" id="children-minus">−</button>
               <input type="number" id="f-children" class="pax-input" value="0" min="0" max="20" readonly>
-              <button type="button" class="pax-btn" id="children-plus" aria-label="Más menores">+</button>
+              <button type="button" class="pax-btn" id="children-plus">+</button>
             </div>
           </div>
-          <div class="pax-total" id="pax-total-display">
-            <span class="pax-total-num" id="pax-total-num">1</span>
-            <span class="pax-total-label" id="pax-total-label">persona en total</span>
-          </div>
+        </div>
+        <div class="pax-total-bar">
+          <span id="pax-total-num">1</span>
+          <span id="pax-total-label">persona en total</span>
         </div>
         <input type="hidden" id="f-pax" value="1">
       </div>
