@@ -87,6 +87,7 @@ export class Dashboard {
       ]);
 
       this._renderKPIs(kpis, today);
+      this._clearSkeleton();
       this._renderOccupancyRing(kpis.occupiedUnits, this.ctx.units.length);
       this._renderDollar(dollar);
       this._renderArrivals(kpis.arrivals ?? kpis.checkins ?? []);
@@ -103,16 +104,17 @@ export class Dashboard {
     }
   }
 
-  // ── Skeleton loader ───────────────────────────────
+  // ── Skeleton loader — no reemplaza el HTML, solo aplica clase CSS ──
   _renderSkeleton() {
     const grid = document.getElementById('kpi-grid');
     if (!grid) return;
-    grid.innerHTML = Array(4).fill(`
-      <div class="skeleton-kpi">
-        <div class="skeleton-box sk-icon"></div>
-        <div class="skeleton-box sk-label"></div>
-        <div class="skeleton-box sk-value"></div>
-      </div>`).join('');
+    grid.querySelectorAll('.kpi-card').forEach(c => c.classList.add('kpi-loading'));
+  }
+
+  _clearSkeleton() {
+    const grid = document.getElementById('kpi-grid');
+    if (!grid) return;
+    grid.querySelectorAll('.kpi-card').forEach(c => c.classList.remove('kpi-loading'));
   }
 
   // ── Contador animado ──────────────────────────────

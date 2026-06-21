@@ -28,10 +28,7 @@ const PAYMENT_METHODS = [
 
 // Canales de origen disponibles (en orden visual)
 // Generado dinámicamente desde SOURCE_CONFIG — única fuente de verdad
-// Filter duplicates: despegar+expedia both map to 'ota' visually
-const SOURCE_OPTIONS = Object.entries(SOURCE_CONFIG)
-  .filter(([key]) => key !== 'expedia') // expedia is shown via 'despegar' as Desp/Exp
-  .map(([value, cfg]) => ({
+const SOURCE_OPTIONS = Object.entries(SOURCE_CONFIG).map(([value, cfg]) => ({
   value,
   label: cfg.label,
   color: cfg.dot ?? cfg.color ?? '#64748B',
@@ -1104,18 +1101,22 @@ export class BookingForm {
         await this.db.from('bookings').update({ pax, adults, children }).eq('id', bookingId);
       } catch { /* columnas opcionales */ }
 
-      // Insertar unidades
+      // Insertar unidades — sin hotel_id (no existe en booking_units)
       const unitRows = [...this._selectedUnitIds].map(uid => ({
         booking_id: bookingId, unit_id: uid,
       }));
-      if (unitRows.length) await this.db.from('booking_units').insert(unitRows);
+      if (unitRows.length) {
+        const { error: buErr } = await this.db.from('booking_units').insert(unitRows);
+        if (buErr) throw new Error('Error asignando unidades: ' + buErr.message);
+      }
 
-      // Insertar pagos
+      // Insertar pagos (incluye notes del nuevo campo)
       const payRows = [];
       document.querySelectorAll('.payment-row').forEach(row => {
         const amt  = parseFloat(row.querySelector('.pay-amount')?.value) || 0;
         const meth = row.querySelector('.pay-method')?.value;
         const date = row.querySelector('.pay-date')?.value;
+        const note = row.querySelector('.pay-note')?.value?.trim() || null;
         if (amt > 0) {
           const isCc = meth === 'credit_card';
           payRows.push({
@@ -1124,10 +1125,14 @@ export class BookingForm {
             method:       meth,
             amount:       isCc ? amt * 1.10 : amt,
             payment_date: date || toISODate(new Date()),
+            notes:        note,
           });
         }
       });
-      if (payRows.length) await this.db.from('payments').insert(payRows);
+      if (payRows.length) {
+        const { error: pmErr } = await this.db.from('payments').insert(payRows);
+        if (pmErr) throw new Error('Error registrando pago: ' + pmErr.message);
+      }
 
       const _logVerb    = this._editingId ? 'UPDATE' : 'CREATE';
       const _logSummary = this._editingId
@@ -1166,16 +1171,22 @@ export class BookingForm {
 
     } catch (err) {
       console.error('[MILA] Booking save error:', err);
-      const userMsg = err.message?.includes('violates')
-        ? 'Error de permisos en la base de datos. Verificá las políticas RLS.'
-        : err.message?.includes('duplicate')
+      // Mostrar el error real siempre — ayuda a diagnosticar
+      const raw = err?.message ?? String(err) ?? 'Error desconocido';
+      const userMsg = raw.includes('violates foreign key')
+        ? 'ID de unidad o huésped inválido. Recargá la página.'
+        : raw.includes('violates not-null')
+        ? 'Falta un campo requerido en la base de datos.'
+        : raw.includes('duplicate')
         ? 'Ya existe una reserva con esos datos.'
-        : err.message ?? String(err);
-      showToast(`No fue posible guardar la reserva. ${userMsg}`, 'error');
+        : raw.includes('permission') || raw.includes('policy')
+        ? 'Sin permisos. Verificá las políticas RLS en Supabase.'
+        : raw;
+      showToast(`❌ ${userMsg}`, 'error');
     } finally {
       clearTimeout(_safetyTimer);
       if (btn) {
-        btn.disabled = false;
+        btn.disabled   = false;
         btn.textContent = this._editingId ? 'Guardar cambios' : 'Confirmar reserva';
       }
     }

@@ -4427,3 +4427,157 @@ select.field-error {
   padding-bottom: 2px;
   -webkit-overflow-scrolling: touch;
 }
+
+/* ── KPI skeleton loading state ─────────────────── */
+.kpi-card.kpi-loading .kpi-icon-wrap,
+.kpi-card.kpi-loading .kpi-label,
+.kpi-card.kpi-loading .kpi-value,
+.kpi-card.kpi-loading .kpi-sub-list {
+  background: linear-gradient(90deg,
+    var(--color-border) 25%,
+    var(--color-surface-2) 50%,
+    var(--color-border) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s infinite;
+  border-radius: 6px;
+  color: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+.kpi-card.kpi-loading .kpi-label  { height: 10px; width: 70%; display: block; }
+.kpi-card.kpi-loading .kpi-value  { height: 28px; width: 50%; display: block; margin-top: 6px; }
+.kpi-card.kpi-loading .kpi-icon-wrap { opacity: .5; }
+@keyframes shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ══════════════════════════════════════════════════
+   Payment Manager v2 — 4-column grid row + summary
+   ══════════════════════════════════════════════════ */
+
+/* ── Payment row grid ─────────────────────────────── */
+.payment-row { margin-bottom: 8px; }
+
+.pay-grid {
+  display: grid;
+  grid-template-columns: minmax(160px,auto) 140px 130px 1fr 28px;
+  gap: 6px;
+  align-items: center;
+}
+
+.pay-grid select,
+.pay-grid input[type="number"],
+.pay-grid input[type="date"],
+.pay-grid input[type="text"] {
+  height: 36px;
+  padding: 0 8px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--r-md);
+  background: var(--color-surface-2);
+  color: var(--color-text);
+  font-size: .83rem;
+  width: 100%;
+  min-width: 0;
+  transition: border-color var(--t-fast), box-shadow var(--t-fast);
+}
+
+.pay-grid select:focus,
+.pay-grid input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 15%, transparent);
+}
+
+/* Note field wrapper with counter */
+.pay-note-wrap { position: relative; display: flex; flex-direction: column; gap: 2px; }
+.pay-note-wrap input { padding-right: 8px; }
+.pay-note-counter {
+  font-size: .62rem;
+  color: var(--color-text-3);
+  text-align: right;
+  line-height: 1;
+  padding-right: 2px;
+}
+.pay-note-counter.warn { color: #ef4444; font-weight: 600; }
+
+/* Remove button */
+.pay-remove {
+  width: 28px; height: 28px;
+  border: none;
+  background: transparent;
+  border-radius: var(--r-sm);
+  color: var(--color-text-3);
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  transition: all var(--t-fast);
+}
+.pay-remove:hover { background: #fee2e2; color: #ef4444; }
+
+/* Credit card surcharge notice */
+.pay-cc-info {
+  grid-column: 1/-1;
+  font-size: .72rem;
+  color: #92400e;
+  background: #fef3c7;
+  border-radius: var(--r-sm);
+  padding: 4px 8px;
+  border: 1px solid #fde68a;
+}
+.pay-cc-info.hidden { display: none; }
+
+/* ── Compact payment summary ─────────────────────── */
+.payment-summary-compact {
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--r-lg);
+  padding: 10px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.ps-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: .78rem;
+}
+
+.ps-label { color: var(--color-text-2); }
+
+.ps-val {
+  font-weight: 700;
+  color: var(--color-text);
+  font-size: .82rem;
+}
+
+.ps-paid  { color: var(--color-success, #16a34a); }
+
+.ps-row-balance {
+  border-top: 1px solid var(--color-border);
+  padding-top: 5px;
+  margin-top: 2px;
+}
+
+.ps-row-balance .ps-label,
+.ps-row-balance .ps-balance {
+  font-size: .88rem;
+}
+
+.ps-row-balance[data-sign="paid"]    .ps-balance { color: var(--color-success, #16a34a); }
+.ps-row-balance[data-sign="over"]    .ps-balance { color: var(--color-primary); }
+.ps-row-balance[data-sign="pending"] .ps-balance { color: #92400e; }
+
+/* Mobile: stack columns */
+@media (max-width: 600px) {
+  .pay-grid {
+    grid-template-columns: 1fr 1fr 28px;
+    grid-template-rows: auto auto;
+  }
+  .pay-grid select      { grid-column: 1 / 3; }
+  .pay-grid input[type="number"] { grid-column: 1; }
+  .pay-grid input[type="date"]   { grid-column: 2; }
+  .pay-note-wrap        { grid-column: 1 / 3; }
+}

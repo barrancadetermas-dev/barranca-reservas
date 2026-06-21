@@ -462,7 +462,8 @@
             <button class="source-filter-btn" data-source="family"   style="--btn-color:#7C3AED">Familia</button>
             <button class="source-filter-btn" data-source="company"  style="--btn-color:#0F766E">Empresa</button>
             <button class="source-filter-btn" data-source="referral" style="--btn-color:#B45309">Referido</button>
-            <button class="source-filter-btn" data-source="ota"  style="--btn-color:#059669">Desp/Exp</button>
+            <button class="source-filter-btn" data-source="despegar" style="--btn-color:#059669">Despegar</button>
+            <button class="source-filter-btn" data-source="expedia"  style="--btn-color:#DC2626">Expedia</button>
             <button class="source-filter-btn" data-source="blocked"  style="--btn-color:#374151">Bloqueos</button>
           </div>
         </div>
@@ -717,19 +718,33 @@
 
     <!-- Step 4: Payments -->
     <div class="step-content hidden" id="step-4">
-      <div class="payment-summary-bar">
-        <div class="ps-item"><span>Total</span><strong id="ps-total">$—</strong></div>
-        <div class="ps-divider"></div>
-        <div class="ps-item"><span>Abonado</span><strong id="ps-paid" class="text-success">$0</strong></div>
-        <div class="ps-divider"></div>
-        <div class="ps-item"><span>Saldo</span><strong id="ps-balance" class="text-warning">$—</strong></div>
-      </div>
+
+      <!-- Payment rows (rendered by PaymentManager) -->
       <div id="payments-container"></div>
-      <button class="btn btn-outline btn-full mt-12" id="btn-add-payment-row">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="16" height="16"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+
+      <!-- Add payment button -->
+      <button class="btn btn-outline btn-full mt-8" id="btn-add-payment-row" style="margin-bottom:12px">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="14" height="14"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
         Agregar cobro
       </button>
-      <p class="step-note">💡 Los pagos son opcionales. Podés registrar la reserva ahora y cargar cobros después.</p>
+
+      <!-- Compact summary -->
+      <div class="payment-summary-compact">
+        <div class="ps-row">
+          <span class="ps-label">Total reserva</span>
+          <span class="ps-val" id="ps-total">$—</span>
+        </div>
+        <div class="ps-row">
+          <span class="ps-label">Abonado</span>
+          <span class="ps-val ps-paid" id="ps-paid">$0</span>
+        </div>
+        <div class="ps-row ps-row-balance">
+          <span class="ps-label"><strong>Saldo</strong></span>
+          <span class="ps-val ps-balance" id="ps-balance">$—</span>
+        </div>
+      </div>
+
+      <p class="step-note" style="margin-top:8px">💡 Los pagos son opcionales. Podés registrar la reserva ahora y cargar cobros después.</p>
     </div>
 
     <div class="modal-footer">
