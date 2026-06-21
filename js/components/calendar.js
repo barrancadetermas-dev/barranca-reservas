@@ -68,11 +68,21 @@ export class Calendar {
 
   // ── Carga del calendario ──────────────────────────
   async load() {
+    // Guard: no concurrent loads (prevents infinite loop via booking:changed)
+    if (this._isLoading) return;
+    this._isLoading = true;
+
     document.getElementById('cal-month-title').textContent =
       `${MONTH_NAMES[this.month]} ${this.year}`;
     try {
+      // Fetch bookings y reminders por separado para que fallo de
+      // reminders no rompa la carga del calendario
       const [bookings, reminders] = await Promise.all([
-        this._fetchBookings(), this._fetchReminders()
+        this._fetchBookings(),
+        this._fetchReminders().catch(err => {
+          console.warn('[Calendar] reminders fetch failed (ignorado):', err?.message ?? err);
+          return [];
+        }),
       ]);
       this._lastRenderedBookings = bookings;
 
@@ -90,7 +100,12 @@ export class Calendar {
       }
     } catch (err) {
       console.error('Calendar load error:', err);
-      showToast('Error al cargar el calendario', 'error');
+      // No mostrar toast si es solo el stack overflow del loop
+      if (!err?.message?.includes('call stack')) {
+        showToast('Error al cargar el calendario', 'error');
+      }
+    } finally {
+      this._isLoading = false;
     }
   }
 
@@ -119,13 +134,14 @@ export class Calendar {
   async _fetchReminders() {
     const firstDay = `${this.year}-${String(this.month+1).padStart(2,'0')}-01`;
     const lastDay  = toISODate(new Date(this.year, this.month+1, 0));
-    const { data } = await this.db
+    const { data, error } = await this.db
       .from('reminders')
       .select('*, units(name, sort_order)')
       .eq('hotel_id', this.ctx.hotelId)
       .gte('scheduled_date', firstDay)
       .lte('scheduled_date', lastDay)
-      .eq('completed', false);
+      .is('completed', false);   // usar is() para booleanos, no eq()
+    if (error) throw new Error(error.message);
     return data ?? [];
   }
 

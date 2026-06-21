@@ -522,11 +522,17 @@ export class OperationsModule {
 
   _errorHTML(table) {
     return `
-      <div class="error-state">
-        <p>No se pudo cargar la sección.</p>
-        <p style="font-size:.78rem;color:var(--color-text-3);margin-top:4px">
-          Verificá que exista la tabla <code>${table}</code> en Supabase.
+      <div class="error-state" style="padding:32px;text-align:center">
+        <div style="font-size:2rem;margin-bottom:12px">🗄️</div>
+        <p style="font-weight:700;margin-bottom:6px">Tabla no encontrada: <code>${table}</code></p>
+        <p style="font-size:.82rem;color:var(--color-text-3);max-width:380px;margin:0 auto 16px">
+          Ejecutá <strong>migration_complete_v8.sql</strong> en el SQL Editor de Supabase para crear esta tabla.
         </p>
+        <a href="https://supabase.com/dashboard/project/tuneeinpudlsezzmvaro/editor"
+           target="_blank" rel="noopener"
+           class="btn btn-primary btn-sm">
+          Abrir SQL Editor →
+        </a>
       </div>`;
   }
 

@@ -1124,6 +1124,8 @@ export class BookingForm {
             hotel_id:     this.ctx.hotelId,
             method:       meth,
             amount:       isCc ? amt * 1.10 : amt,
+            // payment_date añadido en migration_complete_v8.sql
+            // Si la columna no existe todavía, se ignora el error de schema
             payment_date: date || toISODate(new Date()),
             notes:        note,
           });

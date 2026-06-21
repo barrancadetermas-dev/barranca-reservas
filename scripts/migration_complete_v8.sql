@@ -281,3 +281,32 @@ END $$;
 -- hotel_config, guest_notes, hotel_stock,
 -- cleaning_tasks, maintenance_issues, audit_log,
 -- season_pricing, channel_commissions
+
+-- ── Columnas faltantes detectadas en producción ──────
+-- Ejecutar si hay errores 400 en payments o reminders
+
+ALTER TABLE payments  ADD COLUMN IF NOT EXISTS payment_date date;
+ALTER TABLE payments  ADD COLUMN IF NOT EXISTS notes        text;
+ALTER TABLE payments  ADD COLUMN IF NOT EXISTS amount_ars   numeric(12,2);
+ALTER TABLE payments  ADD COLUMN IF NOT EXISTS currency     text DEFAULT 'ARS';
+ALTER TABLE payments  ADD COLUMN IF NOT EXISTS exchange_rate numeric(12,2);
+
+ALTER TABLE reminders ADD COLUMN IF NOT EXISTS completed    boolean DEFAULT false;
+ALTER TABLE reminders ADD COLUMN IF NOT EXISTS completed_at timestamptz;
+
+ALTER TABLE bookings  ADD COLUMN IF NOT EXISTS price_per_night numeric(12,2);
+ALTER TABLE bookings  ADD COLUMN IF NOT EXISTS total_amount    numeric(12,2);
+ALTER TABLE bookings  ADD COLUMN IF NOT EXISTS total_paid      numeric(12,2) DEFAULT 0;
+ALTER TABLE bookings  ADD COLUMN IF NOT EXISTS balance         numeric(12,2);
+ALTER TABLE bookings  ADD COLUMN IF NOT EXISTS nights          int;
+ALTER TABLE bookings  ADD COLUMN IF NOT EXISTS adults          int DEFAULT 1;
+ALTER TABLE bookings  ADD COLUMN IF NOT EXISTS children        int DEFAULT 0;
+ALTER TABLE bookings  ADD COLUMN IF NOT EXISTS pax             int DEFAULT 1;
+ALTER TABLE bookings  ADD COLUMN IF NOT EXISTS is_blocked      boolean DEFAULT false;
+ALTER TABLE bookings  ADD COLUMN IF NOT EXISTS block_reason    text;
+ALTER TABLE bookings  ADD COLUMN IF NOT EXISTS checked_in_at   timestamptz;
+ALTER TABLE bookings  ADD COLUMN IF NOT EXISTS checked_out_at  timestamptz;
+ALTER TABLE bookings  ADD COLUMN IF NOT EXISTS source          text DEFAULT 'direct';
+
+-- Refresca schema cache de PostgREST (importante!)
+NOTIFY pgrst, 'reload schema';

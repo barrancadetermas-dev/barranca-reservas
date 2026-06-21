@@ -1204,23 +1204,49 @@ async function updateOperationsBadge() {
 }
 
 async function loadRemindersSection() {
-  const {data:reminders}=await supabase.from('reminders').select('*,units(name)').eq('hotel_id',AppContext.hotelId).order('scheduled_date');
-  const container=document.getElementById('reminders-full-list');
-  if(!container)return;
-  if(!reminders?.length){container.innerHTML=`<div class="empty-state"><span class="empty-state-icon">🔔</span><p>Sin recordatorios.</p></div>`;return;}
-  const today=toISODate(new Date());
-  container.innerHTML=reminders.map(r=>{
-    const isToday=r.scheduled_date===today,isPast=r.scheduled_date<today;
-    return `<div class="expense-row ${r.completed?'paid':''}" id="reminder-row-${r.id}">
-      <div class="expense-category-dot" style="background:${isToday?'var(--color-warning)':isPast?'var(--color-danger)':'var(--color-primary)'}"></div>
-      <div class="expense-info"><div class="expense-desc">${r.title}</div>
-      <div class="expense-meta">${r.scheduled_date} ${r.units?`· ${r.units.name}`:'· General'}${r.description?` · ${r.description}`:''}</div></div>
-      <label class="expense-paid-toggle"><input type="checkbox" ${r.completed?'checked':''} onchange="window.toggleReminder('${r.id}',this.checked)"></label>
+  const container = document.getElementById('reminders-full-list');
+  if (!container) return;
+  container.innerHTML = '<div class="loading-state">Cargando...</div>';
+
+  const { data: reminders, error } = await supabase
+    .from('reminders')
+    .select('*, units(name)')
+    .eq('hotel_id', AppContext.hotelId)
+    .order('scheduled_date');
+
+  if (error) {
+    const msg = error.message?.includes('completed')
+      ? 'Ejecutá <strong>migration_complete_v8.sql</strong> en Supabase para añadir la columna <code>completed</code>.'
+      : error.message ?? 'Error desconocido';
+    container.innerHTML = `
+      <div class="error-state" style="padding:32px;text-align:center">
+        <div style="font-size:2rem;margin-bottom:12px">🗄️</div>
+        <p style="font-weight:700">Error al cargar recordatorios</p>
+        <p style="font-size:.82rem;color:var(--color-text-3);margin:6px auto 0;max-width:340px">${msg}</p>
+      </div>`;
+    return;
+  }
+
+  if (!reminders?.length) {
+    container.innerHTML = '<div class="empty-state"><span class="empty-state-icon">🔔</span><p>Sin recordatorios.</p></div>';
+    return;
+  }
+  const today = toISODate(new Date());
+  container.innerHTML = reminders.map(r => {
+    const isToday = r.scheduled_date === today, isPast = r.scheduled_date < today;
+    return `<div class="expense-row ${r.completed ? 'paid' : ''}" id="reminder-row-${r.id}">
+      <div class="expense-category-dot" style="background:${isToday ? 'var(--color-warning)' : isPast ? '#ef4444' : 'var(--color-primary)'}"></div>
+      <div class="expense-info">
+        <div class="expense-desc">${r.title}</div>
+        <div class="expense-meta">${r.scheduled_date}${r.units ? ' · ' + r.units.name : ' · General'}${r.description ? ' · ' + r.description : ''}</div>
+      </div>
+      <label class="expense-paid-toggle"><input type="checkbox" ${r.completed ? 'checked' : ''} onchange="window.toggleReminder('${r.id}',this.checked)"></label>
       <button class="btn btn-ghost btn-xs" onclick="window.deleteReminder('${r.id}')">🗑️</button>
     </div>`;
   }).join('');
-  updateReminderBadge(reminders.filter(r=>!r.completed&&r.scheduled_date<=today).length);
+  updateReminderBadge(reminders.filter(r => !r.completed && r.scheduled_date <= today).length);
 }
+
 
 window.toggleReminder=(async(id,c)=>{await supabase.from('reminders').update({completed:c}).eq('id',id);document.getElementById(`reminder-row-${id}`)?.classList.toggle('paid',c);});
 window.deleteReminder=(async(id)=>{if(!confirm('¿Eliminar?'))return;await supabase.from('reminders').delete().eq('id',id);document.getElementById(`reminder-row-${id}`)?.remove();showToast('Eliminado','success');});
