@@ -51,7 +51,6 @@ export class OperationsModule {
       <div class="tabs-bar ops-tabs">
         <button class="tab active" data-ops-tab="cleaning">🧹 Limpieza</button>
         <button class="tab" data-ops-tab="maintenance">🔧 Mantenimiento</button>
-        <button class="tab" data-ops-tab="stock">📦 Stock</button>
         <div class="ops-tab-actions" id="ops-header-actions"></div>
       </div>
       <div id="ops-panel"></div>
@@ -134,7 +133,20 @@ export class OperationsModule {
         </div>`;
 
       panel.querySelectorAll('.cleaning-status-btn').forEach(btn => {
-        btn.addEventListener('click', () => this._updateCleaningStatus(btn.dataset.id, btn.dataset.status, panel));
+        btn.addEventListener('click', () => this._updateCleaningStatus(btn.dataset.id, btn.dataset.status, panel, header));
+      });
+      panel.querySelectorAll('.cleaning-delete-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          if (!confirm('¿Eliminar esta tarea de limpieza?')) return;
+          try {
+            const { error } = await this.db.from('cleaning_tasks').delete().eq('id', btn.dataset.id);
+            if (error) throw error;
+            showToast('Tarea eliminada', 'success');
+            await this._loadCleaning(panel, header);
+          } catch (err) {
+            showToast('Error al eliminar: ' + (err?.message ?? err), 'error');
+          }
+        });
       });
 
     } catch (err) {
@@ -143,12 +155,17 @@ export class OperationsModule {
   }
 
   _cleaningRowHTML(task, today) {
-    const statusMap = { pending:'⏳ Pendiente', in_progress:'🔄 En proceso', completed:'✅ Lista' };
+    const statusMap = {
+      pending:     '⏳ Pendiente',
+      in_progress: '🔄 En proceso',
+      completed:   '✅ Lista',
+      skipped:     '⏭️ Omitida',
+    };
     const isOverdue = task.status !== 'completed' && task.scheduled_date < today;
     const unitName  = task.units?.name ?? 'General';
 
     return `
-      <div class="ops-row ${isOverdue ? 'ops-overdue' : ''} ${task.status === 'completed' ? 'ops-done' : ''}">
+      <div class="ops-row ${isOverdue ? 'ops-overdue' : ''} ${task.status === 'completed' ? 'ops-done' : ''}" data-id="${task.id}">
         <div class="ops-row-left">
           <span class="ops-unit-badge">${unitName}</span>
           <div class="ops-row-info">
@@ -162,15 +179,16 @@ export class OperationsModule {
         </div>
         <div class="ops-row-right">
           <span class="ops-status-chip">${statusMap[task.status] ?? task.status}</span>
-          ${task.status !== 'completed' ? `
+          ${task.status === 'pending' ? `
             <button class="btn btn-outline btn-xs cleaning-status-btn"
-                    data-id="${task.id}" data-status="${task.status === 'pending' ? 'in_progress' : 'completed'}">
-              ${task.status === 'pending' ? 'Iniciar' : '✓ Finalizar'}
-            </button>` : ''}
+                    data-id="${task.id}" data-status="in_progress">Iniciar</button>` : ''}
+          ${task.status === 'in_progress' ? `
+            <button class="btn btn-primary btn-xs cleaning-status-btn"
+                    data-id="${task.id}" data-status="completed">✓ Finalizar</button>` : ''}
+          <button class="btn btn-ghost btn-xs cleaning-delete-btn" data-id="${task.id}" title="Eliminar">🗑️</button>
         </div>
       </div>`;
   }
-
   async _updateCleaningStatus(id, newStatus, panel) {
     try {
       const update = { status: newStatus };
@@ -258,7 +276,10 @@ export class OperationsModule {
         if (error) throw error;
         showToast('Tarea de limpieza creada ✓', 'success');
         close();
-        await this.load();
+        const panel = document.getElementById('ops-panel');
+        const hdrEl = document.getElementById('ops-header-actions');
+        if (panel && hdrEl) await this._loadCleaning(panel, hdrEl);
+        if (typeof updateOperationsBadge === 'function') updateOperationsBadge();
       } catch (err) {
         console.error('[Operations] cleaning insert:', err);
         showToast('Error: ' + (err?.message ?? 'Verificá que hayas corrido migration_complete_v8.sql en Supabase'), 'error');
@@ -311,13 +332,29 @@ export class OperationsModule {
           ${data.map(issue => this._maintenanceRowHTML(issue)).join('')}
         </div>`;
 
+      // Resolver
       panel.querySelectorAll('.maint-resolve-btn').forEach(btn => {
         btn.addEventListener('click', async () => {
-          await this.db.from('maintenance_issues')
+          btn.disabled = true; btn.textContent = '...';
+          const { error } = await this.db.from('maintenance_issues')
             .update({ status: 'resolved', resolved_at: new Date().toISOString() })
             .eq('id', btn.dataset.id);
+          if (error) { showToast('Error: ' + error.message, 'error'); btn.disabled = false; btn.textContent = '✓ Resolver'; return; }
           showToast('✅ Incidencia resuelta', 'success');
-          this._loadMaintenance(panel, header);
+          await this._loadMaintenance(panel, header);
+          updateOperationsBadge?.();
+        });
+      });
+
+      // Eliminar
+      panel.querySelectorAll('.maint-delete-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          if (!confirm('¿Eliminar esta incidencia?')) return;
+          const { error } = await this.db.from('maintenance_issues').delete().eq('id', btn.dataset.id);
+          if (error) { showToast('Error: ' + error.message, 'error'); return; }
+          showToast('Eliminada', 'success');
+          await this._loadMaintenance(panel, header);
+          updateOperationsBadge?.();
         });
       });
 
@@ -327,12 +364,12 @@ export class OperationsModule {
   }
 
   _maintenanceRowHTML(issue) {
-    const pr  = PRIORITY_CONFIG[issue.priority ?? 'medium'];
+    const pr       = PRIORITY_CONFIG[issue.priority ?? 'medium'];
     const unitName = issue.units?.name ?? 'General';
     const isOpen   = issue.status !== 'resolved';
 
     return `
-      <div class="ops-row ${!isOpen ? 'ops-done' : ''}">
+      <div class="ops-row ${!isOpen ? 'ops-done' : ''}" data-id="${issue.id}">
         <div class="ops-row-left">
           <span class="ops-priority-dot" style="background:${pr.color}" title="${pr.label}"></span>
           <div class="ops-row-info">
@@ -342,14 +379,17 @@ export class OperationsModule {
             </div>
             <div class="ops-row-meta">
               <span class="ops-badge" style="background:${pr.bg};color:${pr.color}">${pr.label}</span>
+              ${formatDate(issue.created_at)}
               ${issue.assigned_to ? ` · 👤 ${issue.assigned_to}` : ''}
-              ${formatDate(issue.created_at ?? issue.created_date)}
               ${issue.status === 'resolved' ? ` · ✅ Resuelto ${formatDate(issue.resolved_at)}` : ''}
             </div>
           </div>
         </div>
         <div class="ops-row-right">
-          ${isOpen ? `<button class="btn btn-outline btn-xs maint-resolve-btn" data-id="${issue.id}">✓ Resolver</button>` : ''}
+          ${isOpen
+            ? `<button class="btn btn-primary btn-xs maint-resolve-btn" data-id="${issue.id}">✓ Resolver</button>`
+            : `<span style="font-size:.72rem;color:var(--color-text-3)">Resuelto</span>`}
+          <button class="btn btn-ghost btn-xs maint-delete-btn" data-id="${issue.id}" title="Eliminar">🗑️</button>
         </div>
       </div>`;
   }
@@ -425,21 +465,28 @@ export class OperationsModule {
       const saveBtn = modal.querySelector('#mi-save');
       if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Guardando...'; }
       try {
+        const unitVal = modal.querySelector('#mi-unit').value;
         const { error } = await this.db.from('maintenance_issues').insert({
           hotel_id:    this.ctx.hotelId,
-          unit_id:     modal.querySelector('#mi-unit').value || null,
-          title, status: 'open',
-          priority:    modal.querySelector('#mi-priority').value ?? 'normal',
-          reported_by: modal.querySelector('#mi-assigned').value.trim() || null,
+          unit_id:     unitVal || null,
+          category:    modal.querySelector('#mi-cat')?.value || null,
+          title,
+          status:      'open',
+          priority:    modal.querySelector('#mi-priority').value || 'medium',
+          assigned_to: modal.querySelector('#mi-assigned').value.trim() || null,
         });
         if (error) throw error;
         showToast('Incidencia registrada ✓', 'success');
         close();
-        await this.load();
+        // Reload sólo el panel de mantenimiento
+        const panel = document.getElementById('ops-panel');
+        const hdrEl = document.getElementById('ops-header-actions');
+        if (panel && hdrEl) await this._loadMaintenance(panel, hdrEl);
+        if (typeof updateOperationsBadge === 'function') updateOperationsBadge();
       } catch (err) {
         console.error('[Operations] maintenance insert:', err);
-        showToast('Error: ' + (err?.message ?? 'No se pudo guardar. ¿Corriste la migración SQL?'), 'error');
-        if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Guardar'; }
+        showToast('Error: ' + (err?.message ?? 'Verificá migration_complete_v8.sql'), 'error');
+        if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Registrar'; }
       }
     });
   }

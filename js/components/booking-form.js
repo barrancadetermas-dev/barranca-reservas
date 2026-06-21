@@ -1086,48 +1086,289 @@ export class BookingForm {
   }
 
   _exportVoucherPDF() {
-    const el = document.getElementById('booking-voucher');
-    if (!el) return;
-    // Simple print-based PDF export
-    const fn  = document.getElementById('f-firstname')?.value?.trim() ?? '';
-    const ln  = document.getElementById('f-lastname')?.value?.trim()  ?? '';
+    const fn   = document.getElementById('f-firstname')?.value?.trim() ?? '';
+    const ln   = document.getElementById('f-lastname')?.value?.trim()  ?? '';
+    const dni  = document.getElementById('f-dni')?.value?.trim()       ?? '';
+    const phone= document.getElementById('f-phone')?.value?.trim()     ?? '';
+    const email= document.getElementById('f-email')?.value?.trim()     ?? '';
+    const ci   = document.getElementById('f-checkin')?.value  ?? '';
+    const co   = document.getElementById('f-checkout')?.value ?? '';
+    const price= parseFloat(document.getElementById('f-price')?.value ?? 0);
+    const notes= document.getElementById('f-notes')?.value?.trim()     ?? '';
+    const adults   = parseInt(document.getElementById('f-adults')?.value   ?? 1);
+    const children = parseInt(document.getElementById('f-children')?.value ?? 0);
+
+    const unitNames = (this.ctx?.units ?? [])
+      .filter(u => this._selectedUnitIds.has(String(u.id)))
+      .map(u => u.name).join(' / ');
+
+    const nightsN    = ci && co ? Math.round((new Date(co) - new Date(ci)) / 86400000) : 0;
+    const discPct    = parseFloat(document.getElementById('f-discount')?.value ?? 0);
+    const surcharge  = parseFloat(document.getElementById('f-surcharge')?.value ?? 0);
+    const freeNights = parseInt(document.getElementById('f-free-nights')?.value ?? 0);
+    const billable   = Math.max(0, nightsN - freeNights);
+    const subtotal   = billable * price;
+    const discount   = subtotal * discPct / 100;
+    const total      = subtotal - discount + surcharge;
+    const paid       = this._getTotalPaid();
+    const balance    = Math.max(0, total - paid);
+
+    const fmt  = n => '$\u00a0' + Math.round(n).toLocaleString('es-AR');
+    const fmtD = d => d ? new Date(d + 'T12:00:00').toLocaleDateString('es-AR', {weekday:'long', day:'numeric', month:'long', year:'numeric'}) : '—';
+    const fmtDShort = d => d ? d.split('-').reverse().join('/') : '—';
+    const now  = new Date().toLocaleDateString('es-AR', {day:'numeric',month:'long',year:'numeric'});
+
+    const payRows = [];
+    document.querySelectorAll('.payment-row').forEach(row => {
+      const amt  = parseFloat(row.querySelector('.pay-amount')?.value) || 0;
+      const meth = row.querySelector('.pay-method')?.value;
+      const date = row.querySelector('.pay-date')?.value;
+      const note = row.querySelector('.pay-note')?.value ?? '';
+      if (amt > 0) {
+        const labels = { cash:'Efectivo', transfer:'Transferencia', mercadopago:'MercadoPago',
+          naranjax:'Naranja X', uala:'Ualá', debit_card:'Tarjeta Débito',
+          credit_card:'Tarjeta Crédito (+10%)', credit_note:'Nota de Crédito/Voucher' };
+        payRows.push({ label: labels[meth] ?? meth, amount: meth === 'credit_card' ? amt * 1.10 : amt, date: fmtDShort(date), note });
+      }
+    });
+
+    const paxStr = `${adults} adulto${adults !== 1 ? 's' : ''}${children ? ` + ${children} menor${children !== 1 ? 'es' : ''}` : ''}`;
+    const sourceChip = document.querySelector('#f-source-selector .src-chip.selected');
+    const sourceLabel = sourceChip?.querySelector('span')?.textContent?.trim() ?? 'Directo';
+    const statusText = paid <= 0 ? 'SIN SEÑA' : balance <= 0 ? 'PAGADO TOTAL' : 'CON SEÑA';
+    const statusColor = paid <= 0 ? '#f59e0b' : balance <= 0 ? '#16a34a' : '#6366f1';
+
     const win = window.open('', '_blank');
-    win.document.write(`
-      <!DOCTYPE html><html><head>
-        <meta charset="utf-8">
-        <title>Reserva – ${fn} ${ln}</title>
-        <style>
-          body { font-family: sans-serif; max-width: 560px; margin: 0 auto; padding: 24px; color: #1e293b; }
-          h1 { font-size: 1.1rem; font-weight: 700; margin: 0 0 4px; }
-          .section { margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid #e2e8f0; }
-          .label { font-size: .65rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: #94a3b8; margin-bottom: 2px; }
-          .row { display: flex; justify-content: space-between; font-size: .85rem; margin-bottom: 3px; }
-          .total { font-weight: 700; border-top: 2px solid #1e293b; padding-top: 6px; margin-top: 4px; }
-          @media print { body { padding: 0; } }
-        </style>
-      </head><body>${el.innerHTML}</body></html>`);
+    win.document.write(`<!DOCTYPE html><html lang="es"><head>
+<meta charset="utf-8">
+<title>Voucher — ${ln} ${fn}</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:'Inter',sans-serif; background:#f8fafc; color:#1e293b; padding:32px 24px; font-size:13px; }
+
+  /* Header */
+  .header { display:flex; align-items:center; justify-content:space-between; margin-bottom:28px; }
+  .hotel-brand { display:flex; align-items:center; gap:12px; }
+  .hotel-logo { width:44px; height:44px; border-radius:10px; background:linear-gradient(135deg,#6366f1,#8b5cf6); display:flex; align-items:center; justify-content:center; color:white; font-size:22px; }
+  .hotel-name { font-size:16px; font-weight:700; color:#1e293b; }
+  .hotel-sub  { font-size:11px; color:#64748b; margin-top:1px; }
+  .voucher-label-badge { background:#6366f1; color:white; font-size:10px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; padding:5px 14px; border-radius:20px; }
+  .divider { height:1px; background:linear-gradient(to right,#6366f1,transparent); margin:0 0 24px; }
+
+  /* Status bar */
+  .status-bar { background:#f1f5f9; border-radius:10px; padding:12px 18px; display:flex; justify-content:space-between; align-items:center; margin-bottom:24px; border-left:4px solid ${statusColor}; }
+  .status-label { font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.08em; color:#64748b; }
+  .status-value { font-size:13px; font-weight:700; color:${statusColor}; letter-spacing:.06em; }
+  .status-date  { font-size:11px; color:#94a3b8; }
+
+  /* Sections */
+  .grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:20px; }
+  .card { background:white; border:1px solid #e2e8f0; border-radius:10px; padding:16px 18px; }
+  .card-title { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.1em; color:#6366f1; margin-bottom:12px; display:flex; align-items:center; gap:6px; }
+  .field { margin-bottom:8px; }
+  .field:last-child { margin-bottom:0; }
+  .field-label { font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:.07em; color:#94a3b8; margin-bottom:2px; }
+  .field-value { font-size:13px; font-weight:500; color:#1e293b; }
+  .field-value.large { font-size:15px; font-weight:700; }
+
+  /* Dates banner */
+  .dates-banner { background:linear-gradient(135deg,#6366f1,#8b5cf6); color:white; border-radius:10px; padding:18px 20px; margin-bottom:20px; display:flex; justify-content:space-between; align-items:center; }
+  .dates-block { text-align:center; flex:1; }
+  .dates-block-lbl { font-size:10px; font-weight:600; letter-spacing:.1em; opacity:.7; margin-bottom:4px; }
+  .dates-block-val { font-size:14px; font-weight:700; }
+  .dates-block-sub { font-size:11px; opacity:.75; margin-top:2px; }
+  .dates-arrow { font-size:22px; opacity:.6; }
+  .nights-pill { background:rgba(255,255,255,.2); border-radius:20px; padding:4px 14px; font-size:12px; font-weight:600; }
+
+  /* Finance table */
+  .finance-card { background:white; border:1px solid #e2e8f0; border-radius:10px; overflow:hidden; margin-bottom:20px; }
+  .finance-row { display:flex; justify-content:space-between; align-items:center; padding:9px 18px; border-bottom:1px solid #f1f5f9; font-size:12px; }
+  .finance-row:last-child { border-bottom:none; }
+  .finance-row.subtotal { font-weight:500; }
+  .finance-row.disc { color:#16a34a; }
+  .finance-row.total { background:#f8fafc; font-size:14px; font-weight:700; color:#1e293b; padding:12px 18px; }
+  .finance-row.payment-row-item { color:#64748b; font-size:11px; padding:6px 18px 6px 30px; background:#fafafa; }
+  .finance-row.paid-row { color:#16a34a; font-weight:600; }
+  .finance-row.balance-row { background:${balance > 0 ? '#fef3c7' : '#f0fdf4'}; color:${balance > 0 ? '#92400e' : '#14532d'}; font-weight:700; font-size:13px; padding:12px 18px; }
+
+  /* Notes */
+  .notes-card { background:#fafafa; border:1px dashed #cbd5e1; border-radius:10px; padding:14px 18px; margin-bottom:20px; }
+  .notes-text  { font-size:12px; color:#475569; font-style:italic; line-height:1.5; }
+
+  /* Footer */
+  .footer { text-align:center; margin-top:24px; padding-top:16px; border-top:1px solid #e2e8f0; }
+  .footer p { font-size:10px; color:#94a3b8; line-height:1.6; }
+  .footer strong { color:#6366f1; }
+
+  @media print {
+    body { background:white; padding:16px; }
+    .dates-banner { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+    .finance-row.balance-row, .finance-row.total { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  }
+</style></head><body>
+
+<div class="header">
+  <div class="hotel-brand">
+    <div class="hotel-logo">🏨</div>
+    <div>
+      <div class="hotel-name">Barranca de Termas</div>
+      <div class="hotel-sub">Complejo de Apartamentos Turísticos</div>
+    </div>
+  </div>
+  <div class="voucher-label-badge">Voucher de Reserva</div>
+</div>
+<div class="divider"></div>
+
+<div class="status-bar">
+  <div>
+    <div class="status-label">Estado de pago</div>
+    <div class="status-value">${statusText}</div>
+  </div>
+  <div style="text-align:right">
+    <div class="status-label">Canal</div>
+    <div style="font-size:12px;font-weight:600;color:#475569">${sourceLabel}</div>
+  </div>
+  <div style="text-align:right">
+    <div class="status-label">Emitido</div>
+    <div class="status-date">${now}</div>
+  </div>
+</div>
+
+<!-- Datos del Huésped + Unidad -->
+<div class="grid-2">
+  <div class="card">
+    <div class="card-title">👤 Datos del Huésped</div>
+    <div class="field">
+      <div class="field-label">Nombre completo</div>
+      <div class="field-value large">${(ln + ', ' + fn).trim().replace(/^, /,'') || '—'}</div>
+    </div>
+    ${dni   ? `<div class="field"><div class="field-label">DNI / Documento</div><div class="field-value">${dni}</div></div>` : ''}
+    ${phone ? `<div class="field"><div class="field-label">Teléfono</div><div class="field-value">${phone}</div></div>` : ''}
+    ${email ? `<div class="field"><div class="field-label">Email</div><div class="field-value">${email}</div></div>` : ''}
+  </div>
+  <div class="card">
+    <div class="card-title">🏠 Alojamiento</div>
+    <div class="field">
+      <div class="field-label">Unidad / Departamento</div>
+      <div class="field-value large">${unitNames || '—'}</div>
+    </div>
+    <div class="field">
+      <div class="field-label">Huéspedes</div>
+      <div class="field-value">${paxStr}</div>
+    </div>
+  </div>
+</div>
+
+<!-- Fechas -->
+<div class="dates-banner">
+  <div class="dates-block">
+    <div class="dates-block-lbl">CHECK-IN</div>
+    <div class="dates-block-val">${fmtDShort(ci)}</div>
+    <div class="dates-block-sub">${fmtD(ci).split(',')[0] ?? ''}</div>
+  </div>
+  <div style="text-align:center">
+    <div class="dates-arrow">→</div>
+    <div class="nights-pill">${nightsN} noche${nightsN !== 1 ? 's' : ''}</div>
+  </div>
+  <div class="dates-block">
+    <div class="dates-block-lbl">CHECK-OUT</div>
+    <div class="dates-block-val">${fmtDShort(co)}</div>
+    <div class="dates-block-sub">${fmtD(co).split(',')[0] ?? ''}</div>
+  </div>
+</div>
+
+<!-- Liquidación -->
+<div class="finance-card">
+  <div class="finance-row subtotal">
+    <span>Precio por noche</span><span>${fmt(price)}</span>
+  </div>
+  <div class="finance-row subtotal">
+    <span>Noches (${billable}${freeNights ? ` facturables de ${nightsN}` : ''})</span><span>${fmt(subtotal)}</span>
+  </div>
+  ${discPct > 0    ? `<div class="finance-row disc"><span>Descuento ${discPct}%</span><span>− ${fmt(discount)}</span></div>` : ''}
+  ${surcharge > 0  ? `<div class="finance-row"><span>Recargo adicional</span><span>+ ${fmt(surcharge)}</span></div>` : ''}
+  <div class="finance-row total">
+    <span>TOTAL ESTADÍA</span><span>${fmt(total)}</span>
+  </div>
+  ${payRows.map(p => `
+  <div class="finance-row payment-row-item">
+    <span>↳ ${p.label}${p.date ? ' · ' + p.date : ''}${p.note ? ' · ' + p.note : ''}</span>
+    <span>${fmt(p.amount)}</span>
+  </div>`).join('')}
+  ${paid > 0 ? `<div class="finance-row paid-row"><span>Total abonado</span><span>${fmt(paid)}</span></div>` : ''}
+  <div class="finance-row balance-row">
+    <span>${balance > 0 ? '⚠️ Saldo pendiente al check-in' : '✅ Sin saldo pendiente'}</span>
+    <span>${balance > 0 ? fmt(balance) : '—'}</span>
+  </div>
+</div>
+
+${notes ? `
+<div class="notes-card">
+  <div class="card-title" style="margin-bottom:8px">📝 Observaciones</div>
+  <div class="notes-text">${notes}</div>
+</div>` : ''}
+
+<div class="footer">
+  <p>Este documento es un comprobante interno de reserva generado por <strong>MILA PMS</strong>.<br>
+  Barranca de Termas — Departamentos Turísticos · <em>Documento emitido el ${now}</em></p>
+</div>
+
+</body></html>`);
     win.document.close();
-    setTimeout(() => win.print(), 300);
+    setTimeout(() => win.print(), 500);
   }
 
   _sendVoucherToManager() {
-    const fn   = document.getElementById('f-firstname')?.value?.trim() ?? '';
-    const ln   = document.getElementById('f-lastname')?.value?.trim()  ?? '';
-    const ci   = document.getElementById('f-checkin')?.value  ?? '';
-    const co   = document.getElementById('f-checkout')?.value ?? '';
-    const unit = (this.ctx?.units ?? []).filter(u => this._selectedUnitIds.has(String(u.id))).map(u => u.name).join(', ');
-    const wifiName = this.ctx?.config?.wifi_name ?? '';
-    const wifiPass = this.ctx?.config?.wifi_pass ?? '';
-    const msg = encodeURIComponent(
-      `*Nueva Reserva* 🏨\n\n` +
-      `👤 Huésped: *${(fn + ' ' + ln).trim()}*\n` +
-      `🏠 Unidad: ${unit || '—'}\n` +
-      `📅 Ingreso: ${ci}\n📅 Salida: ${co}\n` +
-      (wifiName ? `📶 WiFi: ${wifiName} / ${wifiPass}\n` : '') +
-      `\n_Enviado desde MILA_`
-    );
-    const managerPhone = this.ctx?.config?.manager_phone ?? '';
-    window.open(`https://wa.me/${managerPhone.replace(/\D/g, '')}?text=${msg}`, '_blank');
+    const fn      = document.getElementById('f-firstname')?.value?.trim() ?? '';
+    const ln      = document.getElementById('f-lastname')?.value?.trim()  ?? '';
+    const dni     = document.getElementById('f-dni')?.value?.trim()       ?? '';
+    const phone   = document.getElementById('f-phone')?.value?.trim()     ?? '';
+    const ci      = document.getElementById('f-checkin')?.value  ?? '';
+    const co      = document.getElementById('f-checkout')?.value ?? '';
+    const price   = parseFloat(document.getElementById('f-price')?.value ?? 0);
+    const adults  = parseInt(document.getElementById('f-adults')?.value   ?? 1);
+    const children= parseInt(document.getElementById('f-children')?.value ?? 0);
+    const notes   = document.getElementById('f-notes')?.value?.trim() ?? '';
+
+    const unitNames = (this.ctx?.units ?? [])
+      .filter(u => this._selectedUnitIds.has(String(u.id)))
+      .map(u => u.name).join(', ');
+
+    const nightsN  = ci && co ? Math.round((new Date(co) - new Date(ci)) / 86400000) : 0;
+    const discPct  = parseFloat(document.getElementById('f-discount')?.value ?? 0);
+    const surcharge= parseFloat(document.getElementById('f-surcharge')?.value ?? 0);
+    const freeNights = parseInt(document.getElementById('f-free-nights')?.value ?? 0);
+    const billable = Math.max(0, nightsN - freeNights);
+    const subtotal = billable * price;
+    const discount = subtotal * discPct / 100;
+    const total    = subtotal - discount + surcharge;
+    const paid     = this._getTotalPaid();
+    const balance  = Math.max(0, total - paid);
+
+    // Origen/canal
+    const sourceChip = document.querySelector('#f-source-selector .src-chip.selected');
+    const sourceLabel = sourceChip?.querySelector('span')?.textContent?.trim() ?? 'Directo';
+
+    const paxStr = `${adults} adulto${adults !== 1 ? 's' : ''}${children ? ` + ${children} menor${children !== 1 ? 'es' : ''}` : ''}`;
+    const fmt = n => '$' + Math.round(n).toLocaleString('es-AR');
+    const fmtD = d => d ? d.split('-').reverse().join('/') : '—';
+
+    // Exact format requested
+    const text =
+      `🏨 *Nueva Reserva*\n` +
+      `*Apellido y Nombre:* ${ln} ${fn}\n` +
+      `*DNI:* ${dni || '—'}\n` +
+      `*Celular de contacto:* ${phone || '—'}\n` +
+      `*Check-in:* ${fmtD(ci)}\n` +
+      `*Check-out:* ${fmtD(co)} (${nightsN} noche${nightsN !== 1 ? 's' : ''})\n` +
+      `*Tipo de departamento:* ${unitNames || '—'}\n` +
+      `*Cantidad de personas:* ${paxStr}\n` +
+      `*Saldo pendiente al ingreso:* ${fmt(balance)}\n\n` +
+      `📝 *Nota y observaciones:* _${[sourceLabel, notes].filter(Boolean).join(' · ') || 'Sin observaciones'}_`;
+
+    const MANAGER_PHONE = '5492236848043'; // +54 9 223 684-8043
+    window.open(`https://wa.me/${MANAGER_PHONE}?text=${encodeURIComponent(text)}`, '_blank');
   }
 
   async _submit() {

@@ -175,7 +175,11 @@ export function formatARS(n) {
 export function formatDate(iso) {
   if (!iso) return '—';
   try {
-    return new Date(iso + 'T12:00:00').toLocaleDateString('es-AR', {
+    // If already has time component (timestamp), parse directly
+    // If only date (YYYY-MM-DD), append T12:00:00 to avoid timezone shifts
+    const d = iso.includes('T') ? new Date(iso) : new Date(iso + 'T12:00:00');
+    if (isNaN(d.getTime())) return iso;
+    return d.toLocaleDateString('es-AR', {
       day: '2-digit', month: '2-digit', year: 'numeric',
     });
   } catch { return iso; }
