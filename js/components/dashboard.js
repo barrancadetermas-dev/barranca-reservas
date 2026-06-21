@@ -251,7 +251,7 @@ export class Dashboard {
       .select('*, units(name)')
       .eq('hotel_id', this.ctx.hotelId)
       .lte('scheduled_date', today)
-      .eq('completed', false)
+      .is('completed', false)
       .order('scheduled_date');
     return data ?? [];
   }

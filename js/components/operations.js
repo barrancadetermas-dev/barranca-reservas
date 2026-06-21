@@ -173,6 +173,44 @@ export class OperationsModule {
     }
   }
 
+  _cleaningRowHTML(task, today) {
+    const statusMap = {
+      pending:     '⏳ Pendiente',
+      in_progress: '🔄 En proceso',
+      completed:   '✅ Lista',
+      skipped:     '⏭️ Omitida',
+    };
+    const isOverdue = task.status !== 'completed' && task.scheduled_date < today;
+    const unitName  = task.unit_name ?? task.units?.name ??
+                      this.ctx.units?.find(u => u.id === task.unit_id)?.name ?? 'General';
+
+    return `
+      <div class="ops-row ${isOverdue ? 'ops-overdue' : ''} ${task.status === 'completed' ? 'ops-done' : ''}" data-id="${task.id}">
+        <div class="ops-row-left">
+          <span class="ops-unit-badge">${unitName}</span>
+          <div class="ops-row-info">
+            <div class="ops-row-title">${task.title ?? 'Limpieza'}</div>
+            <div class="ops-row-meta">
+              ${formatDate(task.scheduled_date)}
+              ${task.assigned_to ? ` · 👤 ${task.assigned_to}` : ''}
+              ${task.notes       ? ` · ${task.notes}`          : ''}
+            </div>
+          </div>
+        </div>
+        <div class="ops-row-right">
+          <span class="ops-status-chip">${statusMap[task.status] ?? task.status}</span>
+          ${task.status === 'pending' ? `
+            <button class="btn btn-outline btn-xs cleaning-status-btn"
+                    data-id="${task.id}" data-status="in_progress">Iniciar</button>` : ''}
+          ${task.status === 'in_progress' ? `
+            <button class="btn btn-primary btn-xs cleaning-status-btn"
+                    data-id="${task.id}" data-status="completed">✓ Listo</button>` : ''}
+          <button class="btn btn-ghost btn-xs cleaning-delete-btn"
+                  data-id="${task.id}" title="Eliminar">🗑️</button>
+        </div>
+      </div>`;
+  }
+
   async _autoCreateCheckoutCleaningTasks(today) {
     try {
       // Find bookings with checkout today that don't have a cleaning task yet

@@ -120,7 +120,7 @@ export class NotificationService {
         .from('reminders')
         .select('id, title, scheduled_date, priority')
         .eq('hotel_id', AppContext.hotelId)
-        .eq('completed', false)
+        .is('completed', false)
         .lte('scheduled_date', today)
         .order('scheduled_date')
         .limit(10);

@@ -256,13 +256,8 @@ export class ConfigPanel {
     });
 
     // ── Refresh Supabase schema cache ─────────────────
-    container.querySelector('#cfg-notify-schema')?.addEventListener('click', async () => {
-      try {
-        const { error } = await this.db.rpc('exec_sql', { sql: "NOTIFY pgrst, 'reload schema'" }).single();
-        showToast(error ? 'Error: ' + error.message : '✅ Schema cache actualizado', error ? 'error' : 'success');
-      } catch {
-        showToast('Ejecutá manualmente en SQL Editor: NOTIFY pgrst, \'reload schema\'', 'info');
-      }
+    container.querySelector('#cfg-notify-schema')?.addEventListener('click', () => {
+      showToast('Ejecutá en Supabase SQL Editor: NOTIFY pgrst, \'reload schema\';', 'info');
     });
 
     // Accordion toggle
