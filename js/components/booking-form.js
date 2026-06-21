@@ -28,7 +28,10 @@ const PAYMENT_METHODS = [
 
 // Canales de origen disponibles (en orden visual)
 // Generado dinámicamente desde SOURCE_CONFIG — única fuente de verdad
-const SOURCE_OPTIONS = Object.entries(SOURCE_CONFIG).map(([value, cfg]) => ({
+// Filter duplicates: despegar+expedia both map to 'ota' visually
+const SOURCE_OPTIONS = Object.entries(SOURCE_CONFIG)
+  .filter(([key]) => key !== 'expedia') // expedia is shown via 'despegar' as Desp/Exp
+  .map(([value, cfg]) => ({
   value,
   label: cfg.label,
   color: cfg.dot ?? cfg.color ?? '#64748B',
@@ -465,6 +468,8 @@ export class BookingForm {
         this._updateBlockedDates();
         this._updateBreakdown();
         this._triggerPriceSuggestion();
+        // Update pax cap when unit changes
+        this._updatePaxCap?.();
       });
     });
 
@@ -475,13 +480,16 @@ export class BookingForm {
   // ── Selector de cantidad de personas ─────────────
   _renderPaxSelector() {
     const getMaxPax = () => {
-      // Usar la capacidad máxima de la unidad seleccionada
-      const selectedUnit = [...(this._selectedUnitIds ?? [])][0];
-      if (selectedUnit) {
-        const unit = this._units?.find(u => u.id === selectedUnit);
-        if (unit?.max_guests) return unit.max_guests;
-      }
-      return 99; // sin límite si no hay unidad
+      // Capacidad máxima = suma de max_guests de unidades seleccionadas
+      // (permite multi-unidad: ej. 2 deptos para 8 personas)
+      if (!this._selectedUnitIds?.size) return 99;
+      const units = this.ctx?.units ?? [];
+      let total = 0;
+      this._selectedUnitIds.forEach(uid => {
+        const u = units.find(u => String(u.id) === String(uid));
+        if (u?.max_guests) total += u.max_guests;
+      });
+      return total > 0 ? total : 99;
     };
 
     const updateTotal = () => {
@@ -1098,7 +1106,7 @@ export class BookingForm {
 
       // Insertar unidades
       const unitRows = [...this._selectedUnitIds].map(uid => ({
-        booking_id: bookingId, unit_id: uid, hotel_id: this.ctx.hotelId,
+        booking_id: bookingId, unit_id: uid,
       }));
       if (unitRows.length) await this.db.from('booking_units').insert(unitRows);
 

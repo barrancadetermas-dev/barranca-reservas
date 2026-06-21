@@ -53,8 +53,9 @@ export const SOURCE_CONFIG = {
   family:   { label: 'Familia',    dot: '#7C3AED', color: '#7C3AED', textColor: 'white' },
   company:  { label: 'Empresa',    dot: '#0F766E', color: '#0F766E', textColor: 'white' },
   referral: { label: 'Referido',   dot: '#B45309', color: '#B45309', textColor: 'white' },
-  despegar: { label: 'Despegar',   dot: '#059669', color: '#059669', textColor: 'white' },
-  expedia:  { label: 'Expedia',    dot: '#DC2626', color: '#DC2626', textColor: 'white' },
+  despegar: { label: 'Desp/Exp',   dot: '#059669', color: '#059669', textColor: 'white' },
+  expedia:  { label: 'Desp/Exp',   dot: '#059669', color: '#059669', textColor: 'white' },
+  ota:      { label: 'Desp/Exp',   dot: '#059669', color: '#059669', textColor: 'white' },
 };
 
 // ══════════════════════════════════════════════════

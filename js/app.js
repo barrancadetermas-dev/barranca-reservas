@@ -1564,18 +1564,114 @@ function setupCalculator() {
   const overlay = document.getElementById('overlay-calculator');
   if (!overlay) return;
 
-  // Abrir al hacer clic en el botón del header
-  document.getElementById('btn-calculator')?.addEventListener('click', (e) => {
+  const btn = document.getElementById('btn-calculator');
+
+  // Toggle highlight on btn when open
+  const setOpen = (open) => {
+    if (open) {
+      overlay.classList.remove('hidden');
+      btn?.classList.add('calc-active');
+      _calcUpdate();
+      document.getElementById('calc-price')?.focus();
+    } else {
+      overlay.classList.add('hidden');
+      btn?.classList.remove('calc-active');
+    }
+  };
+
+  // Insert mode tabs into calc header
+  const calcHeader = overlay.querySelector('.calc-header');
+  if (calcHeader && !calcHeader.querySelector('.calc-mode-tabs')) {
+    const tabs = document.createElement('div');
+    tabs.className = 'calc-mode-tabs';
+    tabs.innerHTML = `
+      <button class="calc-tab active" data-mode="stay">📅 Estadía</button>
+      <button class="calc-tab" data-mode="normal">🔢 Normal</button>`;
+    calcHeader.appendChild(tabs);
+
+    const stayBody   = overlay.querySelector('.calc-body');
+    const normalBody = document.createElement('div');
+    normalBody.className = 'calc-body calc-normal-body';
+    normalBody.style.display = 'none';
+    normalBody.innerHTML = `
+      <div id="calc-norm-display" style="font-size:1.6rem;font-weight:700;text-align:right;
+        padding:10px 12px;background:var(--color-surface-2);border-radius:var(--r-md);
+        border:1px solid var(--color-border);min-height:52px;word-break:break-all;color:var(--color-text)">0</div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:10px">
+        ${['C','±','%','÷','7','8','9','×','4','5','6','−','1','2','3','+','0','','.',
+          '='].map(k => `<button class="calc-norm-btn${k==='='?' calc-norm-eq':k==='0'?' calc-norm-zero':''}"
+          data-key="${k}" style="${k==='='?'background:var(--color-primary);color:white;':''}">${k||''}</button>`).join('')}
+      </div>`;
+    stayBody.parentNode.insertBefore(normalBody, stayBody.nextSibling);
+
+    // Bind normal calculator
+    let _normExpr = '', _normDisplay = '0', _normHasResult = false;
+    const normDisp = () => {
+      const el = document.getElementById('calc-norm-display');
+      if (el) el.textContent = _normDisplay;
+    };
+    normalBody.querySelectorAll('.calc-norm-btn').forEach(b => {
+      b.addEventListener('click', () => {
+        const k = b.dataset.key;
+        if (!k) return;
+        if (k === 'C') { _normExpr = ''; _normDisplay = '0'; _normHasResult = false; }
+        else if (k === '=') {
+          try {
+            const safe = _normExpr.replace(/×/g,'*').replace(/÷/g,'/').replace(/−/g,'-');
+            const result = Function(`"use strict"; return (${safe})`)();
+            _normDisplay = String(parseFloat(result.toFixed(10)));
+            _normExpr = _normDisplay;
+            _normHasResult = true;
+          } catch { _normDisplay = 'Error'; _normExpr = ''; }
+        } else if (k === '±') {
+          _normDisplay = _normDisplay.startsWith('-') ? _normDisplay.slice(1) : '-' + _normDisplay;
+          _normExpr = _normDisplay;
+        } else if (k === '%') {
+          const v = parseFloat(_normDisplay) / 100;
+          _normDisplay = String(v);
+          _normExpr = _normDisplay;
+        } else {
+          if (_normHasResult && !/[+\-×÷]/.test(k)) { _normExpr = ''; _normDisplay = '0'; }
+          _normHasResult = false;
+          if (k === '.' && _normDisplay.includes('.')) return;
+          if (['+','-','×','÷'].includes(k)) {
+            _normExpr = _normExpr || _normDisplay;
+            _normDisplay = k;
+            _normExpr += k;
+          } else {
+            if (_normDisplay === '0' || ['+','-','×','÷'].includes(_normDisplay)) _normDisplay = '';
+            _normDisplay += k;
+            _normExpr = _normExpr.replace(/[^0-9.+\-×÷]$/, '') + k;
+            if (!/[+\-×÷]/.test(_normDisplay)) _normExpr = _normDisplay;
+          }
+        }
+        normDisp();
+      });
+    });
+
+    // Tab switching
+    tabs.querySelectorAll('.calc-tab').forEach(t => {
+      t.addEventListener('click', () => {
+        tabs.querySelectorAll('.calc-tab').forEach(x => x.classList.remove('active'));
+        t.classList.add('active');
+        if (t.dataset.mode === 'normal') {
+          stayBody.style.display = 'none';
+          normalBody.style.display = '';
+        } else {
+          stayBody.style.display = '';
+          normalBody.style.display = 'none';
+        }
+      });
+    });
+  }
+
+  // Open / close
+  btn?.addEventListener('click', (e) => {
     e.stopPropagation();
-    const isOpen = !overlay.classList.contains('hidden');
-    if (isOpen) { overlay.classList.add('hidden'); return; }
-    overlay.classList.remove('hidden');
-    _calcUpdate();
-    document.getElementById('calc-price')?.focus();
+    setOpen(overlay.classList.contains('hidden'));
   });
 
-  // Cerrar
-  const close = () => overlay.classList.add('hidden');
+  const close = () => setOpen(false);
   document.getElementById('calc-close')?.addEventListener('click', close);
   overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
   document.addEventListener('keydown', (e) => {

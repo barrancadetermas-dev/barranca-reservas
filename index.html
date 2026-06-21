@@ -382,12 +382,6 @@
 
       <!-- ── SECTION: CALENDAR ── -->
       <section id="section-calendar" class="section">
-        <div class="section-page-header">
-          <div class="sph-left">
-            <span class="sph-icon">📅</span>
-            <div><h2 class="sph-title">Calendario</h2><p class="sph-sub">Vista mensual · Drag &amp; Drop · <kbd>Shift</kbd>+arrastre para bloquear</p></div>
-          </div>
-        </div>
         <div class="cal-toolbar">
           <div class="cal-nav">
             <button class="btn btn-ghost btn-icon" id="cal-prev" title="Mes anterior">
@@ -424,12 +418,6 @@
       <!-- ── SECTION: BOOKINGS ── -->
       <!-- ── SECTION: BOOKINGS ── -->
       <section id="section-bookings" class="section">
-        <div class="section-page-header">
-          <div class="sph-left">
-            <span class="sph-icon">📋</span>
-            <div><h2 class="sph-title">Reservas</h2><p class="sph-sub">Gestión completa de reservas</p></div>
-          </div>
-        </div>
         <div class="card search-card">
           <div class="search-bar">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="17" height="17" class="search-icon"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
@@ -474,8 +462,7 @@
             <button class="source-filter-btn" data-source="family"   style="--btn-color:#7C3AED">Familia</button>
             <button class="source-filter-btn" data-source="company"  style="--btn-color:#0F766E">Empresa</button>
             <button class="source-filter-btn" data-source="referral" style="--btn-color:#B45309">Referido</button>
-            <button class="source-filter-btn" data-source="despegar" style="--btn-color:#059669">Despegar</button>
-            <button class="source-filter-btn" data-source="expedia"  style="--btn-color:#DC2626">Expedia</button>
+            <button class="source-filter-btn" data-source="ota"  style="--btn-color:#059669">Desp/Exp</button>
             <button class="source-filter-btn" data-source="blocked"  style="--btn-color:#374151">Bloqueos</button>
           </div>
         </div>
@@ -491,11 +478,7 @@
       <!-- ── SECTION: STATISTICS ── -->
       <!-- ── SECTION: STATISTICS ── -->
       <section id="section-statistics" class="section">
-        <div class="section-page-header">
-          <div class="sph-left">
-            <span class="sph-icon">📊</span>
-            <div><h2 class="sph-title">Estadísticas</h2><p class="sph-sub">Ingresos · Ocupación · ADR · RevPAR</p></div>
-          </div>
+        </div>
         </div>
         <div class="stats-toolbar">
           <div class="stats-period-selectors">
@@ -541,57 +524,26 @@
 
       <!-- ── SECTION: REMINDERS ── -->
       <section id="section-reminders" class="section">
-        <div class="section-page-header">
-          <div class="sph-left">
-            <span class="sph-icon">🔔</span>
-            <div><h2 class="sph-title">Recordatorios</h2><p class="sph-sub">Recordatorios y mantenimiento programado</p></div>
-          </div>
-          <button class="btn btn-primary btn-sm" id="btn-add-reminder-main">+ Nuevo Recordatorio</button>
-        </div>
         <div id="reminders-full-list"></div>
       </section>
 
       <!-- ── SECTION: GUESTS CRM ── -->
       <section id="section-guests" class="section">
-        <div class="section-page-header">
-          <div class="sph-left">
-            <span class="sph-icon">👥</span>
-            <div><h2 class="sph-title">Huéspedes / CRM</h2><p class="sph-sub">Historial · Notas · Antecedentes</p></div>
-          </div>
-        </div>
         <div id="guests-container"></div>
       </section>
 
       <!-- ── SECTION: OPERATIONS ── -->
       <section id="section-operations" class="section">
-        <div class="section-page-header">
-          <div class="sph-left">
-            <span class="sph-icon">🔧</span>
-            <div><h2 class="sph-title">Operaciones</h2><p class="sph-sub">Limpieza · Mantenimiento · Stock</p></div>
-          </div>
-        </div>
         <div id="operations-container"></div>
       </section>
 
             <!-- ── SECTION: AUDIT LOG (Admin only) ── -->
       <section id="section-audit" class="section">
-        <div class="section-page-header">
-          <div class="sph-left">
-            <span class="sph-icon">📜</span>
-            <div><h2 class="sph-title">Auditoría</h2><p class="sph-sub">Registro de acciones del sistema</p></div>
-          </div>
-        </div>
         <div id="audit-container"></div>
       </section>
 
       <!-- ── SECTION: CONFIG (Admin only) ── -->
       <section id="section-config" class="section">
-        <div class="section-page-header">
-          <div class="sph-left">
-            <span class="sph-icon">⚙️</span>
-            <div><h2 class="sph-title">Configuración</h2><p class="sph-sub">Comisiones · Tarifas · Departamentos</p></div>
-          </div>
-        </div>
         <div id="config-container"></div>
       </section>
 
@@ -1064,8 +1016,7 @@
           <option value="airbnb:18">Airbnb — 18%</option>
           <option value="family:0">Familia — sin comisión</option>
           <option value="company:0">Empresa — sin comisión</option>
-          <option value="despegar:12">Despegar — 12%</option>
-          <option value="expedia:15">Expedia — 15%</option>
+          <option value="ota:12">Desp/Exp — 12%</option>
         </select>
       </div>
       <div class="calc-field">
