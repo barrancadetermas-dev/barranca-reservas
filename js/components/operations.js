@@ -90,9 +90,12 @@ export class OperationsModule {
 
     try {
       const today = toISODate(new Date());
+      // Auto-generate cleaning tasks for checkouts today
+      await this._autoCreateCheckoutCleaningTasks(today);
+
       const { data, error } = await this.db
         .from('cleaning_tasks')
-        .select('*')   // sin units() join — puede fallar si FK no está en cache
+        .select('*')
         .eq('hotel_id', this.ctx.hotelId)
         .order('scheduled_date', { ascending: true })
         .limit(100);
@@ -105,19 +108,18 @@ export class OperationsModule {
             <span class="empty-state-icon">🧹</span>
             <p>Sin tareas de limpieza.</p>
             <p style="font-size:.78rem;color:var(--color-text-3)">
-              Se generan automáticamente cuando un huésped hace check-out.
+              Se generan automáticamente cuando hay check-outs. También podés crear una manualmente.
             </p>
           </div>`;
         return;
       }
 
-      // KPIs rápidos
-      const pending   = data.filter(t => t.status === 'pending'   && t.scheduled_date === today).length;
-      const done      = data.filter(t => t.status === 'completed' && t.scheduled_date === today).length;
-      const overdue   = data.filter(t => t.status !== 'completed' && t.scheduled_date < today).length;
+      const pending  = data.filter(t => t.status === 'pending'   && t.scheduled_date === today).length;
+      const done     = data.filter(t => t.status === 'completed' && t.scheduled_date === today).length;
+      const overdue  = data.filter(t => t.status !== 'completed' && t.scheduled_date < today).length;
 
       panel.innerHTML = `
-        <div class="kpi-grid" style="margin-bottom:20px">
+        <div class="kpi-grid" style="margin-bottom:16px">
           <div class="kpi-card kpi-amber">
             <div class="kpi-body"><span class="kpi-label">Pendientes hoy</span><span class="kpi-value">${pending}</span></div>
           </div>
@@ -132,73 +134,81 @@ export class OperationsModule {
           ${data.map(t => this._cleaningRowHTML(t, today)).join('')}
         </div>`;
 
-      panel.querySelectorAll('.cleaning-status-btn').forEach(btn => {
-        btn.addEventListener('click', () => this._updateCleaningStatus(btn.dataset.id, btn.dataset.status, panel, header));
-      });
-      panel.querySelectorAll('.cleaning-delete-btn').forEach(btn => {
-        btn.addEventListener('click', async () => {
-          if (!confirm('¿Eliminar esta tarea de limpieza?')) return;
+      // ── Event delegation — un solo listener en el panel ──────────
+      panel.addEventListener('click', async (e) => {
+        const btn = e.target.closest('button');
+        if (!btn) return;
+
+        if (btn.classList.contains('cleaning-status-btn')) {
+          const id = btn.dataset.id;
+          const newStatus = btn.dataset.status;
+          btn.disabled = true; btn.textContent = '...';
           try {
-            const { error } = await this.db.from('cleaning_tasks').delete().eq('id', btn.dataset.id);
+            const update = { status: newStatus };
+            if (newStatus === 'completed') update.completed_at = new Date().toISOString();
+            const { error } = await this.db.from('cleaning_tasks').update(update).eq('id', id);
             if (error) throw error;
-            showToast('Tarea eliminada', 'success');
+            showToast(newStatus === 'completed' ? '✅ Limpieza finalizada — depto disponible' : '🔄 Tarea en proceso', 'success');
             await this._loadCleaning(panel, header);
+            if (typeof updateOperationsBadge === 'function') updateOperationsBadge();
           } catch (err) {
-            showToast('Error al eliminar: ' + (err?.message ?? err), 'error');
+            showToast('Error: ' + (err?.message ?? err), 'error');
+            btn.disabled = false;
           }
-        });
-      });
+        }
+
+        if (btn.classList.contains('cleaning-delete-btn')) {
+          if (!confirm('¿Eliminar esta tarea?')) return;
+          const { error } = await this.db.from('cleaning_tasks').delete().eq('id', btn.dataset.id);
+          if (error) { showToast('Error al eliminar: ' + error.message, 'error'); return; }
+          showToast('Tarea eliminada', 'success');
+          await this._loadCleaning(panel, header);
+          if (typeof updateOperationsBadge === 'function') updateOperationsBadge();
+        }
+      }, { once: true }); // once: re-attached each reload
 
     } catch (err) {
+      console.error('[Operations] cleaning:', err);
       panel.innerHTML = this._errorHTML('cleaning_tasks');
     }
   }
 
-  _cleaningRowHTML(task, today) {
-    const statusMap = {
-      pending:     '⏳ Pendiente',
-      in_progress: '🔄 En proceso',
-      completed:   '✅ Lista',
-      skipped:     '⏭️ Omitida',
-    };
-    const isOverdue = task.status !== 'completed' && task.scheduled_date < today;
-    const unitName  = task.units?.name ?? 'General';
-
-    return `
-      <div class="ops-row ${isOverdue ? 'ops-overdue' : ''} ${task.status === 'completed' ? 'ops-done' : ''}" data-id="${task.id}">
-        <div class="ops-row-left">
-          <span class="ops-unit-badge">${unitName}</span>
-          <div class="ops-row-info">
-            <div class="ops-row-title">${task.title ?? 'Limpieza post check-out'}</div>
-            <div class="ops-row-meta">
-              ${formatDate(task.scheduled_date)}
-              ${task.assigned_to ? ` · 👤 ${task.assigned_to}` : ''}
-              ${task.notes ? ` · ${task.notes}` : ''}
-            </div>
-          </div>
-        </div>
-        <div class="ops-row-right">
-          <span class="ops-status-chip">${statusMap[task.status] ?? task.status}</span>
-          ${task.status === 'pending' ? `
-            <button class="btn btn-outline btn-xs cleaning-status-btn"
-                    data-id="${task.id}" data-status="in_progress">Iniciar</button>` : ''}
-          ${task.status === 'in_progress' ? `
-            <button class="btn btn-primary btn-xs cleaning-status-btn"
-                    data-id="${task.id}" data-status="completed">✓ Finalizar</button>` : ''}
-          <button class="btn btn-ghost btn-xs cleaning-delete-btn" data-id="${task.id}" title="Eliminar">🗑️</button>
-        </div>
-      </div>`;
-  }
-  async _updateCleaningStatus(id, newStatus, panel) {
+  async _autoCreateCheckoutCleaningTasks(today) {
     try {
-      const update = { status: newStatus };
-      if (newStatus === 'completed') update.completed_at = new Date().toISOString();
-      await this.db.from('cleaning_tasks').update(update).eq('id', id);
-      await this._loadCleaning(panel, panel.closest('#operations-container').querySelector('#ops-header-actions'));
-      showToast(newStatus === 'completed' ? '✅ Limpieza finalizada' : '🔄 En proceso', 'success');
-    } catch { showToast('Error al actualizar', 'error'); }
-  }
+      // Find bookings with checkout today that don't have a cleaning task yet
+      const { data: checkouts } = await this.db
+        .from('bookings')
+        .select('id, booking_units(unit_id)')
+        .eq('hotel_id', this.ctx.hotelId)
+        .eq('check_out', today)
+        .not('status', 'in', '(cancelled,blocked)');
 
+      if (!checkouts?.length) return;
+
+      for (const b of checkouts) {
+        const units = b.booking_units ?? [];
+        for (const bu of units) {
+          // Check if task already exists for this booking+unit+date
+          const { data: existing } = await this.db.from('cleaning_tasks')
+            .select('id')
+            .eq('hotel_id', this.ctx.hotelId)
+            .eq('scheduled_date', today)
+            .eq('unit_id', bu.unit_id)
+            .limit(1);
+          if (existing?.length) continue;
+
+          const unitName = this.ctx.units?.find(u => u.id === bu.unit_id)?.name ?? 'Unidad';
+          await this.db.from('cleaning_tasks').insert({
+            hotel_id:       this.ctx.hotelId,
+            unit_id:        bu.unit_id,
+            title:          `Limpieza post check-out — ${unitName}`,
+            scheduled_date: today,
+            status:         'pending',
+          });
+        }
+      }
+    } catch { /* silencioso — si la tabla no existe aún */ }
+  }
   _openCleaningModal() {
     const units = this.ctx.units ?? [];
     const today = toISODate(new Date());
@@ -332,31 +342,36 @@ export class OperationsModule {
           ${data.map(issue => this._maintenanceRowHTML(issue)).join('')}
         </div>`;
 
-      // Resolver
-      panel.querySelectorAll('.maint-resolve-btn').forEach(btn => {
-        btn.addEventListener('click', async () => {
+      // ── Event delegation — un solo listener en el panel ──────────
+      panel.addEventListener('click', async (e) => {
+        const btn = e.target.closest('button');
+        if (!btn) return;
+
+        if (btn.classList.contains('maint-resolve-btn')) {
+          if (!confirm('¿Marcar como resuelta?')) return;
           btn.disabled = true; btn.textContent = '...';
           const { error } = await this.db.from('maintenance_issues')
             .update({ status: 'resolved', resolved_at: new Date().toISOString() })
             .eq('id', btn.dataset.id);
-          if (error) { showToast('Error: ' + error.message, 'error'); btn.disabled = false; btn.textContent = '✓ Resolver'; return; }
+          if (error) {
+            showToast('Error: ' + error.message, 'error');
+            btn.disabled = false; btn.textContent = '✓ Resolver';
+            return;
+          }
           showToast('✅ Incidencia resuelta', 'success');
           await this._loadMaintenance(panel, header);
-          updateOperationsBadge?.();
-        });
-      });
+          if (typeof updateOperationsBadge === 'function') updateOperationsBadge();
+        }
 
-      // Eliminar
-      panel.querySelectorAll('.maint-delete-btn').forEach(btn => {
-        btn.addEventListener('click', async () => {
+        if (btn.classList.contains('maint-delete-btn')) {
           if (!confirm('¿Eliminar esta incidencia?')) return;
           const { error } = await this.db.from('maintenance_issues').delete().eq('id', btn.dataset.id);
           if (error) { showToast('Error: ' + error.message, 'error'); return; }
           showToast('Eliminada', 'success');
           await this._loadMaintenance(panel, header);
-          updateOperationsBadge?.();
-        });
-      });
+          if (typeof updateOperationsBadge === 'function') updateOperationsBadge();
+        }
+      }, { once: true });
 
     } catch (err) {
       panel.innerHTML = this._errorHTML('maintenance_issues');

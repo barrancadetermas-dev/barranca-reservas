@@ -162,22 +162,108 @@ export class ConfigPanel {
     }).join('');
 
     return `
-      <div class="section-header-row" style="margin-bottom:20px">
-        <div>
-          <p style="font-size:.78rem;color:var(--color-text-3);margin-top:3px">
+      <div class="tabs-bar" style="margin-bottom:20px">
+        <button class="tab active" id="cfg-tab-config">⚙️ Configuración</button>
+        <button class="tab" id="cfg-tab-control">👤 Panel de Control</button>
+      </div>
+
+      <!-- Configuración tab -->
+      <div id="cfg-pane-config">
+        <div class="section-header-row" style="margin-bottom:16px">
+          <p style="font-size:.78rem;color:var(--color-text-3)">
             🔒 Solo administradores · Cambios se guardan en la base de datos
           </p>
+          <button class="btn btn-primary" id="btn-save-config">💾 Guardar cambios</button>
         </div>
-        <button class="btn btn-primary" id="btn-save-config">
-          💾 Guardar cambios
-        </button>
+        <div class="config-groups">${groupsHTML}${unitsHTML}</div>
       </div>
-      <div class="config-groups">${groupsHTML}${unitsHTML}</div>
+
+      <!-- Panel de Control tab -->
+      <div id="cfg-pane-control" style="display:none">
+        <div id="cfg-user-card" class="config-group" style="margin-bottom:16px">
+          <div style="padding:20px">
+            <div style="display:flex;align-items:center;gap:14px;margin-bottom:18px">
+              <div id="cfg-user-avatar" style="width:48px;height:48px;border-radius:50%;background:var(--color-primary);color:white;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700;flex-shrink:0">?</div>
+              <div>
+                <div id="cfg-user-email" style="font-weight:700;font-size:.95rem">Cargando...</div>
+                <div id="cfg-user-role" style="font-size:.75rem;color:var(--color-text-3);margin-top:2px">Administrador</div>
+              </div>
+            </div>
+            <div style="display:flex;gap:10px;flex-wrap:wrap">
+              <button class="btn btn-danger btn-sm" id="cfg-logout-btn">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                  <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
+                </svg>
+                Cerrar Sesión
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="config-group" style="padding:16px 20px;margin-bottom:16px">
+          <div style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--color-text-3);margin-bottom:12px">⚠️ Zona de peligro</div>
+          <p style="font-size:.8rem;color:var(--color-text-2);margin-bottom:10px">Estas acciones son irreversibles. Usá con precaución.</p>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn btn-outline btn-sm" id="cfg-notify-schema" style="color:var(--color-warning);border-color:var(--color-warning)">
+              🔄 Refrescar schema Supabase
+            </button>
+          </div>
+        </div>
+
+        <div class="config-group" style="padding:16px 20px">
+          <div style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--color-text-3);margin-bottom:12px">ℹ️ Información del sistema</div>
+          <div style="font-size:.8rem;color:var(--color-text-2);line-height:1.7">
+            <div>📦 Versión: MILA PMS v8</div>
+            <div>🗄️ Supabase: <code style="font-size:.72rem">tuneeinpudlsezzmvaro</code></div>
+            <div>🌐 App: <a href="https://barranca-reservas.vercel.app" target="_blank" style="color:var(--color-primary)">barranca-reservas.vercel.app</a></div>
+          </div>
+        </div>
+      </div>
     `;
   }
 
   _bindSave(container) {
     container.querySelector('#btn-save-config')?.addEventListener('click', () => this._save(container));
+
+    // ── Tab switching ─────────────────────────────────
+    const tabConfig  = container.querySelector('#cfg-tab-config');
+    const tabControl = container.querySelector('#cfg-tab-control');
+    const paneConfig  = container.querySelector('#cfg-pane-config');
+    const paneControl = container.querySelector('#cfg-pane-control');
+
+    tabConfig?.addEventListener('click', () => {
+      tabConfig.classList.add('active'); tabControl.classList.remove('active');
+      paneConfig.style.display  = ''; paneControl.style.display = 'none';
+    });
+
+    tabControl?.addEventListener('click', async () => {
+      tabControl.classList.add('active'); tabConfig.classList.remove('active');
+      paneConfig.style.display = 'none'; paneControl.style.display = '';
+      // Load user info
+      try {
+        const { data: { session } } = await this.db.auth.getSession();
+        const user = session?.user;
+        const emailEl  = container.querySelector('#cfg-user-email');
+        const avatarEl = container.querySelector('#cfg-user-avatar');
+        if (emailEl && user) emailEl.textContent = user.email ?? '—';
+        if (avatarEl && user) avatarEl.textContent = (user.email ?? 'A')[0].toUpperCase();
+      } catch (_) {}
+    });
+
+    // ── Logout from Panel de Control ─────────────────
+    container.querySelector('#cfg-logout-btn')?.addEventListener('click', () => {
+      if (confirm('¿Cerrar sesión?')) this.db.auth.signOut();
+    });
+
+    // ── Refresh Supabase schema cache ─────────────────
+    container.querySelector('#cfg-notify-schema')?.addEventListener('click', async () => {
+      try {
+        const { error } = await this.db.rpc('exec_sql', { sql: "NOTIFY pgrst, 'reload schema'" }).single();
+        showToast(error ? 'Error: ' + error.message : '✅ Schema cache actualizado', error ? 'error' : 'success');
+      } catch {
+        showToast('Ejecutá manualmente en SQL Editor: NOTIFY pgrst, \'reload schema\'', 'info');
+      }
+    });
 
     // Accordion toggle
     container.querySelectorAll('.config-acc-header').forEach(btn => {
