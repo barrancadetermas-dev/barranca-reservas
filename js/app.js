@@ -859,46 +859,34 @@ function _updateDollarUI(rates) {
     badgeEl.textContent = `$${Math.round(rates.oficial.sell).toLocaleString('es-AR')}`;
   }
 
-  // Widget del dashboard
+  // El widget del dashboard se actualiza via dashboard._renderDollar()
+  // Solo actualizar campos legacy si existen
   const setEl = (id, val) => { const el = document.getElementById(id); if (el && val) el.textContent = val; };
   const fmt   = v => v ? `$${Math.round(v).toLocaleString('es-AR')}` : '—';
 
-  // Filas de fuentes individuales
-  const sources = rates.rawSources ?? [];
+  // Campos individuales por fuente (oficial venta únicamente)
+  const sources = rates.sourceData ?? [];
+  const bna     = sources.find(s => s.source === 'BNA');
   const ambito  = sources.find(s => s.source === 'ambito');
-  const dolarapi= sources.find(s => s.source === 'dolarapi');
-  const bluelytics = sources.find(s => s.source === 'bluelytics');
+  const argdat  = sources.find(s => s.source === 'argentinadatos');
 
-  setEl('dol-of-buy',  fmt(rates.oficial?.buy));
-  setEl('dol-of-sell', fmt(rates.oficial?.sell));
-  setEl('dol-bl-buy',  fmt(rates.blue?.buy));
-  setEl('dol-bl-sell', fmt(rates.blue?.sell));
+  setEl('dol-of-sell',         fmt(rates.oficial?.sell));
+  setEl('dol-of-buy',          fmt(rates.oficial?.buy));
+  setEl('dol-ambito-sell',     fmt(ambito?.sell));
+  setEl('dol-dolarapi-sell',   fmt(bna?.sell));          // legacy campo
+  setEl('dol-bluelytics-sell', fmt(argdat?.sell));       // legacy campo
 
-  // Fuentes individuales
-  setEl('dol-ambito-sell',     fmt(ambito?.blue?.sell ?? ambito?.oficial?.sell));
-  setEl('dol-dolarapi-sell',   fmt(dolarapi?.blue?.sell ?? dolarapi?.oficial?.sell));
-  setEl('dol-bluelytics-sell', fmt(bluelytics?.blue?.sell ?? bluelytics?.oficial?.sell));
-
-  // Timestamp y estado
-  const statusEl = document.getElementById('dollar-status-badge');
-  if (statusEl) {
-    statusEl.textContent = `${rates.sources?.length ?? 1} fuente${rates.sources?.length !== 1 ? 's' : ''} · actualizado`;
-    statusEl.style.background = '#22c55e18';
-    statusEl.style.color      = '#15803d';
-  }
-
+  // Timestamp
   const updEl = document.getElementById('dollar-updated-at');
   if (updEl) {
-    const t = new Date();
-    updEl.textContent = `Promedio de ${rates.sources?.join(', ') ?? 'dolarapi'} · ${t.toLocaleTimeString('es-AR', {hour:'2-digit',minute:'2-digit'})}`;
+    const t = rates.updatedAt ? new Date(rates.updatedAt).toLocaleTimeString('es-AR', { hour:'2-digit', minute:'2-digit', second:'2-digit' }) : '—';
+    updEl.textContent = `${rates.sources?.length ?? 0} fuentes · ${t}`;
   }
 
-  // Actualizar spread (diferencia blue vs oficial)
-  const spreadEl = document.getElementById('dol-spread');
-  if (spreadEl && rates.oficial?.sell && rates.blue?.sell) {
-    const spread = Math.round(((rates.blue.sell / rates.oficial.sell) - 1) * 100);
-    spreadEl.textContent = `Brecha: ${spread > 0 ? '+' : ''}${spread}%`;
-    spreadEl.style.color = spread > 50 ? '#dc2626' : spread > 20 ? '#f59e0b' : '#22c55e';
+  // Estado
+  const statusEl = document.getElementById('dollar-status-badge');
+  if (statusEl) {
+    statusEl.textContent = rates.stale ? '⚠ Caché' : '✓ Actualizado';
   }
 }
 
@@ -929,15 +917,18 @@ function debouncedCalendarLoad(delay = 400) {
 
 function setupRealtime() {
   if (!AppContext.hotelId || isDemo()) return;
-  // Evitar doble subscribe si initApp corre más de una vez
   if (_realtimeChannel) {
     supabase.removeChannel(_realtimeChannel);
     _realtimeChannel = null;
   }
   _realtimeChannel = supabase
-    .channel('pms-bookings')
-    .on('postgres_changes', { event:'*', schema:'public', table:'bookings', filter:`hotel_id=eq.${AppContext.hotelId}` }, handleBookingChange)
-    .on('postgres_changes', { event:'*', schema:'public', table:'payments', filter:`hotel_id=eq.${AppContext.hotelId}` }, handlePaymentChange)
+    .channel('pms-main')
+    .on('postgres_changes', { event:'*', schema:'public', table:'bookings',          filter:`hotel_id=eq.${AppContext.hotelId}` }, handleBookingChange)
+    .on('postgres_changes', { event:'*', schema:'public', table:'payments',          filter:`hotel_id=eq.${AppContext.hotelId}` }, handlePaymentChange)
+    .on('postgres_changes', { event:'*', schema:'public', table:'expenses',          filter:`hotel_id=eq.${AppContext.hotelId}` }, handleExpenseChange)
+    .on('postgres_changes', { event:'*', schema:'public', table:'cleaning_tasks',    filter:`hotel_id=eq.${AppContext.hotelId}` }, handleOperationsChange)
+    .on('postgres_changes', { event:'*', schema:'public', table:'maintenance_issues',filter:`hotel_id=eq.${AppContext.hotelId}` }, handleOperationsChange)
+    .on('postgres_changes', { event:'*', schema:'public', table:'reminders',         filter:`hotel_id=eq.${AppContext.hotelId}` }, handleReminderChange)
     .subscribe();
 }
 
@@ -995,6 +986,30 @@ function handlePaymentChange(payload) {
   document.dispatchEvent(new CustomEvent('payment:changed', { detail: payload }));
   if (currentSection === 'bookings')  bookingList?.load();
   if (currentSection === 'dashboard') dashboard?.load();
+}
+
+function handleExpenseChange(payload) {
+  cache.invalidate('expenses');
+  document.dispatchEvent(new CustomEvent('expense:changed', { detail: payload }));
+  if (currentSection === 'statistics') statistics?.loadExpenses?.();
+  if (currentSection === 'operations') operations?.load?.();
+  // Actualizar P&L si está visible
+  if (currentSection === 'statistics' && statistics?._tab === 'pl') statistics?.loadPL?.();
+}
+
+function handleOperationsChange(payload) {
+  cache.invalidate('cleaning_tasks', 'maintenance_issues');
+  document.dispatchEvent(new CustomEvent('operations:changed', { detail: payload }));
+  if (currentSection === 'operations') operations?.load?.();
+  if (currentSection === 'dashboard')  dashboard?.load?.();
+  updateOperationsBadge();
+}
+
+function handleReminderChange(payload) {
+  cache.invalidate('reminders');
+  document.dispatchEvent(new CustomEvent('reminder:changed', { detail: payload }));
+  if (currentSection === 'reminders') loadRemindersSection();
+  if (currentSection === 'dashboard') dashboard?.load?.();
 }
 
 // ══════════════════════════════════════════════════
@@ -1884,19 +1899,20 @@ function setupCalculator() {
     if (lbl) lbl.textContent = e.target.value + '%';
   });
 
-  // Precio en USD
+  // Precio en USD — usa EXCLUSIVAMENTE el dólar oficial vendedor del BNA
   document.getElementById('calc-use-dollar')?.addEventListener('click', () => {
-    const dollarEl = document.getElementById('dollar-badge-value');
-    const rateText = dollarEl?.textContent?.replace(/[^0-9]/g, '');
-    const rate = parseInt(rateText);
-    if (!rate) { showToast('No hay cotización disponible', 'warning'); return; }
-    const priceEl = document.getElementById('calc-price');
-    if (priceEl) {
-      const usdAmount = prompt('¿Cuántos dólares por noche?', '50');
-      if (!usdAmount) return;
-      priceEl.value = Math.round(parseFloat(usdAmount) * rate);
-      _calcUpdate();
-    }
+    import('./services/dollar-api.js').then(({ getCachedBNASell }) => {
+      const bnaRate = getCachedBNASell();
+      if (!bnaRate) { showToast('No hay cotización BNA disponible', 'warning'); return; }
+      const priceEl = document.getElementById('calc-price');
+      if (priceEl) {
+        const usdAmount = prompt(`Cotización BNA Oficial: $${bnaRate.toLocaleString('es-AR')}/USD\n¿Cuántos dólares por noche?`, '50');
+        if (!usdAmount) return;
+        priceEl.value = Math.round(parseFloat(usdAmount) * bnaRate);
+        _calcUpdate();
+        showToast(`Convertido a ARS usando BNA: $${bnaRate.toLocaleString('es-AR')}`, 'info');
+      }
+    });
   });
 
   // Crear reserva con estos datos — paso 0 del formulario
@@ -1945,7 +1961,7 @@ function setupCalculator() {
     const commAmt   = total * (commPct / 100);
     const net       = total - commAmt;
 
-    // USD blue
+    // USD equivalente — usa BNA oficial venta
     const dollarEl  = document.getElementById('dollar-badge-value');
     const rateText  = dollarEl?.textContent?.replace(/[^0-9]/g, '');
     const blueRate  = parseInt(rateText) || 0;

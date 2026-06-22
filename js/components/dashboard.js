@@ -416,66 +416,73 @@ export class Dashboard {
     if (subEl) subEl.textContent = `${occupied}/${total} uds`;
   }
 
-  // ── Render Dollar Widget ──────────────────────────
+  // ── Render Dollar Widget — dólar oficial 3 fuentes ──
   _renderDollar(rates) {
+    const fmt = n => n ? `$${Number(n).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—';
+
     if (!rates) {
-      const badge = document.getElementById('dollar-status-badge');
-      if (badge) badge.textContent = 'Sin datos';
+      const s = document.getElementById('dollar-status-badge');
+      if (s) { s.textContent = 'Sin conexión'; s.style.background = '#fee2e2'; s.style.color = '#dc2626'; }
       return;
     }
 
-    const fmt = (n) => n ? `$${Math.round(n).toLocaleString('es-AR')}` : '—';
+    // Promedio oficial
+    const mainVal = rates.oficial?.sell ?? null;
+    const headerBadge = document.getElementById('dollar-badge-value');
+    if (headerBadge) headerBadge.textContent = mainVal ? `$${Math.round(mainVal).toLocaleString('es-AR')}` : '—';
 
-    // Promedios oficiales/blue
-    this._animateValue('dol-of-buy',  rates.oficial?.buy,  fmt);
-    this._animateValue('dol-of-sell', rates.oficial?.sell, fmt);
-    this._animateValue('dol-bl-buy',  rates.blue?.buy,     fmt);
-    this._animateValue('dol-bl-sell', rates.blue?.sell,    fmt);
-
-    // Valores individuales por fuente (blue venta)
-    const raw = rates.rawSources ?? [];
-    const bySource = {};
-    raw.forEach(r => { if (r?.source) bySource[r.source] = r; });
-
-    const ambitoVal    = bySource.ambito?.blue?.sell;
-    const dolarapiVal  = bySource.dolarapi?.blue?.sell;
-    const bluelyticsVal= bySource.bluelytics?.blue?.sell;
-
-    const setVal = (id, val) => {
-      const el = document.getElementById(id);
-      if (el) el.textContent = val ? fmt(val) : '—';
-    };
-    setVal('dol-ambito-sell',    ambitoVal);
-    setVal('dol-dolarapi-sell',  dolarapiVal);
-    setVal('dol-bluelytics-sell',bluelyticsVal);
-
-    // Spread oficial vs blue
-    const spread = rates.blue?.sell && rates.oficial?.sell
-      ? Math.round(((rates.blue.sell / rates.oficial.sell) - 1) * 100)
-      : null;
-    const spreadEl = document.getElementById('dol-spread');
-    if (spreadEl) {
-      if (spread !== null) {
-        spreadEl.textContent = `Brecha: ${spread}%`;
-        spreadEl.style.color = spread > 50 ? '#ef4444' : spread > 20 ? '#f59e0b' : '#22c55e';
-      } else {
-        spreadEl.textContent = '';
-      }
+    // Widget principal en dashboard
+    const el = document.getElementById('dollar-widget-body');
+    if (!el) {
+      // Fallback: actualizar campos individuales (compatibilidad)
+      const setEl = (id, v) => { const e = document.getElementById(id); if (e) e.textContent = v; };
+      setEl('dol-of-sell', fmt(rates.oficial?.sell));
+      setEl('dol-of-buy',  fmt(rates.oficial?.buy));
+      return;
     }
 
-    // Badge header (blue sell si disponible, sino oficial sell)
-    const headerVal = rates.blue?.sell ?? rates.oficial?.sell;
-    const badge = document.getElementById('dollar-status-badge');
-    if (badge) { badge.textContent = '✓ Actualizado'; badge.style.background = ''; }
+    const sources = rates.sourceData ?? [];
+    const failed  = rates.failedSources ?? [];
+    const isStale = rates.stale;
+    const updTime = rates.updatedAt
+      ? new Date(rates.updatedAt).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+      : '—';
 
-    const headerBadge = document.getElementById('dollar-badge-value');
-    if (headerBadge) headerBadge.textContent = fmt(headerVal);
+    const sourceRows = [
+      { key: 'BNA',          label: '🏦 Banco Nación' },
+      { key: 'ambito',       label: '📰 Ámbito'       },
+      { key: 'argentinadatos', label: '📊 Dólar Hoy'  },
+    ].map(def => {
+      const src  = sources.find(s => s.source === def.key);
+      const fail = failed.includes(def.label.split(' ').slice(1).join(' ')) ||
+                   failed.some(f => def.label.includes(f));
+      return `
+        <div class="dollar-source-row ${!src ? 'dollar-source-fail' : ''}">
+          <span class="dollar-source-name">${def.label}</span>
+          <span class="dollar-source-val ${!src ? 'text-muted' : ''}">
+            ${src ? fmt(src.sell) : '<span title="Sin respuesta">⚠ —</span>'}
+          </span>
+        </div>`;
+    }).join('');
 
-    // Fecha actualización
-    const updatedEl = document.getElementById('dollar-updated-at');
-    if (updatedEl && rates.updatedAt) {
-      const time = new Date(rates.updatedAt).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
-      updatedEl.textContent = `Actualizado: ${time} p. m. · ${rates.sources?.join(', ') ?? ''}`;
+    el.innerHTML = `
+      <div class="dollar-main-val">${mainVal ? `$${Number(mainVal).toLocaleString('es-AR', {minimumFractionDigits:2})}` : '—'}</div>
+      <div class="dollar-main-label">Dólar Oficial Venta · Promedio</div>
+      <div class="dollar-sources-list">${sourceRows}</div>
+      <div class="dollar-footer">
+        <span class="dollar-src-count">${sources.length}/3 fuente${sources.length !== 1 ? 's' : ''}</span>
+        ${isStale ? '<span class="dollar-stale-badge">⚠ Caché</span>' : '<span class="dollar-ok-badge">✓ Actualizado</span>'}
+        <span class="dollar-update-time">🕐 ${updTime}</span>
+      </div>
+      ${failed.length ? `<div class="dollar-failed-notice">Sin respuesta: ${failed.join(', ')}</div>` : ''}
+    `;
+
+    // Actualizar badge de estado global
+    const statusEl = document.getElementById('dollar-status-badge');
+    if (statusEl) {
+      statusEl.textContent = isStale ? '⚠ Caché' : `✓ ${sources.length} fuente${sources.length !== 1 ? 's' : ''}`;
+      statusEl.style.background = isStale ? '#fef9c3' : '#f0fdf4';
+      statusEl.style.color      = isStale ? '#a16207' : '#15803d';
     }
   }
 

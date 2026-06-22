@@ -5,7 +5,7 @@
 // • Stock e Insumos (alertas de stock bajo)
 // ══════════════════════════════════════════════════
 
-import { showToast, toISODate, formatDate } from '../supabase-config.js';
+import { showToast, toISODate, formatDate, formatARS, can as canOps } from '../supabase-config.js';
 import { can } from '../auth/permissions.js';
 import { logAction } from '../services/audit-service.js';
 
@@ -51,6 +51,7 @@ export class OperationsModule {
       <div class="tabs-bar ops-tabs">
         <button class="tab active" data-ops-tab="cleaning">🧹 Limpieza</button>
         <button class="tab" data-ops-tab="maintenance">🔧 Mantenimiento</button>
+        <button class="tab" data-ops-tab="expenses">💰 Gastos</button>
         <div class="ops-tab-actions" id="ops-header-actions"></div>
       </div>
       <div id="ops-panel"></div>
@@ -77,6 +78,7 @@ export class OperationsModule {
     if (tab === 'cleaning')     await this._loadCleaning(panel, header);
     if (tab === 'maintenance')  await this._loadMaintenance(panel, header);
     if (tab === 'stock')        await this._loadStock(panel, header);
+    if (tab === 'expenses')     await this._loadExpenses(panel, header);
   }
 
   // ══════════════════════════════════════════════════
@@ -648,6 +650,146 @@ export class OperationsModule {
           Abrir SQL Editor →
         </a>
       </div>`;
+  }
+
+  // ══════════════════════════════════════════════════
+  // GASTOS — movidos desde Estadísticas
+  // ══════════════════════════════════════════════════
+  async _loadExpenses(panel, header) {
+    const canManage = can('manageExpenses');
+    if (header) {
+      header.innerHTML = canManage
+        ? `<button class="btn btn-primary btn-sm" id="btn-ops-add-expense">+ Nuevo gasto</button>`
+        : '';
+      header.querySelector('#btn-ops-add-expense')?.addEventListener('click', () => {
+        document.getElementById('expense-editing-id').value = '';
+        ['expense-desc','expense-amount','expense-due'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+        const t = document.getElementById('expense-modal-title');
+        if (t) t.textContent = 'Nuevo Gasto';
+        document.getElementById('overlay-expense')?.classList.remove('hidden');
+      });
+    }
+
+    // Selector de mes
+    const now = new Date();
+    const months = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+    panel.innerHTML = `
+      <div class="ops-expenses-header">
+        <select id="ops-exp-month" class="form-input form-input--sm">
+          ${months.map((m, i) => `<option value="${i}" ${i === now.getMonth() ? 'selected' : ''}>${m}</option>`).join('')}
+        </select>
+        <select id="ops-exp-year" class="form-input form-input--sm">
+          ${[now.getFullYear()-1, now.getFullYear()].map(y => `<option value="${y}" ${y === now.getFullYear() ? 'selected' : ''}>${y}</option>`).join('')}
+        </select>
+      </div>
+      <div id="ops-expenses-summary"></div>
+      <div id="ops-expenses-list"><div class="loading-state">Cargando...</div></div>
+    `;
+
+    const reload = async () => {
+      const month = parseInt(document.getElementById('ops-exp-month')?.value ?? now.getMonth());
+      const year  = parseInt(document.getElementById('ops-exp-year')?.value  ?? now.getFullYear());
+      const first = `${year}-${String(month+1).padStart(2,'0')}-01`;
+      const last  = new Date(year, month+1, 0).toISOString().slice(0,10);
+      try {
+        const { data: exps } = await this.db.from('expenses').select('*')
+          .eq('hotel_id', this.ctx.hotelId)
+          .or(`due_date.is.null,and(due_date.gte.${first},due_date.lte.${last})`)
+          .order('due_date', { ascending: true, nullsFirst: false });
+        this._renderExpensesInOps(panel, exps ?? []);
+      } catch (err) {
+        panel.querySelector('#ops-expenses-list').innerHTML =
+          `<div class="error-state"><p>Error al cargar gastos: ${err.message}</p></div>`;
+      }
+    };
+
+    panel.querySelector('#ops-exp-month')?.addEventListener('change', reload);
+    panel.querySelector('#ops-exp-year')?.addEventListener('change',  reload);
+    await reload();
+
+    // Escuchar cuando se guarde un gasto desde el modal
+    document.addEventListener('expense:changed', reload, { once: false });
+  }
+
+  _renderExpensesInOps(panel, expenses) {
+    const CATEGORY_COLORS = {
+      servicios:'#3B82F6', mantenimiento:'#F59E0B', limpieza:'#34D399',
+      impuestos:'#F43F5E', personal:'#A855F7', otros:'#94A3B8',
+    };
+    const summary = panel.querySelector('#ops-expenses-summary');
+    const list    = panel.querySelector('#ops-expenses-list');
+    if (!list) return;
+
+    const total   = expenses.reduce((s, e) => s + (e.amount ?? 0), 0);
+    const paid    = expenses.filter(e => e.paid).reduce((s, e) => s + (e.amount ?? 0), 0);
+    const pending = total - paid;
+
+    if (summary) {
+      summary.innerHTML = `
+        <div class="ops-exp-summary">
+          <div class="ops-exp-kpi"><label>Total</label><strong>${formatARS(total)}</strong></div>
+          <div class="ops-exp-kpi" style="color:#16a34a"><label>Pagados</label><strong>${formatARS(paid)}</strong></div>
+          <div class="ops-exp-kpi" style="color:#f59e0b"><label>Pendientes</label><strong>${formatARS(pending)}</strong></div>
+        </div>`;
+    }
+
+    if (!expenses.length) {
+      list.innerHTML = `<div class="empty-state"><span class="empty-state-icon">💰</span><p>Sin gastos en este período.</p></div>`;
+      return;
+    }
+
+    list.innerHTML = expenses.map(e => `
+      <div class="expense-row ${e.paid ? 'paid' : ''}" id="ops-exp-${e.id}">
+        <div class="expense-category-dot" style="background:${CATEGORY_COLORS[e.category] ?? '#94A3B8'}"></div>
+        <div class="expense-info">
+          <div class="expense-desc">${e.description}</div>
+          <div class="expense-meta">${e.category}${e.due_date ? ` · Vence: ${e.due_date}` : ''}${e.paid && e.paid_at ? ` · Pagado: ${e.paid_at.slice(0,10)}` : ''}</div>
+        </div>
+        <strong class="expense-amount" style="color:${e.paid ? 'var(--color-success)' : 'var(--color-text)'}">${formatARS(e.amount)}</strong>
+        <label class="expense-paid-toggle" title="${e.paid ? 'Marcar pendiente' : 'Marcar pagado'}">
+          <input type="checkbox" ${e.paid ? 'checked' : ''} data-exp-id="${e.id}" class="ops-exp-toggle">
+        </label>
+        <button class="btn btn-ghost btn-xs ops-exp-edit" data-exp-id="${e.id}" title="Editar">✏️</button>
+        <button class="btn btn-ghost btn-xs ops-exp-del" data-exp-id="${e.id}" title="Eliminar" style="color:var(--color-danger)">🗑️</button>
+      </div>
+    `).join('');
+
+    // Bind actions
+    list.querySelectorAll('.ops-exp-toggle').forEach(cb => {
+      cb.addEventListener('change', async () => {
+        const id   = cb.dataset.expId;
+        const paid = cb.checked;
+        const { error } = await this.db.from('expenses')
+          .update({ paid, paid_at: paid ? new Date().toISOString() : null }).eq('id', id);
+        if (error) { showToast('Error', 'error'); cb.checked = !paid; return; }
+        document.getElementById(`ops-exp-${id}`)?.classList.toggle('paid', paid);
+        showToast(paid ? 'Marcado como pagado ✓' : 'Marcado como pendiente', 'success');
+      });
+    });
+    list.querySelectorAll('.ops-exp-edit').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const id = btn.dataset.expId;
+        const { data: e } = await this.db.from('expenses').select('*').eq('id', id).single();
+        if (!e) return;
+        document.getElementById('expense-editing-id').value = id;
+        document.getElementById('expense-category').value   = e.category ?? 'otros';
+        document.getElementById('expense-desc').value       = e.description ?? '';
+        document.getElementById('expense-amount').value     = e.amount ?? '';
+        document.getElementById('expense-due').value        = e.due_date ?? '';
+        const t = document.getElementById('expense-modal-title');
+        if (t) t.textContent = 'Editar Gasto';
+        document.getElementById('overlay-expense')?.classList.remove('hidden');
+      });
+    });
+    list.querySelectorAll('.ops-exp-del').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        if (!confirm('¿Eliminar este gasto?')) return;
+        const id = btn.dataset.expId;
+        await this.db.from('expenses').delete().eq('id', id);
+        document.getElementById(`ops-exp-${id}`)?.remove();
+        showToast('Gasto eliminado', 'success');
+      });
+    });
   }
 
   // ── API pública: crear tarea de limpieza al check-out ──
