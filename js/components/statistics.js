@@ -155,10 +155,12 @@ export class Statistics {
     try {
       const { data: bookings } = await this.db
         .from('bookings')
-        .select('id, check_in, check_out, price_per_night, total_amount, status, nights, booking_units(unit_id)')
+        .select('id, check_in, check_out, price_per_night, total_amount, status, nights, source, booking_units(unit_id)')
         .eq('hotel_id', this.ctx.hotelId)
         .neq('status', 'cancelled').neq('status', 'blocked')
         .lte('check_in', lastDayStr).gt('check_out', firstDay);
+
+      this._lastBookings = bookings ?? []; // ← necesario para el gráfico de canales
 
       // Usar Web Worker para cálculos pesados si está disponible
       let stats;

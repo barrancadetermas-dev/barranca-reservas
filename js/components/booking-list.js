@@ -40,6 +40,7 @@ export class BookingList {
     this._dateTo   = '';
     this._page     = 1;
     this._pageSize = 30;
+    this._sortBy   = 'check_in_asc'; // más próximas primero por defecto
     this._allBookings = [];
 
     this._bindTabs();
@@ -71,6 +72,7 @@ export class BookingList {
       if (action === 'checkout')  this._doCheckout(id);
       if (action === 'flag')      this._openFlagModal(id, row);
       if (action === 'duplicate') this._duplicateBooking(id);
+      if (action === 'pay-full')  this._payFull(id);
     }, true); // ← capture phase: recibe el evento ANTES de que los hijos llamen stopPropagation
 
     document.addEventListener('booking:changed', () => {
@@ -120,7 +122,7 @@ export class BookingList {
           booking_units(unit_id, units(name, sort_order, color))
         `)
         .eq('hotel_id', this.ctx.hotelId)
-        .order('check_in', { ascending: false });
+        .order('check_in', { ascending: true });
 
       if (error) throw error;
       this._allBookings = data ?? [];
@@ -139,8 +141,10 @@ export class BookingList {
       tab.addEventListener('click', () => {
         document.querySelectorAll('#section-bookings .tabs-bar .tab').forEach(t => t.classList.remove('active'));
         tab.classList.add('active');
-        this._tab  = tab.dataset.tab;
-        this._page = 1;
+        this._tab    = tab.dataset.tab;
+        this._page   = 1;
+        // Default sort per tab: active → próximas primero; archive → más recientes primero
+        this._sortBy = this._tab === 'archive' ? 'check_in_desc' : 'check_in_asc';
         this._render(new Date().toISOString().split('T')[0]);
       });
     });
@@ -296,14 +300,126 @@ export class BookingList {
     });
   }
 
+  // ── Ordenamiento ──────────────────────────────────
+  _sortBookings(arr) {
+    const sorted = [...arr];
+    switch (this._sortBy) {
+      case 'check_in_asc':  return sorted.sort((a, b) => a.check_in.localeCompare(b.check_in));
+      case 'check_in_desc': return sorted.sort((a, b) => b.check_in.localeCompare(a.check_in));
+      case 'unit_asc':      return sorted.sort((a, b) =>
+        (a.booking_units?.[0]?.units?.sort_order ?? 99) -
+        (b.booking_units?.[0]?.units?.sort_order ?? 99));
+      case 'amount_asc':    return sorted.sort((a, b) => Number(a.total_amount) - Number(b.total_amount));
+      case 'amount_desc':   return sorted.sort((a, b) => Number(b.total_amount) - Number(a.total_amount));
+      default:              return sorted;
+    }
+  }
+
+  _renderSortTabs() {
+    const OPTS = [
+      { value: 'check_in_asc',  label: '📅 Próximas' },
+      { value: 'check_in_desc', label: '📅 Lejanas'  },
+      { value: 'unit_asc',      label: '🏠 Depto.'   },
+      { value: 'amount_asc',    label: '💰 Menor'    },
+      { value: 'amount_desc',   label: '💰 Mayor'    },
+    ];
+    return `
+      <div class="bl-sort-wrap">
+        <span class="bl-sort-label">Orden:</span>
+        ${OPTS.map(o => `
+          <button type="button" class="bl-sort-tab ${this._sortBy === o.value ? 'bl-sort-tab--active' : ''}"
+            data-sortby="${o.value}">${o.label}</button>
+        `).join('')}
+      </div>`;
+  }
+
+  // ── Pago total desde la lista ─────────────────────
+  async _payFull(id) {
+    const b = this._allBookings.find(x => x.id === id);
+    if (!b) return;
+    const balance = Math.max(0, Number(b.balance ?? 0));
+    if (balance <= 0) { showToast('Esta reserva ya está pagada ✓', 'info'); return; }
+
+    const existing = document.getElementById('overlay-pay-full');
+    if (existing) existing.remove();
+
+    const modal = document.createElement('div');
+    modal.className = 'modal-overlay';
+    modal.id = 'overlay-pay-full';
+    const guest = b.guests ? `${b.guests.first_name} ${b.guests.last_name}` : 'Huésped';
+    modal.innerHTML = `
+      <div class="modal modal-sm">
+        <div class="modal-header">
+          <h3 class="modal-title">✅ Registrar pago total</h3>
+          <button class="modal-close" id="pf-close">✕</button>
+        </div>
+        <div class="modal-body">
+          <p style="font-size:.875rem;margin-bottom:16px">
+            <strong>${guest}</strong> · Saldo a cobrar: <strong style="color:var(--color-primary)">${formatARS(balance)}</strong>
+          </p>
+          <div class="form-group">
+            <label class="form-label">Método de pago</label>
+            <select id="pf-method" class="form-input">
+              <option value="cash">💵 Efectivo</option>
+              <option value="transfer" selected>🏦 Transferencia</option>
+              <option value="card">💳 Tarjeta</option>
+              <option value="mercadopago">💙 MercadoPago</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Fecha</label>
+            <input type="date" id="pf-date" class="form-input" value="${new Date().toISOString().slice(0,10)}">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Notas (opcional)</label>
+            <input type="text" id="pf-notes" class="form-input" placeholder="Ej: pago en mostrador">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-outline" id="pf-cancel">Cancelar</button>
+          <button class="btn btn-primary" id="pf-confirm">Confirmar pago ${formatARS(balance)}</button>
+        </div>
+      </div>`;
+    document.body.appendChild(modal);
+
+    const close = () => modal.remove();
+    modal.querySelector('#pf-close').onclick   = close;
+    modal.querySelector('#pf-cancel').onclick  = close;
+    modal.addEventListener('click', e => { if (e.target === modal) close(); });
+
+    modal.querySelector('#pf-confirm').addEventListener('click', async () => {
+      const btn = modal.querySelector('#pf-confirm');
+      btn.disabled = true; btn.textContent = '⏳ Registrando…';
+      const { error } = await this.db.from('payments').insert({
+        booking_id:   id,
+        hotel_id:     this.ctx.hotelId,
+        amount:       balance,
+        currency:     'ARS',
+        payment_type: 'balance',
+        method:       document.getElementById('pf-method').value,
+        payment_date: document.getElementById('pf-date').value,
+        notes:        document.getElementById('pf-notes').value.trim() || null,
+      });
+      if (error) {
+        showToast('Error: ' + error.message, 'error');
+        btn.disabled = false; btn.textContent = `Confirmar pago ${formatARS(balance)}`;
+        return;
+      }
+      close();
+      showToast('✅ Pago registrado — reserva abonada en su totalidad', 'success');
+      document.dispatchEvent(new CustomEvent('booking:changed'));
+    });
+  }
+
   // ── Render principal ──────────────────────────────
   _render(today) {
     const container = document.getElementById('bookings-list');
     if (!container) return;
 
     const filtered = this._applyFilters(this._allBookings, today);
-    const showing  = filtered.slice(0, this._page * this._pageSize);
-    const hasMore  = filtered.length > showing.length;
+    const sorted   = this._sortBookings(filtered);
+    const showing  = sorted.slice(0, this._page * this._pageSize);
+    const hasMore  = sorted.length > showing.length;
 
     if (!filtered.length) {
       container.innerHTML = `
@@ -317,6 +433,9 @@ export class BookingList {
     }
 
     let html = '';
+
+    // Sort tabs
+    html += this._renderSortTabs();
 
     // Header con conteo y exportar
     html += `<div class="list-header-bar">
@@ -341,6 +460,15 @@ export class BookingList {
     }
 
     container.innerHTML = html;
+
+    // Bind sort tabs
+    container.querySelectorAll('.bl-sort-tab').forEach(btn => {
+      btn.addEventListener('click', () => {
+        this._sortBy = btn.dataset.sortby;
+        this._page   = 1;
+        this._render(new Date().toISOString().split('T')[0]);
+      });
+    });
 
     // Bind botones de exportación
     document.getElementById('btn-export-excel-list')?.addEventListener('click', () => this._exportExcel(filtered));
@@ -404,7 +532,13 @@ export class BookingList {
             </div>
             <div class="booking-amount-col">
               <span class="booking-total">${formatARS(b.total_amount)}</span>
-              ${b.balance > 0 ? `<span class="booking-balance-due">Saldo: ${formatARS(b.balance)}</span>` : ''}
+              ${b.balance > 0
+                ? `<span class="booking-balance-due">Saldo: ${formatARS(b.balance)}</span>
+                   <button data-action="pay-full" class="bl-action-btn bl-payfull-btn"
+                     title="Registrar pago total" onclick="event.stopPropagation()">
+                     u2705 Cobrar</button>`
+                : `<span class="booking-paid-badge">u2713 Pagado</span>`
+              }
             </div>
             <div class="booking-status-col">
               <span class="status-badge ${statusCls}">${statusLbl}</span>

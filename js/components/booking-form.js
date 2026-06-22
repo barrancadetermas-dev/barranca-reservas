@@ -1587,12 +1587,14 @@ ${notes ? `
         await this.db.from('bookings').update({ pax, adults, children }).eq('id', bookingId);
       } catch { /* columnas opcionales */ }
 
-      // Insertar unidades — sin hotel_id (no existe en booking_units)
+      // Insertar unidades — upsert para evitar duplicate key en edición
       const unitRows = [...this._selectedUnitIds].map(uid => ({
         booking_id: bookingId, unit_id: uid,
       }));
       if (unitRows.length) {
-        const { error: buErr } = await this.db.from('booking_units').insert(unitRows);
+        const { error: buErr } = await this.db
+          .from('booking_units')
+          .upsert(unitRows, { onConflict: 'booking_id,unit_id', ignoreDuplicates: true });
         if (buErr) throw new Error('Error asignando unidades: ' + buErr.message);
       }
 

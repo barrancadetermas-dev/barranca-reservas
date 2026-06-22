@@ -2,98 +2,98 @@
  * MILA PMS — patches/realtime-guard.js
  *
  * PROBLEMA: Maximum call stack size exceeded
- * CAUSA:    Suscripción Realtime creada DENTRO de load() →
- *           cada evento DB llama load() → que crea otra suscripción →
- *           que dispara de nuevo → loop infinito.
+ * CAUSA: La suscripción Realtime de Supabase dispara un evento →
+ *        el handler llama a load() → load() vuelve a suscribirse →
+ *        la nueva suscripción dispara de nuevo → loop infinito.
  *
- * SOLUCIÓN: Canal único + debounce 300ms + flag de inicialización.
+ * SOLUCIÓN: Canal único + flag de carga + debounce.
+ *
+ * CÓMO USAR:
+ * Buscá en tu código donde hacés supabase.channel(...).on(...).subscribe()
+ * dentro de la clase BookingList (o similar) y reemplazá con el patrón de abajo.
  */
-
-// ── Canal único de Realtime ──────────────────────────────────────
 
 /**
- * Configura Realtime UNA sola vez, fuera del load().
- * @param {import('@supabase/supabase-js').SupabaseClient} supabase
- * @param {Function} onChangeCallback  - qué hacer cuando cambia algo
- * @returns {Function} cleanup — llamar al desmontar
+ * Reemplaza el patrón de suscripción problemático.
+ * Buscá en tu BookingList algo como:
+ *
+ *   supabase.channel('bookings').on('postgres_changes', ..., () => this.load()).subscribe()
+ *
+ * Y reemplazalo con:
  */
-export function setupRealtimeOnce(supabase, onChangeCallback) {
-  const CHANNEL = 'mila-realtime-v1';
 
-  // Eliminar canal previo si existe (evita duplicados)
+// ── PATRÓN CORRECTO ───────────────────────────────────────────────
+
+export function setupBookingRealtime(supabase, onChangeCallback) {
+  // 1. Canal con nombre fijo (no crear uno nuevo en cada load)
+  const CHANNEL_NAME = 'mila-bookings-realtime';
+
+  // 2. Eliminar canal previo si existe (evita duplicados al re-llamar)
   supabase.getChannels().forEach(ch => {
-    if (ch.topic === CHANNEL) {
-      supabase.removeChannel(ch);
-    }
+    if (ch.topic === CHANNEL_NAME) supabase.removeChannel(ch);
   });
 
-  // Debounce: ignorar eventos duplicados en 300ms
-  let timer = null;
-  const debounced = () => {
-    if (timer) clearTimeout(timer);
-    timer = setTimeout(() => {
-      timer = null;
+  // 3. Flag de debounce para no ejecutar múltiples recargas simultáneas
+  let reloadTimeout = null;
+  const debouncedReload = () => {
+    if (reloadTimeout) clearTimeout(reloadTimeout);
+    reloadTimeout = setTimeout(() => {
+      reloadTimeout = null;
       onChangeCallback();
-    }, 300);
+    }, 300); // 300ms de debounce
   };
 
+  // 4. Suscribirse UNA sola vez
   const channel = supabase
-    .channel(CHANNEL)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'bookings' },  debounced)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'payments' },  debounced)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'reminders' }, debounced)
-    .subscribe(status => {
-      if (status === 'SUBSCRIBED') console.log('✅ Realtime conectado');
-      if (status === 'CHANNEL_ERROR') console.error('❌ Realtime error');
+    .channel(CHANNEL_NAME)
+    .on('postgres_changes',
+      { event: '*', schema: 'public', table: 'bookings' },
+      debouncedReload
+    )
+    .on('postgres_changes',
+      { event: '*', schema: 'public', table: 'payments' },
+      debouncedReload
+    )
+    .subscribe((status) => {
+      if (status === 'SUBSCRIBED') {
+        console.log('✅ Realtime: suscripción activa');
+      }
+      if (status === 'CHANNEL_ERROR') {
+        console.error('❌ Realtime: error en canal');
+      }
     });
 
-  return () => supabase.removeChannel(channel); // cleanup
+  // 5. Retornar función de cleanup (llamar al desmontar/navegar)
+  return () => supabase.removeChannel(channel);
 }
 
-// ── Guard de inicialización única ────────────────────────────────
+// ── GUARD DE CARGA (para el DOMContentLoaded) ───────────────────
 
 /**
- * Reemplaza el patrón problemático de DOMContentLoaded.
- *
- * ANTES (problemático):
- *   document.addEventListener('DOMContentLoaded', () => bookingList.load())
- *   // + dentro de load() → supabase.channel().subscribe()
- *
- * DESPUÉS:
- *   initOnce(async () => {
- *     await bookingList.load();
- *     setupRealtimeOnce(supabase, () => bookingList.load());
- *   });
+ * Si el problema está en el DOMContentLoaded que se dispara múltiples veces,
+ * reemplazar la inicialización con este patrón:
  */
-export function initOnce(fn) {
-  let done = false;
+export function initBookingListSafe(loadFn) {
+  let initialized = false;
+
   document.addEventListener('DOMContentLoaded', async () => {
-    if (done) return;
-    done = true;
-    try {
-      await fn();
-    } catch (err) {
-      console.error('initOnce error:', err);
-    }
+    if (initialized) return; // ← Corta el loop
+    initialized = true;
+    await loadFn();
   });
 }
 
-// ── EJEMPLO DE USO ───────────────────────────────────────────────
+// ── EJEMPLO DE USO COMPLETO ──────────────────────────────────────
 /*
-import { setupRealtimeOnce, initOnce } from './patches/realtime-guard.js';
+import { setupBookingRealtime, initBookingListSafe } from './patches/realtime-guard.js';
 
-initOnce(async () => {
-  // 1. Cargar datos una vez
+// En tu BookingList o donde inicializás la lista:
+initBookingListSafe(async () => {
   await bookingList.load();
-  await reminderWidget.load();
 
-  // 2. Realtime una sola vez, fuera del load()
-  const cleanup = setupRealtimeOnce(supabase, async () => {
+  // Configurar realtime UNA sola vez, fuera del load()
+  setupBookingRealtime(supabase, async () => {
     await bookingList.load();
-    await reminderWidget.load();
   });
-
-  // 3. Cleanup si navegás a otra página (SPA)
-  window.addEventListener('beforeunload', cleanup);
 });
 */

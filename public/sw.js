@@ -116,5 +116,7 @@ async function syncQueue(queue) {
 
 async function notifyClients(msg) {
   const clients = await self.clients.matchAll({ includeUncontrolled: true });
-  clients.forEach(c => c.postMessage(msg));
+  clients.forEach(c => {
+    try { c.postMessage(msg); } catch { /* cliente cerrado */ }
+  });
 }

@@ -116,24 +116,27 @@ export class NotificationService {
       });
 
       // ── Recordatorios vencidos ───────────────────
+      // NOTA: La tabla reminders NO tiene columna 'priority' — no incluirla en select
       const { data: reminders } = await this.db
         .from('reminders')
-        .select('id, title, scheduled_date, priority')
+        .select('id, title, scheduled_date, completed_at')
         .eq('hotel_id', AppContext.hotelId)
         .is('completed', false)
         .lte('scheduled_date', today)
-        .order('scheduled_date')
+        .order('scheduled_date', { ascending: true })
         .limit(10);
 
       (reminders ?? []).forEach(r => {
-        const days = Math.round((now - new Date(r.scheduled_date)) / 86400000);
+        const days = Math.round((now - new Date(r.scheduled_date + 'T00:00:00')) / 86400000);
+        // Cuanto más vencido, más urgente
+        const priority = days > 3 ? 'high' : 'medium';
         this._list.push({
-          id:       `rem-${r.id}`,
-          type:     'reminder',
-          priority: r.priority === 'urgent' ? 'high' : 'medium',
-          icon:     '🔔',
-          title:    `Recordatorio vencido`,
-          body:     `${r.title}${days > 0 ? ` (hace ${days} día${days!==1?'s':''})` : ' (hoy)'}`,
+          id:        `rem-${r.id}`,
+          type:      'reminder',
+          priority,
+          icon:      days > 3 ? '🚨' : '🔔',
+          title:     `Recordatorio vencido`,
+          body:      `${r.title}${days > 0 ? ` (hace ${days} día${days !== 1 ? 's' : ''})` : ' (hoy)'}`,
           reminderId: r.id,
         });
       });

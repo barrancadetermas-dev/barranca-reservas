@@ -1185,23 +1185,37 @@ async function updateOperationsBadge() {
   if (!opsBadge || !AppContext.hotelId) return;
   try {
     const today = new Date().toISOString().split('T')[0];
-    const [cleanRes, maintRes] = await Promise.all([
-      supabase.from('cleaning_tasks')
+
+    // cleaning_tasks — siempre existe
+    let cleanCount = 0;
+    try {
+      const { count } = await supabase.from('cleaning_tasks')
         .select('id', { count: 'exact', head: true })
-        .eq('hotel_id', AppContext.hotelId).eq('status','pending').eq('scheduled_date', today),
-      supabase.from('maintenance_issues')
+        .eq('hotel_id', AppContext.hotelId)
+        .eq('status', 'pending')
+        .eq('scheduled_date', today);
+      cleanCount = count ?? 0;
+    } catch { /* tabla no disponible */ }
+
+    // maintenance_issues — puede no existir o tener RLS sin configurar
+    let maintCount = 0;
+    try {
+      const { count } = await supabase.from('maintenance_issues')
         .select('id', { count: 'exact', head: true })
-        .eq('hotel_id', AppContext.hotelId).neq('status','resolved').eq('priority','urgent'),
-    ]);
-    const n = (cleanRes.count ?? 0) + (maintRes.count ?? 0);
+        .eq('hotel_id', AppContext.hotelId)
+        .neq('status', 'resolved');
+      maintCount = count ?? 0;
+    } catch { /* tabla no disponible o sin RLS */ }
+
+    const n = cleanCount + maintCount;
     if (n > 0) {
-      opsBadge.textContent  = n;
+      opsBadge.textContent   = n;
       opsBadge.style.display = 'inline';
       opsBadge.style.background = n >= 3 ? '#ef4444' : '#f59e0b';
     } else {
       opsBadge.style.display = 'none';
     }
-  } catch { /* tabla no creada aún */ }
+  } catch { /* silencioso */ }
 }
 
 async function loadRemindersSection() {
