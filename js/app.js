@@ -219,6 +219,12 @@ async function initApp(user) {
       user.user_metadata?.name ?? user.email?.split('@')[0] ?? 'Admin';
     document.getElementById('user-role-badge').textContent = getRoleLabel(AppContext.role);
 
+    // Cargar avatar guardado del perfil
+    _loadAndApplyAvatar(supabase, user.id);
+
+    // Click en avatar → abrir selector
+    document.getElementById('user-avatar')?.addEventListener('click', () => _openAvatarModal(supabase, user.id));
+
     // ── Demo banner ──
     if (AppContext.IS_DEMO) setupDemoBanner();
 
@@ -1603,16 +1609,22 @@ function setupSoundButton() {
 // TEMAS DE COLOR
 // ══════════════════════════════════════════════════
 const THEMES = {
+  // ── Fríos (cool) ────────────────────────────────
+  violet:  { primary:'#8b5cf6', primaryH:'#7c3aed', primaryL:'#f5f3ff', primaryT:'rgba(139,92,246,.12)',  sidebarBg:'#2e1065', sidebarActive:'#3b0764', sidebarAccent:'#a78bfa' },
   indigo:  { primary:'#6366F1', primaryH:'#4F46E5', primaryL:'#EEF2FF', primaryT:'rgba(99,102,241,.12)',  sidebarBg:'#0F172A', sidebarActive:'#1E293B', sidebarAccent:'#818CF8' },
-  emerald: { primary:'#10b981', primaryH:'#059669', primaryL:'#d1fae5', primaryT:'rgba(16,185,129,.12)',  sidebarBg:'#064e3b', sidebarActive:'#065f46', sidebarAccent:'#34d399' },
+  blue:    { primary:'#2563eb', primaryH:'#1d4ed8', primaryL:'#eff6ff', primaryT:'rgba(37,99,235,.12)',   sidebarBg:'#1e3a8a', sidebarActive:'#1e40af', sidebarAccent:'#60a5fa' },
   ocean:   { primary:'#0891b2', primaryH:'#0e7490', primaryL:'#cffafe', primaryT:'rgba(8,145,178,.12)',   sidebarBg:'#0c4a6e', sidebarActive:'#075985', sidebarAccent:'#38bdf8' },
+  cyan:    { primary:'#06b6d4', primaryH:'#0891b2', primaryL:'#ecfeff', primaryT:'rgba(6,182,212,.12)',   sidebarBg:'#083344', sidebarActive:'#0e4f6a', sidebarAccent:'#22d3ee' },
+  teal:    { primary:'#0d9488', primaryH:'#0f766e', primaryL:'#f0fdfa', primaryT:'rgba(13,148,136,.12)',  sidebarBg:'#042f2e', sidebarActive:'#134e4a', sidebarAccent:'#2dd4bf' },
+  emerald: { primary:'#10b981', primaryH:'#059669', primaryL:'#d1fae5', primaryT:'rgba(16,185,129,.12)',  sidebarBg:'#064e3b', sidebarActive:'#065f46', sidebarAccent:'#34d399' },
+  // ── Cálidos (warm) ──────────────────────────────
+  lime:    { primary:'#65a30d', primaryH:'#4d7c0f', primaryL:'#f7fee7', primaryT:'rgba(101,163,13,.12)',  sidebarBg:'#1a2e05', sidebarActive:'#365314', sidebarAccent:'#a3e635' },
+  amber:   { primary:'#d97706', primaryH:'#b45309', primaryL:'#fffbeb', primaryT:'rgba(217,119,6,.12)',   sidebarBg:'#451a03', sidebarActive:'#78350f', sidebarAccent:'#fbbf24' },
   sunset:  { primary:'#f97316', primaryH:'#ea580c', primaryL:'#fff7ed', primaryT:'rgba(249,115,22,.12)',  sidebarBg:'#431407', sidebarActive:'#7c2d12', sidebarAccent:'#fb923c' },
   cherry:  { primary:'#e11d48', primaryH:'#be123c', primaryL:'#fff1f2', primaryT:'rgba(225,29,72,.12)',   sidebarBg:'#4c0519', sidebarActive:'#881337', sidebarAccent:'#fb7185' },
-  violet:  { primary:'#8b5cf6', primaryH:'#7c3aed', primaryL:'#f5f3ff', primaryT:'rgba(139,92,246,.12)', sidebarBg:'#2e1065', sidebarActive:'#3b0764', sidebarAccent:'#a78bfa' },
   rose:    { primary:'#f43f5e', primaryH:'#e11d48', primaryL:'#fff1f2', primaryT:'rgba(244,63,94,.12)',   sidebarBg:'#3d0618', sidebarActive:'#6d0324', sidebarAccent:'#fb7185' },
-  amber:   { primary:'#d97706', primaryH:'#b45309', primaryL:'#fffbeb', primaryT:'rgba(217,119,6,.12)',   sidebarBg:'#451a03', sidebarActive:'#78350f', sidebarAccent:'#fbbf24' },
+  fuchsia: { primary:'#c026d3', primaryH:'#a21caf', primaryL:'#fdf4ff', primaryT:'rgba(192,38,211,.12)', sidebarBg:'#4a044e', sidebarActive:'#701a75', sidebarAccent:'#e879f9' },
   slate:   { primary:'#475569', primaryH:'#334155', primaryL:'#f8fafc', primaryT:'rgba(71,85,105,.12)',   sidebarBg:'#020617', sidebarActive:'#0f172a', sidebarAccent:'#94a3b8' },
-  teal:    { primary:'#0d9488', primaryH:'#0f766e', primaryL:'#f0fdfa', primaryT:'rgba(13,148,136,.12)',  sidebarBg:'#042f2e', sidebarActive:'#134e4a', sidebarAccent:'#2dd4bf' },
 };
 
 function setupThemeSystem() {
@@ -2069,6 +2081,132 @@ function setupConnectivityIndicator() {
   }
 }
 
+
+// ══════════════════════════════════════════════════
+// AVATAR & PERFIL
+// ══════════════════════════════════════════════════
+const AVATARS = [
+  { id:1, emoji:'🧑‍💼', label:'Gerente'    },
+  { id:2, emoji:'👩‍💻', label:'Dev'         },
+  { id:3, emoji:'🏨', label:'Hotel'        },
+  { id:4, emoji:'🌿', label:'Naturaleza'  },
+  { id:5, emoji:'🎯', label:'Estratega'   },
+  { id:6, emoji:'🌊', label:'Viajero'     },
+  { id:7, emoji:'🦁', label:'Líder'       },
+  { id:8, emoji:'⭐', label:'VIP'          },
+];
+const PALETTE_COLORS = [
+  '#8b5cf6','#6366f1','#2563eb','#0891b2','#06b6d4','#0d9488','#10b981',
+  '#65a30d','#d97706','#f97316','#e11d48','#f43f5e','#c026d3','#475569',
+];
+
+async function _loadAndApplyAvatar(supabase, userId) {
+  try {
+    const { data } = await supabase.from('user_profiles')
+      .select('avatar_id, avatar_color').eq('id', userId).single();
+    if (!data) return;
+    const av  = AVATARS.find(a => a.id === data.avatar_id) ?? AVATARS[0];
+    const el  = document.getElementById('user-avatar');
+    if (el) {
+      el.textContent = av.emoji;
+      el.style.background = data.avatar_color ?? '#4F46E5';
+      el.style.fontSize   = '1.1rem';
+      el.style.cursor     = 'pointer';
+      el.title = 'Cambiar avatar';
+    }
+  } catch { /* perfil nuevo — sin avatar guardado */ }
+}
+
+function _openAvatarModal(supabase, userId) {
+  document.getElementById('overlay-avatar-modal')?.remove();
+
+  let selAvatar = 1, selColor = '#6366f1';
+
+  const modal = document.createElement('div');
+  modal.className = 'modal-overlay';
+  modal.id = 'overlay-avatar-modal';
+  modal.style.cssText = 'display:flex;position:fixed;inset:0;background:rgba(15,23,42,.55);backdrop-filter:blur(4px);z-index:9999;align-items:center;justify-content:center;padding:16px';
+
+  modal.innerHTML = `
+    <div style="background:var(--color-background,#fff);border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.2);width:100%;max-width:340px;overflow:hidden">
+      <div style="padding:20px 20px 0;border-bottom:1px solid var(--color-border,#e2e8f0);margin-bottom:0">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+          <h3 style="font-size:1rem;font-weight:700;margin:0">🎨 Mi Perfil</h3>
+          <button id="av-close" style="background:none;border:none;font-size:1.2rem;cursor:pointer;color:#94a3b8;padding:0">✕</button>
+        </div>
+        <p style="font-size:.78rem;color:var(--color-text-muted,#64748b);margin:0 0 14px">Elegí tu avatar y color de acento</p>
+      </div>
+      <div style="padding:16px 20px">
+        <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#94a3b8;margin-bottom:8px">Avatar</div>
+        <div id="av-grid" style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px">
+          ${AVATARS.map(av => `
+            <button class="av-btn" data-id="${av.id}" title="${av.label}"
+              style="padding:10px 4px;border-radius:10px;border:2px solid transparent;background:var(--color-surface,#f8fafc);cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:3px;transition:all .12s">
+              <span style="font-size:1.6rem;line-height:1">${av.emoji}</span>
+              <span style="font-size:.6rem;color:#64748b">${av.label}</span>
+            </button>`).join('')}
+        </div>
+        <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#94a3b8;margin-bottom:8px">Color</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:20px">
+          ${PALETTE_COLORS.map(c => `
+            <button class="av-color" data-color="${c}"
+              style="width:26px;height:26px;border-radius:50%;background:${c};border:2px solid transparent;cursor:pointer;transition:all .12s"></button>
+          `).join('')}
+        </div>
+      </div>
+      <div style="padding:0 20px 20px;display:flex;gap:10px;justify-content:flex-end">
+        <button id="av-cancel" style="padding:8px 16px;border-radius:8px;border:1px solid var(--color-border,#e2e8f0);background:var(--color-surface,#f8fafc);cursor:pointer;font-size:.875rem">Cancelar</button>
+        <button id="av-save" style="padding:8px 16px;border-radius:8px;border:none;background:var(--color-primary,#6366f1);color:#fff;cursor:pointer;font-size:.875rem;font-weight:600">Guardar</button>
+      </div>
+    </div>`;
+
+  document.body.appendChild(modal);
+
+  const close = () => modal.remove();
+  modal.querySelector('#av-close').onclick   = close;
+  modal.querySelector('#av-cancel').onclick  = close;
+  modal.addEventListener('click', e => { if (e.target === modal) close(); });
+
+  // Avatar buttons
+  modal.querySelectorAll('.av-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      selAvatar = parseInt(btn.dataset.id);
+      modal.querySelectorAll('.av-btn').forEach(b => {
+        b.style.borderColor = Number(b.dataset.id) === selAvatar ? 'var(--color-primary,#6366f1)' : 'transparent';
+        b.style.background  = Number(b.dataset.id) === selAvatar ? 'var(--color-primary-l,#eef2ff)' : 'var(--color-surface,#f8fafc)';
+      });
+    });
+  });
+
+  // Color swatches
+  modal.querySelectorAll('.av-color').forEach(btn => {
+    btn.addEventListener('click', () => {
+      selColor = btn.dataset.color;
+      modal.querySelectorAll('.av-color').forEach(b => {
+        b.style.border = b.dataset.color === selColor
+          ? `2px solid white` : '2px solid transparent';
+        b.style.boxShadow = b.dataset.color === selColor
+          ? `0 0 0 2px ${b.dataset.color}` : 'none';
+      });
+    });
+  });
+
+  // Guardar
+  modal.querySelector('#av-save').addEventListener('click', async () => {
+    const saveBtn = modal.querySelector('#av-save');
+    saveBtn.textContent = '⏳ Guardando...'; saveBtn.disabled = true;
+    const { error } = await supabase.from('user_profiles')
+      .upsert({ id: userId, avatar_id: selAvatar, avatar_color: selColor }, { onConflict: 'id' });
+    if (error) {
+      saveBtn.textContent = 'Guardar'; saveBtn.disabled = false;
+      showToast('Error al guardar perfil', 'error');
+      return;
+    }
+    await _loadAndApplyAvatar(supabase, userId);
+    close();
+    showToast('Perfil actualizado ✓', 'success');
+  });
+}
 
 // ══════════════════════════════════════════════════
 // START — manejo de URL params especiales

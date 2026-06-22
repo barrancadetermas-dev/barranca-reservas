@@ -964,37 +964,46 @@ export class BookingForm {
     hints.innerHTML = '<span style="font-size:.72rem;color:var(--color-text-3)">⟳ Buscando historial...</span>';
 
     try {
-      const now   = new Date();
-      const month = now.getMonth() + 1;  // mes actual
+      const now      = new Date();
+      const month    = now.getMonth() + 1;
       const monthPad = String(month).padStart(2, '0');
-      // Buscar reservas de esta unidad en el mismo mes (cualquier año)
-      const { data } = await this.db
-        .from('booking_units')
-        .select('bookings!inner(price_per_night, check_in, check_out, status)')
-        .eq('unit_id', unitId)
-        .not('bookings.status', 'in', '(cancelled,blocked)')
-        .gt('bookings.price_per_night', 0)
-        .like('bookings.check_in', `%-${monthPad}-%`)
-        .limit(30);
 
-      const prices = (data ?? [])
-        .map(bu => bu.bookings?.price_per_night)
+      // ── Query segura: via bookings (RLS ok) + filtro JS por unidad ──
+      // Mes actual (mismo mes, cualquier año)
+      const { data: monthData } = await this.db
+        .from('bookings')
+        .select('price_per_night, check_in, check_out, booking_units(unit_id)')
+        .eq('hotel_id', this.ctx.hotelId)
+        .not('status', 'in', '(cancelled,blocked)')
+        .gt('price_per_night', 0)
+        .like('check_in', `%-${monthPad}-%`)
+        .order('check_in', { ascending: false })
+        .limit(60);
+
+      const prices = (monthData ?? [])
+        .filter(b => (b.booking_units ?? []).some(bu => bu.unit_id === unitId))
+        .map(b => b.price_per_night)
         .filter(p => p > 0);
 
       if (!prices.length) {
-        // Fallback: buscar precio de cualquier mes reciente para esta unidad
+        // Fallback: cualquier mes reciente para esta unidad
         const { data: anyData } = await this.db
-          .from('booking_units')
-          .select('bookings!inner(price_per_night, check_in, status)')
-          .eq('unit_id', unitId)
-          .not('bookings.status', 'in', '(cancelled,blocked)')
-          .gt('bookings.price_per_night', 0)
-          .order('bookings.check_in', { ascending: false })
-          .limit(5);
-        const anyPrices = (anyData ?? []).map(bu => bu.bookings?.price_per_night).filter(p => p > 0);
+          .from('bookings')
+          .select('price_per_night, check_in, booking_units(unit_id)')
+          .eq('hotel_id', this.ctx.hotelId)
+          .not('status', 'in', '(cancelled,blocked)')
+          .gt('price_per_night', 0)
+          .order('check_in', { ascending: false })
+          .limit(50);
+
+        const anyPrices = (anyData ?? [])
+          .filter(b => (b.booking_units ?? []).some(bu => bu.unit_id === unitId))
+          .map(b => b.price_per_night)
+          .filter(p => p > 0);
+
         if (!anyPrices.length) { hints.innerHTML = ''; return; }
-        const anyAvg = Math.round(anyPrices.reduce((a,b) => a+b,0) / anyPrices.length);
-        const fmt = n => '$' + Math.round(n).toLocaleString('es-AR');
+        const anyAvg   = Math.round(anyPrices.reduce((a,b) => a+b,0) / anyPrices.length);
+        const fmt      = n => '$' + Math.round(n).toLocaleString('es-AR');
         const unitName = this.ctx.units.find(u => u.id === unitId)?.name ?? 'esta unidad';
         hints.innerHTML = `<span style="font-size:.72rem;color:var(--color-primary)">
           💡 Último precio registrado en <strong>${unitName}</strong>: <strong>${fmt(anyAvg)}</strong>/noche
