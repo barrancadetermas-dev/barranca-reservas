@@ -97,12 +97,22 @@ export class Statistics {
   }
 
   _bindButtons() {
-    document.getElementById('btn-load-stats')?.addEventListener('click', () => {
-      if (this._tab === 'units')    this.loadUnits();
-      if (this._tab === 'expenses') this.loadExpenses();
-      if (this._tab === 'heatmap')  this.loadHeatmap();
-      if (this._tab === 'charts')   this.loadCharts();
-      if (this._tab === 'pl')       this.loadPL();
+    document.getElementById('btn-load-stats')?.addEventListener('click', async () => {
+      const btn = document.getElementById('btn-load-stats');
+      if (btn) { btn.disabled = true; btn.textContent = 'Generando...'; }
+      try {
+        if (this._tab === 'units')    await this.loadUnits();
+        else if (this._tab === 'expenses') await this.loadExpenses();
+        else if (this._tab === 'heatmap')  await this.loadHeatmap?.();
+        else if (this._tab === 'charts')   await this.loadCharts?.();
+        else if (this._tab === 'pl')       await this.loadPL?.();
+        else if (this._tab === 'revenue')  await this._revenuePanel?.load?.();
+        else await this.loadUnits();
+      } catch (err) {
+        showToast('Error al generar reporte: ' + (err?.message ?? err), 'error');
+      } finally {
+        if (btn) { btn.disabled = false; btn.textContent = 'Generar Reporte'; }
+      }
     });
     document.getElementById('btn-add-expense')?.addEventListener('click', () => {
       document.getElementById('expense-editing-id').value = '';

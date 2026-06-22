@@ -344,8 +344,14 @@ export class Dashboard {
     const el = document.getElementById('dashboard-ops-badge');
     if (!el) return;
     if (count > 0) {
-      el.textContent = `🧹 ${count} limpieza${count !== 1 ? 's' : ''} pendiente${count !== 1 ? 's' : ''} hoy`;
-      el.style.display = 'block';
+      el.innerHTML = `
+        <a href="#" onclick="window.milaNav?.('operations');return false;"
+           style="display:flex;align-items:center;gap:8px;color:inherit;text-decoration:none">
+          <span style="font-size:1.1rem">🧹</span>
+          <span>${count} limpieza${count !== 1 ? 's' : ''} pendiente${count !== 1 ? 's' : ''} hoy</span>
+        </a>`;
+      el.style.display = 'flex';
+      el.style.alignItems = 'center';
     } else {
       el.style.display = 'none';
     }

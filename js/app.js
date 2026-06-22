@@ -1206,7 +1206,34 @@ async function updateOperationsBadge() {
 async function loadRemindersSection() {
   const container = document.getElementById('reminders-full-list');
   if (!container) return;
+
   container.innerHTML = '<div class="loading-state">Cargando...</div>';
+
+  // ── Agregar botón "+ Nuevo" si no está ───────────────────────────
+  const section = container.closest('#section-reminders') ?? container.parentElement;
+  if (section && !document.getElementById('reminders-header-bar')) {
+    const bar = document.createElement('div');
+    bar.id = 'reminders-header-bar';
+    bar.style.cssText = 'display:flex;justify-content:flex-end;margin-bottom:14px';
+    bar.innerHTML = `<button class="btn btn-primary" id="btn-add-reminder-main">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="13" height="13">
+        <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+      </svg>
+      Nuevo Recordatorio
+    </button>`;
+    section.insertBefore(bar, container);
+    document.getElementById('btn-add-reminder-main')?.addEventListener('click', () => {
+      // Reset modal to create mode
+      const overlay = document.getElementById('overlay-reminder');
+      const titleEl = overlay?.querySelector('.modal-title');
+      if (titleEl) titleEl.textContent = 'Nuevo Recordatorio';
+      document.getElementById('r-title')?.value && (document.getElementById('r-title').value = '');
+      document.getElementById('r-date')?.value  && (document.getElementById('r-date').value  = toISODate(new Date()));
+      document.getElementById('r-desc')?.value  && (document.getElementById('r-desc').value  = '');
+      populateReminderUnitSelect();
+      overlay?.classList.remove('hidden');
+    });
+  }
 
   const { data: reminders, error } = await supabase
     .from('reminders')
@@ -1549,6 +1576,11 @@ const THEMES = {
   ocean:   { primary:'#0891b2', primaryH:'#0e7490', primaryL:'#cffafe', primaryT:'rgba(8,145,178,.12)',   sidebarBg:'#0c4a6e', sidebarActive:'#075985', sidebarAccent:'#38bdf8' },
   sunset:  { primary:'#f97316', primaryH:'#ea580c', primaryL:'#fff7ed', primaryT:'rgba(249,115,22,.12)',  sidebarBg:'#431407', sidebarActive:'#7c2d12', sidebarAccent:'#fb923c' },
   cherry:  { primary:'#e11d48', primaryH:'#be123c', primaryL:'#fff1f2', primaryT:'rgba(225,29,72,.12)',   sidebarBg:'#4c0519', sidebarActive:'#881337', sidebarAccent:'#fb7185' },
+  violet:  { primary:'#8b5cf6', primaryH:'#7c3aed', primaryL:'#f5f3ff', primaryT:'rgba(139,92,246,.12)', sidebarBg:'#2e1065', sidebarActive:'#3b0764', sidebarAccent:'#a78bfa' },
+  rose:    { primary:'#f43f5e', primaryH:'#e11d48', primaryL:'#fff1f2', primaryT:'rgba(244,63,94,.12)',   sidebarBg:'#3d0618', sidebarActive:'#6d0324', sidebarAccent:'#fb7185' },
+  amber:   { primary:'#d97706', primaryH:'#b45309', primaryL:'#fffbeb', primaryT:'rgba(217,119,6,.12)',   sidebarBg:'#451a03', sidebarActive:'#78350f', sidebarAccent:'#fbbf24' },
+  slate:   { primary:'#475569', primaryH:'#334155', primaryL:'#f8fafc', primaryT:'rgba(71,85,105,.12)',   sidebarBg:'#020617', sidebarActive:'#0f172a', sidebarAccent:'#94a3b8' },
+  teal:    { primary:'#0d9488', primaryH:'#0f766e', primaryL:'#f0fdfa', primaryT:'rgba(13,148,136,.12)',  sidebarBg:'#042f2e', sidebarActive:'#134e4a', sidebarAccent:'#2dd4bf' },
 };
 
 function setupThemeSystem() {

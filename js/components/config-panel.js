@@ -180,42 +180,53 @@ export class ConfigPanel {
 
       <!-- Panel de Control tab -->
       <div id="cfg-pane-control" style="display:none">
-        <div id="cfg-user-card" class="config-group" style="margin-bottom:16px">
-          <div style="padding:20px">
-            <div style="display:flex;align-items:center;gap:14px;margin-bottom:18px">
-              <div id="cfg-user-avatar" style="width:48px;height:48px;border-radius:50%;background:var(--color-primary);color:white;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700;flex-shrink:0">?</div>
-              <div>
-                <div id="cfg-user-email" style="font-weight:700;font-size:.95rem">Cargando...</div>
-                <div id="cfg-user-role" style="font-size:.75rem;color:var(--color-text-3);margin-top:2px">Administrador</div>
+        <div id="cfg-user-card" style="background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--r-xl);padding:20px 24px;margin-bottom:16px">
+          <div style="display:flex;align-items:center;gap:16px;margin-bottom:20px">
+            <div id="cfg-user-avatar"
+              style="width:52px;height:52px;border-radius:50%;
+                     background:linear-gradient(135deg,var(--color-primary),var(--color-primary-hover));
+                     color:white;display:flex;align-items:center;justify-content:center;
+                     font-size:22px;font-weight:700;flex-shrink:0;box-shadow:0 2px 8px rgba(0,0,0,.15)">?</div>
+            <div style="min-width:0">
+              <div id="cfg-user-email"
+                style="font-weight:700;font-size:1rem;color:var(--color-text);
+                       white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Cargando...</div>
+              <div id="cfg-user-role"
+                style="font-size:.75rem;margin-top:3px;display:inline-flex;align-items:center;gap:4px;
+                       background:var(--color-primary-light);color:var(--color-primary);
+                       padding:2px 10px;border-radius:var(--r-full);font-weight:600">
+                👑 Administrador
               </div>
             </div>
-            <div style="display:flex;gap:10px;flex-wrap:wrap">
-              <button class="btn btn-danger btn-sm" id="cfg-logout-btn">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
-                  <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
-                </svg>
-                Cerrar Sesión
-              </button>
-            </div>
+          </div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap">
+            <button class="btn btn-danger btn-sm" id="cfg-logout-btn" style="display:flex;align-items:center;gap:6px">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/>
+                <polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
+              </svg>
+              Cerrar Sesión
+            </button>
           </div>
         </div>
 
-        <div class="config-group" style="padding:16px 20px;margin-bottom:16px">
-          <div style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--color-text-3);margin-bottom:12px">⚠️ Zona de peligro</div>
-          <p style="font-size:.8rem;color:var(--color-text-2);margin-bottom:10px">Estas acciones son irreversibles. Usá con precaución.</p>
+        <div style="background:var(--color-surface);border:1px solid #fde68a;border-radius:var(--r-xl);padding:16px 20px;margin-bottom:16px">
+          <div style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#b45309;margin-bottom:10px">⚠️ Zona de peligro</div>
+          <p style="font-size:.8rem;color:var(--color-text-2);margin-bottom:12px">Estas acciones son irreversibles. Usá con precaución.</p>
           <div style="display:flex;gap:8px;flex-wrap:wrap">
-            <button class="btn btn-outline btn-sm" id="cfg-notify-schema" style="color:var(--color-warning);border-color:var(--color-warning)">
+            <button class="btn btn-outline btn-sm" id="cfg-notify-schema"
+              style="color:#b45309;border-color:#fbbf24;font-size:.78rem">
               🔄 Refrescar schema Supabase
             </button>
           </div>
         </div>
 
-        <div class="config-group" style="padding:16px 20px">
+        <div style="background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--r-xl);padding:16px 20px">
           <div style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--color-text-3);margin-bottom:12px">ℹ️ Información del sistema</div>
-          <div style="font-size:.8rem;color:var(--color-text-2);line-height:1.7">
-            <div>📦 Versión: MILA PMS v8</div>
-            <div>🗄️ Supabase: <code style="font-size:.72rem">tuneeinpudlsezzmvaro</code></div>
-            <div>🌐 App: <a href="https://barranca-reservas.vercel.app" target="_blank" style="color:var(--color-primary)">barranca-reservas.vercel.app</a></div>
+          <div style="font-size:.82rem;color:var(--color-text-2);line-height:1.9">
+            <div>📦 <span style="color:var(--color-text-3)">Versión:</span> <strong>MILA PMS v8</strong></div>
+            <div>🗄️ <span style="color:var(--color-text-3)">Supabase:</span> <code style="font-size:.72rem;background:var(--color-surface-2);padding:1px 6px;border-radius:4px">tuneeinpudlsezzmvaro</code></div>
+            <div>🌐 <span style="color:var(--color-text-3)">App:</span> <a href="https://barranca-reservas.vercel.app" target="_blank" style="color:var(--color-primary);text-decoration:none">barranca-reservas.vercel.app ↗</a></div>
           </div>
         </div>
       </div>

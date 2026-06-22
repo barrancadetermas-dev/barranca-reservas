@@ -134,38 +134,42 @@ export class OperationsModule {
           ${data.map(t => this._cleaningRowHTML(t, today)).join('')}
         </div>`;
 
-      // ── Event delegation — un solo listener en el panel ──────────
-      panel.addEventListener('click', async (e) => {
-        const btn = e.target.closest('button');
-        if (!btn) return;
+      // ── Event delegation — usa data-bound para no duplicar listener ──
+      if (!panel.dataset.cleaningBound) {
+        panel.dataset.cleaningBound = '1';
+        panel.addEventListener('click', async (e) => {
+          const btn = e.target.closest('button');
+          if (!btn) return;
 
-        if (btn.classList.contains('cleaning-status-btn')) {
-          const id = btn.dataset.id;
-          const newStatus = btn.dataset.status;
-          btn.disabled = true; btn.textContent = '...';
-          try {
-            const update = { status: newStatus };
-            if (newStatus === 'completed') update.completed_at = new Date().toISOString();
-            const { error } = await this.db.from('cleaning_tasks').update(update).eq('id', id);
-            if (error) throw error;
-            showToast(newStatus === 'completed' ? '✅ Limpieza finalizada — depto disponible' : '🔄 Tarea en proceso', 'success');
+          if (btn.classList.contains('cleaning-status-btn') && !btn.disabled) {
+            const id = btn.dataset.id;
+            const newStatus = btn.dataset.status;
+            btn.disabled = true; btn.textContent = '...';
+            try {
+              const update = { status: newStatus };
+              if (newStatus === 'completed') update.completed_at = new Date().toISOString();
+              const { error } = await this.db.from('cleaning_tasks').update(update).eq('id', id);
+              if (error) throw error;
+              showToast(newStatus === 'completed' ? '✅ Limpieza lista — depto disponible' : '🔄 En proceso', 'success');
+              await this._loadCleaning(panel, header);
+              if (typeof updateOperationsBadge === 'function') updateOperationsBadge();
+            } catch (err) {
+              showToast('Error: ' + (err?.message ?? err), 'error');
+              btn.disabled = false; btn.textContent = newStatus === 'in_progress' ? 'Iniciar' : '✓ Listo';
+            }
+          }
+
+          if (btn.classList.contains('cleaning-delete-btn') && !btn.disabled) {
+            if (!confirm('¿Eliminar esta tarea?')) return;
+            btn.disabled = true;
+            const { error } = await this.db.from('cleaning_tasks').delete().eq('id', btn.dataset.id);
+            if (error) { showToast('Error: ' + error.message, 'error'); btn.disabled = false; return; }
+            showToast('Tarea eliminada', 'success');
             await this._loadCleaning(panel, header);
             if (typeof updateOperationsBadge === 'function') updateOperationsBadge();
-          } catch (err) {
-            showToast('Error: ' + (err?.message ?? err), 'error');
-            btn.disabled = false;
           }
-        }
-
-        if (btn.classList.contains('cleaning-delete-btn')) {
-          if (!confirm('¿Eliminar esta tarea?')) return;
-          const { error } = await this.db.from('cleaning_tasks').delete().eq('id', btn.dataset.id);
-          if (error) { showToast('Error al eliminar: ' + error.message, 'error'); return; }
-          showToast('Tarea eliminada', 'success');
-          await this._loadCleaning(panel, header);
-          if (typeof updateOperationsBadge === 'function') updateOperationsBadge();
-        }
-      }, { once: true }); // once: re-attached each reload
+        });
+      }
 
     } catch (err) {
       console.error('[Operations] cleaning:', err);
@@ -380,36 +384,42 @@ export class OperationsModule {
           ${data.map(issue => this._maintenanceRowHTML(issue)).join('')}
         </div>`;
 
-      // ── Event delegation — un solo listener en el panel ──────────
-      panel.addEventListener('click', async (e) => {
-        const btn = e.target.closest('button');
-        if (!btn) return;
+      // ── Event delegation — data-bound guard ─────────────────────
+      if (!panel.dataset.maintBound) {
+        panel.dataset.maintBound = '1';
+        panel.addEventListener('click', async (e) => {
+          const btn = e.target.closest('button');
+          if (!btn || btn.disabled) return;
 
-        if (btn.classList.contains('maint-resolve-btn')) {
-          if (!confirm('¿Marcar como resuelta?')) return;
-          btn.disabled = true; btn.textContent = '...';
-          const { error } = await this.db.from('maintenance_issues')
-            .update({ status: 'resolved', resolved_at: new Date().toISOString() })
-            .eq('id', btn.dataset.id);
-          if (error) {
-            showToast('Error: ' + error.message, 'error');
-            btn.disabled = false; btn.textContent = '✓ Resolver';
-            return;
+          if (btn.classList.contains('maint-resolve-btn')) {
+            if (!confirm('¿Marcar como resuelta?')) return;
+            btn.disabled = true; btn.textContent = '...';
+            const { error } = await this.db.from('maintenance_issues')
+              .update({ status: 'resolved', resolved_at: new Date().toISOString() })
+              .eq('id', btn.dataset.id);
+            if (error) {
+              showToast('Error: ' + error.message, 'error');
+              btn.disabled = false; btn.textContent = '✓ Resolver';
+              return;
+            }
+            showToast('✅ Incidencia resuelta', 'success');
+            panel.dataset.maintBound = ''; // reset so listener re-attaches on reload
+            await this._loadMaintenance(panel, header);
+            if (typeof updateOperationsBadge === 'function') updateOperationsBadge();
           }
-          showToast('✅ Incidencia resuelta', 'success');
-          await this._loadMaintenance(panel, header);
-          if (typeof updateOperationsBadge === 'function') updateOperationsBadge();
-        }
 
-        if (btn.classList.contains('maint-delete-btn')) {
-          if (!confirm('¿Eliminar esta incidencia?')) return;
-          const { error } = await this.db.from('maintenance_issues').delete().eq('id', btn.dataset.id);
-          if (error) { showToast('Error: ' + error.message, 'error'); return; }
-          showToast('Eliminada', 'success');
-          await this._loadMaintenance(panel, header);
-          if (typeof updateOperationsBadge === 'function') updateOperationsBadge();
-        }
-      }, { once: true });
+          if (btn.classList.contains('maint-delete-btn')) {
+            if (!confirm('¿Eliminar esta incidencia?')) return;
+            btn.disabled = true;
+            const { error } = await this.db.from('maintenance_issues').delete().eq('id', btn.dataset.id);
+            if (error) { showToast('Error: ' + error.message, 'error'); btn.disabled = false; return; }
+            showToast('Eliminada', 'success');
+            panel.dataset.maintBound = '';
+            await this._loadMaintenance(panel, header);
+            if (typeof updateOperationsBadge === 'function') updateOperationsBadge();
+          }
+        });
+      }
 
     } catch (err) {
       panel.innerHTML = this._errorHTML('maintenance_issues');
