@@ -1,0 +1,159 @@
+/* =====================================================
+   MILA PMS — patches/enhancements.css
+   Sort tabs · Paid-in-full · Reminders · Tooltip · Badges
+   ===================================================== */
+
+/* ── Sort tabs ── */
+.booking-sort-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0 14px;
+  flex-wrap: wrap;
+}
+.sort-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-text-muted, #64748b);
+  white-space: nowrap;
+}
+.sort-tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+.sort-tab {
+  padding: 5px 12px;
+  border-radius: 20px;
+  border: 1px solid var(--color-border, #e2e8f0);
+  background: var(--color-surface, #f8fafc);
+  color: var(--color-text-muted, #64748b);
+  font-size: 0.72rem;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.12s;
+}
+.sort-tab:hover {
+  border-color: var(--color-primary, #4F46E5);
+  color: var(--color-primary, #4F46E5);
+}
+.sort-tab--active {
+  background: var(--color-primary, #4F46E5);
+  border-color: var(--color-primary, #4F46E5);
+  color: #fff;
+  font-weight: 600;
+}
+
+/* ── Paid in full ── */
+.paid-full-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.btn--success           { background: #16a34a; color: #fff; }
+.btn--success:hover     { background: #15803d; }
+.btn--sm                { padding: 6px 14px; font-size: 0.78rem; }
+.form-input--sm         { padding: 5px 8px; font-size: 0.78rem; border-radius: 6px; width: auto; }
+
+/* ── Badges ── */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+.badge--green  { background: #dcfce7; color: #16a34a; }
+.badge--red    { background: #fee2e2; color: #dc2626; }
+.badge--yellow { background: #fef9c3; color: #a16207; }
+
+/* ── Colors ── */
+.text-green { color: #16a34a !important; }
+.text-red   { color: #dc2626 !important; }
+
+/* ── Tooltip financials ── */
+.tooltip-financials {
+  border-top: 1px solid rgba(255,255,255,0.15);
+  margin-top: 8px;
+  padding-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.tooltip-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.8rem;
+  gap: 16px;
+}
+.tooltip-row strong { font-weight: 700; }
+
+/* ── Reminders widget ── */
+.reminders-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.reminder-item {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--color-surface, #f8fafc);
+  border: 1px solid var(--color-border, #e2e8f0);
+}
+.reminder-item--overdue {
+  border-color: #fca5a5;
+  background: #fff5f5;
+}
+.reminder-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+}
+.reminder-date {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--color-text-muted, #64748b);
+}
+.reminder-title {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--color-text, #1e293b);
+}
+.reminder-desc {
+  font-size: 0.75rem;
+  color: var(--color-text-muted, #64748b);
+}
+.btn-complete-reminder {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid #16a34a;
+  background: transparent;
+  color: #16a34a;
+  font-size: 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.12s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.btn-complete-reminder:hover {
+  background: #16a34a;
+  color: #fff;
+}
+.reminders-empty {
+  padding: 16px;
+  text-align: center;
+  color: var(--color-text-muted, #64748b);
+  font-size: 0.85rem;
+}
