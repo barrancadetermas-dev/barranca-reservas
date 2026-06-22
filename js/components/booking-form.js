@@ -269,8 +269,9 @@ export class BookingForm {
     const subtotal      = pricePerNight * billable;
     const discAmt       = subtotal * (discPct / 100);
     const total         = booking.total_amount ?? Math.max(0, subtotal - discAmt + surcharge);
-    const totalPaid     = booking.total_paid ?? 0;
-    const balance       = booking.balance ?? (total - totalPaid);
+    const paymentRows   = (booking.payments ?? []).filter(p => Number(p.amount) !== 0);
+    const totalPaid     = paymentRows.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+    const balance       = Math.max(0, total - totalPaid);
 
     // Botones check-in/out
     const now   = new Date();
@@ -344,9 +345,8 @@ export class BookingForm {
       ${booking.notes ? `<div class="detail-notes"><span class="detail-label">Notas</span><p>${booking.notes}</p></div>` : ''}
     `;
 
-    if (booking.payments?.length) {
-      const payHtml = booking.payments
-        .filter(p => p.amount !== 0)
+    if (paymentRows.length) {
+      const payHtml = paymentRows
         .map(p => {
           const pm    = PAYMENT_METHODS.find(m => m.value === p.method)?.label ?? p.method;
           const isNeg = p.amount < 0;
@@ -1515,7 +1515,8 @@ ${notes ? `
       };
 
       if (guestId) {
-        await this.db.from('guests').update(guestPayload).eq('id', guestId);
+        const { error: gUpErr } = await this.db.from('guests').update(guestPayload).eq('id', guestId);
+        if (gUpErr) throw new Error('No fue posible actualizar el huesped: ' + gUpErr.message);
       } else {
         const { data: newGuest, error: gErr } = await this.db
           .from('guests').insert(guestPayload).select('id').single();
@@ -1560,8 +1561,10 @@ ${notes ? `
         } else if (upErr) {
           throw new Error('No fue posible actualizar la reserva: ' + upErr.message);
         }
-        await this.db.from('booking_units').delete().eq('booking_id', bookingId);
-        await this.db.from('payments').delete().eq('booking_id', bookingId);
+        const { error: buDelErr } = await this.db.from('booking_units').delete().eq('booking_id', bookingId);
+        if (buDelErr) throw new Error('Error limpiando unidades anteriores: ' + buDelErr.message);
+        const { error: payDelErr } = await this.db.from('payments').delete().eq('booking_id', bookingId);
+        if (payDelErr) throw new Error('Error limpiando pagos anteriores: ' + payDelErr.message);
       } else {
         // INSERT — intentar con free_nights primero
         let { data: newB, error: insErr } = await this.db
@@ -1618,6 +1621,16 @@ ${notes ? `
         const { error: pmErr } = await this.db.from('payments').insert(payRows);
         if (pmErr) throw new Error('Error registrando pago: ' + pmErr.message);
       }
+
+      const persistedPaid = payRows.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+      const persistedBalance = Math.max(0, total - persistedPaid);
+      const persistedStatus = persistedBalance <= 0 ? 'paid' : persistedPaid > 0 ? 'partial' : 'pending';
+      const { error: totalsErr } = await this.db.from('bookings').update({
+        total_paid: persistedPaid,
+        balance: persistedBalance,
+        status: persistedStatus,
+      }).eq('id', bookingId);
+      if (totalsErr) throw new Error('Error recalculando saldo: ' + totalsErr.message);
 
       const _logVerb    = this._editingId ? 'UPDATE' : 'CREATE';
       const _logSummary = this._editingId

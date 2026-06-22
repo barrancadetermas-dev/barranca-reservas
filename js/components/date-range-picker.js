@@ -102,14 +102,14 @@ export class DateRangePicker {
       // Click
       el.addEventListener('click', (e) => {
         e.preventDefault(); e.stopPropagation();
-        if (el.classList.contains('drp-past') || el.classList.contains('drp-blocked')) return;
+        if (el.classList.contains('drp-blocked')) return;
         this._handleClick(el.dataset.date);
       });
 
       // Touch support
       el.addEventListener('touchend', (e) => {
         e.preventDefault();
-        if (el.classList.contains('drp-past') || el.classList.contains('drp-blocked')) return;
+        if (el.classList.contains('drp-blocked')) return;
         this._handleClick(el.dataset.date);
       }, { passive: false });
 
@@ -156,7 +156,7 @@ export class DateRangePicker {
         isStart   ? 'drp-start'     : '',
         isEnd     ? 'drp-end'       : '',
         inRange   ? 'drp-in-range'  : '',
-        !isPast && !isBlocked ? 'drp-available' : '',
+        !isBlocked ? 'drp-available' : '',
       ].filter(Boolean).join(' ');
 
       cells += `<div class="${cls}" data-date="${ds}" title="${isBlocked ? '🔴 Ocupado' : ds}">
@@ -199,9 +199,6 @@ export class DateRangePicker {
 
   // ── Lógica de click ───────────────────────────────
   _handleClick(ds) {
-    const today = new Date().toISOString().split('T')[0];
-    if (ds < today) return;
-
     if (!this._startDate || (this._startDate && this._endDate)) {
       // Iniciar nueva selección
       this._startDate = ds;

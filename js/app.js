@@ -1100,8 +1100,9 @@ function _ensureModalCleanup() {
   // Fix: si el overlay-booking quedó visible sin contexto, permitir cierre con X
   document.getElementById('overlay-booking')?.addEventListener('click', (e) => {
     // Solo cerrar si clic directo en el backdrop (no en el modal interno)
-    if (e.target === e.currentTarget && bookingForm) {
-      bookingForm.close();
+    if (e.target === e.currentTarget) {
+      e.preventDefault();
+      e.stopPropagation();
     }
   });
 }

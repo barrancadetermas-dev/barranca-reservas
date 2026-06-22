@@ -1,0 +1,184 @@
+/* =====================================================
+   MILA PMS — css/avatar-palette.css
+   Estilos para AvatarPicker y ColorPalette
+   ===================================================== */
+
+/* ──────────────────────────────
+   AVATAR PICKER
+   ────────────────────────────── */
+.avatar-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.avatar-picker__label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--color-text-muted, #64748b);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin: 0;
+}
+
+.avatar-picker__grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+
+.avatar-option {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 6px 8px;
+  border-radius: 12px;
+  border: 2px solid transparent;
+  background: var(--color-surface, #f8fafc);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, box-shadow 0.15s, transform 0.1s;
+  outline: none;
+}
+
+.avatar-option:hover {
+  border-color: color-mix(in srgb, var(--color-primary, #4F46E5) 30%, transparent);
+  background: color-mix(in srgb, var(--color-primary, #4F46E5) 8%, white);
+  transform: translateY(-1px);
+}
+
+.avatar-option:focus-visible {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary, #4F46E5) 40%, transparent);
+}
+
+.avatar-option--selected {
+  border-color: var(--color-primary, #4F46E5);
+  background: color-mix(in srgb, var(--color-primary, #4F46E5) 10%, white);
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--color-primary, #4F46E5) 20%, transparent);
+}
+
+.avatar-emoji {
+  font-size: 2rem;
+  line-height: 1;
+  display: block;
+}
+
+.avatar-label {
+  font-size: 0.625rem;
+  color: var(--color-text-muted, #64748b);
+  text-align: center;
+  line-height: 1.2;
+}
+
+/* Avatar display en header/navbar */
+.avatar-display {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background-color: var(--avatar-bg, #4F46E5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.avatar-display__emoji {
+  font-size: 1.25rem;
+  line-height: 1;
+}
+
+/* ──────────────────────────────
+   COLOR PALETTE
+   ────────────────────────────── */
+.color-palette {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.palette-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.palette-row__label {
+  font-size: 0.65rem;
+  font-weight: 600;
+  color: var(--color-text-muted, #64748b);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  width: 52px;
+  flex-shrink: 0;
+}
+
+.palette-row__swatches {
+  display: flex;
+  gap: 6px;
+  flex-wrap: nowrap;
+}
+
+.color-swatch {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background-color: var(--swatch-color);
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: transform 0.12s, box-shadow 0.12s;
+  outline: none;
+  padding: 0;
+}
+
+.color-swatch:hover {
+  transform: scale(1.2);
+  box-shadow:
+    0 0 0 2px white,
+    0 0 0 4px var(--swatch-color);
+}
+
+.color-swatch:focus-visible {
+  box-shadow:
+    0 0 0 2px white,
+    0 0 0 4px var(--swatch-color);
+}
+
+.color-swatch--selected {
+  border-color: white;
+  box-shadow:
+    0 0 0 2px white,
+    0 0 0 4px var(--swatch-color);
+  transform: scale(1.15);
+}
+
+.palette-selected-label {
+  font-size: 0.7rem;
+  color: var(--color-text-muted, #64748b);
+  margin: 2px 0 0;
+}
+
+.palette-selected-label span {
+  font-weight: 600;
+  color: var(--color-text, #1e293b);
+}
+
+/* ──────────────────────────────
+   DARK MODE
+   ────────────────────────────── */
+@media (prefers-color-scheme: dark) {
+  .avatar-option {
+    background: var(--color-surface, #1e293b);
+  }
+  .avatar-option:hover,
+  .avatar-option--selected {
+    background: color-mix(in srgb, var(--color-primary, #4F46E5) 20%, #1e293b);
+  }
+  .color-swatch:hover,
+  .color-swatch--selected {
+    box-shadow:
+      0 0 0 2px var(--color-surface, #1e293b),
+      0 0 0 4px var(--swatch-color);
+  }
+}
