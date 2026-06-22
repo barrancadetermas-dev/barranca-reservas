@@ -4797,3 +4797,54 @@ select.field-error {
   white-space: nowrap;
   min-width: 80px;
 }
+
+/* ── Guest history badge (step 1 booking form) ── */
+.guest-history-badge {
+  font-size: .78rem;
+  font-weight: 600;
+  padding: 5px 12px;
+  border-radius: var(--r-md);
+  margin-top: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all var(--t-fast);
+}
+.guest-history-badge:empty { display: none; }
+.guest-history-badge.new {
+  background: #dbeafe;
+  color: #1d4ed8;
+  border: 1px solid #93c5fd;
+}
+.guest-history-badge.returning {
+  background: #dcfce7;
+  color: #15803d;
+  border: 1px solid #86efac;
+}
+.guest-history-badge.loading {
+  background: var(--color-surface-2);
+  color: var(--color-text-3);
+}
+
+/* ── Config panel stat cards ─────────────────── */
+.cfg-stat-card {
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--r-lg);
+  padding: 12px 14px;
+  text-align: center;
+}
+.cfg-stat-val {
+  font-size: 1.4rem;
+  font-weight: 800;
+  color: var(--color-primary);
+  line-height: 1;
+  margin-bottom: 4px;
+}
+.cfg-stat-lbl {
+  font-size: .68rem;
+  color: var(--color-text-3);
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  font-weight: 600;
+}

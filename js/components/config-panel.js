@@ -180,19 +180,21 @@ export class ConfigPanel {
 
       <!-- Panel de Control tab -->
       <div id="cfg-pane-control" style="display:none">
-        <div id="cfg-user-card" style="background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--r-xl);padding:20px 24px;margin-bottom:16px">
-          <div style="display:flex;align-items:center;gap:16px;margin-bottom:20px">
+
+        <!-- User card -->
+        <div style="background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--r-xl);padding:20px 24px;margin-bottom:16px">
+          <div style="display:flex;align-items:center;gap:16px;margin-bottom:18px">
             <div id="cfg-user-avatar"
               style="width:52px;height:52px;border-radius:50%;
                      background:linear-gradient(135deg,var(--color-primary),var(--color-primary-hover));
                      color:white;display:flex;align-items:center;justify-content:center;
-                     font-size:22px;font-weight:700;flex-shrink:0;box-shadow:0 2px 8px rgba(0,0,0,.15)">?</div>
-            <div style="min-width:0">
+                     font-size:22px;font-weight:700;flex-shrink:0;box-shadow:0 2px 8px rgba(0,0,0,.18)">?</div>
+            <div style="min-width:0;flex:1">
               <div id="cfg-user-email"
                 style="font-weight:700;font-size:1rem;color:var(--color-text);
                        white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Cargando...</div>
               <div id="cfg-user-role"
-                style="font-size:.75rem;margin-top:3px;display:inline-flex;align-items:center;gap:4px;
+                style="font-size:.73rem;margin-top:4px;display:inline-flex;align-items:center;gap:4px;
                        background:var(--color-primary-light);color:var(--color-primary);
                        padding:2px 10px;border-radius:var(--r-full);font-weight:600">
                 👑 Administrador
@@ -210,9 +212,54 @@ export class ConfigPanel {
           </div>
         </div>
 
+        <!-- System stats -->
+        <div style="background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--r-xl);padding:16px 20px;margin-bottom:16px">
+          <div style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--color-text-3);margin-bottom:14px">📊 Estadísticas del Sistema</div>
+          <div id="cfg-sys-stats" style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">
+            <div class="cfg-stat-card"><div class="cfg-stat-val" id="sys-stat-bookings">—</div><div class="cfg-stat-lbl">Reservas totales</div></div>
+            <div class="cfg-stat-card"><div class="cfg-stat-val" id="sys-stat-guests">—</div><div class="cfg-stat-lbl">Huéspedes</div></div>
+            <div class="cfg-stat-card"><div class="cfg-stat-val" id="sys-stat-revenue">—</div><div class="cfg-stat-lbl">Ingresos totales</div></div>
+            <div class="cfg-stat-card"><div class="cfg-stat-val" id="sys-stat-cleaning">—</div><div class="cfg-stat-lbl">Tareas limpieza</div></div>
+            <div class="cfg-stat-card"><div class="cfg-stat-val" id="sys-stat-maint">—</div><div class="cfg-stat-lbl">Incidencias mant.</div></div>
+            <div class="cfg-stat-card"><div class="cfg-stat-val" id="sys-stat-reminders">—</div><div class="cfg-stat-lbl">Recordatorios</div></div>
+          </div>
+          <button class="btn btn-outline btn-sm" id="cfg-load-stats" style="margin-top:12px;font-size:.78rem">
+            🔄 Cargar estadísticas
+          </button>
+        </div>
+
+        <!-- Quick export -->
+        <div style="background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--r-xl);padding:16px 20px;margin-bottom:16px">
+          <div style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--color-text-3);margin-bottom:10px">📤 Exportar Datos</div>
+          <p style="font-size:.8rem;color:var(--color-text-2);margin-bottom:12px">Exportá reservas y huéspedes como CSV para backup o análisis externo.</p>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn btn-outline btn-sm" id="cfg-export-bookings">📋 Exportar Reservas (CSV)</button>
+            <button class="btn btn-outline btn-sm" id="cfg-export-guests">👤 Exportar Huéspedes (CSV)</button>
+          </div>
+        </div>
+
+        <!-- Quick links -->
+        <div style="background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--r-xl);padding:16px 20px;margin-bottom:16px">
+          <div style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--color-text-3);margin-bottom:10px">🔗 Accesos Rápidos</div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <a href="https://supabase.com/dashboard/project/tuneeinpudlsezzmvaro/editor" target="_blank"
+               class="btn btn-outline btn-sm" style="justify-content:flex-start;gap:8px;text-decoration:none">
+              🗄️ SQL Editor — Supabase
+            </a>
+            <a href="https://supabase.com/dashboard/project/tuneeinpudlsezzmvaro/auth/users" target="_blank"
+               class="btn btn-outline btn-sm" style="justify-content:flex-start;gap:8px;text-decoration:none">
+              👥 Gestión de Usuarios — Supabase
+            </a>
+            <a href="https://vercel.com/dashboard" target="_blank"
+               class="btn btn-outline btn-sm" style="justify-content:flex-start;gap:8px;text-decoration:none">
+              🚀 Vercel Dashboard
+            </a>
+          </div>
+        </div>
+
+        <!-- Danger zone -->
         <div style="background:var(--color-surface);border:1px solid #fde68a;border-radius:var(--r-xl);padding:16px 20px;margin-bottom:16px">
-          <div style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#b45309;margin-bottom:10px">⚠️ Zona de peligro</div>
-          <p style="font-size:.8rem;color:var(--color-text-2);margin-bottom:12px">Estas acciones son irreversibles. Usá con precaución.</p>
+          <div style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#b45309;margin-bottom:8px">⚠️ Zona de peligro</div>
           <div style="display:flex;gap:8px;flex-wrap:wrap">
             <button class="btn btn-outline btn-sm" id="cfg-notify-schema"
               style="color:#b45309;border-color:#fbbf24;font-size:.78rem">
@@ -221,10 +268,33 @@ export class ConfigPanel {
           </div>
         </div>
 
+        <!-- Changelog -->
+        <div style="background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--r-xl);padding:16px 20px;margin-bottom:16px">
+          <div style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--color-text-3);margin-bottom:12px">📋 Changelog — MILA PMS v8</div>
+          <div style="font-size:.78rem;color:var(--color-text-2);line-height:1.6">
+            ${[
+              ['v8.4','Jun 2026','Panel de Control con stats + exports + links rápidos'],
+              ['v8.3','Jun 2026','Indicador cliente nuevo/frecuente · USD en pagos · Stats desde 2026'],
+              ['v8.2','Jun 2026','10 temas de color · Recordatorios CRUD · Auto-limpieza en checkout'],
+              ['v8.1','Jun 2026','Paso 5 Voucher · PDF profesional · WhatsApp encargada'],
+              ['v8.0','Jun 2026','Operaciones (Limpieza + Mantenimiento) · Event delegation · Flags mejorados'],
+              ['v7.x','May 2026','Calendario drag-drop · Bloqueos · Estadísticas SVG · Export Excel'],
+              ['v6.x','May 2026','Dashboard KPIs · Dólar widget · Notificaciones realtime · Auditoría'],
+            ].map(([v,d,txt]) => `
+              <div style="display:flex;gap:10px;padding:6px 0;border-bottom:1px solid var(--color-border)">
+                <span style="background:var(--color-primary-light);color:var(--color-primary);
+                             padding:1px 8px;border-radius:var(--r-full);font-size:.68rem;
+                             font-weight:700;flex-shrink:0;height:fit-content">${v}</span>
+                <div><span style="color:var(--color-text-3);font-size:.7rem">${d} ·</span> ${txt}</div>
+              </div>`).join('')}
+          </div>
+        </div>
+
+        <!-- System info -->
         <div style="background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--r-xl);padding:16px 20px">
           <div style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--color-text-3);margin-bottom:12px">ℹ️ Información del sistema</div>
           <div style="font-size:.82rem;color:var(--color-text-2);line-height:1.9">
-            <div>📦 <span style="color:var(--color-text-3)">Versión:</span> <strong>MILA PMS v8</strong></div>
+            <div>📦 <span style="color:var(--color-text-3)">Versión:</span> <strong>MILA PMS v8.4</strong></div>
             <div>🗄️ <span style="color:var(--color-text-3)">Supabase:</span> <code style="font-size:.72rem;background:var(--color-surface-2);padding:1px 6px;border-radius:4px">tuneeinpudlsezzmvaro</code></div>
             <div>🌐 <span style="color:var(--color-text-3)">App:</span> <a href="https://barranca-reservas.vercel.app" target="_blank" style="color:var(--color-primary);text-decoration:none">barranca-reservas.vercel.app ↗</a></div>
           </div>
@@ -261,7 +331,74 @@ export class ConfigPanel {
       } catch (_) {}
     });
 
-    // ── Logout from Panel de Control ─────────────────
+    // ── Cargar estadísticas del sistema ──────────────
+    const loadSysStats = async () => {
+      const btn = container.querySelector('#cfg-load-stats');
+      if (btn) { btn.disabled = true; btn.textContent = '⟳ Cargando...'; }
+      try {
+        const [bkRes, gRes, payRes, clRes, mRes, rRes] = await Promise.all([
+          this.db.from('bookings').select('id', { count:'exact', head:true }).eq('hotel_id', this.ctx.hotelId).neq('status','cancelled'),
+          this.db.from('guests').select('id',   { count:'exact', head:true }).eq('hotel_id', this.ctx.hotelId),
+          this.db.from('payments').select('amount').eq('hotel_id', this.ctx.hotelId),
+          this.db.from('cleaning_tasks').select('id', { count:'exact', head:true }).eq('hotel_id', this.ctx.hotelId),
+          this.db.from('maintenance_issues').select('id', { count:'exact', head:true }).eq('hotel_id', this.ctx.hotelId),
+          this.db.from('reminders').select('id', { count:'exact', head:true }).eq('hotel_id', this.ctx.hotelId),
+        ]);
+        const totalRev = (payRes.data ?? []).reduce((s, p) => s + (p.amount ?? 0), 0);
+        const fmt = n => '$' + Math.round(n).toLocaleString('es-AR');
+        const set = (id, v) => { const el = container.querySelector('[id="' + id + '"]'); if (el) el.textContent = v; };
+        set('sys-stat-bookings',  bkRes.count ?? '—');
+        set('sys-stat-guests',    gRes.count  ?? '—');
+        set('sys-stat-revenue',   fmt(totalRev));
+        set('sys-stat-cleaning',  clRes.count ?? '—');
+        set('sys-stat-maint',     mRes.count  ?? '—');
+        set('sys-stat-reminders', rRes.count  ?? '—');
+      } catch (err) {
+        showToast('Error: ' + (err?.message ?? err), 'error');
+      } finally {
+        if (btn) { btn.disabled = false; btn.textContent = '🔄 Actualizar'; }
+      }
+    };
+    container.querySelector('#cfg-load-stats')?.addEventListener('click', loadSysStats);
+
+    // ── Exportar CSV ──────────────────────────────────
+    container.querySelector('#cfg-export-bookings')?.addEventListener('click', async () => {
+      try {
+        const { data } = await this.db.from('bookings')
+          .select('id, status, check_in, check_out, guests(first_name,last_name), booking_units(units(name)), price_per_night, adults, children, source, created_at')
+          .eq('hotel_id', this.ctx.hotelId)
+          .order('check_in', { ascending: false });
+        if (!data?.length) { showToast('Sin reservas para exportar', 'info'); return; }
+        const rows = [['ID','Estado','Check-in','Check-out','Huésped','Unidad','Precio/noche','Adultos','Menores','Canal','Creado']];
+        data.forEach(b => rows.push([
+          b.id, b.status, b.check_in, b.check_out,
+          (b.guests ? b.guests.first_name + ' ' + b.guests.last_name : '').trim(),
+          b.booking_units?.[0]?.units?.name ?? '',
+          b.price_per_night ?? 0, b.adults ?? 1, b.children ?? 0, b.source ?? '', b.created_at?.split('T')[0],
+        ]));
+        _downloadCSV(rows, 'reservas_mila.csv');
+        showToast('✅ Reservas exportadas', 'success');
+      } catch (err) { showToast('Error: ' + (err?.message ?? err), 'error'); }
+    });
+
+    container.querySelector('#cfg-export-guests')?.addEventListener('click', async () => {
+      try {
+        const { data } = await this.db.from('guests')
+          .select('id, first_name, last_name, dni, email, phone, country, tags, created_at')
+          .eq('hotel_id', this.ctx.hotelId)
+          .order('last_name');
+        if (!data?.length) { showToast('Sin huéspedes para exportar', 'info'); return; }
+        const rows = [['ID','Nombre','Apellido','DNI','Email','Teléfono','País','Etiquetas','Creado']];
+        data.forEach(g => rows.push([
+          g.id, g.first_name ?? '', g.last_name ?? '', g.dni ?? '', g.email ?? '',
+          g.phone ?? '', g.country ?? '', (g.tags ?? []).join(';'), g.created_at?.split('T')[0],
+        ]));
+        _downloadCSV(rows, 'huespedes_mila.csv');
+        showToast('✅ Huéspedes exportados', 'success');
+      } catch (err) { showToast('Error: ' + (err?.message ?? err), 'error'); }
+    });
+
+    // ── Logout ────────────────────────────────────────
     container.querySelector('#cfg-logout-btn')?.addEventListener('click', () => {
       if (confirm('¿Cerrar sesión?')) this.db.auth.signOut();
     });
@@ -333,7 +470,7 @@ export class ConfigPanel {
 
       if (error) throw error;
 
-      await logAction('UPDATE', 'config', this.ctx.hotelId, `Configuración actualizada: ${upserts.map(u => u.key).join(', ')}`);
+      await logAction('UPDATE', 'config', this.ctx.hotelId, 'Configuración actualizada: ' + upserts.map(u => u.key).join(', '));
       showToast('Configuración guardada ✓', 'success');
 
     } catch (err) {

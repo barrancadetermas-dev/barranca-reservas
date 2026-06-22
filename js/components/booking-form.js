@@ -906,7 +906,7 @@ export class BookingForm {
     }).join('');
 
     container.querySelectorAll('.guest-result-item').forEach(item => {
-      item.addEventListener('click', () => {
+      item.addEventListener('click', async () => {
         this._selectedGuestId = item.dataset.id;
         document.getElementById('f-firstname').value = item.dataset.fn;
         document.getElementById('f-lastname').value  = item.dataset.ln;
@@ -924,6 +924,30 @@ export class BookingForm {
             alertContainer.innerHTML = `<div class="alert alert-info">⭐ <strong>Huésped VIP</strong> — Dar atención preferencial.</div>`;
           } else {
             alertContainer.innerHTML = '';
+          }
+        }
+
+        // ── Indicador cliente nuevo / frecuente ───────
+        const guestBadge = document.getElementById('guest-booking-history-badge');
+        if (guestBadge) {
+          guestBadge.textContent = '⟳ Verificando...';
+          guestBadge.className = 'guest-history-badge loading';
+          try {
+            const { count } = await this.db
+              .from('bookings')
+              .select('id', { count: 'exact', head: true })
+              .eq('guest_id', item.dataset.id)
+              .neq('status', 'cancelled');
+            const n = count ?? 0;
+            if (n === 0) {
+              guestBadge.textContent  = '🆕 Cliente nuevo — primera reserva';
+              guestBadge.className    = 'guest-history-badge new';
+            } else {
+              guestBadge.textContent  = `🔄 Huésped frecuente — ${n} reserva${n !== 1 ? 's' : ''} anterior${n !== 1 ? 'es' : ''}`;
+              guestBadge.className    = 'guest-history-badge returning';
+            }
+          } catch {
+            guestBadge.textContent = '';
           }
         }
       });
