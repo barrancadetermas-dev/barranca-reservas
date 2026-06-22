@@ -90,6 +90,7 @@ export class Statistics {
         this._tab = tab.dataset.tab;
         this._showPanel(this._tab);
         if (this._tab === 'units')    this.loadUnits();
+        if (this._tab === 'expenses') this.loadExpenses();
         if (this._tab === 'pl')       this.loadPL();
         if (this._tab === 'heatmap')  this.loadHeatmap();
         if (this._tab === 'charts')   this.loadCharts();
@@ -99,7 +100,7 @@ export class Statistics {
   }
 
   _showPanel(tab) {
-    ['units','pl','heatmap','charts','revenue'].forEach(t => {
+    ['units','expenses','pl','heatmap','charts','revenue'].forEach(t => {
       document.getElementById(`stats-${t}-panel`)?.classList.toggle('hidden', t !== tab);
     });
   }

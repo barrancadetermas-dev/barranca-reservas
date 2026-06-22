@@ -3,7 +3,7 @@
 // HTML siempre de red, assets cacheados, offline queue
 // ═══════════════════════════════════════════════════
 
-const V  = '8.2.0';
+const V  = '8.3.0';
 const CA = `mila-app-${V}`;
 
 self.addEventListener('install', e => {

@@ -1899,20 +1899,19 @@ function setupCalculator() {
     if (lbl) lbl.textContent = e.target.value + '%';
   });
 
-  // Precio en USD — usa EXCLUSIVAMENTE el dólar oficial vendedor del BNA
+  // Precio en USD — usa dólar oficial BNA (badge del header)
   document.getElementById('calc-use-dollar')?.addEventListener('click', () => {
-    import('./services/dollar-api.js').then(({ getCachedBNASell }) => {
-      const bnaRate = getCachedBNASell();
-      if (!bnaRate) { showToast('No hay cotización BNA disponible', 'warning'); return; }
-      const priceEl = document.getElementById('calc-price');
-      if (priceEl) {
-        const usdAmount = prompt(`Cotización BNA Oficial: $${bnaRate.toLocaleString('es-AR')}/USD\n¿Cuántos dólares por noche?`, '50');
-        if (!usdAmount) return;
-        priceEl.value = Math.round(parseFloat(usdAmount) * bnaRate);
-        _calcUpdate();
-        showToast(`Convertido a ARS usando BNA: $${bnaRate.toLocaleString('es-AR')}`, 'info');
-      }
-    });
+    const dollarEl = document.getElementById('dollar-badge-value');
+    const rateText = dollarEl?.textContent?.replace(/[^0-9]/g, '');
+    const rate = parseInt(rateText);
+    if (!rate) { showToast('No hay cotización disponible', 'warning'); return; }
+    const priceEl = document.getElementById('calc-price');
+    if (priceEl) {
+      const usdAmount = prompt(`Cotización oficial: $${rate.toLocaleString('es-AR')}/USD\n¿Cuántos dólares por noche?`, '50');
+      if (!usdAmount) return;
+      priceEl.value = Math.round(parseFloat(usdAmount) * rate);
+      _calcUpdate();
+    }
   });
 
   // Crear reserva con estos datos — paso 0 del formulario

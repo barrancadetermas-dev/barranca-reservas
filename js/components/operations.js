@@ -5,7 +5,7 @@
 // • Stock e Insumos (alertas de stock bajo)
 // ══════════════════════════════════════════════════
 
-import { showToast, toISODate, formatDate, formatARS, can as canOps } from '../supabase-config.js';
+import { showToast, toISODate, formatDate, formatARS } from '../supabase-config.js';
 import { can } from '../auth/permissions.js';
 import { logAction } from '../services/audit-service.js';
 

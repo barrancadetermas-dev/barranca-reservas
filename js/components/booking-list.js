@@ -536,8 +536,8 @@ export class BookingList {
                 ? `<span class="booking-balance-due">Saldo: ${formatARS(b.balance)}</span>
                    <button data-action="pay-full" class="bl-action-btn bl-payfull-btn"
                      title="Registrar pago total" onclick="event.stopPropagation()">
-                     u2705 Cobrar</button>`
-                : `<span class="booking-paid-badge">u2713 Pagado</span>`
+                     ✅ Cobrar</button>`
+                : `<span class="booking-paid-badge">✓ Pagado</span>`
               }
             </div>
             <div class="booking-status-col">
