@@ -770,25 +770,54 @@ export class BookingForm {
 
   // ── Manejo de pagos ───────────────────────────────
   _addPaymentRow(existing = null) {
-    const rowId = `pay-row-${++this._payRowCount}`;
-    const today = toISODate(new Date());
-    const row   = document.createElement('div');
+    const rowId  = `pay-row-${++this._payRowCount}`;
+    const today  = toISODate(new Date());
+    const isFx   = existing?.currency === 'USD';
+    const rate   = existing?.exchange_rate ?? '';
+    const row    = document.createElement('div');
     row.className = 'payment-row';
     row.id = rowId;
     row.innerHTML = `
-      <select class="pay-method form-control">
-        ${PAYMENT_METHODS.map(m =>
-          `<option value="${m.value}" ${existing?.method === m.value ? 'selected' : ''}>${m.label}</option>`
-        ).join('')}
-      </select>
-      <input type="number" class="pay-amount form-control" placeholder="Monto" min="0" step="100"
-             value="${existing?.amount ?? ''}">
-      <input type="date" class="pay-date form-control" value="${existing?.payment_date ?? today}">
-      <button class="btn btn-icon btn-danger-icon pay-remove" title="Eliminar">×</button>
-      <div class="credit-surcharge-info" style="display:none;grid-column:1/-1;font-size:.75rem;color:var(--color-warning)">
-        +10% recargo tarjeta: <span id="${rowId}-cc-surcharge">$0</span>
+      <div class="pay-grid">
+        <select class="pay-method form-control">
+          ${PAYMENT_METHODS.map(m =>
+            `<option value="${m.value}" ${existing?.method === m.value ? 'selected' : ''}>${m.label}</option>`
+          ).join('')}
+        </select>
+        <div class="pay-currency-toggle" title="Cambiar moneda">
+          <button type="button" class="pay-cur-btn ${!isFx ? 'active' : ''}" data-cur="ARS">$ARS</button>
+          <button type="button" class="pay-cur-btn ${isFx ? 'active' : ''}"  data-cur="USD">USD</button>
+        </div>
+        <input type="number" class="pay-amount form-control" placeholder="Monto" min="0" step="100"
+               value="${existing?.amount ?? ''}">
+        <div class="pay-usd-rate ${!isFx ? 'hidden' : ''}">
+          <span style="font-size:.7rem;color:var(--color-text-3)">Cotiz.</span>
+          <input type="number" class="pay-rate form-control" placeholder="1480" min="0" step="1"
+                 value="${rate}" style="width:80px">
+          <span class="pay-ars-equiv" style="font-size:.72rem;color:var(--color-text-2)"></span>
+        </div>
+        <input type="date" class="pay-date form-control" value="${existing?.payment_date ?? today}">
+        <button class="btn btn-icon btn-danger-icon pay-remove" title="Eliminar">×</button>
       </div>
-    `;
+      <div class="credit-surcharge-info" style="display:none;font-size:.75rem;color:var(--color-warning);margin-top:4px">
+        +10% recargo tarjeta: <span id="${rowId}-cc-surcharge">$0</span>
+      </div>`;
+
+    // Currency toggle
+    row.querySelectorAll('.pay-cur-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const cur = btn.dataset.cur;
+        row.querySelectorAll('.pay-cur-btn').forEach(b => b.classList.toggle('active', b.dataset.cur === cur));
+        row.querySelector('.pay-usd-rate').classList.toggle('hidden', cur !== 'USD');
+        row.dataset.currency = cur;
+        this._updateUsdEquiv(row);
+        this._updatePaymentSummary();
+      });
+    });
+    row.dataset.currency = isFx ? 'USD' : 'ARS';
+
+    // Rate input → recalculate equiv
+    row.querySelector('.pay-rate').addEventListener('input', () => this._updateUsdEquiv(row));
 
     row.querySelector('.pay-remove').addEventListener('click', () => {
       row.remove(); this._updatePaymentSummary();
@@ -797,11 +826,24 @@ export class BookingForm {
       this._updateCreditSurcharge(row); this._updatePaymentSummary();
     });
     row.querySelector('.pay-amount').addEventListener('input', () => {
-      this._updateCreditSurcharge(row); this._updatePaymentSummary();
+      this._updateCreditSurcharge(row); this._updateUsdEquiv(row); this._updatePaymentSummary();
     });
 
     document.getElementById('payments-container').appendChild(row);
-    if (existing) this._updateCreditSurcharge(row);
+    if (existing) { this._updateCreditSurcharge(row); this._updateUsdEquiv(row); }
+  }
+
+  _updateUsdEquiv(row) {
+    const cur    = row.dataset.currency;
+    const equiv  = row.querySelector('.pay-ars-equiv');
+    if (!equiv || cur !== 'USD') return;
+    const usd    = parseFloat(row.querySelector('.pay-amount')?.value) || 0;
+    const rate   = parseFloat(row.querySelector('.pay-rate')?.value)   || 0;
+    if (usd && rate) {
+      equiv.textContent = `= ${formatARS(usd * rate)}`;
+    } else {
+      equiv.textContent = rate ? `× ${formatARS(rate)}` : '';
+    }
   }
 
   _updateCreditSurcharge(row) {
@@ -817,10 +859,12 @@ export class BookingForm {
   _getTotalPaid() {
     let total = 0;
     document.querySelectorAll('.payment-row').forEach(row => {
-      const amt  = parseFloat(row.querySelector('.pay-amount')?.value) || 0;
-      const meth = row.querySelector('.pay-method')?.value;
-      // Nota de crédito puede ser negativa (descuento) o positiva (abono)
-      total += meth === 'credit_card' ? amt * 1.10 : amt;
+      const rawAmt = parseFloat(row.querySelector('.pay-amount')?.value) || 0;
+      const cur    = row.dataset?.currency ?? 'ARS';
+      const rate   = parseFloat(row.querySelector('.pay-rate')?.value) || 1;
+      const amt    = cur === 'USD' ? rawAmt * rate : rawAmt;
+      const isCc   = row.querySelector('.pay-method')?.value === 'credit_card';
+      total += isCc ? amt * 1.10 : amt;
     });
     return total;
   }

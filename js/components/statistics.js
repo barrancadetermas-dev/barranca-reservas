@@ -56,7 +56,7 @@ export class Statistics {
     if (!monthSel || !yearSel) return;
     MONTH_NAMES.forEach((m, i) => { monthSel.innerHTML += `<option value="${i}">${m}</option>`; });
     const now = new Date(), curYear = now.getFullYear();
-    for (let y = curYear - 2; y <= curYear + 1; y++) {
+    for (let y = 2026; y <= curYear + 1; y++) {
       yearSel.innerHTML += `<option value="${y}" ${y === curYear ? 'selected' : ''}>${y}</option>`;
     }
     // Persistir selección al cambiar
@@ -68,8 +68,17 @@ export class Statistics {
         }));
       } catch {}
     };
-    monthSel.addEventListener('change', savePeriod);
-    yearSel.addEventListener('change', savePeriod);
+    const reloadActive = () => {
+      savePeriod();
+      // Auto-reload the active tab when period changes
+      if (this._tab === 'units')    this.loadUnits();
+      else if (this._tab === 'expenses') this.loadExpenses();
+      else if (this._tab === 'charts')   this.loadCharts?.();
+      else if (this._tab === 'pl')       this.loadPL?.();
+      else if (this._tab === 'revenue')  this._revenuePanel?.load?.();
+    };
+    monthSel.addEventListener('change', reloadActive);
+    yearSel.addEventListener('change',  reloadActive);
     monthSel.value = now.getMonth();
   }
 

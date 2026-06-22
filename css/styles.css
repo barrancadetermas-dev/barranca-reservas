@@ -4752,3 +4752,48 @@ select.field-error {
 .reminder-check input { display: none; }
 
 .reminder-check-icon { font-size: 1rem; }
+
+/* ── Payment row — currency toggle + USD ──────── */
+.pay-grid {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.pay-currency-toggle {
+  display: flex;
+  border: 1px solid var(--color-border);
+  border-radius: var(--r-sm);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.pay-cur-btn {
+  padding: 5px 8px;
+  font-size: .7rem;
+  font-weight: 600;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: var(--color-text-3);
+  transition: all var(--t-fast);
+}
+.pay-cur-btn.active {
+  background: var(--color-primary);
+  color: white;
+}
+
+.pay-usd-rate {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.pay-usd-rate.hidden { display: none; }
+
+.pay-ars-equiv {
+  white-space: nowrap;
+  min-width: 80px;
+}

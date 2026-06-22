@@ -1302,61 +1302,63 @@ async function loadRemindersSection() {
       </div>`;
   }).join('');
 
-  // Event delegation for edit/delete
-  container.addEventListener('click', async (e) => {
-    const editBtn = e.target.closest('.reminder-edit-btn');
-    const delBtn  = e.target.closest('.reminder-del-btn');
+  // ── Event delegation — data-bound para no duplicar listener ──
+  if (!container.dataset.reminderBound) {
+    container.dataset.reminderBound = '1';
+    container.addEventListener('click', async (e) => {
+      const editBtn = e.target.closest('.reminder-edit-btn');
+      const delBtn  = e.target.closest('.reminder-del-btn');
+      const checkLbl = e.target.closest('.reminder-check');
 
-    if (editBtn) {
-      const { id } = editBtn.dataset;
-      // Open the reminder modal in EDIT mode
-      const titleEl = document.getElementById('r-title');
-      const dateEl  = document.getElementById('r-date');
-      const descEl  = document.getElementById('r-desc');
-      const unitEl  = document.getElementById('r-unit');
-      if (titleEl) titleEl.value = editBtn.dataset.title;
-      if (dateEl)  dateEl.value  = editBtn.dataset.date;
-      if (descEl)  descEl.value  = editBtn.dataset.desc;
-      populateReminderUnitSelect();
-      setTimeout(() => { if (unitEl) unitEl.value = editBtn.dataset.unit; }, 60);
+      if (editBtn) {
+        const { id } = editBtn.dataset;
+        const titleEl = document.getElementById('r-title');
+        const dateEl  = document.getElementById('r-date');
+        const descEl  = document.getElementById('r-desc');
+        const unitEl  = document.getElementById('r-unit');
+        if (titleEl) titleEl.value = editBtn.dataset.title;
+        if (dateEl)  dateEl.value  = editBtn.dataset.date;
+        if (descEl)  descEl.value  = editBtn.dataset.desc;
+        populateReminderUnitSelect();
+        setTimeout(() => { if (unitEl) unitEl.value = editBtn.dataset.unit; }, 60);
 
-      // Switch modal to edit mode
-      const overlay = document.getElementById('overlay-reminder');
-      const saveBtn = document.getElementById('reminder-save');
-      const modalTitle = overlay?.querySelector('.modal-title');
-      if (modalTitle) modalTitle.textContent = 'Editar Recordatorio';
-      overlay?.classList.remove('hidden');
+        const overlay    = document.getElementById('overlay-reminder');
+        const saveBtn    = document.getElementById('reminder-save');
+        const modalTitle = overlay?.querySelector('.modal-title');
+        if (modalTitle) modalTitle.textContent = 'Editar Recordatorio';
+        overlay?.classList.remove('hidden');
 
-      // Override save to UPDATE instead of INSERT
-      const handleSave = async () => {
-        const title = titleEl?.value.trim();
-        const date  = dateEl?.value;
-        if (!title || !date) { showToast('Título y fecha obligatorios','warning'); return; }
-        const { error } = await supabase.from('reminders')
-          .update({ title, description: descEl?.value.trim() || null, scheduled_date: date, unit_id: unitEl?.value || null })
-          .eq('id', id);
-        if (error) { showToast('Error: ' + error.message, 'error'); return; }
-        showToast('Recordatorio actualizado ✓','success');
-        overlay?.classList.add('hidden');
-        if (modalTitle) modalTitle.textContent = 'Nuevo Recordatorio';
-        saveBtn?.removeEventListener('click', handleSave);
+        const handleSave = async () => {
+          const title = titleEl?.value.trim();
+          const date  = dateEl?.value;
+          if (!title || !date) { showToast('Título y fecha obligatorios', 'warning'); return; }
+          const { error } = await supabase.from('reminders')
+            .update({ title, description: descEl?.value.trim() || null, scheduled_date: date, unit_id: unitEl?.value || null })
+            .eq('id', id);
+          if (error) { showToast('Error: ' + error.message, 'error'); return; }
+          showToast('Recordatorio actualizado ✓', 'success');
+          overlay?.classList.add('hidden');
+          if (modalTitle) modalTitle.textContent = 'Nuevo Recordatorio';
+          saveBtn?.removeEventListener('click', handleSave);
+          container.dataset.reminderBound = ''; // reset so listener re-attaches
+          await loadRemindersSection();
+        };
+        saveBtn?.removeEventListener('click', window._reminderSaveHandler);
+        saveBtn?.addEventListener('click', handleSave);
+        window._reminderSaveHandler = handleSave;
+      }
+
+      if (delBtn && !delBtn.disabled) {
+        if (!confirm('¿Eliminar este recordatorio?')) return;
+        delBtn.disabled = true;
+        const { error } = await supabase.from('reminders').delete().eq('id', delBtn.dataset.id);
+        if (error) { showToast('Error: ' + error.message, 'error'); delBtn.disabled = false; return; }
+        showToast('Eliminado', 'success');
+        container.dataset.reminderBound = '';
         await loadRemindersSection();
-      };
-      saveBtn?.removeEventListener('click', window._reminderSaveHandler);
-      saveBtn?.addEventListener('click', handleSave);
-      window._reminderSaveHandler = handleSave;
-    }
-
-    if (delBtn) {
-      if (!confirm('¿Eliminar este recordatorio?')) return;
-      const { error } = await supabase.from('reminders').delete().eq('id', delBtn.dataset.id);
-      if (error) { showToast('Error: ' + error.message, 'error'); return; }
-      showToast('Eliminado','success');
-      delBtn.closest('.reminder-card')?.remove();
-      const remaining = container.querySelectorAll('.reminder-card').length;
-      updateReminderBadge(remaining);
-    }
-  }, { once: true });
+      }
+    });
+  }
 
   updateReminderBadge(reminders.filter(r => !r.completed && r.scheduled_date <= today).length);
 }
