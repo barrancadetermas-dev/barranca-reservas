@@ -1,15 +1,15 @@
-﻿import { generateVoucherText, openWhatsAppVoucher, openManagerTemplate } from './services/whatsapp-service.js';
+import { generateVoucherText, openWhatsAppVoucher, openManagerTemplate } from './services/whatsapp-service.js';
 import { Bus, EVENTS } from './services/event-bus.js';
 import { cache } from './services/supabase-cache.js';
 import { Sound } from './services/sound-service.js';
 import { NotificationService } from './services/notification-service.js';
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-// app.js v5.0 â€” MILA Sistema Inteligente para Alojamientos
+// ═══════════════════════════════════════════════════
+// app.js v5.0 — MILA Sistema Inteligente para Alojamientos
 // + Roles (admin/staff/demo) + Demo banner
 // + Audit log + Check-in/out + Cancel modal
-// + Error boundaries + PWA + MÃ³dulo Operaciones
-// + Panel de ConfiguraciÃ³n + Indicador de ConexiÃ³n
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// + Error boundaries + PWA + Módulo Operaciones
+// + Panel de Configuración + Indicador de Conexión
+// ═══════════════════════════════════════════════════
 
 import { supabase, loadHotelContext, AppContext, showToast, toISODate, formatARS } from './supabase-config.js';
 import { can, isDemo, getRoleLabel, ROLE_PERMISSIONS } from './auth/permissions.js';
@@ -36,16 +36,16 @@ let configPanel = null;
 let auditPanel  = null;
 let operations  = null;
 let currentSection = 'dashboard';
-let _initializedUserId = null; // evita que initApp() corra mÃ¡s de una vez para el mismo usuario
+let _initializedUserId = null; // evita que initApp() corra más de una vez para el mismo usuario
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ══════════════════════════════════════════════════
 // PWA
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ══════════════════════════════════════════════════
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('/sw.js')
     .then(reg => {
       console.log('[PWA] Service Worker registrado');
-      // Forzar activaciÃ³n inmediata del SW nuevo si hay uno esperando
+      // Forzar activación inmediata del SW nuevo si hay uno esperando
       if (reg.waiting) reg.waiting.postMessage({ type: 'SKIP_WAITING' });
       reg.addEventListener('updatefound', () => {
         const newSW = reg.installing;
@@ -67,9 +67,9 @@ if ('serviceWorker' in navigator) {
   });
 }
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ══════════════════════════════════════════════════
 // BOOT
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ══════════════════════════════════════════════════
 async function boot() {
   initDarkMode();
   const { data: { session } } = await supabase.auth.getSession();
@@ -82,7 +82,7 @@ async function boot() {
 
   supabase.auth.onAuthStateChange(async (event, session) => {
     if (event === 'SIGNED_IN' && session) {
-      if (_initializedUserId === session.user.id) return; // evento SIGNED_IN duplicado â€” ya inicializado
+      if (_initializedUserId === session.user.id) return; // evento SIGNED_IN duplicado — ya inicializado
       _initializedUserId = session.user.id;
       await initApp(session.user);
     }
@@ -94,9 +94,9 @@ async function boot() {
   });
 }
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ══════════════════════════════════════════════════
 // DARK MODE
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ══════════════════════════════════════════════════
 function initDarkMode() {
   const saved = localStorage.getItem('pms-theme') ??
     (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
@@ -109,9 +109,9 @@ function applyDarkMode(theme) {
   document.getElementById('dark-icon-moon')?.classList.toggle('hidden', theme !== 'dark');
 }
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ══════════════════════════════════════════════════
 // LOGIN / LOGOUT
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ══════════════════════════════════════════════════
 function showLogin() {
   document.getElementById('login-screen').classList.remove('hidden');
   document.getElementById('app-shell').classList.add('hidden');
@@ -131,7 +131,7 @@ document.getElementById('login-form').addEventListener('submit', async (e) => {
   const btn      = document.getElementById('login-btn');
 
   if (!email || !password) {
-    errEl.textContent = 'IngresÃ¡ tu email y contraseÃ±a.';
+    errEl.textContent = 'Ingresá tu email y contraseña.';
     errEl.classList.remove('hidden');
     return;
   }
@@ -146,18 +146,18 @@ document.getElementById('login-form').addEventListener('submit', async (e) => {
 
     if (error) {
       const msgs = {
-        'Invalid login credentials': 'Email o contraseÃ±a incorrectos.',
-        'Email not confirmed':       'ConfirmÃ¡ tu email antes de ingresar.',
-        'Too many requests':         'Demasiados intentos. EsperÃ¡ un momento.',
+        'Invalid login credentials': 'Email o contraseña incorrectos.',
+        'Email not confirmed':       'Confirmá tu email antes de ingresar.',
+        'Too many requests':         'Demasiados intentos. Esperá un momento.',
       };
       const msg = msgs[error.message] ?? `Error: ${error.message}`;
       errEl.textContent = msg;
       errEl.classList.remove('hidden');
       errEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }
-    // Si no hay error, onAuthStateChange dispara initApp automÃ¡ticamente
+    // Si no hay error, onAuthStateChange dispara initApp automáticamente
   } catch (ex) {
-    errEl.textContent = 'Error de conexiÃ³n. VerificÃ¡ tu internet.';
+    errEl.textContent = 'Error de conexión. Verificá tu internet.';
     errEl.classList.remove('hidden');
   } finally {
     btnText?.classList.remove('hidden');
@@ -173,7 +173,7 @@ document.getElementById('toggle-password')?.addEventListener('click', (e) => {
   const btn     = document.getElementById('toggle-password');
   const isShown = input.type === 'text';
   input.type    = isShown ? 'password' : 'text';
-  // Actualizar Ã­cono: ojo abierto / cerrado
+  // Actualizar ícono: ojo abierto / cerrado
   btn.innerHTML = isShown
     ? `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
         <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
@@ -190,15 +190,15 @@ document.getElementById('toggle-password')?.addEventListener('click', (e) => {
 
 document.getElementById('logout-btn').addEventListener('click', () => supabase.auth.signOut());
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ══════════════════════════════════════════════════
 // INIT APP
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ══════════════════════════════════════════════════
 async function initApp(user) {
   try {
     await loadHotelContext();
     AppContext.user = user;
 
-    // â”€â”€ Cargar rol del usuario â”€â”€
+    // ── Cargar rol del usuario ──
     const { data: hotelUser } = await supabase
       .from('hotel_users')
       .select('role')
@@ -212,7 +212,7 @@ async function initApp(user) {
     hideLogin();
     updateHeaderDate();
 
-    // â”€â”€ UI usuario â”€â”€
+    // ── UI usuario ──
     const initials = (user.email ?? 'A')[0].toUpperCase();
     document.getElementById('user-avatar').textContent  = initials;
     document.getElementById('user-name').textContent    =
@@ -220,15 +220,15 @@ async function initApp(user) {
     document.getElementById('user-role-badge').textContent = getRoleLabel(AppContext.role);
 
     // Cargar avatar guardado del perfil
-    // _loadAndApplyAvatar pendiente SQL
+    _loadAndApplyAvatar(supabase, user.id);
 
-    // Click en avatar â†’ abrir selector
+    // Click en avatar → abrir selector
     document.getElementById('user-avatar')?.addEventListener('click', () => _openAvatarModal(supabase, user.id));
 
-    // â”€â”€ Demo banner â”€â”€
+    // ── Demo banner ──
     if (AppContext.IS_DEMO) setupDemoBanner();
 
-    // â”€â”€ Componentes â€” cada uno en su propio try/catch para no bloquear los demÃ¡s â”€â”€
+    // ── Componentes — cada uno en su propio try/catch para no bloquear los demás ──
     const tryInit = (name, fn) => { try { return fn(); } catch(e) { console.error(`[MILA] Error init ${name}:`, e); return null; } };
 
     bookingForm = tryInit('BookingForm', () => new BookingForm(supabase, AppContext));
@@ -245,10 +245,10 @@ async function initApp(user) {
     window._statsInstance = statistics;
     window._operations   = operations;
 
-    // â”€â”€ Nav: mostrar/ocultar secciones por rol â”€â”€
+    // ── Nav: mostrar/ocultar secciones por rol ──
     setupNavByRole();
 
-    // Restaurar Ãºltima secciÃ³n visitada
+    // Restaurar última sección visitada
     let _startSection = 'dashboard';
     try {
       const _saved = localStorage.getItem('mila_last_section');
@@ -265,7 +265,7 @@ async function initApp(user) {
     setupGlobalShortcuts();
     setupCommandPalette();
     setupDarkModeToggle();
-    // â”€â”€ Bottom nav (mobile) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Bottom nav (mobile) ────────────────────────
     document.querySelectorAll('.bnav-item[data-section]').forEach(btn => {
       btn.addEventListener('click', () => navigateTo(btn.dataset.section));
     });
@@ -273,7 +273,7 @@ async function initApp(user) {
       document.getElementById('btn-new-booking')?.click();
     });
 
-    // â”€â”€ Setup modales â€” cada uno aislado â”€â”€
+    // ── Setup modales — cada uno aislado ──
     const trySetup = (name, fn) => { try { fn(); } catch(e) { console.error(`[MILA] Error setup ${name}:`, e); } };
     trySetup('connectivity',  setupConnectivityIndicator);
     trySetup('calculator',    setupCalculator);
@@ -289,13 +289,13 @@ async function initApp(user) {
     trySetup('theme',         setupThemeSystem);
     notifService = new NotificationService(supabase);
     trySetup('realNotif',     () => setupRealNotifications(notifService));
-    // Emitir sonido de login â€” defer until first user interaction (iOS Safari requires it)
+    // Emitir sonido de login — defer until first user interaction (iOS Safari requires it)
     const playLoginSound = () => {
       Sound?.login?.();
       document.removeEventListener('click',     playLoginSound);
       document.removeEventListener('touchstart', playLoginSound);
     };
-    // Si ya hubo interacciÃ³n (desktop), tocar inmediato; sino esperar el primer tap
+    // Si ya hubo interacción (desktop), tocar inmediato; sino esperar el primer tap
     if (document.hasFocus() && !navigator.userAgent.match(/iPhone|iPad|iPod/i)) {
       setTimeout(() => Sound?.login?.(), 400);
     } else {
@@ -307,19 +307,19 @@ async function initApp(user) {
     document.addEventListener('booking:fullypaid', () => { launchConfetti(); Sound?.newBooking(); });
     document.addEventListener('show:toast', (e) => showToast(e.detail.msg, e.detail.type));
 
-    // â”€â”€ Recargar la secciÃ³n activa cuando cambia una reserva (debounced) â”€â”€
+    // ── Recargar la sección activa cuando cambia una reserva (debounced) ──
     document.addEventListener('booking:changed', () => debouncedCalendarLoad(400));
 
-    // "Nueva Reserva" â†’ abre calculadora primero como paso 0
+    // "Nueva Reserva" → abre calculadora primero como paso 0
     document.getElementById('btn-new-booking').addEventListener('click', () => {
       if (isDemo()) return showDemoAction(() => bookingForm.open());
       const overlay = document.getElementById('overlay-calculator');
       if (overlay) {
-        // Cambiar tÃ­tulo a "Paso 1 â€” CalculÃ¡ el precio"
+        // Cambiar título a "Paso 1 — Calculá el precio"
         const title = overlay.querySelector('.calc-title');
-        if (title) title.innerHTML = 'ðŸ“Š Paso 1 â€” CalculÃ¡ el precio';
+        if (title) title.innerHTML = '📊 Paso 1 — Calculá el precio';
         const createBtn = document.getElementById('calc-create-booking');
-        if (createBtn) createBtn.textContent = 'Continuar con la reserva â†’';
+        if (createBtn) createBtn.textContent = 'Continuar con la reserva →';
         overlay.classList.remove('hidden');
         document.getElementById('calc-price')?.focus();
       } else {
@@ -327,12 +327,12 @@ async function initApp(user) {
       }
     });
 
-    // Restaurar tÃ­tulo original cuando el botÃ³n de calculadora del header lo abre
+    // Restaurar título original cuando el botón de calculadora del header lo abre
     document.getElementById('btn-calculator')?.addEventListener('mousedown', () => {
       const title = document.querySelector('.calc-title');
-      if (title) title.innerHTML = 'ðŸ§® Calculadora de estadÃ­a';
+      if (title) title.innerHTML = '🧮 Calculadora de estadía';
       const createBtn = document.getElementById('calc-create-booking');
-      if (createBtn) createBtn.textContent = 'Crear reserva con estos datos â†’';
+      if (createBtn) createBtn.textContent = 'Crear reserva con estos datos →';
     });
     document.getElementById('sidebar-toggle').addEventListener('click', () => {
       document.getElementById('sidebar').classList.toggle('open');
@@ -356,9 +356,9 @@ function destroyApp() {
   configPanel = auditPanel = operations = null;
 }
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ══════════════════════════════════════════════════
 // DEMO BANNER
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ══════════════════════════════════════════════════
 function setupDemoBanner() {
   const banner = document.getElementById('demo-banner');
   if (!banner) return;
@@ -371,14 +371,14 @@ function setupDemoBanner() {
 
 export function showDemoAction(simulateFn) {
   simulateFn?.(); // ejecutar igual visualmente
-  showToast('ðŸŽ­ Modo Demo Â· Simulado â€” en modo real esto se guardarÃ­a', 'warning');
+  showToast('🎭 Modo Demo · Simulado — en modo real esto se guardaría', 'warning');
 }
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ══════════════════════════════════════════════════
 // NAV POR ROL
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ══════════════════════════════════════════════════
 function setupNavByRole() {
-  // Admin-only: AuditorÃ­a, Config
+  // Admin-only: Auditoría, Config
   const auditNav    = document.querySelector('.nav-item[data-section="audit"]');
   const configNav   = document.querySelector('.nav-item[data-section="config"]');
   const statsNav    = document.querySelector('.nav-item[data-section="statistics"]');
@@ -389,19 +389,19 @@ function setupNavByRole() {
   if (statsNav && !can('viewStats') && !isDemo()) statsNav.style.opacity = '.5';
 }
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-// NAVEGACIÃ“N
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ══════════════════════════════════════════════════
+// NAVEGACIÓN
+// ══════════════════════════════════════════════════
 const SECTION_META = {
-  dashboard:  { title: 'Panel de Hoy',            icon: 'ðŸ ', sub: 'Resumen operativo diario' },
-  calendar:   { title: 'Calendario de OcupaciÃ³n', icon: 'ðŸ“…', sub: 'Vista mensual Â· Drag & Drop Â· SHIFT+arrastre para bloquear' },
-  bookings:   { title: 'Reservas',                icon: 'ðŸ“‹', sub: 'GestiÃ³n completa de reservas' },
-  statistics: { title: 'EstadÃ­sticas',            icon: 'ðŸ“Š', sub: 'Ingresos Â· OcupaciÃ³n Â· ADR Â· RevPAR' },
-  reminders:  { title: 'Recordatorios',           icon: 'ðŸ””', sub: 'Recordatorios y mantenimiento programado' },
-  guests:     { title: 'HuÃ©spedes / CRM',         icon: 'ðŸ‘¥', sub: 'Historial Â· Notas Â· Antecedentes' },
-  operations: { title: 'Operaciones',             icon: 'ðŸ”§', sub: 'Limpieza Â· Mantenimiento' },
-  audit:      { title: 'AuditorÃ­a',               icon: 'ðŸ“œ', sub: 'Registro de acciones del sistema' },
-  config:     { title: 'ConfiguraciÃ³n',           icon: 'âš™ï¸', sub: 'Comisiones Â· Tarifas Â· Departamentos' },
+  dashboard:  { title: 'Panel de Hoy',            icon: '🏠', sub: 'Resumen operativo diario' },
+  calendar:   { title: 'Calendario de Ocupación', icon: '📅', sub: 'Vista mensual · Drag & Drop · SHIFT+arrastre para bloquear' },
+  bookings:   { title: 'Reservas',                icon: '📋', sub: 'Gestión completa de reservas' },
+  statistics: { title: 'Estadísticas',            icon: '📊', sub: 'Ingresos · Ocupación · ADR · RevPAR' },
+  reminders:  { title: 'Recordatorios',           icon: '🔔', sub: 'Recordatorios y mantenimiento programado' },
+  guests:     { title: 'Huéspedes / CRM',         icon: '👥', sub: 'Historial · Notas · Antecedentes' },
+  operations: { title: 'Operaciones',             icon: '🔧', sub: 'Limpieza · Mantenimiento' },
+  audit:      { title: 'Auditoría',               icon: '📜', sub: 'Registro de acciones del sistema' },
+  config:     { title: 'Configuración',           icon: '⚙️', sub: 'Comisiones · Tarifas · Departamentos' },
 };
 const SECTION_TITLES = Object.fromEntries(Object.entries(SECTION_META).map(([k,v]) => [k, v.title]));
 
@@ -418,11 +418,11 @@ function setupNavigation() {
 export async function navigateTo(section) {
   // Gate por rol
   if (section === 'statistics' && !can('viewStats') && !isDemo()) {
-    showToast('ðŸ”’ Sin acceso a estadÃ­sticas', 'warning');
+    showToast('🔒 Sin acceso a estadísticas', 'warning');
     return;
   }
   if (section === 'audit' && !can('viewAuditLog')) {
-    showToast('ðŸ”’ Solo administradores', 'warning');
+    showToast('🔒 Solo administradores', 'warning');
     return;
   }
 
@@ -459,31 +459,31 @@ function updateHeaderDate() {
     new Date().toLocaleDateString('es-AR', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
 }
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ══════════════════════════════════════════════════
 // ERROR BOUNDARY
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ══════════════════════════════════════════════════
 function showErrorBoundary(containerId, message, retryFn) {
   const el = document.getElementById(containerId);
   if (!el) return;
   el.innerHTML = `
     <div class="error-state">
-      <span class="error-icon">âš ï¸</span>
+      <span class="error-icon">⚠️</span>
       <p class="error-msg">${message ?? 'Error inesperado'}</p>
-      <button class="btn btn-outline btn-sm" id="retry-${containerId}">ðŸ”„ Reintentar</button>
+      <button class="btn btn-outline btn-sm" id="retry-${containerId}">🔄 Reintentar</button>
     </div>`;
   document.getElementById(`retry-${containerId}`)?.addEventListener('click', () => retryFn?.());
 }
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-// AUDIT LOG â€” implementado en js/services/audit-service.js
-// Exportado aquÃ­ para que otros mÃ³dulos que hacen import('../app.js') lo encuentren
+// ══════════════════════════════════════════════════
+// AUDIT LOG — implementado en js/services/audit-service.js
+// Exportado aquí para que otros módulos que hacen import('../app.js') lo encuentren
 export { logAction } from './services/audit-service.js';
 
 // audit delegado a AuditPanel en audit-panel.js
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-// SEASON PRICING (ConfiguraciÃ³n)
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ══════════════════════════════════════════════════
+// SEASON PRICING (Configuración)
+// ══════════════════════════════════════════════════
 async function loadSeasonPricing() {
   const container = document.getElementById('section-config');
   if (!container) return;
@@ -499,7 +499,7 @@ async function loadSeasonPricing() {
     .select('*')
     .eq('hotel_id', AppContext.hotelId);
 
-  const fmtDate = (d) => d ? new Date(d+'T12:00:00').toLocaleDateString('es-AR', {day:'2-digit',month:'short',year:'numeric'}) : 'â€”';
+  const fmtDate = (d) => d ? new Date(d+'T12:00:00').toLocaleDateString('es-AR', {day:'2-digit',month:'short',year:'numeric'}) : '—';
 
   container.innerHTML = `
     <div style="display:grid;gap:24px">
@@ -514,8 +514,8 @@ async function loadSeasonPricing() {
             <div style="display:flex;align-items:center;justify-content:space-between;
               padding:12px 16px;border:1px solid var(--color-border);border-radius:var(--r-lg)">
               <div>
-                <div style="font-weight:700;font-size:.9rem">${c.channel === 'booking' ? 'ðŸŸ¦ Booking.com' : 'ðŸŸ§ Airbnb'}</div>
-                <div style="font-size:.75rem;color:var(--color-text-3)">ComisiÃ³n sobre ingreso bruto</div>
+                <div style="font-weight:700;font-size:.9rem">${c.channel === 'booking' ? '🟦 Booking.com' : '🟧 Airbnb'}</div>
+                <div style="font-size:.75rem;color:var(--color-text-3)">Comisión sobre ingreso bruto</div>
               </div>
               <div style="display:flex;align-items:center;gap:8px">
                 <input type="number" value="${c.commission_pct}" min="0" max="50" step="0.5"
@@ -541,7 +541,7 @@ async function loadSeasonPricing() {
               <div style="flex:1">
                 <div style="font-weight:700;font-size:.9rem">${s.name}</div>
                 <div style="font-size:.75rem;color:var(--color-text-3);margin-top:2px">
-                  ${fmtDate(s.start_date)} â†’ ${fmtDate(s.end_date)} Â·
+                  ${fmtDate(s.start_date)} → ${fmtDate(s.end_date)} ·
                   ${s.units ? `#${s.units.sort_order} ${s.units.name}` : 'Todas las unidades'}
                 </div>
               </div>
@@ -549,19 +549,19 @@ async function loadSeasonPricing() {
                 $${s.price_per_night.toLocaleString('es-AR')}<span style="font-size:.72rem;font-weight:400;color:var(--color-text-3)">/noche</span>
               </div>
               ${can('manageSeasonPricing') ? `
-                <button class="btn btn-ghost btn-xs" onclick="window.deleteSeasonPricing('${s.id}')">ðŸ—‘ï¸</button>` : ''}
+                <button class="btn btn-ghost btn-xs" onclick="window.deleteSeasonPricing('${s.id}')">🗑️</button>` : ''}
             </div>`).join('')}
       </div>
     </div>`;
 
   window.updateCommission = async (id, pct) => {
-    if (!can('manageSeasonPricing')) { showToast('ðŸ”’ Sin permiso', 'warning'); return; }
+    if (!can('manageSeasonPricing')) { showToast('🔒 Sin permiso', 'warning'); return; }
     const { error } = await supabase.from('channel_commissions').update({ commission_pct: parseFloat(pct) }).eq('id', id);
     if (error) showToast('Error al actualizar', 'error');
-    else showToast('ComisiÃ³n actualizada âœ“', 'success');
+    else showToast('Comisión actualizada ✓', 'success');
   };
   window.deleteSeasonPricing = async (id) => {
-    if (!confirm('Â¿Eliminar esta tarifa de temporada?')) return;
+    if (!confirm('¿Eliminar esta tarifa de temporada?')) return;
     await supabase.from('season_pricing').delete().eq('id', id);
     showToast('Tarifa eliminada', 'success');
     loadSeasonPricing();
@@ -570,13 +570,13 @@ async function loadSeasonPricing() {
     document.getElementById('overlay-season')?.classList.remove('hidden');
     document.getElementById('season-unit').innerHTML =
       '<option value="">Todas las unidades</option>' +
-      AppContext.units.map(u => `<option value="${u.id}">#${u.sort_order} Â· ${u.name}</option>`).join('');
+      AppContext.units.map(u => `<option value="${u.id}">#${u.sort_order} · ${u.name}</option>`).join('');
   };
 }
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ══════════════════════════════════════════════════
 // CANCEL BOOKING MODAL
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ══════════════════════════════════════════════════
 function setupCancelBookingModal() {
   document.getElementById('cancel-modal-close')?.addEventListener('click', closeCancelModal);
   document.getElementById('overlay-cancel-booking')?.addEventListener('click', (e) => {
@@ -589,7 +589,7 @@ function setupCancelBookingModal() {
 }
 
 export function openCancelModal(bookingId, totalPaid) {
-  if (!can('cancelBooking')) { showToast('ðŸ”’ Sin permiso para cancelar', 'warning'); return; }
+  if (!can('cancelBooking')) { showToast('🔒 Sin permiso para cancelar', 'warning'); return; }
   if (isDemo()) { showDemoAction(() => showToast('Reserva cancelada (simulado)', 'success')); return; }
   const overlay = document.getElementById('overlay-cancel-booking');
   if (!overlay) return;
@@ -627,7 +627,7 @@ async function confirmCancelBooking() {
 
   if (error) { showToast('Error al cancelar', 'error'); return; }
 
-  // Registrar devoluciÃ³n como pago negativo
+  // Registrar devolución como pago negativo
   if (refundAmt > 0) {
     await supabase.from('payments').insert({
       booking_id: bookingId,
@@ -636,25 +636,25 @@ async function confirmCancelBooking() {
       amount_ars: -refundAmt,
       currency:   'ARS',
       method:     'transfer',
-      notes:      `DevoluciÃ³n por cancelaciÃ³n${note ? ': ' + note : ''}`,
+      notes:      `Devolución por cancelación${note ? ': ' + note : ''}`,
     });
   }
 
   await logAction('CANCEL', 'booking', bookingId,
-    `Reserva cancelada. DevoluciÃ³n: ${formatARS(refundAmt)}. Motivo: ${note || 'Sin motivo indicado'}`);
+    `Reserva cancelada. Devolución: ${formatARS(refundAmt)}. Motivo: ${note || 'Sin motivo indicado'}`);
 
-  showToast('Reserva cancelada' + (refundAmt > 0 ? ` Â· DevoluciÃ³n: ${formatARS(refundAmt)}` : ''), 'success');
+  showToast('Reserva cancelada' + (refundAmt > 0 ? ` · Devolución: ${formatARS(refundAmt)}` : ''), 'success');
   closeCancelModal();
   document.getElementById('overlay-detail')?.classList.add('hidden');
   document.dispatchEvent(new CustomEvent('booking:changed'));
 }
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ══════════════════════════════════════════════════
 // CHECK-IN / CHECK-OUT
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ══════════════════════════════════════════════════
 function setupCheckInOutModal() {} // mantenido por compatibilidad
 
-// â”€â”€ Wiring completo del modal de detalle de reserva â”€â”€
+// ── Wiring completo del modal de detalle de reserva ──
 function setupDetailModal() {
   const closeDetail = () => {
     document.getElementById('overlay-detail')?.classList.add('hidden');
@@ -694,7 +694,7 @@ function setupDetailModal() {
     const id = bookingForm?._currentDetailBookingId;
     if (!id) return;
     const url = `${location.origin}${location.pathname}?booking=${id}`;
-    navigator.clipboard?.writeText(url).then(() => showToast('Link copiado âœ“', 'success'))
+    navigator.clipboard?.writeText(url).then(() => showToast('Link copiado ✓', 'success'))
       .catch(() => showToast('No se pudo copiar', 'error'));
   });
 
@@ -730,11 +730,11 @@ function setupDetailModal() {
 
   // Eliminar
   document.getElementById('detail-btn-delete')?.addEventListener('click', async () => {
-    if (!can('deleteBooking')) { showToast('ðŸ”’ Sin permiso para eliminar', 'warning'); return; }
+    if (!can('deleteBooking')) { showToast('🔒 Sin permiso para eliminar', 'warning'); return; }
     if (isDemo()) { showDemoAction(null); return; }
     const id = bookingForm?._currentDetailBookingId;
     if (!id) { showToast('No se pudo identificar la reserva', 'error'); return; }
-    if (!confirm('Â¿Eliminar esta reserva?\nEsta acciÃ³n no se puede deshacer.')) return;
+    if (!confirm('¿Eliminar esta reserva?\nEsta acción no se puede deshacer.')) return;
 
     const btn = document.getElementById('detail-btn-delete');
     if (btn) { btn.disabled = true; btn.textContent = 'Eliminando...'; }
@@ -742,7 +742,7 @@ function setupDetailModal() {
       const { error } = await supabase.from('bookings').delete().eq('id', id);
       if (error) throw error;
       closeDetail();
-      showToast('Reserva eliminada âœ“', 'success');
+      showToast('Reserva eliminada ✓', 'success');
       await logAction('DELETE', 'booking', id, 'Eliminada desde detalle');
       document.dispatchEvent(new CustomEvent('booking:changed'));
     } catch (err) {
@@ -766,17 +766,17 @@ function setupDetailModal() {
 }
 
 export async function markCheckIn(bookingId) {
-  if (!can('checkInOut')) { showToast('ðŸ”’ Sin permiso', 'warning'); return; }
+  if (!can('checkInOut')) { showToast('🔒 Sin permiso', 'warning'); return; }
   if (isDemo()) { showDemoAction(null); return; }
   const { error } = await supabase.from('bookings')
     .update({ checked_in_at: new Date().toISOString() }).eq('id', bookingId);
   if (error) { showToast('Error al registrar check-in', 'error'); Sound?.error(); return; }
   await logAction('CHECKIN', 'booking', bookingId, 'Check-in registrado');
-  showToast('âœ… Check-in registrado', 'success');
+  showToast('✅ Check-in registrado', 'success');
   Sound?.checkIn();
   document.dispatchEvent(new CustomEvent('booking:changed'));
 
-  // â”€â”€ Ofrecer WhatsApp de bienvenida â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Ofrecer WhatsApp de bienvenida ──────────────────
   try {
     const { data: booking } = await supabase
       .from('bookings')
@@ -788,35 +788,35 @@ export async function markCheckIn(bookingId) {
       const guestName = `${booking.guests.first_name} ${booking.guests.last_name}`.trim();
       const unitName  = (booking.booking_units ?? [])[0]?.units?.name ?? 'su departamento';
       const config    = AppContext.config ?? {};
-      const wifi      = config.wifi_name     ? `ðŸ“¶ WiFi: *${config.wifi_name}* Â· Clave: *${config.wifi_pass ?? 'â€”'}*` : '';
+      const wifi      = config.wifi_name     ? `📶 WiFi: *${config.wifi_name}* · Clave: *${config.wifi_pass ?? '—'}*` : '';
       const checkIn   = config.checkin_hour  ?? '14:00';
       const checkOut  = config.checkout_hour ?? '10:00';
 
       const welcomeMsg = [
-        `Â¡Hola *${guestName}*! ðŸ‘‹`,
-        `Bienvenido/a a *Barranca de Termas*. Tu *${unitName}* ya estÃ¡ listo.`,
+        `¡Hola *${guestName}*! 👋`,
+        `Bienvenido/a a *Barranca de Termas*. Tu *${unitName}* ya está listo.`,
         wifi,
-        `ðŸ“‹ Check-out: *${checkOut} hs*`,
-        `Cualquier consulta, estamos a tu disposiciÃ³n. Â¡Que disfrutes la estadÃ­a! ðŸŒ¿`,
+        `📋 Check-out: *${checkOut} hs*`,
+        `Cualquier consulta, estamos a tu disposición. ¡Que disfrutes la estadía! 🌿`,
       ].filter(Boolean).join('\n\n');
 
-      // Mostrar toast con acciÃ³n WhatsApp
+      // Mostrar toast con acción WhatsApp
       const toastCont = document.getElementById('toast-container');
       if (toastCont) {
         const waTip = document.createElement('div');
         waTip.className = 'toast toast-show';
         waTip.style.cssText = 'background:#f0fdf4;border-left:3px solid #22c55e;display:flex;align-items:center;gap:10px;max-width:360px';
         waTip.innerHTML = `
-          <span style="font-size:1.2rem">ðŸ’¬</span>
-          <span style="flex:1;font-size:.82rem;color:#14532d">Â¿Enviar bienvenida por WhatsApp a ${guestName.split(' ')[0]}?</span>
+          <span style="font-size:1.2rem">💬</span>
+          <span style="flex:1;font-size:.82rem;color:#14532d">¿Enviar bienvenida por WhatsApp a ${guestName.split(' ')[0]}?</span>
           <a href="https://wa.me/${phone}?text=${encodeURIComponent(welcomeMsg)}" target="_blank" rel="noopener"
              style="background:#22c55e;color:white;border:none;border-radius:6px;padding:5px 12px;
                     font-size:.78rem;font-weight:700;cursor:pointer;text-decoration:none;white-space:nowrap"
              onclick="this.closest('.toast')?.remove()">
-            Enviar â†—
+            Enviar ↗
           </a>
           <button style="background:none;border:none;color:#94a3b8;cursor:pointer;font-size:1rem;padding:0 2px"
-                  onclick="this.closest('.toast')?.remove()">âœ•</button>`;
+                  onclick="this.closest('.toast')?.remove()">✕</button>`;
         toastCont.appendChild(waTip);
         setTimeout(() => waTip.classList.remove('toast-show'), 12000);
         setTimeout(() => waTip.remove(), 12500);
@@ -826,13 +826,13 @@ export async function markCheckIn(bookingId) {
 }
 
 export async function markCheckOut(bookingId) {
-  if (!can('checkInOut')) { showToast('ðŸ”’ Sin permiso', 'warning'); return; }
+  if (!can('checkInOut')) { showToast('🔒 Sin permiso', 'warning'); return; }
   if (isDemo()) { showDemoAction(null); return; }
   const { error } = await supabase.from('bookings')
     .update({ checked_out_at: new Date().toISOString() }).eq('id', bookingId);
   if (error) { showToast('Error al registrar check-out', 'error'); Sound?.error(); return; }
   await logAction('CHECKOUT', 'booking', bookingId, 'Check-out registrado');
-  showToast('ðŸ‘‹ Check-out registrado', 'success');
+  showToast('👋 Check-out registrado', 'success');
   Sound?.checkOut();
   try {
     const { data: booking } = await supabase
@@ -853,9 +853,9 @@ window.openManagerTemplate = (booking) => openManagerTemplate(booking, AppContex
 window.markCheckOut = markCheckOut;
 window.openCancelModal = openCancelModal;
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ══════════════════════════════════════════════════
 // DOLLAR BADGE
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ══════════════════════════════════════════════════
 function _updateDollarUI(rates) {
   if (!rates) return;
 
@@ -868,9 +868,9 @@ function _updateDollarUI(rates) {
   // El widget del dashboard se actualiza via dashboard._renderDollar()
   // Solo actualizar campos legacy si existen
   const setEl = (id, val) => { const el = document.getElementById(id); if (el && val) el.textContent = val; };
-  const fmt   = v => v ? `$${Math.round(v).toLocaleString('es-AR')}` : 'â€”';
+  const fmt   = v => v ? `$${Math.round(v).toLocaleString('es-AR')}` : '—';
 
-  // Campos individuales por fuente (oficial venta Ãºnicamente)
+  // Campos individuales por fuente (oficial venta únicamente)
   const sources = rates.sourceData ?? [];
   const bna     = sources.find(s => s.source === 'BNA');
   const ambito  = sources.find(s => s.source === 'ambito');
@@ -885,14 +885,14 @@ function _updateDollarUI(rates) {
   // Timestamp
   const updEl = document.getElementById('dollar-updated-at');
   if (updEl) {
-    const t = rates.updatedAt ? new Date(rates.updatedAt).toLocaleTimeString('es-AR', { hour:'2-digit', minute:'2-digit', second:'2-digit' }) : 'â€”';
-    updEl.textContent = `${rates.sources?.length ?? 0} fuentes Â· ${t}`;
+    const t = rates.updatedAt ? new Date(rates.updatedAt).toLocaleTimeString('es-AR', { hour:'2-digit', minute:'2-digit', second:'2-digit' }) : '—';
+    updEl.textContent = `${rates.sources?.length ?? 0} fuentes · ${t}`;
   }
 
   // Estado
   const statusEl = document.getElementById('dollar-status-badge');
   if (statusEl) {
-    statusEl.textContent = rates.stale ? 'âš  CachÃ©' : 'âœ“ Actualizado';
+    statusEl.textContent = rates.stale ? '⚠ Caché' : '✓ Actualizado';
   }
 }
 
@@ -905,11 +905,11 @@ async function loadDollarBadge() {
   } catch { /* silencioso */ }
 }
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ══════════════════════════════════════════════════
 // REALTIME + PULSE
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ══════════════════════════════════════════════════
 let _realtimeChannel = null;
-// Debounced reload â€” evita mÃºltiples recargas simultÃ¡neas
+// Debounced reload — evita múltiples recargas simultáneas
 let _calLoadTimer = null;
 function debouncedCalendarLoad(delay = 400) {
   clearTimeout(_calLoadTimer);
@@ -941,19 +941,19 @@ function setupRealtime() {
 function handleBookingChange(payload) {
   const { eventType, new: newRecord, old: oldRecord } = payload;
 
-  // Invalidar cache para que el prÃ³ximo load traiga datos frescos
+  // Invalidar cache para que el próximo load traiga datos frescos
   cache.invalidate('bookings', 'reminders');
 
-  // Emitir en el bus con informaciÃ³n granular
+  // Emitir en el bus con información granular
   Bus.emit(EVENTS.BOOKING_CHANGED, payload);
   document.dispatchEvent(new CustomEvent('booking:changed', { detail: payload }));
 
-  // ActualizaciÃ³n granular de la barra en el calendario
+  // Actualización granular de la barra en el calendario
   if (newRecord?.id) {
     const bar = document.querySelector(`.bar[data-booking-id="${newRecord.id}"]`);
 
     if (eventType === 'INSERT') {
-      // Nueva reserva â†’ pulsar al cargar
+      // Nueva reserva → pulsar al cargar
       Bus.emit(EVENTS.CAL_PULSE_BAR, { bookingId: newRecord.id });
     }
 
@@ -962,7 +962,7 @@ function handleBookingChange(payload) {
       bar.classList.add('bar-realtime-pulse');
       setTimeout(() => bar?.classList.remove('bar-realtime-pulse'), 1600);
 
-      // Si cambiÃ³ el estado, actualizar color sin reload
+      // Si cambió el estado, actualizar color sin reload
       if (oldRecord?.status !== newRecord.status) {
         debouncedCalendarLoad(300);
       }
@@ -999,7 +999,7 @@ function handleExpenseChange(payload) {
   document.dispatchEvent(new CustomEvent('expense:changed', { detail: payload }));
   if (currentSection === 'statistics') statistics?.loadExpenses?.();
   if (currentSection === 'operations') operations?.load?.();
-  // Actualizar P&L si estÃ¡ visible
+  // Actualizar P&L si está visible
   if (currentSection === 'statistics' && statistics?._tab === 'pl') statistics?.loadPL?.();
 }
 
@@ -1018,9 +1018,9 @@ function handleReminderChange(payload) {
   if (currentSection === 'dashboard') dashboard?.load?.();
 }
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ══════════════════════════════════════════════════
 // CONFETTI
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ══════════════════════════════════════════════════
 export function launchConfetti() {
   const canvas = document.getElementById('confetti-canvas');
   if (!canvas) return;
@@ -1057,23 +1057,23 @@ export function launchConfetti() {
   setTimeout(() => { cancelAnimationFrame(frame); canvas.style.display='none'; }, 4500);
 }
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ══════════════════════════════════════════════════
 // COMMAND PALETTE
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ══════════════════════════════════════════════════
 function setupGlobalShortcuts() {
   const noField = () => !['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName);
   document.addEventListener('keydown', (e) => {
     const mod = e.ctrlKey || e.metaKey;
     if (mod && e.key==='k') { e.preventDefault(); toggleCommandPalette(); return; }
-    // Ctrl+N â†’ Nueva Reserva (paso 0: calculadora)
+    // Ctrl+N → Nueva Reserva (paso 0: calculadora)
     if (mod && !e.shiftKey && e.key==='n' && noField()) {
       e.preventDefault(); document.getElementById('btn-new-booking')?.click(); return;
     }
-    // Ctrl+F â†’ Buscar huÃ©sped
+    // Ctrl+F → Buscar huésped
     if (mod && !e.shiftKey && e.key==='f' && noField()) {
       e.preventDefault();
       navigateTo('guests').then(() => {
-        // ID correcto: guests-search-input (en guests.js) o guest-search (en HTML estÃ¡tico)
+        // ID correcto: guests-search-input (en guests.js) o guest-search (en HTML estático)
         setTimeout(() => {
           const el = document.getElementById('guests-search-input')
                   ?? document.getElementById('guest-search');
@@ -1083,11 +1083,11 @@ function setupGlobalShortcuts() {
       });
       return;
     }
-    // Ctrl+D â†’ Panel de hoy
+    // Ctrl+D → Panel de hoy
     if (mod && !e.shiftKey && e.key==='d' && noField()) {
       e.preventDefault(); navigateTo('dashboard'); return;
     }
-    // Ctrl+Shift+C â†’ Calendario
+    // Ctrl+Shift+C → Calendario
     if (mod && e.shiftKey && (e.key==='C'||e.key==='c') && noField()) {
       e.preventDefault(); navigateTo('calendar'); return;
     }
@@ -1115,10 +1115,10 @@ function setupGlobalShortcuts() {
   });
 }
 
-// â”€â”€ GestiÃ³n centralizada de modales â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Gestión centralizada de modales ──────────────────
 // Asegura que siempre se pueda cerrar cualquier modal
 function _ensureModalCleanup() {
-  // Fix: si el overlay-booking quedÃ³ visible sin contexto, permitir cierre con X
+  // Fix: si el overlay-booking quedó visible sin contexto, permitir cierre con X
   document.getElementById('overlay-booking')?.addEventListener('click', (e) => {
     // Solo cerrar si clic directo en el backdrop (no en el modal interno)
     if (e.target === e.currentTarget) {
@@ -1153,16 +1153,16 @@ async function renderCommandResults(query) {
   if (!container) return;
   const q = query.toLowerCase();
   const NAV = [
-    {label:'Panel de Hoy',section:'dashboard',icon:'ðŸ '},
-    {label:'Calendario',section:'calendar',icon:'ðŸ“…'},
-    {label:'Reservas',section:'bookings',icon:'ðŸ“‹'},
-    ...(can('viewStats')||isDemo() ? [{label:'EstadÃ­sticas',section:'statistics',icon:'ðŸ“Š'}] : []),
-    {label:'HuÃ©spedes / CRM',section:'guests',icon:'ðŸ‘¤'},
-    {label:'Recordatorios',section:'reminders',icon:'ðŸ””'},
-    ...(can('viewAuditLog') ? [{label:'AuditorÃ­a',section:'audit',icon:'ðŸ”'}] : []),
-    ...(can('manageSeasonPricing') ? [{label:'ConfiguraciÃ³n',section:'config',icon:'âš™ï¸'}] : []),
+    {label:'Panel de Hoy',section:'dashboard',icon:'🏠'},
+    {label:'Calendario',section:'calendar',icon:'📅'},
+    {label:'Reservas',section:'bookings',icon:'📋'},
+    ...(can('viewStats')||isDemo() ? [{label:'Estadísticas',section:'statistics',icon:'📊'}] : []),
+    {label:'Huéspedes / CRM',section:'guests',icon:'👤'},
+    {label:'Recordatorios',section:'reminders',icon:'🔔'},
+    ...(can('viewAuditLog') ? [{label:'Auditoría',section:'audit',icon:'🔍'}] : []),
+    ...(can('manageSeasonPricing') ? [{label:'Configuración',section:'config',icon:'⚙️'}] : []),
   ];
-  const ACTIONS = [{label:'Nueva Reserva',action:'new-booking',icon:'âž•',hint:'âŒ˜N'}];
+  const ACTIONS = [{label:'Nueva Reserva',action:'new-booking',icon:'➕',hint:'⌘N'}];
   const filteredNav = NAV.filter(i=>!q||i.label.toLowerCase().includes(q));
   const filteredAct = ACTIONS.filter(i=>!q||i.label.toLowerCase().includes(q));
   let bkResults = [];
@@ -1173,7 +1173,7 @@ async function renderCommandResults(query) {
   let html='';
   if (filteredAct.length) { html+=`<div class="cmd-section-label">Acciones</div>`; html+=filteredAct.map(a=>`<div class="cmd-item" data-action="${a.action}"><span class="cmd-item-icon">${a.icon}</span><span>${a.label}</span>${a.hint?`<span class="cmd-item-hint">${a.hint}</span>`:''}</div>`).join(''); }
   if (filteredNav.length) { html+=`<div class="cmd-section-label">Secciones</div>`; html+=filteredNav.map(n=>`<div class="cmd-item" data-section="${n.section}"><span class="cmd-item-icon">${n.icon}</span><span>Ir a ${n.label}</span></div>`).join(''); }
-  if (bkResults.length) { html+=`<div class="cmd-section-label">Reservas</div>`; html+=bkResults.map(b=>`<div class="cmd-item" data-booking-id="${b.id}"><span class="cmd-item-icon">ðŸ›ï¸</span><span>${b.guests?.first_name??''} ${b.guests?.last_name??''}</span><span class="cmd-item-hint">${b.check_in}â†’${b.check_out}</span></div>`).join(''); }
+  if (bkResults.length) { html+=`<div class="cmd-section-label">Reservas</div>`; html+=bkResults.map(b=>`<div class="cmd-item" data-booking-id="${b.id}"><span class="cmd-item-icon">🛏️</span><span>${b.guests?.first_name??''} ${b.guests?.last_name??''}</span><span class="cmd-item-hint">${b.check_in}→${b.check_out}</span></div>`).join(''); }
   if (!html) html=`<div class="cmd-empty">Sin resultados para "<strong>${query}</strong>".</div>`;
   container.innerHTML=html;
   container.querySelectorAll('.cmd-item[data-section]').forEach(el=>el.addEventListener('click',()=>{closeCommandPalette();navigateTo(el.dataset.section);}));
@@ -1181,9 +1181,9 @@ async function renderCommandResults(query) {
   container.querySelectorAll('.cmd-item[data-booking-id]').forEach(el=>el.addEventListener('click',async()=>{closeCommandPalette();await navigateTo('bookings');const {data:b}=await supabase.from('bookings').select('*,guests(*),booking_units(unit_id,units(name,sort_order,color,max_guests)),payments(*)').eq('id',el.dataset.bookingId).single();if(b)bookingForm?.openDetail(b);}));
 }
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ══════════════════════════════════════════════════
 // DARK MODE TOGGLE
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ══════════════════════════════════════════════════
 function setupDarkModeToggle() {
   document.getElementById('dark-mode-toggle')?.addEventListener('click', () => {
     const cur = document.documentElement.getAttribute('data-theme')?? 'light';
@@ -1191,9 +1191,9 @@ function setupDarkModeToggle() {
   });
 }
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ══════════════════════════════════════════════════
 // REMINDER BADGE + SECTION
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ══════════════════════════════════════════════════
 export function updateReminderBadge(count) {
   const badge = document.getElementById('nav-badge-reminders');
   if (!badge) return;
@@ -1207,7 +1207,7 @@ async function updateOperationsBadge() {
   try {
     const today = new Date().toISOString().split('T')[0];
 
-    // cleaning_tasks â€” siempre existe
+    // cleaning_tasks — siempre existe
     let cleanCount = 0;
     try {
       const { count } = await supabase.from('cleaning_tasks')
@@ -1218,7 +1218,7 @@ async function updateOperationsBadge() {
       cleanCount = count ?? 0;
     } catch { /* tabla no disponible */ }
 
-    // maintenance_issues â€” puede no existir o tener RLS sin configurar
+    // maintenance_issues — puede no existir o tener RLS sin configurar
     let maintCount = 0;
     try {
       const { count } = await supabase.from('maintenance_issues')
@@ -1245,7 +1245,7 @@ async function loadRemindersSection() {
 
   container.innerHTML = '<div class="loading-state">Cargando...</div>';
 
-  // â”€â”€ Agregar botÃ³n "+ Nuevo" si no estÃ¡ â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Agregar botón "+ Nuevo" si no está ───────────────────────────
   const section = container.closest('#section-reminders') ?? container.parentElement;
   if (section && !document.getElementById('reminders-header-bar')) {
     const bar = document.createElement('div');
@@ -1279,11 +1279,11 @@ async function loadRemindersSection() {
 
   if (error) {
     const msg = error.message?.includes('completed')
-      ? 'EjecutÃ¡ <strong>migration_complete_v8.sql</strong> para aÃ±adir la columna <code>completed</code>.'
+      ? 'Ejecutá <strong>migration_complete_v8.sql</strong> para añadir la columna <code>completed</code>.'
       : error.message ?? 'Error desconocido';
     container.innerHTML = `
       <div class="error-state" style="padding:32px;text-align:center">
-        <div style="font-size:2rem;margin-bottom:12px">ðŸ—„ï¸</div>
+        <div style="font-size:2rem;margin-bottom:12px">🗄️</div>
         <p style="font-weight:700">Error al cargar recordatorios</p>
         <p style="font-size:.82rem;color:var(--color-text-3);margin:6px auto 0;max-width:340px">${msg}</p>
       </div>`;
@@ -1293,10 +1293,10 @@ async function loadRemindersSection() {
   if (!reminders?.length) {
     container.innerHTML = `
       <div class="empty-state">
-        <span class="empty-state-icon">ðŸ””</span>
+        <span class="empty-state-icon">🔔</span>
         <p>Sin recordatorios.</p>
         <p style="font-size:.78rem;color:var(--color-text-3)">
-          UsÃ¡ el botÃ³n "+ Nuevo Recordatorio" para crear uno.
+          Usá el botón "+ Nuevo Recordatorio" para crear uno.
         </p>
       </div>`;
     return;
@@ -1310,35 +1310,35 @@ async function loadRemindersSection() {
                    : isToday    ? '#f59e0b'
                    : isPast     ? '#ef4444'
                    :              'var(--color-primary)';
-    const fmtD = d => d ? new Date(d + 'T12:00:00').toLocaleDateString('es-AR', {weekday:'short',day:'numeric',month:'short'}) : 'â€”';
+    const fmtD = d => d ? new Date(d + 'T12:00:00').toLocaleDateString('es-AR', {weekday:'short',day:'numeric',month:'short'}) : '—';
     return `
       <div class="reminder-card ${r.completed ? 'reminder-done' : ''} ${isPast ? 'reminder-overdue' : ''}" data-id="${r.id}">
         <div class="reminder-dot" style="background:${dotColor}"></div>
         <div class="reminder-body">
           <div class="reminder-title ${r.completed ? 'line-through' : ''}">${r.title}</div>
           <div class="reminder-meta">
-            ðŸ“… ${fmtD(r.scheduled_date)}
-            ${r.units?.name ? ` Â· ðŸ  ${r.units.name}` : ' Â· General'}
-            ${r.description ? ` Â· ${r.description}` : ''}
+            📅 ${fmtD(r.scheduled_date)}
+            ${r.units?.name ? ` · 🏠 ${r.units.name}` : ' · General'}
+            ${r.description ? ` · ${r.description}` : ''}
           </div>
         </div>
         <div class="reminder-actions">
           <label class="reminder-check" title="${r.completed ? 'Marcar pendiente' : 'Marcar completado'}">
             <input type="checkbox" ${r.completed ? 'checked' : ''} onchange="window.toggleReminder('${r.id}',this.checked)">
-            <span class="reminder-check-icon">${r.completed ? 'âœ…' : 'â¬œ'}</span>
+            <span class="reminder-check-icon">${r.completed ? '✅' : '⬜'}</span>
           </label>
           <button class="btn btn-ghost btn-xs reminder-edit-btn" data-id="${r.id}"
                   data-title="${r.title.replace(/"/g,'&quot;')}"
                   data-date="${r.scheduled_date}"
                   data-desc="${(r.description ?? '').replace(/"/g,'&quot;')}"
                   data-unit="${r.unit_id ?? ''}"
-                  title="Editar">âœï¸</button>
-          <button class="btn btn-ghost btn-xs reminder-del-btn" data-id="${r.id}" title="Eliminar">ðŸ—‘ï¸</button>
+                  title="Editar">✏️</button>
+          <button class="btn btn-ghost btn-xs reminder-del-btn" data-id="${r.id}" title="Eliminar">🗑️</button>
         </div>
       </div>`;
   }).join('');
 
-  // â”€â”€ Event delegation â€” data-bound para no duplicar listener â”€â”€
+  // ── Event delegation — data-bound para no duplicar listener ──
   if (!container.dataset.reminderBound) {
     container.dataset.reminderBound = '1';
     container.addEventListener('click', async (e) => {
@@ -1367,12 +1367,12 @@ async function loadRemindersSection() {
         const handleSave = async () => {
           const title = titleEl?.value.trim();
           const date  = dateEl?.value;
-          if (!title || !date) { showToast('TÃ­tulo y fecha obligatorios', 'warning'); return; }
+          if (!title || !date) { showToast('Título y fecha obligatorios', 'warning'); return; }
           const { error } = await supabase.from('reminders')
             .update({ title, description: descEl?.value.trim() || null, scheduled_date: date, unit_id: unitEl?.value || null })
             .eq('id', id);
           if (error) { showToast('Error: ' + error.message, 'error'); return; }
-          showToast('Recordatorio actualizado âœ“', 'success');
+          showToast('Recordatorio actualizado ✓', 'success');
           overlay?.classList.add('hidden');
           if (modalTitle) modalTitle.textContent = 'Nuevo Recordatorio';
           saveBtn?.removeEventListener('click', handleSave);
@@ -1385,7 +1385,7 @@ async function loadRemindersSection() {
       }
 
       if (delBtn && !delBtn.disabled) {
-        if (!confirm('Â¿Eliminar este recordatorio?')) return;
+        if (!confirm('¿Eliminar este recordatorio?')) return;
         delBtn.disabled = true;
         const { error } = await supabase.from('reminders').delete().eq('id', delBtn.dataset.id);
         if (error) { showToast('Error: ' + error.message, 'error'); delBtn.disabled = false; return; }
@@ -1408,16 +1408,16 @@ window.toggleReminder = async (id, completed) => {
     const title = card.querySelector('.reminder-title');
     if (title) title.classList.toggle('line-through', completed);
     const icon = card.querySelector('.reminder-check-icon');
-    if (icon) icon.textContent = completed ? 'âœ…' : 'â¬œ';
+    if (icon) icon.textContent = completed ? '✅' : '⬜';
   }
   const today = toISODate(new Date());
   const remaining = document.querySelectorAll('.reminder-card:not(.reminder-done)').length;
   updateReminderBadge(remaining);
 };
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ══════════════════════════════════════════════════
 // MODALES (reminders, expenses, guest profile, season)
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ══════════════════════════════════════════════════
 function setupReminderModal() {
   const open=()=>{
     // Reset form
@@ -1440,11 +1440,11 @@ function setupReminderModal() {
   document.getElementById('overlay-reminder').addEventListener('click',(e)=>{if(e.target===e.currentTarget)close();});
   document.getElementById('reminder-save')?.addEventListener('click',async()=>{
     const title=document.getElementById('r-title').value.trim(),date=document.getElementById('r-date').value;
-    if(!title||!date){showToast('TÃ­tulo y fecha obligatorios','warning');return;}
+    if(!title||!date){showToast('Título y fecha obligatorios','warning');return;}
     if(isDemo()){showDemoAction(null);close();return;}
     const{error}=await supabase.from('reminders').insert({hotel_id:AppContext.hotelId,title,description:document.getElementById('r-desc').value.trim()||null,scheduled_date:date,unit_id:document.getElementById('r-unit').value||null});
     if(error){showToast('Error al guardar','error');return;}
-    showToast('Recordatorio guardado âœ“','success');close();
+    showToast('Recordatorio guardado ✓','success');close();
     ['r-title','r-desc','r-date'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
     if(currentSection==='reminders')await loadRemindersSection();
     if(currentSection==='dashboard')await dashboard?.load();
@@ -1461,7 +1461,7 @@ function populateReminderUnitSelect(){
   sel.innerHTML = '<option value="">General (todo el hotel)</option>';
 
   if (!units.length) {
-    // Units might still be loading â€” show a placeholder
+    // Units might still be loading — show a placeholder
     const opt = document.createElement('option');
     opt.value = ''; opt.disabled = true;
     opt.textContent = '(Cargando unidades...)';
@@ -1473,7 +1473,7 @@ function populateReminderUnitSelect(){
       retryUnits.forEach(u => {
         const o = document.createElement('option');
         o.value = u.id;
-        o.textContent = `#${u.sort_order ?? ''} Â· ${u.name}`;
+        o.textContent = `#${u.sort_order ?? ''} · ${u.name}`;
         sel.appendChild(o);
       });
     }, 1000);
@@ -1483,7 +1483,7 @@ function populateReminderUnitSelect(){
   units.forEach(u => {
     const opt = document.createElement('option');
     opt.value = u.id;
-    opt.textContent = `#${u.sort_order ?? ''} Â· ${u.name}`;
+    opt.textContent = `#${u.sort_order ?? ''} · ${u.name}`;
     sel.appendChild(opt);
   });
 }
@@ -1494,21 +1494,21 @@ function setupExpenseModal() {
   document.getElementById('expense-cancel')?.addEventListener('click',close);
   document.getElementById('overlay-expense')?.addEventListener('click',(e)=>{if(e.target===e.currentTarget)close();});
   document.getElementById('expense-save')?.addEventListener('click',async()=>{
-    if(!can('manageExpenses')){showToast('ðŸ”’ Sin permiso','warning');return;}
+    if(!can('manageExpenses')){showToast('🔒 Sin permiso','warning');return;}
     if(isDemo()){showDemoAction(null);close();return;}
     const editingId=document.getElementById('expense-editing-id').value;
     const desc=document.getElementById('expense-desc').value.trim(),amount=parseFloat(document.getElementById('expense-amount').value);
-    if(!desc||isNaN(amount)||amount<=0){showToast('DescripciÃ³n y monto obligatorios','warning');return;}
+    if(!desc||isNaN(amount)||amount<=0){showToast('Descripción y monto obligatorios','warning');return;}
     const payload={hotel_id:AppContext.hotelId,category:document.getElementById('expense-category').value,description:desc,amount,due_date:document.getElementById('expense-due').value||null};
     const{error}=editingId?await supabase.from('expenses').update(payload).eq('id',editingId):await supabase.from('expenses').insert(payload);
     if(error){showToast('Error al guardar','error');return;}
-    showToast(editingId?'Gasto actualizado âœ“':'Gasto registrado âœ“','success');close();
+    showToast(editingId?'Gasto actualizado ✓':'Gasto registrado ✓','success');close();
     document.getElementById('expense-editing-id').value='';
     if(currentSection==='statistics')statistics?.loadExpenses();
   });
 }
 
-// â”€â”€ WhatsApp Manager Template Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── WhatsApp Manager Template Modal ──────────────────
 function setupWhatsAppModal() {
   const close = () => document.getElementById('overlay-whatsapp')?.classList.add('hidden');
   document.getElementById('wa-modal-close')?.addEventListener('click', close);
@@ -1523,12 +1523,12 @@ function setupWhatsAppModal() {
     if (navigator.clipboard) {
       navigator.clipboard.writeText(ta.value).then(() => {
         const btn = document.getElementById('wa-copy-btn');
-        if (btn) { btn.textContent = 'âœ“ Copiado!'; setTimeout(() => btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="15" height="15"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> Copiar', 2000); }
-        showToast('Texto copiado al portapapeles âœ“', 'success');
+        if (btn) { btn.textContent = '✓ Copiado!'; setTimeout(() => btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="15" height="15"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> Copiar', 2000); }
+        showToast('Texto copiado al portapapeles ✓', 'success');
       });
     } else {
       document.execCommand('copy');
-      showToast('Texto copiado âœ“', 'success');
+      showToast('Texto copiado ✓', 'success');
     }
   });
 }
@@ -1542,31 +1542,31 @@ function setupGuestProfileModal() {
 
 // Season pricing modal setup
 document.getElementById('season-save')?.addEventListener('click', async () => {
-  if (!can('manageSeasonPricing')) { showToast('ðŸ”’ Sin permiso', 'warning'); return; }
+  if (!can('manageSeasonPricing')) { showToast('🔒 Sin permiso', 'warning'); return; }
   const name  = document.getElementById('season-name').value.trim();
   const start = document.getElementById('season-start').value;
   const end   = document.getElementById('season-end').value;
   const price = parseFloat(document.getElementById('season-price').value);
   const unit  = document.getElementById('season-unit').value;
-  if (!name || !start || !end || isNaN(price)) { showToast('CompletÃ¡ todos los campos', 'warning'); return; }
+  if (!name || !start || !end || isNaN(price)) { showToast('Completá todos los campos', 'warning'); return; }
   const { error } = await supabase.from('season_pricing').insert({
     hotel_id: AppContext.hotelId, name, start_date: start, end_date: end,
     price_per_night: price, unit_id: unit || null,
   });
   if (error) { showToast('Error al guardar', 'error'); return; }
-  showToast('Tarifa de temporada creada âœ“', 'success');
+  showToast('Tarifa de temporada creada ✓', 'success');
   document.getElementById('overlay-season')?.classList.add('hidden');
   loadSeasonPricing();
 });
 document.getElementById('season-cancel')?.addEventListener('click', () => document.getElementById('overlay-season')?.classList.add('hidden'));
 document.getElementById('season-close')?.addEventListener('click',  () => document.getElementById('overlay-season')?.classList.add('hidden'));
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ══════════════════════════════════════════════════
 // INDICADOR DE CONECTIVIDAD (Realtime + Online)
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ══════════════════════════════════════════════════
+// ══════════════════════════════════════════════════
 // SONIDO
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ══════════════════════════════════════════════════
 function setupSoundButton() {
   const btn     = document.getElementById('btn-sound');
   const iconOn  = document.getElementById('sound-icon-on');
@@ -1576,7 +1576,7 @@ function setupSoundButton() {
   const updateIcon = (muted) => {
     if (iconOn)  iconOn.style.display  = muted ? 'none' : '';
     if (iconOff) iconOff.style.display = muted ? ''     : 'none';
-    btn.title = muted ? 'Sonidos silenciados â€” clic para activar' : 'Sonidos activos â€” clic para silenciar';
+    btn.title = muted ? 'Sonidos silenciados — clic para activar' : 'Sonidos activos — clic para silenciar';
     btn.classList.toggle('icon-muted', muted);
   };
 
@@ -1587,7 +1587,7 @@ function setupSoundButton() {
     if (!muted) setTimeout(() => Sound.success(), 80);
   });
 
-  // Sonido en apertura/cierre de modales dinÃ¡micos (body children)
+  // Sonido en apertura/cierre de modales dinámicos (body children)
   const observer = new MutationObserver((muts) => {
     muts.forEach(m => {
       m.addedNodes.forEach(n => { if (n.classList?.contains('modal-overlay')) Sound?.modalOpen(); });
@@ -1596,7 +1596,7 @@ function setupSoundButton() {
   });
   observer.observe(document.body, { childList: true });
 
-  // Sonido en modales estÃ¡ticos (overlay-booking, overlay-detail, etc.)
+  // Sonido en modales estáticos (overlay-booking, overlay-detail, etc.)
   document.querySelectorAll('.modal-overlay').forEach(el => {
     new MutationObserver(() => {
       const isOpen = !el.classList.contains('hidden');
@@ -1605,11 +1605,11 @@ function setupSoundButton() {
   });
 }
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ══════════════════════════════════════════════════
 // TEMAS DE COLOR
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ══════════════════════════════════════════════════
 const THEMES = {
-  // â”€â”€ FrÃ­os (cool) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Fríos (cool) ────────────────────────────────
   violet:  { primary:'#8b5cf6', primaryH:'#7c3aed', primaryL:'#f5f3ff', primaryT:'rgba(139,92,246,.12)',  sidebarBg:'#2e1065', sidebarActive:'#3b0764', sidebarAccent:'#a78bfa' },
   indigo:  { primary:'#6366F1', primaryH:'#4F46E5', primaryL:'#EEF2FF', primaryT:'rgba(99,102,241,.12)',  sidebarBg:'#0F172A', sidebarActive:'#1E293B', sidebarAccent:'#818CF8' },
   blue:    { primary:'#2563eb', primaryH:'#1d4ed8', primaryL:'#eff6ff', primaryT:'rgba(37,99,235,.12)',   sidebarBg:'#1e3a8a', sidebarActive:'#1e40af', sidebarAccent:'#60a5fa' },
@@ -1617,7 +1617,7 @@ const THEMES = {
   cyan:    { primary:'#06b6d4', primaryH:'#0891b2', primaryL:'#ecfeff', primaryT:'rgba(6,182,212,.12)',   sidebarBg:'#083344', sidebarActive:'#0e4f6a', sidebarAccent:'#22d3ee' },
   teal:    { primary:'#0d9488', primaryH:'#0f766e', primaryL:'#f0fdfa', primaryT:'rgba(13,148,136,.12)',  sidebarBg:'#042f2e', sidebarActive:'#134e4a', sidebarAccent:'#2dd4bf' },
   emerald: { primary:'#10b981', primaryH:'#059669', primaryL:'#d1fae5', primaryT:'rgba(16,185,129,.12)',  sidebarBg:'#064e3b', sidebarActive:'#065f46', sidebarAccent:'#34d399' },
-  // â”€â”€ CÃ¡lidos (warm) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Cálidos (warm) ──────────────────────────────
   lime:    { primary:'#65a30d', primaryH:'#4d7c0f', primaryL:'#f7fee7', primaryT:'rgba(101,163,13,.12)',  sidebarBg:'#1a2e05', sidebarActive:'#365314', sidebarAccent:'#a3e635' },
   amber:   { primary:'#d97706', primaryH:'#b45309', primaryL:'#fffbeb', primaryT:'rgba(217,119,6,.12)',   sidebarBg:'#451a03', sidebarActive:'#78350f', sidebarAccent:'#fbbf24' },
   sunset:  { primary:'#f97316', primaryH:'#ea580c', primaryL:'#fff7ed', primaryT:'rgba(249,115,22,.12)',  sidebarBg:'#431407', sidebarActive:'#7c2d12', sidebarAccent:'#fb923c' },
@@ -1709,9 +1709,9 @@ function markActiveSwatch(name) {
   });
 }
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ══════════════════════════════════════════════════
 // NOTIFICACIONES REALES
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ══════════════════════════════════════════════════
 async function setupRealNotifications(notifSvc) {
   const refresh = async () => {
     const notifs = await notifSvc.refresh();
@@ -1734,10 +1734,10 @@ async function setupRealNotifications(notifSvc) {
           </div>
           ${n.action ? `<button class="notif-action-btn btn btn-primary btn-xs"
               data-booking-id="${n.bookingId}" data-action="${n.action}">
-              ${n.action === 'checkin' ? 'âœ… CI' : 'ðŸ‘‹ CO'}
+              ${n.action === 'checkin' ? '✅ CI' : '👋 CO'}
             </button>` : ''}
         </div>`).join('')
-        : `<p class="empty-state-sm" style="padding:20px">Sin notificaciones pendientes âœ“</p>`;
+        : `<p class="empty-state-sm" style="padding:20px">Sin notificaciones pendientes ✓</p>`;
 
       list.querySelectorAll('.notif-action-btn').forEach(btn => {
         btn.addEventListener('click', async (e) => {
@@ -1746,7 +1746,7 @@ async function setupRealNotifications(notifSvc) {
           try {
             if (btn.dataset.action === 'checkin')  { await markCheckIn(bId);  Sound?.checkIn(); }
             if (btn.dataset.action === 'checkout') { await markCheckOut(bId); Sound?.checkOut(); }
-            btn.textContent = 'âœ“'; btn.disabled = true;
+            btn.textContent = '✓'; btn.disabled = true;
             setTimeout(refresh, 600);
           } catch (err) { showToast('Error: ' + err.message, 'error'); }
         });
@@ -1786,8 +1786,8 @@ function setupCalculator() {
     const tabs = document.createElement('div');
     tabs.className = 'calc-mode-tabs';
     tabs.innerHTML = `
-      <button class="calc-tab active" data-mode="stay">ðŸ“… EstadÃ­a</button>
-      <button class="calc-tab" data-mode="normal">ðŸ”¢ Normal</button>`;
+      <button class="calc-tab active" data-mode="stay">📅 Estadía</button>
+      <button class="calc-tab" data-mode="normal">🔢 Normal</button>`;
     calcHeader.appendChild(tabs);
 
     const stayBody   = overlay.querySelector('.calc-body');
@@ -1799,7 +1799,7 @@ function setupCalculator() {
         padding:10px 12px;background:var(--color-surface-2);border-radius:var(--r-md);
         border:1px solid var(--color-border);min-height:52px;word-break:break-all;color:var(--color-text)">0</div>
       <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:10px">
-        ${['C','Â±','%','Ã·','7','8','9','Ã—','4','5','6','âˆ’','1','2','3','+','0','','.',
+        ${['C','±','%','÷','7','8','9','×','4','5','6','−','1','2','3','+','0','','.',
           '='].map(k => `<button class="calc-norm-btn${k==='='?' calc-norm-eq':k==='0'?' calc-norm-zero':''}"
           data-key="${k}" style="${k==='='?'background:var(--color-primary);color:white;':''}">${k||''}</button>`).join('')}
       </div>`;
@@ -1818,7 +1818,7 @@ function setupCalculator() {
         if (k === 'C') { _normExpr = ''; _normDisplay = '0'; _normHasResult = false; }
         else if (k === '=') {
           try {
-            const safe = _normExpr.replace(/Ã—/g,'*').replace(/Ã·/g,'/').replace(/âˆ’/g,'-');
+            const safe = _normExpr.replace(/×/g,'*').replace(/÷/g,'/').replace(/−/g,'-');
             // Safe eval using basic parser (no Function() - blocked by some CSP)
           let result = NaN;
           try {
@@ -1834,7 +1834,7 @@ function setupCalculator() {
             _normExpr = _normDisplay;
             _normHasResult = true;
           } catch { _normDisplay = 'Error'; _normExpr = ''; }
-        } else if (k === 'Â±') {
+        } else if (k === '±') {
           _normDisplay = _normDisplay.startsWith('-') ? _normDisplay.slice(1) : '-' + _normDisplay;
           _normExpr = _normDisplay;
         } else if (k === '%') {
@@ -1842,18 +1842,18 @@ function setupCalculator() {
           _normDisplay = String(v);
           _normExpr = _normDisplay;
         } else {
-          if (_normHasResult && !/[+\-Ã—Ã·]/.test(k)) { _normExpr = ''; _normDisplay = '0'; }
+          if (_normHasResult && !/[+\-×÷]/.test(k)) { _normExpr = ''; _normDisplay = '0'; }
           _normHasResult = false;
           if (k === '.' && _normDisplay.includes('.')) return;
-          if (['+','-','Ã—','Ã·'].includes(k)) {
+          if (['+','-','×','÷'].includes(k)) {
             _normExpr = _normExpr || _normDisplay;
             _normDisplay = k;
             _normExpr += k;
           } else {
-            if (_normDisplay === '0' || ['+','-','Ã—','Ã·'].includes(_normDisplay)) _normDisplay = '';
+            if (_normDisplay === '0' || ['+','-','×','÷'].includes(_normDisplay)) _normDisplay = '';
             _normDisplay += k;
-            _normExpr = _normExpr.replace(/[^0-9.+\-Ã—Ã·]$/, '') + k;
-            if (!/[+\-Ã—Ã·]/.test(_normDisplay)) _normExpr = _normDisplay;
+            _normExpr = _normExpr.replace(/[^0-9.+\-×÷]$/, '') + k;
+            if (!/[+\-×÷]/.test(_normDisplay)) _normExpr = _normDisplay;
           }
         }
         normDisp();
@@ -1899,7 +1899,7 @@ function setupCalculator() {
     if (el) { el.value = Math.min(90, parseInt(el.value) + 1); _calcUpdate(); }
   });
 
-  // Inputs â†’ recalcular
+  // Inputs → recalcular
   ['calc-price','calc-channel','calc-discount-range'].forEach(id => {
     document.getElementById(id)?.addEventListener('input', _calcUpdate);
     document.getElementById(id)?.addEventListener('change', _calcUpdate);
@@ -1911,29 +1911,29 @@ function setupCalculator() {
     if (lbl) lbl.textContent = e.target.value + '%';
   });
 
-  // Precio en USD â€” usa dÃ³lar oficial BNA (badge del header)
+  // Precio en USD — usa dólar oficial BNA (badge del header)
   document.getElementById('calc-use-dollar')?.addEventListener('click', () => {
     const dollarEl = document.getElementById('dollar-badge-value');
     const rateText = dollarEl?.textContent?.replace(/[^0-9]/g, '');
     const rate = parseInt(rateText);
-    if (!rate) { showToast('No hay cotizaciÃ³n disponible', 'warning'); return; }
+    if (!rate) { showToast('No hay cotización disponible', 'warning'); return; }
     const priceEl = document.getElementById('calc-price');
     if (priceEl) {
-      const usdAmount = prompt(`CotizaciÃ³n oficial: $${rate.toLocaleString('es-AR')}/USD\nÂ¿CuÃ¡ntos dÃ³lares por noche?`, '50');
+      const usdAmount = prompt(`Cotización oficial: $${rate.toLocaleString('es-AR')}/USD\n¿Cuántos dólares por noche?`, '50');
       if (!usdAmount) return;
       priceEl.value = Math.round(parseFloat(usdAmount) * rate);
       _calcUpdate();
     }
   });
 
-  // Crear reserva con estos datos â€” paso 0 del formulario
+  // Crear reserva con estos datos — paso 0 del formulario
   document.getElementById('calc-create-booking')?.addEventListener('click', () => {
     const price   = parseFloat(document.getElementById('calc-price')?.value) || 0;
     const nights  = parseInt(document.getElementById('calc-nights')?.value) || 1;
     const chanVal = document.getElementById('calc-channel')?.value ?? 'direct:0';
     const source  = chanVal.split(':')[0];
     const discPct = parseFloat(document.getElementById('calc-discount-range')?.value) || 0;
-    if (!price) { showToast('IngresÃ¡ un precio primero', 'warning'); return; }
+    if (!price) { showToast('Ingresá un precio primero', 'warning'); return; }
     close(); // cierra calculadora
 
     // Calcular checkout sugerido
@@ -1961,7 +1961,7 @@ function setupCalculator() {
 
     if (!price) {
       ['cr-subtotal','cr-disc','cr-comm','cr-total','cr-net','cr-usd'].forEach(id => {
-        const el = document.getElementById(id); if (el) el.textContent = 'â€”';
+        const el = document.getElementById(id); if (el) el.textContent = '—';
       });
       return;
     }
@@ -1972,7 +1972,7 @@ function setupCalculator() {
     const commAmt   = total * (commPct / 100);
     const net       = total - commAmt;
 
-    // USD equivalente â€” usa BNA oficial venta
+    // USD equivalente — usa BNA oficial venta
     const dollarEl  = document.getElementById('dollar-badge-value');
     const rateText  = dollarEl?.textContent?.replace(/[^0-9]/g, '');
     const blueRate  = parseInt(rateText) || 0;
@@ -1982,17 +1982,17 @@ function setupCalculator() {
 
     const set = (id, text) => { const el = document.getElementById(id); if (el) el.textContent = text; };
 
-    set('cr-subtotal', `${fmt(price)} Ã— ${nights} noche${nights !== 1 ? 's' : ''} = ${fmt(subtotal)}`);
+    set('cr-subtotal', `${fmt(price)} × ${nights} noche${nights !== 1 ? 's' : ''} = ${fmt(subtotal)}`);
 
     const discRow = document.getElementById('cr-disc-row');
     if (discRow) discRow.style.display = discPct > 0 ? '' : 'none';
     set('cr-disc-label', `Descuento ${discPct}%`);
-    set('cr-disc', `âˆ’${fmt(discAmt)}`);
+    set('cr-disc', `−${fmt(discAmt)}`);
 
     const commRow = document.getElementById('cr-comm-row');
     if (commRow) commRow.style.display = commPct > 0 ? '' : 'none';
-    set('cr-comm-label', `ComisiÃ³n canal ${commPct}%`);
-    set('cr-comm', `âˆ’${fmt(commAmt)}`);
+    set('cr-comm-label', `Comisión canal ${commPct}%`);
+    set('cr-comm', `−${fmt(commAmt)}`);
 
     set('cr-total', fmt(total));
 
@@ -2002,7 +2002,7 @@ function setupCalculator() {
 
     const usdRow = document.getElementById('cr-usd-row');
     if (usdRow) usdRow.style.display = usdEq ? '' : 'none';
-    set('cr-usd', usdEq ? `â‰ˆ USD ${parseInt(usdEq).toLocaleString('es-AR')}` : 'â€”');
+    set('cr-usd', usdEq ? `≈ USD ${parseInt(usdEq).toLocaleString('es-AR')}` : '—');
   }
 
   // Calcular al abrir
@@ -2020,7 +2020,7 @@ function setupConnectivityIndicator() {
     const states = {
       connected:    { text: 'Conectado',    cls: 'conn-ok'   },
       reconnecting: { text: 'Reconectando', cls: 'conn-warn' },
-      disconnected: { text: 'Sin conexiÃ³n', cls: 'conn-err'  },
+      disconnected: { text: 'Sin conexión', cls: 'conn-err'  },
       syncing:      { text: 'Sincronizando',cls: 'conn-warn' },
     };
     const s = states[status] ?? states.connected;
@@ -2036,7 +2036,7 @@ function setupConnectivityIndicator() {
   });
   window.addEventListener('offline', () => {
     setStatus('disconnected');
-    showToast('âš ï¸ Sin conexiÃ³n â€” las acciones se guardarÃ¡n para sincronizar', 'warning');
+    showToast('⚠️ Sin conexión — las acciones se guardarán para sincronizar', 'warning');
   });
 
   supabase.realtime?.on?.('connect',    () => setStatus('connected'));
@@ -2048,7 +2048,7 @@ function setupConnectivityIndicator() {
     const { type, payload, succeeded, total } = e.data ?? {};
     if (type === 'OFFLINE') {
       setStatus('disconnected');
-      showToast('ðŸ“µ Sin conexiÃ³n â€” acciÃ³n en cola', 'warning');
+      showToast('📵 Sin conexión — acción en cola', 'warning');
     }
     if (type === 'ONLINE')  setStatus('connected');
     if (type === 'QUEUE_ACTION' && payload) {
@@ -2063,11 +2063,11 @@ function setupConnectivityIndicator() {
       const queueBadge = document.getElementById('conn-queue-badge');
       if (queueBadge) queueBadge.style.display = 'none';
       setStatus('connected');
-      if (succeeded > 0) showToast(`âœ… ${succeeded} acciÃ³n${succeeded!==1?'es':''} sincronizada${succeeded!==1?'s':''} âœ“`, 'success');
+      if (succeeded > 0) showToast(`✅ ${succeeded} acción${succeeded!==1?'es':''} sincronizada${succeeded!==1?'s':''} ✓`, 'success');
     }
   });
 
-  // Sync al recuperar conexiÃ³n
+  // Sync al recuperar conexión
   async function _syncOfflineQueue() {
     if (!_offlineQueue.length) return;
     setStatus('syncing');
@@ -2082,18 +2082,18 @@ function setupConnectivityIndicator() {
 }
 
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ══════════════════════════════════════════════════
 // AVATAR & PERFIL
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ══════════════════════════════════════════════════
 const AVATARS = [
-  { id:1, emoji:'ðŸ§‘â€ðŸ’¼', label:'Gerente'    },
-  { id:2, emoji:'ðŸ‘©â€ðŸ’»', label:'Dev'         },
-  { id:3, emoji:'ðŸ¨', label:'Hotel'        },
-  { id:4, emoji:'ðŸŒ¿', label:'Naturaleza'  },
-  { id:5, emoji:'ðŸŽ¯', label:'Estratega'   },
-  { id:6, emoji:'ðŸŒŠ', label:'Viajero'     },
-  { id:7, emoji:'ðŸ¦', label:'LÃ­der'       },
-  { id:8, emoji:'â­', label:'VIP'          },
+  { id:1, emoji:'🧑‍💼', label:'Gerente'    },
+  { id:2, emoji:'👩‍💻', label:'Dev'         },
+  { id:3, emoji:'🏨', label:'Hotel'        },
+  { id:4, emoji:'🌿', label:'Naturaleza'  },
+  { id:5, emoji:'🎯', label:'Estratega'   },
+  { id:6, emoji:'🌊', label:'Viajero'     },
+  { id:7, emoji:'🦁', label:'Líder'       },
+  { id:8, emoji:'⭐', label:'VIP'          },
 ];
 const PALETTE_COLORS = [
   '#8b5cf6','#6366f1','#2563eb','#0891b2','#06b6d4','#0d9488','#10b981',
@@ -2114,7 +2114,7 @@ async function _loadAndApplyAvatar(supabase, userId) {
       el.style.cursor     = 'pointer';
       el.title = 'Cambiar avatar';
     }
-  } catch { /* perfil nuevo â€” sin avatar guardado */ }
+  } catch { /* perfil nuevo — sin avatar guardado */ }
 }
 
 function _openAvatarModal(supabase, userId) {
@@ -2131,10 +2131,10 @@ function _openAvatarModal(supabase, userId) {
     <div style="background:var(--color-background,#fff);border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.2);width:100%;max-width:340px;overflow:hidden">
       <div style="padding:20px 20px 0;border-bottom:1px solid var(--color-border,#e2e8f0);margin-bottom:0">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
-          <h3 style="font-size:1rem;font-weight:700;margin:0">ðŸŽ¨ Mi Perfil</h3>
-          <button id="av-close" style="background:none;border:none;font-size:1.2rem;cursor:pointer;color:#94a3b8;padding:0">âœ•</button>
+          <h3 style="font-size:1rem;font-weight:700;margin:0">🎨 Mi Perfil</h3>
+          <button id="av-close" style="background:none;border:none;font-size:1.2rem;cursor:pointer;color:#94a3b8;padding:0">✕</button>
         </div>
-        <p style="font-size:.78rem;color:var(--color-text-muted,#64748b);margin:0 0 14px">ElegÃ­ tu avatar y color de acento</p>
+        <p style="font-size:.78rem;color:var(--color-text-muted,#64748b);margin:0 0 14px">Elegí tu avatar y color de acento</p>
       </div>
       <div style="padding:16px 20px">
         <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#94a3b8;margin-bottom:8px">Avatar</div>
@@ -2194,7 +2194,7 @@ function _openAvatarModal(supabase, userId) {
   // Guardar
   modal.querySelector('#av-save').addEventListener('click', async () => {
     const saveBtn = modal.querySelector('#av-save');
-    saveBtn.textContent = 'â³ Guardando...'; saveBtn.disabled = true;
+    saveBtn.textContent = '⏳ Guardando...'; saveBtn.disabled = true;
     const { error } = await supabase.from('user_profiles')
       .upsert({ id: userId, avatar_id: selAvatar, avatar_color: selColor }, { onConflict: 'id' });
     if (error) {
@@ -2204,16 +2204,16 @@ function _openAvatarModal(supabase, userId) {
     }
     await _loadAndApplyAvatar(supabase, userId);
     close();
-    showToast('Perfil actualizado âœ“', 'success');
+    showToast('Perfil actualizado ✓', 'success');
   });
 }
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-// START â€” manejo de URL params especiales
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ══════════════════════════════════════════════════
+// START — manejo de URL params especiales
+// ══════════════════════════════════════════════════
 (async () => {
   const params = new URLSearchParams(window.location.search);
-  // ?demo=true â†’ auto-login con usuario demo
+  // ?demo=true → auto-login con usuario demo
   if (params.get('demo') === 'true') {
     const demoEmail = import.meta.env.VITE_DEMO_EMAIL ?? 'demo@milasistema.com';
     const demoPass  = import.meta.env.VITE_DEMO_PASS  ?? 'MILAdemo2025!';
@@ -2226,17 +2226,16 @@ function _openAvatarModal(supabase, userId) {
       window.history.replaceState({}, '', url.toString());
     }
   }
-  // ?booking=ID â†’ abrir detalle al cargar
+  // ?booking=ID → abrir detalle al cargar
   if (params.get('booking')) {
     window._pendingDetailId = params.get('booking');
     const url = new URL(window.location.href);
     url.searchParams.delete('booking');
     window.history.replaceState({}, '', url.toString());
   }
-  // ?section=calendar â†’ ir a esa secciÃ³n al arrancar
+  // ?section=calendar → ir a esa sección al arrancar
   if (params.get('section')) {
     window._pendingSection = params.get('section');
   }
   boot();
 })();
-

@@ -1,10 +1,10 @@
-﻿// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-// booking-form.js v5.0 â€” MILA Sistema Inteligente
-// â€¢ NavegaciÃ³n libre entre pestaÃ±as (sin validaciÃ³n forzada)
-// â€¢ Canal de origen rediseÃ±ado (compacto, sin emojis)
-// â€¢ Nota de CrÃ©dito / Voucher como mÃ©todo de pago
-// â€¢ ValidaciÃ³n solo al guardar
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ══════════════════════════════════════════════════
+// booking-form.js v5.0 — MILA Sistema Inteligente
+// • Navegación libre entre pestañas (sin validación forzada)
+// • Canal de origen rediseñado (compacto, sin emojis)
+// • Nota de Crédito / Voucher como método de pago
+// • Validación solo al guardar
+// ══════════════════════════════════════════════════
 
 import { can, isDemo } from '../auth/permissions.js';
 import { formatARS, toISODate, showToast, getUnitLabel, getUnitColor, getUnitChipHTML, SOURCE_CONFIG } from '../supabase-config.js';
@@ -20,14 +20,14 @@ const PAYMENT_METHODS = [
   { value: 'transfer',    label: 'Transferencia' },
   { value: 'mercadopago', label: 'MercadoPago' },
   { value: 'naranjax',    label: 'Naranja X' },
-  { value: 'uala',        label: 'UalÃ¡' },
-  { value: 'credit_card', label: 'Tarjeta de CrÃ©dito (+10%)' },
-  { value: 'debit_card',  label: 'Tarjeta de DÃ©bito' },
-  { value: 'credit_note', label: 'Nota de CrÃ©dito / Voucher' },
+  { value: 'uala',        label: 'Ualá' },
+  { value: 'credit_card', label: 'Tarjeta de Crédito (+10%)' },
+  { value: 'debit_card',  label: 'Tarjeta de Débito' },
+  { value: 'credit_note', label: 'Nota de Crédito / Voucher' },
 ];
 
 // Canales de origen disponibles (en orden visual)
-// Generado dinÃ¡micamente desde SOURCE_CONFIG â€” Ãºnica fuente de verdad
+// Generado dinámicamente desde SOURCE_CONFIG — única fuente de verdad
 const SOURCE_OPTIONS = Object.entries(SOURCE_CONFIG).map(([value, cfg]) => ({
   value,
   label: cfg.label,
@@ -53,7 +53,7 @@ export class BookingForm {
     this._bindEvents();
   }
 
-  // â”€â”€ Bind eventos globales del formulario â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Bind eventos globales del formulario ──────────
   _bindEvents() {
     document.getElementById('booking-modal-close')?.addEventListener('click', () => this.close());
     document.getElementById('btn-booking-cancel')?.addEventListener('click',  () => this.close());
@@ -61,7 +61,7 @@ export class BookingForm {
     document.getElementById('btn-step-back')?.addEventListener('click', () => this._prevStep());
     document.getElementById('btn-add-payment-row')?.addEventListener('click', () => this._addPaymentRow());
 
-    // Precio/descuento â†’ recalcular breakdown
+    // Precio/descuento → recalcular breakdown
     ['f-price','f-discount','f-surcharge','f-free-nights'].forEach(id => {
       document.getElementById(id)?.addEventListener('input', () => this._updateBreakdown());
     });
@@ -71,14 +71,14 @@ export class BookingForm {
       document.getElementById('notes-count').textContent = e.target.value.length;
     });
 
-    // BÃºsqueda de huÃ©spedes
+    // Búsqueda de huéspedes
     let guestSearchTimer;
     document.getElementById('guest-search')?.addEventListener('input', e => {
       clearTimeout(guestSearchTimer);
       guestSearchTimer = setTimeout(() => this._searchGuests(e.target.value.trim()), 300);
     });
 
-    // NavegaciÃ³n libre: clic en step indicator
+    // Navegación libre: clic en step indicator
     document.querySelectorAll('.step-item').forEach((el, i) => {
       el.style.cursor = 'pointer';
       el.addEventListener('click', () => this._goToStep(i + 1));
@@ -88,12 +88,12 @@ export class BookingForm {
     this._renderSourceSelector();
   }
 
-  // â”€â”€ Renderizar selector de canal (compacto, sin emojis) â”€â”€
+  // ── Renderizar selector de canal (compacto, sin emojis) ──
   _renderSourceSelector(value = 'direct') {
     const container = document.getElementById('f-source-selector');
     if (!container) return;
 
-    // Siempre regenerar desde SOURCE_OPTIONS (Ãºnica fuente de verdad)
+    // Siempre regenerar desde SOURCE_OPTIONS (única fuente de verdad)
     container.innerHTML = SOURCE_OPTIONS.map(s => `
       <label class="src-chip" data-source="${s.value}" style="--src-color:${s.color}">
         <input type="radio" name="booking-source" value="${s.value}"
@@ -125,12 +125,12 @@ export class BookingForm {
     }
   }
 
-  // â”€â”€ Abrir para nueva reserva â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Abrir para nueva reserva ──────────────────────
   open(prefill = {}) {
     this._editingId = null;
     this._reset();
     document.getElementById('booking-modal-title').textContent = 'Nueva Reserva';
-    document.getElementById('btn-step-next').textContent = 'Continuar â†’';
+    document.getElementById('btn-step-next').textContent = 'Continuar →';
 
     if (prefill.unitId) {
       this._selectedUnitIds.add(String(prefill.unitId));
@@ -167,11 +167,11 @@ export class BookingForm {
 
     document.getElementById('overlay-booking').classList.remove('hidden');
 
-    // Historial de precios â€” se carga async en background
+    // Historial de precios — se carga async en background
     if (prefill.unitId) this._loadPriceHistory(prefill.unitId);
   }
 
-  // â”€â”€ Abrir para editar reserva existente â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Abrir para editar reserva existente ───────────
   async openEdit(bookingId) {
     document.getElementById('booking-modal-title').textContent = 'Editar Reserva';
     this._reset();
@@ -184,9 +184,9 @@ export class BookingForm {
         .eq('id', bookingId).single();
 
       if (error) throw error;
-      if (!b) { showToast('No se encontrÃ³ la reserva', 'error'); return; }
+      if (!b) { showToast('No se encontró la reserva', 'error'); return; }
 
-      // Rellenar huÃ©sped
+      // Rellenar huésped
       const g = b.guests ?? {};
       this._selectedGuestId = g.id ?? null;
       ['firstname','lastname','dni','phone','email'].forEach(f => {
@@ -240,7 +240,7 @@ export class BookingForm {
     }
   }
 
-  // â”€â”€ openDetail â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── openDetail ────────────────────────────────────
   openDetail(booking) {
     if (!booking?.id) return;
     this._currentDetailBookingId = booking.id;
@@ -255,7 +255,7 @@ export class BookingForm {
       .map(bu => bu.units?.name ?? '').filter(Boolean).join(', ');
     const srcCfg     = SOURCE_CONFIG?.[booking.source] ?? { label: booking.source ?? 'Directo', dot: '#64748b' };
     const badgeColor = srcCfg.dot ?? srcCfg.color ?? '#64748b';
-    const statusLabels = { pending:'Sin seÃ±a', partial:'Con seÃ±a', paid:'Pagado',
+    const statusLabels = { pending:'Sin seña', partial:'Con seña', paid:'Pagado',
                            cancelled:'Cancelada', blocked:'Bloqueada' };
     const hasBadExp  = booking.guests?.bad_experience;
 
@@ -285,13 +285,13 @@ export class BookingForm {
 
     body.innerHTML = `
       ${hasBadExp ? `<div style="background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.3);border-radius:var(--r-md);padding:8px 12px;font-size:.78rem;color:#dc2626">
-        âš ï¸ <strong>AtenciÃ³n:</strong> HuÃ©sped con antecedentes de mala experiencia.
+        ⚠️ <strong>Atención:</strong> Huésped con antecedentes de mala experiencia.
       </div>` : ''}
       <div class="detail-header-row">
         <div>
           <div class="detail-guest-name">${guest}</div>
           <div class="detail-meta">
-            <span class="chip" style="background:${badgeColor}20;color:${badgeColor}">â–  ${srcCfg.label}</span>
+            <span class="chip" style="background:${badgeColor}20;color:${badgeColor}">■ ${srcCfg.label}</span>
             <span class="detail-unit">${unitNames}</span>
           </div>
         </div>
@@ -303,16 +303,16 @@ export class BookingForm {
         <div>
           <span class="detail-label">Check-in</span>
           <strong>${booking.check_in}</strong>
-          ${booking.checked_in_at ? `<span style="font-size:.65rem;color:var(--color-success);display:block">âœ“ Registrado</span>` : ''}
+          ${booking.checked_in_at ? `<span style="font-size:.65rem;color:var(--color-success);display:block">✓ Registrado</span>` : ''}
         </div>
         <div class="detail-nights">
           ${nights} noche${nights !== 1 ? 's' : ''}
-          ${(booking.pax || booking.adults) ? `<br><span style="font-size:.72rem;color:var(--color-text-3)">ðŸ‘¥ ${booking.adults ?? booking.pax ?? 1} adulto${(booking.adults ?? 1) !== 1 ? 's' : ''}${booking.children ? ` + ${booking.children} menor${booking.children !== 1 ? 'es' : ''}` : ''}</span>` : ''}
+          ${(booking.pax || booking.adults) ? `<br><span style="font-size:.72rem;color:var(--color-text-3)">👥 ${booking.adults ?? booking.pax ?? 1} adulto${(booking.adults ?? 1) !== 1 ? 's' : ''}${booking.children ? ` + ${booking.children} menor${booking.children !== 1 ? 'es' : ''}` : ''}</span>` : ''}
         </div>
         <div style="text-align:right">
           <span class="detail-label">Check-out</span>
           <strong>${booking.check_out}</strong>
-          ${booking.checked_out_at ? `<span style="font-size:.65rem;color:var(--color-success);display:block">âœ“ Registrado</span>` : ''}
+          ${booking.checked_out_at ? `<span style="font-size:.65rem;color:var(--color-success);display:block">✓ Registrado</span>` : ''}
         </div>
       </div>
       <div class="detail-breakdown">
@@ -322,14 +322,14 @@ export class BookingForm {
             <span>${formatARS(pricePerNight)}</span>
           </div>
           <div class="detail-breakdown-row">
-            <span>Noches${freeNights > 0 ? ` (${nights} âˆ’ ${freeNights} gratis)` : ` Ã— ${nights}`}</span>
+            <span>Noches${freeNights > 0 ? ` (${nights} − ${freeNights} gratis)` : ` × ${nights}`}</span>
             <span>${billable} fact.</span>
           </div>
           <div class="detail-breakdown-row">
             <span>Subtotal</span>
             <span>${formatARS(subtotal)}</span>
           </div>
-          ${discPct > 0 ? `<div class="detail-breakdown-row" style="color:var(--color-success)"><span>Descuento ${discPct}%</span><span>âˆ’${formatARS(discAmt)}</span></div>` : ''}
+          ${discPct > 0 ? `<div class="detail-breakdown-row" style="color:var(--color-success)"><span>Descuento ${discPct}%</span><span>−${formatARS(discAmt)}</span></div>` : ''}
           ${surcharge > 0 ? `<div class="detail-breakdown-row" style="color:var(--color-warning)"><span>Recargo / extra</span><span>+${formatARS(surcharge)}</span></div>` : ''}
         ` : ''}
         <div class="detail-breakdown-row total-row">
@@ -338,7 +338,7 @@ export class BookingForm {
         </div>
         ${totalPaid > 0 ? `<div class="detail-breakdown-row paid-row"><span>Pagado</span><span>${formatARS(totalPaid)}</span></div>` : ''}
         <div class="detail-breakdown-row balance-row" style="color:${balance > 0 ? 'var(--color-warning)' : 'var(--color-success)'}">
-          <span>${balance > 0 ? 'âš  Saldo pendiente' : 'âœ“ Saldado'}</span>
+          <span>${balance > 0 ? '⚠ Saldo pendiente' : '✓ Saldado'}</span>
           <span style="font-size:1.05rem">${formatARS(Math.abs(balance))}</span>
         </div>
       </div>
@@ -351,9 +351,9 @@ export class BookingForm {
           const pm    = PAYMENT_METHODS.find(m => m.value === p.method)?.label ?? p.method;
           const isNeg = p.amount < 0;
           return `<div class="pay-row-detail">
-            <span>${isNeg ? 'â†© DevoluciÃ³n' : pm}</span>
+            <span>${isNeg ? '↩ Devolución' : pm}</span>
             <span style="font-size:.72rem;color:var(--color-text-3)">${p.payment_date ?? ''}</span>
-            <span style="color:${isNeg?'var(--color-warning)':'var(--color-success)'};font-weight:600">${isNeg?'âˆ’':'+'}${formatARS(Math.abs(p.amount))}</span>
+            <span style="color:${isNeg?'var(--color-warning)':'var(--color-success)'};font-weight:600">${isNeg?'−':'+'}${formatARS(Math.abs(p.amount))}</span>
           </div>`;
         }).join('');
       body.innerHTML += `<div class="detail-payments"><div class="detail-label" style="margin-bottom:8px">Historial de Pagos</div>${payHtml}</div>`;
@@ -368,7 +368,7 @@ export class BookingForm {
     this._reset();
   }
 
-  // â”€â”€ Reset completo del form â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Reset completo del form ───────────────────────
   _reset() {
     this._currentStep     = 1;
     this._editingId       = null;
@@ -403,7 +403,7 @@ export class BookingForm {
     if (badAlert) badAlert.innerHTML = '';
     document.getElementById('payments-container').innerHTML = '';
 
-    // Source â†’ direct
+    // Source → direct
     this._renderSourceSelector();
 
     // Date picker
@@ -425,7 +425,7 @@ export class BookingForm {
     this._goToStep(1);
   }
 
-  // â”€â”€ Renderizar selector de unidades â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Renderizar selector de unidades ──────────────
   _renderUnitSelector() {
     const container = document.getElementById('units-selector');
     if (!container) return;
@@ -442,7 +442,7 @@ export class BookingForm {
           <span style="width:12px;height:12px;border-radius:50%;
             background:${color};flex-shrink:0;display:inline-block"></span>
           <span class="unit-option-name">${u.name}</span>
-          ${u.max_guests ? `<span class="unit-option-detail">hasta ${u.max_guests} huÃ©spedes</span>` : ''}
+          ${u.max_guests ? `<span class="unit-option-detail">hasta ${u.max_guests} huéspedes</span>` : ''}
           <input type="checkbox" ${selected ? 'checked' : ''} style="accent-color:${color};margin-left:auto">
         </label>`;
     }).join('');
@@ -475,10 +475,10 @@ export class BookingForm {
     this._renderPaxSelector();
   }
 
-  // â”€â”€ Selector de cantidad de personas â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Selector de cantidad de personas ─────────────
   _renderPaxSelector() {
     const getMaxPax = () => {
-      // Capacidad mÃ¡xima = suma de max_guests de unidades seleccionadas
+      // Capacidad máxima = suma de max_guests de unidades seleccionadas
       // (permite multi-unidad: ej. 2 deptos para 8 personas)
       if (!this._selectedUnitIds?.size) return 99;
       const units = this.ctx?.units ?? [];
@@ -505,8 +505,8 @@ export class BookingForm {
       if (capHint && maxPax < 99) {
         const over = total > maxPax;
         capHint.textContent = over
-          ? `âš ï¸ Excede el mÃ¡ximo (${maxPax})`
-          : `mÃ¡x. ${maxPax}`;
+          ? `⚠️ Excede el máximo (${maxPax})`
+          : `máx. ${maxPax}`;
         capHint.style.color = over ? '#ef4444' : '';
       }
     };
@@ -532,9 +532,9 @@ export class BookingForm {
         if (delta > 0 && (next + other) > maxPax) {
           const capHint = document.getElementById('pax-cap-hint');
           if (capHint) {
-            capHint.textContent = `âš ï¸ MÃ¡ximo ${maxPax} huÃ©spedes`;
+            capHint.textContent = `⚠️ Máximo ${maxPax} huéspedes`;
             capHint.style.color = '#ef4444';
-            setTimeout(() => { capHint.textContent = `mÃ¡x. ${maxPax}`; capHint.style.color = ''; }, 1500);
+            setTimeout(() => { capHint.textContent = `máx. ${maxPax}`; capHint.style.color = ''; }, 1500);
           }
           return;
         }
@@ -553,7 +553,7 @@ export class BookingForm {
     this._updatePaxCap = updateTotal;
   }
 
-  // â”€â”€ Sugeridor de precio dinÃ¡mico â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Sugeridor de precio dinámico ─────────────────
   _triggerPriceSuggestion() {
     clearTimeout(this._suggestTimer);
     this._suggestTimer = setTimeout(() => this._runPriceSuggestion(), 500);
@@ -586,7 +586,7 @@ export class BookingForm {
     }
     if (!this._priceSuggester) return;
 
-    container.innerHTML = '<div class="ps-loading">âŸ³ Analizando historial...</div>';
+    container.innerHTML = '<div class="ps-loading">⟳ Analizando historial...</div>';
 
     try {
       const currentPrice = parseFloat(document.getElementById('f-price')?.value) || 0;
@@ -606,14 +606,14 @@ export class BookingForm {
           priceEl.style.boxShadow = '0 0 0 2px #22c55e28';
           setTimeout(() => { priceEl.style.borderColor=''; priceEl.style.boxShadow=''; }, 1800);
         }
-        showToast('Precio sugerido aplicado âœ“', 'success');
+        showToast('Precio sugerido aplicado ✓', 'success');
       });
     } catch (err) {
       container.innerHTML = '';
     }
   }
 
-  // â”€â”€ Calcular fechas bloqueadas para el picker â”€â”€â”€â”€â”€
+  // ── Calcular fechas bloqueadas para el picker ─────
   async _updateBlockedDates() {
     if (!this._datePicker || !this._selectedUnitIds.size) return;
     const unitIds = [...this._selectedUnitIds];
@@ -640,7 +640,7 @@ export class BookingForm {
     } catch (_) {}
   }
 
-  // â”€â”€ NavegaciÃ³n de pasos â€” LIBRE (sin validaciÃ³n forzada) â”€â”€
+  // ── Navegación de pasos — LIBRE (sin validación forzada) ──
   _goToStep(step) {
     this._currentStep = step;
 
@@ -663,16 +663,16 @@ export class BookingForm {
     if (footer) footer.style.display = onVoucher ? 'none' : '';
     if (backBtn) backBtn.style.visibility = (step > 1 && !onVoucher) ? 'visible' : 'hidden';
     if (nextBtn) nextBtn.textContent = step === 4
-      ? 'Ver Resumen â†’'
+      ? 'Ver Resumen →'
       : step < 4
-      ? 'Continuar â†’'
-      : 'Continuar â†’';
+      ? 'Continuar →'
+      : 'Continuar →';
 
     if (step === 4) this._updatePaymentSummary();
     if (step === 5) this._renderVoucher();
   }
 
-  // Continuar â†’ siguiente paso O mostrar voucher en paso 5
+  // Continuar → siguiente paso O mostrar voucher en paso 5
   _nextStep() {
     if (this._currentStep < this._totalSteps) {
       if (this._currentStep === 4 && !this._validateAll()) return; // validar antes del voucher
@@ -684,7 +684,7 @@ export class BookingForm {
     if (this._currentStep > 1) this._goToStep(this._currentStep - 1);
   }
 
-  // â”€â”€ ValidaciÃ³n completa â€” solo al guardar â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Validación completa — solo al guardar ─────────
   _validateAll() {
     // Clear previous errors
     document.querySelectorAll('.field-error').forEach(el => {
@@ -710,17 +710,17 @@ export class BookingForm {
     if (!fn) fail('f-firstname', 1, 'Nombre requerido');
     if (!ln) fail('f-lastname',  1, 'Apellido requerido');
     if (!this._selectedUnitIds.size) {
-      // Units selector â€” highlight the container
+      // Units selector — highlight the container
       const sel = document.getElementById('units-selector');
       if (sel) sel.classList.add('field-error');
-      if (!firstStep || 2 < firstStep.step) firstStep = { step: 2, msg: 'SeleccionÃ¡ al menos una unidad' };
+      if (!firstStep || 2 < firstStep.step) firstStep = { step: 2, msg: 'Seleccioná al menos una unidad' };
     }
-    if (!ci) fail('f-date-picker', 2, 'SeleccionÃ¡ fechas de estadÃ­a');
-    if (!co) fail('f-date-picker', 2, 'SeleccionÃ¡ fechas de estadÃ­a');
+    if (!ci) fail('f-date-picker', 2, 'Seleccioná fechas de estadía');
+    if (!co) fail('f-date-picker', 2, 'Seleccioná fechas de estadía');
     if (ci && co && ci >= co) {
       fail('f-date-picker', 2, 'El check-out debe ser posterior al check-in');
     }
-    if (!price || price <= 0) fail('f-price', 3, 'IngresÃ¡ el precio por noche');
+    if (!price || price <= 0) fail('f-price', 3, 'Ingresá el precio por noche');
 
     if (firstStep) {
       this._goToStep(firstStep.step);
@@ -731,7 +731,7 @@ export class BookingForm {
     return true;
   }
 
-  // â”€â”€ Precio breakdown â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Precio breakdown ──────────────────────────────
   _updateBreakdown() {
     const ci    = document.getElementById('f-checkin').value;
     const co    = document.getElementById('f-checkout').value;
@@ -742,7 +742,7 @@ export class BookingForm {
 
     if (!ci || !co || !price) {
       ['pb-nights','pb-subtotal','pb-discount','pb-surcharge','pb-total','pb-free-nights']
-        .forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'â€”'; });
+        .forEach(id => { const el = document.getElementById(id); if (el) el.textContent = '—'; });
       return;
     }
 
@@ -755,9 +755,9 @@ export class BookingForm {
     const set = (id, text) => { const el = document.getElementById(id); if (el) el.textContent = text; };
     set('pb-nights',     `${nights} noche${nights !== 1 ? 's' : ''}`);
     set('pb-subtotal',   formatARS(subtotal));
-    set('pb-free-nights', freeN > 0 ? `âˆ’${formatARS(price * freeN)}` : 'â€”');
-    set('pb-discount',   disc > 0 ? `âˆ’${formatARS(discAmt)} (${disc}%)` : 'â€”');
-    set('pb-surcharge',  surch > 0 ? `+${formatARS(surch)}` : 'â€”');
+    set('pb-free-nights', freeN > 0 ? `−${formatARS(price * freeN)}` : '—');
+    set('pb-discount',   disc > 0 ? `−${formatARS(discAmt)} (${disc}%)` : '—');
+    set('pb-surcharge',  surch > 0 ? `+${formatARS(surch)}` : '—');
     set('pb-total',      formatARS(total));
 
     document.getElementById('pbr-free-nights')?.style.setProperty('display', freeN > 0 ? '' : 'none');
@@ -768,7 +768,7 @@ export class BookingForm {
     this._updatePaymentSummary();
   }
 
-  // â”€â”€ Manejo de pagos â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Manejo de pagos ───────────────────────────────
   _addPaymentRow(existing = null) {
     const rowId  = `pay-row-${++this._payRowCount}`;
     const today  = toISODate(new Date());
@@ -797,7 +797,7 @@ export class BookingForm {
           <span class="pay-ars-equiv" style="font-size:.72rem;color:var(--color-text-2)"></span>
         </div>
         <input type="date" class="pay-date form-control" value="${existing?.payment_date ?? today}">
-        <button class="btn btn-icon btn-danger-icon pay-remove" title="Eliminar">Ã—</button>
+        <button class="btn btn-icon btn-danger-icon pay-remove" title="Eliminar">×</button>
       </div>
       <div class="credit-surcharge-info" style="display:none;font-size:.75rem;color:var(--color-warning);margin-top:4px">
         +10% recargo tarjeta: <span id="${rowId}-cc-surcharge">$0</span>
@@ -816,7 +816,7 @@ export class BookingForm {
     });
     row.dataset.currency = isFx ? 'USD' : 'ARS';
 
-    // Rate input â†’ recalculate equiv
+    // Rate input → recalculate equiv
     row.querySelector('.pay-rate').addEventListener('input', () => this._updateUsdEquiv(row));
 
     row.querySelector('.pay-remove').addEventListener('click', () => {
@@ -842,7 +842,7 @@ export class BookingForm {
     if (usd && rate) {
       equiv.textContent = `= ${formatARS(usd * rate)}`;
     } else {
-      equiv.textContent = rate ? `Ã— ${formatARS(rate)}` : '';
+      equiv.textContent = rate ? `× ${formatARS(rate)}` : '';
     }
   }
 
@@ -879,7 +879,7 @@ export class BookingForm {
     set('ps-balance', formatARS(Math.max(0, balance)));
   }
 
-  // â”€â”€ BÃºsqueda de huÃ©spedes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Búsqueda de huéspedes ─────────────────────────
   async _searchGuests(q) {
     const container = document.getElementById('guest-results');
     if (!container) return;
@@ -900,7 +900,7 @@ export class BookingForm {
       return `<div class="guest-result-item ${isBad ? 'bad-exp' : ''}" data-id="${g.id}"
            data-fn="${g.first_name ?? ''}" data-ln="${g.last_name ?? ''}"
            data-dni="${g.dni ?? ''}" data-phone="${g.phone ?? ''}">
-        ${isBad ? 'âš ï¸ ' : isVIP ? 'â­ ' : ''}${g.first_name} ${g.last_name}
+        ${isBad ? '⚠️ ' : isVIP ? '⭐ ' : ''}${g.first_name} ${g.last_name}
         ${g.dni ? `<span class="result-meta">${g.dni}</span>` : ''}
       </div>`;
     }).join('');
@@ -919,18 +919,18 @@ export class BookingForm {
         const alertContainer = document.getElementById('bad-exp-booking-alert-container');
         if (alertContainer) {
           if (guest?.bad_experience || (guest?.tags ?? []).includes('no_recomendar')) {
-            alertContainer.innerHTML = `<div class="alert alert-warning">âš ï¸ <strong>AtenciÃ³n:</strong> este huÃ©sped tiene antecedentes de mala experiencia previa.</div>`;
+            alertContainer.innerHTML = `<div class="alert alert-warning">⚠️ <strong>Atención:</strong> este huésped tiene antecedentes de mala experiencia previa.</div>`;
           } else if ((guest?.tags ?? []).includes('vip')) {
-            alertContainer.innerHTML = `<div class="alert alert-info">â­ <strong>HuÃ©sped VIP</strong> â€” Dar atenciÃ³n preferencial.</div>`;
+            alertContainer.innerHTML = `<div class="alert alert-info">⭐ <strong>Huésped VIP</strong> — Dar atención preferencial.</div>`;
           } else {
             alertContainer.innerHTML = '';
           }
         }
 
-        // â”€â”€ Indicador cliente nuevo / frecuente â”€â”€â”€â”€â”€â”€â”€
+        // ── Indicador cliente nuevo / frecuente ───────
         const guestBadge = document.getElementById('guest-booking-history-badge');
         if (guestBadge) {
-          guestBadge.textContent = 'âŸ³ Verificando...';
+          guestBadge.textContent = '⟳ Verificando...';
           guestBadge.className = 'guest-history-badge loading';
           try {
             const { count } = await this.db
@@ -940,10 +940,10 @@ export class BookingForm {
               .neq('status', 'cancelled');
             const n = count ?? 0;
             if (n === 0) {
-              guestBadge.textContent  = 'ðŸ†• Cliente nuevo â€” primera reserva';
+              guestBadge.textContent  = '🆕 Cliente nuevo — primera reserva';
               guestBadge.className    = 'guest-history-badge new';
             } else {
-              guestBadge.textContent  = `ðŸ”„ HuÃ©sped frecuente â€” ${n} reserva${n !== 1 ? 's' : ''} anterior${n !== 1 ? 'es' : ''}`;
+              guestBadge.textContent  = `🔄 Huésped frecuente — ${n} reserva${n !== 1 ? 's' : ''} anterior${n !== 1 ? 'es' : ''}`;
               guestBadge.className    = 'guest-history-badge returning';
             }
           } catch {
@@ -956,23 +956,23 @@ export class BookingForm {
     container.classList.remove('hidden');
   }
 
-  // â”€â”€ Historial de precios por unidad y mes â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Historial de precios por unidad y mes ─────────
   async _loadPriceHistory(unitId) {
     if (!unitId) return;
     const hints = document.getElementById('price-history-hint');
     if (!hints) return;
-    hints.innerHTML = '<span style="font-size:.72rem;color:var(--color-text-3)">âŸ³ Buscando historial...</span>';
+    hints.innerHTML = '<span style="font-size:.72rem;color:var(--color-text-3)">⟳ Buscando historial...</span>';
 
     try {
       const now      = new Date();
       const month    = now.getMonth() + 1;
       const monthPad = String(month).padStart(2, '0');
 
-      // â”€â”€ Query segura: via bookings (RLS ok) + filtro JS por unidad â”€â”€
-      // Mes actual (mismo mes, cualquier aÃ±o)
+      // ── Query segura: via bookings (RLS ok) + filtro JS por unidad ──
+      // Mes actual (mismo mes, cualquier año)
       const { data: monthData } = await this.db
         .from('bookings')
-        .select('price_per_night, check_in, check_out')
+        .select('price_per_night, check_in, check_out, booking_units(unit_id)')
         .eq('hotel_id', this.ctx.hotelId)
         .not('status', 'in', '(cancelled,blocked)')
         .gt('price_per_night', 0)
@@ -981,7 +981,7 @@ export class BookingForm {
         .limit(60);
 
       const prices = (monthData ?? [])
-        
+        .filter(b => (b.booking_units ?? []).some(bu => bu.unit_id === unitId))
         .map(b => b.price_per_night)
         .filter(p => p > 0);
 
@@ -989,7 +989,7 @@ export class BookingForm {
         // Fallback: cualquier mes reciente para esta unidad
         const { data: anyData } = await this.db
           .from('bookings')
-          .select('price_per_night, check_in')
+          .select('price_per_night, check_in, booking_units(unit_id)')
           .eq('hotel_id', this.ctx.hotelId)
           .not('status', 'in', '(cancelled,blocked)')
           .gt('price_per_night', 0)
@@ -997,7 +997,7 @@ export class BookingForm {
           .limit(50);
 
         const anyPrices = (anyData ?? [])
-          
+          .filter(b => (b.booking_units ?? []).some(bu => bu.unit_id === unitId))
           .map(b => b.price_per_night)
           .filter(p => p > 0);
 
@@ -1006,7 +1006,7 @@ export class BookingForm {
         const fmt      = n => '$' + Math.round(n).toLocaleString('es-AR');
         const unitName = this.ctx.units.find(u => u.id === unitId)?.name ?? 'esta unidad';
         hints.innerHTML = `<span style="font-size:.72rem;color:var(--color-primary)">
-          ðŸ’¡ Ãšltimo precio registrado en <strong>${unitName}</strong>: <strong>${fmt(anyAvg)}</strong>/noche
+          💡 Último precio registrado en <strong>${unitName}</strong>: <strong>${fmt(anyAvg)}</strong>/noche
         </span>`;
         return;
       }
@@ -1023,10 +1023,10 @@ export class BookingForm {
           padding:6px 10px;background:var(--color-surface-2);
           border-radius:var(--r-md);border-left:3px solid var(--color-primary)">
           <span style="font-size:.72rem;color:var(--color-text-2)">
-            ðŸ’¡ <strong>${unitName}</strong> en <strong>${MONTHS[month-1]}</strong>
-            (${prices.length} reserva${prices.length!==1?'s':''} histÃ³ricas):
+            💡 <strong>${unitName}</strong> en <strong>${MONTHS[month-1]}</strong>
+            (${prices.length} reserva${prices.length!==1?'s':''} históricas):
             prom. <strong style="color:var(--color-primary)">${fmt(avg)}</strong>/noche
-            ${min !== max ? `Â· rango ${fmt(min)}â€“${fmt(max)}` : ''}
+            ${min !== max ? `· rango ${fmt(min)}–${fmt(max)}` : ''}
           </span>
           <button style="font-size:.68rem;padding:2px 8px;border:1px solid var(--color-primary);
             border-radius:var(--r-sm);background:transparent;color:var(--color-primary);
@@ -1040,8 +1040,8 @@ export class BookingForm {
     } catch { hints.innerHTML = ''; }
   }
 
-  // â”€â”€ Submit â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  // â”€â”€ Voucher â€” Paso 5 â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Submit ────────────────────────────────────────
+  // ── Voucher — Paso 5 ─────────────────────────────
   _renderVoucher() {
     const el = document.getElementById('booking-voucher');
     if (!el) return;
@@ -1080,7 +1080,7 @@ export class BookingForm {
     const paid       = this._getTotalPaid();
     const balance    = total - paid;
     const fmt = n => '$' + Math.round(n).toLocaleString('es-AR');
-    const fmtDate = d => d ? new Date(d + 'T12:00:00').toLocaleDateString('es-AR', {weekday:'short',day:'numeric',month:'short'}) : 'â€”';
+    const fmtDate = d => d ? new Date(d + 'T12:00:00').toLocaleDateString('es-AR', {weekday:'short',day:'numeric',month:'short'}) : '—';
 
     // Payment rows
     const payRows = [];
@@ -1091,68 +1091,68 @@ export class BookingForm {
       const note = row.querySelector('.pay-note')?.value ?? '';
       if (amt > 0) {
         const labels = { cash:'Efectivo', transfer:'Transferencia', mercadopago:'MercadoPago',
-          naranjax:'Naranja X', uala:'UalÃ¡', debit_card:'Tarjeta DÃ©bito',
-          credit_card:'Tarjeta CrÃ©dito (+10%)', credit_note:'Nota de CrÃ©dito / Voucher' };
+          naranjax:'Naranja X', uala:'Ualá', debit_card:'Tarjeta Débito',
+          credit_card:'Tarjeta Crédito (+10%)', credit_note:'Nota de Crédito / Voucher' };
         payRows.push({ label: labels[meth] ?? meth, amount: meth === 'credit_card' ? amt * 1.10 : amt, date, note });
       }
     });
 
-    const statusText = paid <= 0 ? 'Sin seÃ±a' : balance <= 0 ? 'Pagado total' : 'Con seÃ±a';
+    const statusText = paid <= 0 ? 'Sin seña' : balance <= 0 ? 'Pagado total' : 'Con seña';
     const statusColor = paid <= 0 ? '#f59e0b' : balance <= 0 ? '#16a34a' : '#fb7185';
 
     el.innerHTML = `
       <div class="voucher-header">
         <div class="voucher-hotel">${this.ctx?.hotel?.name ?? 'Barranca de Termas'}</div>
-        <div class="voucher-title">${this._editingId ? 'ActualizaciÃ³n de Reserva' : 'Nueva Reserva'}</div>
+        <div class="voucher-title">${this._editingId ? 'Actualización de Reserva' : 'Nueva Reserva'}</div>
         <span class="voucher-status-pill" style="background:${statusColor}20;color:${statusColor};border:1px solid ${statusColor}40">${statusText}</span>
       </div>
 
       <div class="voucher-section">
-        <div class="voucher-section-title">ðŸ‘¤ HuÃ©sped</div>
-        <div class="voucher-row"><strong>${(fn + ' ' + ln).trim() || 'â€”'}</strong></div>
+        <div class="voucher-section-title">👤 Huésped</div>
+        <div class="voucher-row"><strong>${(fn + ' ' + ln).trim() || '—'}</strong></div>
         ${dni   ? `<div class="voucher-row-sm">DNI: ${dni}</div>` : ''}
-        ${phone ? `<div class="voucher-row-sm">ðŸ“± ${phone}</div>` : ''}
-        ${email ? `<div class="voucher-row-sm">âœ‰ï¸ ${email}</div>` : ''}
+        ${phone ? `<div class="voucher-row-sm">📱 ${phone}</div>` : ''}
+        ${email ? `<div class="voucher-row-sm">✉️ ${email}</div>` : ''}
       </div>
 
       <div class="voucher-section">
-        <div class="voucher-section-title">ðŸ›ï¸ EstadÃ­a</div>
+        <div class="voucher-section-title">🛏️ Estadía</div>
         <div class="voucher-dates-grid">
           <div><div class="voucher-label">CHECK-IN</div><div class="voucher-date-val">${fmtDate(ci)}</div></div>
-          <div style="text-align:center;color:var(--color-text-3);font-size:1.2rem">â†’</div>
+          <div style="text-align:center;color:var(--color-text-3);font-size:1.2rem">→</div>
           <div><div class="voucher-label">CHECK-OUT</div><div class="voucher-date-val">${fmtDate(co)}</div></div>
         </div>
         <div class="voucher-row-sm" style="margin-top:6px">
-          ðŸŒ™ ${nightsN} noche${nightsN !== 1 ? 's' : ''}&nbsp;Â·&nbsp;
-          ðŸ‘¥ ${adults} adulto${adults !== 1 ? 's' : ''}${children ? ` + ${children} menor${children !== 1 ? 'es' : ''}` : ''}
+          🌙 ${nightsN} noche${nightsN !== 1 ? 's' : ''}&nbsp;·&nbsp;
+          👥 ${adults} adulto${adults !== 1 ? 's' : ''}${children ? ` + ${children} menor${children !== 1 ? 'es' : ''}` : ''}
         </div>
-        <div class="voucher-row-sm">ðŸ  ${unitNames || 'â€”'}</div>
+        <div class="voucher-row-sm">🏠 ${unitNames || '—'}</div>
       </div>
 
       <div class="voucher-section">
-        <div class="voucher-section-title">ðŸ’° Finanzas</div>
+        <div class="voucher-section-title">💰 Finanzas</div>
         <div class="voucher-fin-row"><span>Precio por noche</span><span>${fmt(price)}</span></div>
         <div class="voucher-fin-row"><span>Noches facturadas (${billable})</span><span>${fmt(subtotal)}</span></div>
-        ${discPct > 0   ? `<div class="voucher-fin-row voucher-disc"><span>Descuento ${discPct}%</span><span>âˆ’${fmt(discount)}</span></div>` : ''}
+        ${discPct > 0   ? `<div class="voucher-fin-row voucher-disc"><span>Descuento ${discPct}%</span><span>−${fmt(discount)}</span></div>` : ''}
         ${surcharge > 0 ? `<div class="voucher-fin-row"><span>Recargo</span><span>+${fmt(surcharge)}</span></div>` : ''}
-        ${freeNights > 0 ? `<div class="voucher-fin-row voucher-disc"><span>Noches sin cargo (${freeNights})</span><span>âœ“</span></div>` : ''}
+        ${freeNights > 0 ? `<div class="voucher-fin-row voucher-disc"><span>Noches sin cargo (${freeNights})</span><span>✓</span></div>` : ''}
         <div class="voucher-fin-row voucher-total"><span><strong>TOTAL</strong></span><span><strong>${fmt(total)}</strong></span></div>
         ${payRows.map(p => `
           <div class="voucher-fin-row" style="font-size:.78rem;color:var(--color-text-2)">
-            <span>â†³ ${p.label}${p.date ? ' Â· ' + p.date : ''}${p.note ? ' Â· ' + p.note : ''}</span>
+            <span>↳ ${p.label}${p.date ? ' · ' + p.date : ''}${p.note ? ' · ' + p.note : ''}</span>
             <span>${fmt(p.amount)}</span>
           </div>`).join('')}
         <div class="voucher-fin-row" style="margin-top:6px">
           <span>Abonado</span><span style="color:#16a34a;font-weight:600">${fmt(paid)}</span>
         </div>
         <div class="voucher-fin-row ${balance > 0 ? 'voucher-saldo-pending' : 'voucher-saldo-ok'}">
-          <span><strong>${balance > 0 ? 'âš ï¸ Saldo pendiente' : 'âœ… Sin saldo'}</strong></span>
-          <span><strong>${balance > 0 ? fmt(balance) : 'â€”'}</strong></span>
+          <span><strong>${balance > 0 ? '⚠️ Saldo pendiente' : '✅ Sin saldo'}</strong></span>
+          <span><strong>${balance > 0 ? fmt(balance) : '—'}</strong></span>
         </div>
       </div>
 
       ${notes ? `<div class="voucher-section">
-        <div class="voucher-section-title">ðŸ“ Observaciones</div>
+        <div class="voucher-section-title">📝 Observaciones</div>
         <div class="voucher-notes">${notes}</div>
       </div>` : ''}`;
 
@@ -1191,8 +1191,8 @@ export class BookingForm {
     const balance    = Math.max(0, total - paid);
 
     const fmt  = n => '$\u00a0' + Math.round(n).toLocaleString('es-AR');
-    const fmtD = d => d ? new Date(d + 'T12:00:00').toLocaleDateString('es-AR', {weekday:'long', day:'numeric', month:'long', year:'numeric'}) : 'â€”';
-    const fmtDShort = d => d ? d.split('-').reverse().join('/') : 'â€”';
+    const fmtD = d => d ? new Date(d + 'T12:00:00').toLocaleDateString('es-AR', {weekday:'long', day:'numeric', month:'long', year:'numeric'}) : '—';
+    const fmtDShort = d => d ? d.split('-').reverse().join('/') : '—';
     const now  = new Date().toLocaleDateString('es-AR', {day:'numeric',month:'long',year:'numeric'});
 
     const payRows = [];
@@ -1203,8 +1203,8 @@ export class BookingForm {
       const note = row.querySelector('.pay-note')?.value ?? '';
       if (amt > 0) {
         const labels = { cash:'Efectivo', transfer:'Transferencia', mercadopago:'MercadoPago',
-          naranjax:'Naranja X', uala:'UalÃ¡', debit_card:'Tarjeta DÃ©bito',
-          credit_card:'Tarjeta CrÃ©dito (+10%)', credit_note:'Nota de CrÃ©dito/Voucher' };
+          naranjax:'Naranja X', uala:'Ualá', debit_card:'Tarjeta Débito',
+          credit_card:'Tarjeta Crédito (+10%)', credit_note:'Nota de Crédito/Voucher' };
         payRows.push({ label: labels[meth] ?? meth, amount: meth === 'credit_card' ? amt * 1.10 : amt, date: fmtDShort(date), note });
       }
     });
@@ -1212,13 +1212,13 @@ export class BookingForm {
     const paxStr = `${adults} adulto${adults !== 1 ? 's' : ''}${children ? ` + ${children} menor${children !== 1 ? 'es' : ''}` : ''}`;
     const sourceChip = document.querySelector('#f-source-selector .src-chip.selected');
     const sourceLabel = sourceChip?.querySelector('span')?.textContent?.trim() ?? 'Directo';
-    const statusText = paid <= 0 ? 'SIN SEÃ‘A' : balance <= 0 ? 'PAGADO TOTAL' : 'CON SEÃ‘A';
+    const statusText = paid <= 0 ? 'SIN SEÑA' : balance <= 0 ? 'PAGADO TOTAL' : 'CON SEÑA';
     const statusColor = paid <= 0 ? '#f59e0b' : balance <= 0 ? '#16a34a' : '#6366f1';
 
     const win = window.open('', '_blank');
     win.document.write(`<!DOCTYPE html><html lang="es"><head>
 <meta charset="utf-8">
-<title>Voucher â€” ${ln} ${fn}</title>
+<title>Voucher — ${ln} ${fn}</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
   * { margin:0; padding:0; box-sizing:border-box; }
@@ -1287,10 +1287,10 @@ export class BookingForm {
 
 <div class="header">
   <div class="hotel-brand">
-    <div class="hotel-logo">ðŸ¨</div>
+    <div class="hotel-logo">🏨</div>
     <div>
       <div class="hotel-name">Barranca de Termas</div>
-      <div class="hotel-sub">Complejo de Apartamentos TurÃ­sticos</div>
+      <div class="hotel-sub">Complejo de Apartamentos Turísticos</div>
     </div>
   </div>
   <div class="voucher-label-badge">Voucher de Reserva</div>
@@ -1312,26 +1312,26 @@ export class BookingForm {
   </div>
 </div>
 
-<!-- Datos del HuÃ©sped + Unidad -->
+<!-- Datos del Huésped + Unidad -->
 <div class="grid-2">
   <div class="card">
-    <div class="card-title">ðŸ‘¤ Datos del HuÃ©sped</div>
+    <div class="card-title">👤 Datos del Huésped</div>
     <div class="field">
       <div class="field-label">Nombre completo</div>
-      <div class="field-value large">${(ln + ', ' + fn).trim().replace(/^, /,'') || 'â€”'}</div>
+      <div class="field-value large">${(ln + ', ' + fn).trim().replace(/^, /,'') || '—'}</div>
     </div>
     ${dni   ? `<div class="field"><div class="field-label">DNI / Documento</div><div class="field-value">${dni}</div></div>` : ''}
-    ${phone ? `<div class="field"><div class="field-label">TelÃ©fono</div><div class="field-value">${phone}</div></div>` : ''}
+    ${phone ? `<div class="field"><div class="field-label">Teléfono</div><div class="field-value">${phone}</div></div>` : ''}
     ${email ? `<div class="field"><div class="field-label">Email</div><div class="field-value">${email}</div></div>` : ''}
   </div>
   <div class="card">
-    <div class="card-title">ðŸ  Alojamiento</div>
+    <div class="card-title">🏠 Alojamiento</div>
     <div class="field">
       <div class="field-label">Unidad / Departamento</div>
-      <div class="field-value large">${unitNames || 'â€”'}</div>
+      <div class="field-value large">${unitNames || '—'}</div>
     </div>
     <div class="field">
-      <div class="field-label">HuÃ©spedes</div>
+      <div class="field-label">Huéspedes</div>
       <div class="field-value">${paxStr}</div>
     </div>
   </div>
@@ -1345,7 +1345,7 @@ export class BookingForm {
     <div class="dates-block-sub">${fmtD(ci).split(',')[0] ?? ''}</div>
   </div>
   <div style="text-align:center">
-    <div class="dates-arrow">â†’</div>
+    <div class="dates-arrow">→</div>
     <div class="nights-pill">${nightsN} noche${nightsN !== 1 ? 's' : ''}</div>
   </div>
   <div class="dates-block">
@@ -1355,7 +1355,7 @@ export class BookingForm {
   </div>
 </div>
 
-<!-- LiquidaciÃ³n -->
+<!-- Liquidación -->
 <div class="finance-card">
   <div class="finance-row subtotal">
     <span>Precio por noche</span><span>${fmt(price)}</span>
@@ -1363,32 +1363,32 @@ export class BookingForm {
   <div class="finance-row subtotal">
     <span>Noches (${billable}${freeNights ? ` facturables de ${nightsN}` : ''})</span><span>${fmt(subtotal)}</span>
   </div>
-  ${discPct > 0    ? `<div class="finance-row disc"><span>Descuento ${discPct}%</span><span>âˆ’ ${fmt(discount)}</span></div>` : ''}
+  ${discPct > 0    ? `<div class="finance-row disc"><span>Descuento ${discPct}%</span><span>− ${fmt(discount)}</span></div>` : ''}
   ${surcharge > 0  ? `<div class="finance-row"><span>Recargo adicional</span><span>+ ${fmt(surcharge)}</span></div>` : ''}
   <div class="finance-row total">
-    <span>TOTAL ESTADÃA</span><span>${fmt(total)}</span>
+    <span>TOTAL ESTADÍA</span><span>${fmt(total)}</span>
   </div>
   ${payRows.map(p => `
   <div class="finance-row payment-row-item">
-    <span>â†³ ${p.label}${p.date ? ' Â· ' + p.date : ''}${p.note ? ' Â· ' + p.note : ''}</span>
+    <span>↳ ${p.label}${p.date ? ' · ' + p.date : ''}${p.note ? ' · ' + p.note : ''}</span>
     <span>${fmt(p.amount)}</span>
   </div>`).join('')}
   ${paid > 0 ? `<div class="finance-row paid-row"><span>Total abonado</span><span>${fmt(paid)}</span></div>` : ''}
   <div class="finance-row balance-row">
-    <span>${balance > 0 ? 'âš ï¸ Saldo pendiente al check-in' : 'âœ… Sin saldo pendiente'}</span>
-    <span>${balance > 0 ? fmt(balance) : 'â€”'}</span>
+    <span>${balance > 0 ? '⚠️ Saldo pendiente al check-in' : '✅ Sin saldo pendiente'}</span>
+    <span>${balance > 0 ? fmt(balance) : '—'}</span>
   </div>
 </div>
 
 ${notes ? `
 <div class="notes-card">
-  <div class="card-title" style="margin-bottom:8px">ðŸ“ Observaciones</div>
+  <div class="card-title" style="margin-bottom:8px">📝 Observaciones</div>
   <div class="notes-text">${notes}</div>
 </div>` : ''}
 
 <div class="footer">
   <p>Este documento es un comprobante interno de reserva generado por <strong>MILA PMS</strong>.<br>
-  Barranca de Termas â€” Departamentos TurÃ­sticos Â· <em>Documento emitido el ${now}</em></p>
+  Barranca de Termas — Departamentos Turísticos · <em>Documento emitido el ${now}</em></p>
 </div>
 
 </body></html>`);
@@ -1429,20 +1429,20 @@ ${notes ? `
 
     const paxStr = `${adults} adulto${adults !== 1 ? 's' : ''}${children ? ` + ${children} menor${children !== 1 ? 'es' : ''}` : ''}`;
     const fmt = n => '$' + Math.round(n).toLocaleString('es-AR');
-    const fmtD = d => d ? d.split('-').reverse().join('/') : 'â€”';
+    const fmtD = d => d ? d.split('-').reverse().join('/') : '—';
 
     // Exact format requested
     const text =
-      `ðŸ¨ *Nueva Reserva*\n` +
+      `🏨 *Nueva Reserva*\n` +
       `*Apellido y Nombre:* ${ln} ${fn}\n` +
-      `*DNI:* ${dni || 'â€”'}\n` +
-      `*Celular de contacto:* ${phone || 'â€”'}\n` +
+      `*DNI:* ${dni || '—'}\n` +
+      `*Celular de contacto:* ${phone || '—'}\n` +
       `*Check-in:* ${fmtD(ci)}\n` +
       `*Check-out:* ${fmtD(co)} (${nightsN} noche${nightsN !== 1 ? 's' : ''})\n` +
-      `*Tipo de departamento:* ${unitNames || 'â€”'}\n` +
+      `*Tipo de departamento:* ${unitNames || '—'}\n` +
       `*Cantidad de personas:* ${paxStr}\n` +
       `*Saldo pendiente al ingreso:* ${fmt(balance)}\n\n` +
-      `ðŸ“ *Nota y observaciones:* _${[sourceLabel, notes].filter(Boolean).join(' Â· ') || 'Sin observaciones'}_`;
+      `📝 *Nota y observaciones:* _${[sourceLabel, notes].filter(Boolean).join(' · ') || 'Sin observaciones'}_`;
 
     const MANAGER_PHONE = '5492236848043'; // +54 9 223 684-8043
     window.open(`https://wa.me/${MANAGER_PHONE}?text=${encodeURIComponent(text)}`, '_blank');
@@ -1456,7 +1456,7 @@ ${notes ? `
 
     let _safetyTimer = setTimeout(() => {
       if (btn) { btn.disabled = false; btn.textContent = this._editingId ? 'Guardar cambios' : 'Confirmar reserva'; }
-      showToast('La operaciÃ³n tardÃ³ demasiado. VerificÃ¡ tu conexiÃ³n.', 'error');
+      showToast('La operación tardó demasiado. Verificá tu conexión.', 'error');
     }, 30000);
 
     try {
@@ -1478,7 +1478,7 @@ ${notes ? `
       const paid     = this._getTotalPaid();
       const balance  = total - paid;
 
-      // â”€â”€ Validar superposiciÃ³n de unidades â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      // ── Validar superposición de unidades ────────────
       const selectedUnits = [...this._selectedUnitIds];
       if (selectedUnits.length > 0 && ci && co) {
         const { data: conflicts } = await this.db
@@ -1494,15 +1494,15 @@ ${notes ? `
         );
         if (realConflicts.length) {
           const g = realConflicts[0].bookings?.guests;
-          const name = g ? `${g.first_name} ${g.last_name}` : 'otro huÃ©sped';
-          showToast(`âš ï¸ SuperposiciÃ³n: "${name}" ya tiene esa unidad en esas fechas.`, 'error');
+          const name = g ? `${g.first_name} ${g.last_name}` : 'otro huésped';
+          showToast(`⚠️ Superposición: "${name}" ya tiene esa unidad en esas fechas.`, 'error');
           if (btn) { btn.disabled = false; btn.textContent = this._editingId ? 'Guardar cambios' : 'Confirmar reserva'; }
           clearTimeout(_safetyTimer);
           return;
         }
       }
 
-      // â”€â”€ Capturar estado ANTES (para audit log) â”€â”€â”€â”€â”€â”€â”€â”€
+      // ── Capturar estado ANTES (para audit log) ────────
       let bookingBefore = null;
       if (this._editingId) {
         const { data: prev } = await this.db
@@ -1512,7 +1512,7 @@ ${notes ? `
         bookingBefore = prev;
       }
 
-      // Upsert huÃ©sped
+      // Upsert huésped
       let guestId = this._selectedGuestId;
       const guestPayload = {
         hotel_id:   this.ctx.hotelId,
@@ -1533,13 +1533,13 @@ ${notes ? `
         guestId = newGuest.id;
       }
 
-      // â”€â”€ Columnas CORE (siempre existen en la DB) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      // ── Columnas CORE (siempre existen en la DB) ──────────────
       const corePayload = {
         hotel_id:         this.ctx.hotelId,
         guest_id:         guestId,
         check_in:         ci,
         check_out:        co,
-        // nights: GENERATED ALWAYS AS en PostgreSQL â€” nunca insertar
+        // nights: GENERATED ALWAYS AS en PostgreSQL — nunca insertar
         source,
         price_per_night:  price,
         discount_pct:     disc,
@@ -1551,7 +1551,7 @@ ${notes ? `
         status:           balance <= 0 ? 'paid' : paid > 0 ? 'partial' : 'pending',
       };
 
-      // â”€â”€ Columnas opcionales â€” se agregan en UPDATE separado â”€â”€â”€â”€â”€â”€
+      // ── Columnas opcionales — se agregan en UPDATE separado ──────
       const pax      = (parseInt(document.getElementById('f-adults')?.value) || 1)
                      + (parseInt(document.getElementById('f-children')?.value) || 0);
       const adults   = parseInt(document.getElementById('f-adults')?.value)   || 1;
@@ -1559,12 +1559,12 @@ ${notes ? `
 
       let bookingId = this._editingId;
       if (bookingId) {
-        // UPDATE â€” intentar con free_nights primero
+        // UPDATE — intentar con free_nights primero
         let { error: upErr } = await this.db.from('bookings').update({
           ...corePayload, free_nights: freeN
         }).eq('id', bookingId);
         if (upErr?.message?.includes('free_nights')) {
-          // Columna no existe aÃºn â†’ guardar sin ella
+          // Columna no existe aún → guardar sin ella
           const { error: upErr2 } = await this.db.from('bookings').update(corePayload).eq('id', bookingId);
           if (upErr2) throw new Error('No fue posible actualizar la reserva: ' + upErr2.message);
         } else if (upErr) {
@@ -1575,12 +1575,12 @@ ${notes ? `
         const { error: payDelErr } = await this.db.from('payments').delete().eq('booking_id', bookingId);
         if (payDelErr) throw new Error('Error limpiando pagos anteriores: ' + payDelErr.message);
       } else {
-        // INSERT â€” intentar con free_nights primero
+        // INSERT — intentar con free_nights primero
         let { data: newB, error: insErr } = await this.db
           .from('bookings').insert({ ...corePayload, free_nights: freeN })
           .select('id').single();
         if (insErr?.message?.includes('free_nights') || insErr?.message?.includes('does not exist')) {
-          // Columna no existe â†’ reintentar sin ella
+          // Columna no existe → reintentar sin ella
           const { data: newB2, error: insErr2 } = await this.db
             .from('bookings').insert(corePayload).select('id').single();
           if (insErr2) throw new Error('No fue posible crear la reserva: ' + insErr2.message);
@@ -1591,12 +1591,12 @@ ${notes ? `
         bookingId = newB.id;
       }
 
-      // â”€â”€ Columnas opcionales (pax, comisiones) â€” silencioso si no existen â”€â”€
+      // ── Columnas opcionales (pax, comisiones) — silencioso si no existen ──
       try {
         await this.db.from('bookings').update({ pax, adults, children }).eq('id', bookingId);
       } catch { /* columnas opcionales */ }
 
-      // Insertar unidades â€” upsert para evitar duplicate key en ediciÃ³n
+      // Insertar unidades — upsert para evitar duplicate key en edición
       const unitRows = [...this._selectedUnitIds].map(uid => ({
         booking_id: bookingId, unit_id: uid,
       }));
@@ -1621,8 +1621,8 @@ ${notes ? `
             hotel_id:     this.ctx.hotelId,
             method:       meth,
             amount:       isCc ? amt * 1.10 : amt,
-            // payment_date aÃ±adido en migration_complete_v8.sql
-            // Si la columna no existe todavÃ­a, se ignora el error de schema
+            // payment_date añadido en migration_complete_v8.sql
+            // Si la columna no existe todavía, se ignora el error de schema
             payment_date: date || toISODate(new Date()),
             notes:        note,
           });
@@ -1645,18 +1645,18 @@ ${notes ? `
 
       const _logVerb    = this._editingId ? 'UPDATE' : 'CREATE';
       const _logSummary = this._editingId
-        ? `Actualizada: ${ci} â†’ ${co}, $${price}/noche, total $${total}`
-        : `Creada: ${ci} â†’ ${co}, $${price}/noche, total $${total}`;
+        ? `Actualizada: ${ci} → ${co}, $${price}/noche, total $${total}`
+        : `Creada: ${ci} → ${co}, $${price}/noche, total $${total}`;
       const _changes = bookingBefore ? {
         before: bookingBefore,
         after:  { check_in: ci, check_out: co, price_per_night: price, total_amount: total, status: balance <= 0 ? 'paid' : paid > 0 ? 'partial' : 'pending', source, notes: notes || null },
       } : null;
       await logAction(_logVerb, 'booking', String(bookingId), _logSummary, _changes);
 
-      showToast(this._editingId ? 'Reserva actualizada âœ“' : 'Reserva creada âœ“', 'success');
+      showToast(this._editingId ? 'Reserva actualizada ✓' : 'Reserva creada ✓', 'success');
       Sound?.[this._editingId ? 'success' : 'newBooking']?.();
 
-      // Email de confirmaciÃ³n â€” solo en creaciÃ³n nueva (no ediciÃ³n)
+      // Email de confirmación — solo en creación nueva (no edición)
       if (!this._editingId) {
         const guestEmail = document.getElementById('f-email')?.value?.trim();
         // Invocar async sin bloquear el UI
@@ -1668,7 +1668,7 @@ ${notes ? `
       // Invalidar cache para que el calendario traiga datos frescos
       cache.invalidate('bookings');
 
-      // Micro-animaciÃ³n: pulso en la barra nueva/editada
+      // Micro-animación: pulso en la barra nueva/editada
       Bus.emit(EVENTS.CAL_PULSE_BAR, { bookingId: String(bookingId) });
 
       if (balance <= 0 && paid > 0) {
@@ -1680,18 +1680,18 @@ ${notes ? `
 
     } catch (err) {
       console.error('[MILA] Booking save error:', err);
-      // Mostrar el error real siempre â€” ayuda a diagnosticar
+      // Mostrar el error real siempre — ayuda a diagnosticar
       const raw = err?.message ?? String(err) ?? 'Error desconocido';
       const userMsg = raw.includes('violates foreign key')
-        ? 'ID de unidad o huÃ©sped invÃ¡lido. RecargÃ¡ la pÃ¡gina.'
+        ? 'ID de unidad o huésped inválido. Recargá la página.'
         : raw.includes('violates not-null')
         ? 'Falta un campo requerido en la base de datos.'
         : raw.includes('duplicate')
         ? 'Ya existe una reserva con esos datos.'
         : raw.includes('permission') || raw.includes('policy')
-        ? 'Sin permisos. VerificÃ¡ las polÃ­ticas RLS en Supabase.'
+        ? 'Sin permisos. Verificá las políticas RLS en Supabase.'
         : raw;
-      showToast(`âŒ ${userMsg}`, 'error');
+      showToast(`❌ ${userMsg}`, 'error');
     } finally {
       clearTimeout(_safetyTimer);
       if (btn) {
@@ -1701,5 +1701,3 @@ ${notes ? `
     }
   }
 }
-
-
