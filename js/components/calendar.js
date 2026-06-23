@@ -1,11 +1,10 @@
 // ═══════════════════════════════════════════════════
-// calendar.js v4.0 — MILA Sistema Inteligente
+// calendar.js v4.1 — MILA Sistema Inteligente
+// • Fix mobile: grid columns fijos + scroll horizontal
+// • Fix click en barras (independiente del drag)
+// • Fix colores desaturados en vista mes (reservas pasadas)
 // • Drag & Drop de reservas (fechas + unidad)
 // • Leyendas como Accordion con estado persistente
-// • Eliminados botones innecesarios (Hoy / Ocultar pasados)
-// • Hoy en vista semanal: diseño profesional sutil
-// • Fix: un solo handler de apertura por barra (no doble)
-// • Fix: acumulación de listeners en cambio de vista
 // ═══════════════════════════════════════════════════
 
 import {
@@ -46,7 +45,6 @@ export class Calendar {
     this._weekStart  = this._getWeekStart(new Date());
     this._barDrag    = { active: false, booking: null, unitId: null, startX: 0, moved: false };
 
-    // Cleanup de handlers de drag entre renders
     this._dragAbort  = null;
     this._dragBound  = false;
 
@@ -55,10 +53,8 @@ export class Calendar {
     this._setupContextMenu();
     this._setupDocumentEvents();
 
-    // Micro-animaciones: IDs de reservas recién creadas/movidas
     this._pendingPulse = new Set();
 
-    // Escuchar eventos del Bus para pulso en barras nuevas
     Bus.on(EVENTS.CAL_PULSE_BAR, ({ bookingId }) => {
       this._pendingPulse.add(bookingId);
     });
@@ -68,15 +64,12 @@ export class Calendar {
 
   // ── Carga del calendario ──────────────────────────
   async load() {
-    // Guard: no concurrent loads (prevents infinite loop via booking:changed)
     if (this._isLoading) return;
     this._isLoading = true;
 
     document.getElementById('cal-month-title').textContent =
       `${MONTH_NAMES[this.month]} ${this.year}`;
     try {
-      // Fetch bookings y reminders por separado para que fallo de
-      // reminders no rompa la carga del calendario
       const [bookings, reminders] = await Promise.all([
         this._fetchBookings(),
         this._fetchReminders().catch(err => {
@@ -100,7 +93,6 @@ export class Calendar {
       }
     } catch (err) {
       console.error('Calendar load error:', err);
-      // No mostrar toast si es solo el stack overflow del loop
       if (!err?.message?.includes('call stack')) {
         showToast('Error al cargar el calendario', 'error');
       }
@@ -109,7 +101,7 @@ export class Calendar {
     }
   }
 
-  // ── Fetch reservas (con cache 30s) ───────────────
+  // ── Fetch reservas ───────────────────────────────
   async _fetchBookings() {
     const firstDay = `${this.year}-${String(this.month+1).padStart(2,'0')}-01`;
     const lastDay  = toISODate(new Date(this.year, this.month+1, 0));
@@ -140,7 +132,7 @@ export class Calendar {
       .eq('hotel_id', this.ctx.hotelId)
       .gte('scheduled_date', firstDay)
       .lte('scheduled_date', lastDay)
-      .is('completed', false);   // usar is() para booleanos, no eq()
+      .is('completed', false);
     if (error) throw new Error(error.message);
     return data ?? [];
   }
@@ -194,9 +186,23 @@ export class Calendar {
     const todayDay    = today.getDate();
     const todayMonth  = today.getMonth();
     const todayYear   = today.getFullYear();
+    const todayISO    = today.toISOString().split('T')[0];
     const holidays    = getHolidaysForYear(this.year);
 
-    grid.style.gridTemplateColumns = `160px repeat(${daysInMonth}, minmax(30px, 1fr))`;
+    // ── FIX MOBILE: ancho fijo por celda + scroll horizontal ──
+    const cellW = window.innerWidth <= 768 ? 32 : 38;
+    grid.style.gridTemplateColumns = `160px repeat(${daysInMonth}, ${cellW}px)`;
+    grid.style.minWidth = `${160 + daysInMonth * cellW}px`;
+    grid.style.width    = 'max-content';
+
+    // Forzar scroll en el contenedor padre
+    const gridParent = grid.parentElement;
+    if (gridParent) {
+      gridParent.style.overflowX          = 'auto';
+      gridParent.style.webkitOverflowScrolling = 'touch';
+      gridParent.style.width              = '100%';
+    }
+
     grid.classList.add('month-grid');
     grid.classList.remove('week-grid');
     grid.innerHTML = '';
@@ -207,27 +213,27 @@ export class Calendar {
     grid.appendChild(corner);
 
     for (let d = 1; d <= daysInMonth; d++) {
-      const date    = new Date(this.year, this.month, d);
-      const isToday = d===todayDay && this.month===todayMonth && this.year===todayYear;
-      const dateISO = `${this.year}-${String(this.month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-      const hasRem  = !!reminderMap[dateISO];
-      const dayOfWeek2 = date.getDay();
-      const isWknd2    = dayOfWeek2 === 0 || dayOfWeek2 === 6;
-      const isPastDay2 = dateISO < new Date().toISOString().split('T')[0];
-      const holiday2   = holidays?.get ? holidays.get(dateISO) : null;
-      const isHoliday2 = !!holiday2 && holiday2.type !== 'vacation';
+      const date      = new Date(this.year, this.month, d);
+      const isToday   = d===todayDay && this.month===todayMonth && this.year===todayYear;
+      const dateISO   = `${this.year}-${String(this.month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+      const hasRem    = !!reminderMap[dateISO];
+      const dayOfWeek = date.getDay();
+      const isWknd    = dayOfWeek === 0 || dayOfWeek === 6;
+      const isPastDay = dateISO < todayISO;
+      const holiday   = holidays?.get ? holidays.get(dateISO) : null;
+      const isHoliday = !!holiday && holiday.type !== 'vacation';
 
       const dh = document.createElement('div');
-      let dhCls2 = 'cal-day-header';
-      if (isToday)   dhCls2 += ' today';
-      if (isWknd2)   dhCls2 += ' weekend';
-      if (isPastDay2 && !isToday) dhCls2 += ' past-header';
-      if (isHoliday2) dhCls2 += ` holiday holiday-${holiday2.type}`;
-      dh.className = dhCls2;
-      dh.title = holiday2?.label ?? '';
+      let dhCls = 'cal-day-header';
+      if (isToday)              dhCls += ' today';
+      if (isWknd)               dhCls += ' weekend';
+      if (isPastDay && !isToday) dhCls += ' past-header';
+      if (isHoliday)            dhCls += ` holiday holiday-${holiday.type}`;
+      dh.className = dhCls;
+      dh.title = holiday?.label ?? '';
       dh.innerHTML = `${d}<span class="day-name">${DAY_NAMES[date.getDay()]}</span>
-        ${hasRem?`<div style="width:4px;height:4px;border-radius:50%;background:var(--color-warning);margin:2px auto 0"></div>`:''}
-        ${isToday?`<div style="width:4px;height:4px;border-radius:50%;background:var(--color-primary);margin:1px auto 0"></div>`:''}`;
+        ${hasRem ? `<div style="width:4px;height:4px;border-radius:50%;background:var(--color-warning);margin:2px auto 0"></div>` : ''}
+        ${isToday ? `<div style="width:4px;height:4px;border-radius:50%;background:var(--color-primary);margin:1px auto 0"></div>` : ''}`;
       grid.appendChild(dh);
     }
 
@@ -257,7 +263,7 @@ export class Calendar {
 
         const cellHoliday = holidays.get(dateISO);
         const cellIsWknd  = new Date(dateISO + 'T12:00:00').getDay() % 6 === 0;
-        const cellIsPast  = dateISO < new Date().toISOString().split('T')[0];
+        const cellIsPast  = dateISO < todayISO;
 
         const cell = document.createElement('div');
         let cellCls = 'cal-cell';
@@ -276,18 +282,18 @@ export class Calendar {
         if (bookings.length === 0) {
           this._bindEmptyCell(cell, unit.id, d, dateISO);
         } else if (bookings.length === 1) {
-          this._renderSingleBar(cell, bookings[0]);
+          this._renderSingleBar(cell, bookings[0], todayISO);
         } else {
           const co = bookings.find(b => b._cellType === 'end');
           const ci = bookings.find(b => b._cellType === 'start');
-          if (co && ci) this._renderSplitCell(cell, co, ci);
-          else this._renderSingleBar(cell, bookings[0]);
+          if (co && ci) this._renderSplitCell(cell, co, ci, todayISO);
+          else this._renderSingleBar(cell, bookings[0], todayISO);
         }
 
         rems.forEach(r => {
           const dot = document.createElement('div');
           dot.className = 'cal-reminder-dot';
-          dot.innerHTML = `<div class="tooltip">🔔 ${r.title}${r.units?` · #${r.units.sort_order} ${r.units.name}`:''}</div>`;
+          dot.innerHTML = `<div class="tooltip">🔔 ${r.title}${r.units ? ` · #${r.units.sort_order} ${r.units.name}` : ''}</div>`;
           cell.appendChild(dot);
         });
 
@@ -317,7 +323,7 @@ export class Calendar {
   }
 
   // ── Barra única con avatar ────────────────────────
-  _renderSingleBar(cell, booking) {
+  _renderSingleBar(cell, booking, todayISO) {
     if (booking._cellType !== 'start' && booking._cellType !== 'solo') return;
 
     const { color, textColor } = getBookingBarColor(booking);
@@ -326,6 +332,9 @@ export class Calendar {
     const blockText = booking.block_reason ?? 'Bloqueo';
     const guestFull = booking.guests ? `${lastName} ${firstName}`.trim() : blockText;
     const isBlock   = booking.status === 'blocked' || booking.is_blocked;
+
+    // ── FIX COLORES PASADOS: versión desaturada para checkout anterior a hoy ──
+    const isPast = booking.check_out <= todayISO;
 
     const ci = new Date(booking.check_in  + 'T12:00:00');
     const co = new Date(booking.check_out + 'T12:00:00');
@@ -341,13 +350,13 @@ export class Calendar {
 
     const bar = document.createElement('div');
     bar.className = 'bar bar-span';
-    // Pending pulse: si esta reserva fue recién creada, añadir clase
+
     if (this._pendingPulse.has(booking.id)) {
       bar.classList.add('bar-new-bounce');
       this._pendingPulse.delete(booking.id);
-      // Remover la clase de animación después
       setTimeout(() => bar.classList.remove('bar-new-bounce'), 1200);
     }
+
     bar.style.cssText = `
       background: ${color};
       position: absolute; top: 6px; bottom: 6px; left: 4px;
@@ -356,6 +365,7 @@ export class Calendar {
       display: flex; align-items: center; padding: 0 8px;
       overflow: hidden; white-space: nowrap;
       cursor: grab; transition: filter .15s, transform .15s, box-shadow .15s;
+      ${isPast ? 'filter: saturate(.4) brightness(.78); opacity: .88;' : ''}
     `;
     bar.dataset.bookingId = booking.id;
 
@@ -371,48 +381,60 @@ export class Calendar {
 
     bar.addEventListener('mouseenter', (e) => {
       if (!this._barDrag.active) {
-        bar.style.filter    = 'brightness(1.12)';
-        bar.style.transform = 'scaleY(1.05)';
+        if (!isPast) {
+          bar.style.filter    = 'brightness(1.12)';
+          bar.style.transform = 'scaleY(1.05)';
+        }
         bar.style.boxShadow = '0 2px 8px rgba(0,0,0,.25)';
       }
       this._showTooltip(booking, e);
     });
     bar.addEventListener('mousemove',  (e) => this._moveTooltip(e));
     bar.addEventListener('mouseleave', () => {
-      bar.style.filter    = '';
+      bar.style.filter    = isPast ? 'saturate(.4) brightness(.78)' : '';
       bar.style.transform = '';
       bar.style.boxShadow = '';
       this._hideTooltip();
+    });
+
+    // ── FIX CLICK: handler explícito independiente del drag ──
+    bar.addEventListener('click', (e) => {
+      if (this._barDrag.moved) return;
+      e.stopPropagation();
+      this._openDetailById(booking.id);
     });
 
     cell.appendChild(bar);
   }
 
   // ── Celda dividida (RECAMBIO) ─────────────────────
-  _renderSplitCell(cell, coBooking, ciBooking) {
-    const coColor = getBookingBarColor(coBooking).color;
-    const ciColor = getBookingBarColor(ciBooking).color;
+  _renderSplitCell(cell, coBooking, ciBooking, todayISO) {
+    const todayStr  = todayISO ?? new Date().toISOString().split('T')[0];
+    const coColor   = getBookingBarColor(coBooking).color;
+    const ciColor   = getBookingBarColor(ciBooking).color;
+    const coIsPast  = coBooking.check_out <= todayStr;
+    const ciIsPast  = ciBooking.check_out <= todayStr;
 
     const left = document.createElement('div');
     left.className = 'bar bar-split-left';
     left.style.background = coColor;
+    if (coIsPast) left.style.filter = 'saturate(.4) brightness(.78)';
     left.dataset.bookingId = coBooking.id;
     left.title = `Sale: ${coBooking.guests?.first_name ?? ''} ${coBooking.guests?.last_name ?? ''}`;
     left.addEventListener('mouseenter', (e) => this._showTooltip(coBooking, e));
     left.addEventListener('mousemove',  (e) => this._moveTooltip(e));
     left.addEventListener('mouseleave', ()  => this._hideTooltip());
+    left.addEventListener('click', (e) => { e.stopPropagation(); this._openDetailById(coBooking.id); });
 
     const right = document.createElement('div');
     right.className = 'bar bar-split-right';
     right.style.background = ciColor;
+    if (ciIsPast) right.style.filter = 'saturate(.4) brightness(.78)';
     right.dataset.bookingId = ciBooking.id;
     right.title = `Entra: ${ciBooking.guests?.first_name ?? ''} ${ciBooking.guests?.last_name ?? ''}`;
     right.addEventListener('mouseenter', (e) => this._showTooltip(ciBooking, e));
     right.addEventListener('mousemove',  (e) => this._moveTooltip(e));
     right.addEventListener('mouseleave', ()  => this._hideTooltip());
-
-    // Click en split bars → abrir detalle
-    left.addEventListener('click',  (e) => { e.stopPropagation(); this._openDetailById(coBooking.id); });
     right.addEventListener('click', (e) => { e.stopPropagation(); this._openDetailById(ciBooking.id); });
 
     cell.appendChild(left);
@@ -464,12 +486,6 @@ export class Calendar {
       status: true, channels: false, units: false, calendar: false
     };
 
-    const toggle = (key) => {
-      savedState[key] = !savedState[key];
-      localStorage.setItem('mila_legend_state', JSON.stringify(savedState));
-      this._renderAccordionLegend();
-    };
-
     const section = (key, title, items, isUnit = false) => {
       const open = savedState[key];
       return `
@@ -504,8 +520,7 @@ export class Calendar {
         ${section('calendar', '📅 Calendario',     CAL_ITEMS)}
       </div>`;
 
-    // Exponer el toggle globalmente
-    window._calInstance._legendToggle = toggle.bind(this);
+    window._calInstance._legendToggle = this._legendToggle.bind(this);
   }
 
   _legendToggle(key) {
@@ -520,7 +535,7 @@ export class Calendar {
   // ── Drag selection (crear reserva o bloqueo) ────────
   _setupDragSelection(grid) {
     let startUnit = null, startDate = null, endDate = null;
-    let isBlocking = false; // SHIFT = modo bloqueo
+    let isBlocking = false;
 
     const onMouseDown = (e) => {
       if (e.target.closest('.bar')) return;
@@ -553,19 +568,18 @@ export class Calendar {
         this._ghost.classList.remove('hidden');
       }
 
-      const selClass = isBlocking ? 'blocking' : 'selecting';
-      grid.querySelectorAll(`.cal-cell.selecting, .cal-cell.blocking`).forEach(c => c.classList.remove('selecting','blocking'));
+      grid.querySelectorAll('.cal-cell.selecting, .cal-cell.blocking').forEach(c => c.classList.remove('selecting','blocking'));
       const sd = this._drag.startDay, ed = parseInt(cell.dataset.day);
       const [mn, mx] = [Math.min(sd,ed), Math.max(sd,ed)];
       grid.querySelectorAll(`.cal-cell[data-unit-id="${startUnit}"]`).forEach(c => {
-        if (parseInt(c.dataset.day) >= mn && parseInt(c.dataset.day) <= mx) c.classList.add(selClass);
+        if (parseInt(c.dataset.day) >= mn && parseInt(c.dataset.day) <= mx) c.classList.add(isBlocking ? 'blocking' : 'selecting');
       });
     };
 
     const onMouseUp = async () => {
       if (!this._drag.active) return;
-      const hadDrag   = this._drag.moved;
-      const wasBlock  = this._drag.blocking;
+      const hadDrag  = this._drag.moved;
+      const wasBlock = this._drag.blocking;
       grid.querySelectorAll('.cal-cell.selecting, .cal-cell.blocking').forEach(c => c.classList.remove('selecting','blocking'));
       this._drag.active = false;
       this._ghost.classList.add('hidden');
@@ -577,13 +591,11 @@ export class Calendar {
         last.setDate(last.getDate()+1);
 
         if (wasBlock) {
-          // Modo bloqueo: pedir motivo y bloquear
           const reason = prompt('Motivo del bloqueo (mantenimiento, uso propio, reparación...):', 'Mantenimiento');
           if (reason !== null) {
             await this._blockRange(startUnit, dates[0], toISODate(last), reason.trim() || 'Bloqueo');
           }
         } else {
-          // Modo reserva: abrir formulario
           this.bookingForm.open({ unitId: startUnit, checkIn: dates[0], checkOut: toISODate(last) });
         }
       }
@@ -604,7 +616,6 @@ export class Calendar {
     const unit     = this.ctx.units.find(u => u.id === unitId);
     const unitName = unit?.name ?? 'unidad';
     try {
-      // Omitir 'nights' — puede ser GENERATED ALWAYS en PostgreSQL
       const { data: bk, error } = await this.db.from('bookings').insert({
         hotel_id:        this.ctx.hotelId,
         check_in:        checkIn,
@@ -650,7 +661,6 @@ export class Calendar {
       }
       this.load();
     });
-    // Botón "Hoy" — oculto por solicitud pero mantenemos la lógica
     document.getElementById('cal-today')?.addEventListener('click', () => {
       const n = new Date();
       this.month = n.getMonth(); this.year = n.getFullYear();
@@ -698,7 +708,7 @@ export class Calendar {
         .from('bookings')
         .select('*, guests!bookings_guest_id_fkey(*), booking_units(unit_id, units(name,sort_order,color,max_guests)), payments(*)')
         .eq('id', bookingId).single();
-      if (booking) this.bookingForm.openDetail(booking);
+      this.bookingForm.openEdit(bookingId);
     } catch (err) {
       console.error('[Calendar] Error al abrir detalle:', err);
       showToast('Error al cargar la reserva', 'error');
@@ -796,6 +806,7 @@ export class Calendar {
 
     grid.style.gridTemplateColumns = '1fr';
     grid.style.minWidth = 'auto';
+    grid.style.width    = 'auto';
 
     const seen = new Set();
     const unique = bookings.filter(b => {
@@ -878,9 +889,6 @@ export class Calendar {
 
   // ── Setup toggle Mes/Semana/Lista ─────────────────
   setupViewToggle() {
-    // Vista sólo mensual
-
-    // ── Toggle de disponibilidad ──────────────────────
     let _availMode = false;
     const availBtn = document.getElementById('cal-avail-toggle');
     if (availBtn) {
@@ -891,7 +899,6 @@ export class Calendar {
         const grid = document.getElementById('calendar-grid');
         if (!grid) return;
         if (_availMode) {
-          // Calcular ocupación por columna (día) y marcar celdas libres
           const daysInMonth = new Date(this.year, this.month+1, 0).getDate();
           const totalUnits  = this.ctx.units.length || 1;
           for (let d = 1; d <= daysInMonth; d++) {
@@ -899,16 +906,12 @@ export class Calendar {
             const cells   = grid.querySelectorAll(`.cal-cell[data-date="${dateStr}"]`);
             let free = 0;
             cells.forEach(c => { if (!c.querySelector('.bar')) free++; });
-            // Encabezado de día
             cells.forEach(c => {
-              if (!c.querySelector('.bar')) {
-                c.classList.add('avail-free');
-              }
+              if (!c.querySelector('.bar')) c.classList.add('avail-free');
             });
-            // Porcentaje en header
-            const pct = Math.round((free / totalUnits) * 100);
+            const pct  = Math.round((free / totalUnits) * 100);
             const hdrs = grid.querySelectorAll('.cal-day-header');
-            const hdr  = hdrs[d]; // índice 1-based
+            const hdr  = hdrs[d];
             if (hdr && !hdr.querySelector('.avail-pct')) {
               const badge = document.createElement('div');
               badge.className = 'avail-pct';
@@ -936,7 +939,7 @@ export class Calendar {
   }
 
   _renderWeekView(bookings) {
-    const grid    = document.getElementById('calendar-grid');
+    const grid = document.getElementById('calendar-grid');
     if (!this._weekStart) this._weekStart = this._getWeekStart(new Date());
 
     const days = Array.from({ length: 7 }, (_, i) => {
@@ -948,6 +951,7 @@ export class Calendar {
     const today = new Date().toISOString().split('T')[0];
     grid.style.gridTemplateColumns = `160px repeat(7, 1fr)`;
     grid.style.minWidth = '600px';
+    grid.style.width    = 'max-content';
     grid.classList.add('week-grid');
     grid.classList.remove('month-grid');
     grid.innerHTML = '';
@@ -977,7 +981,6 @@ export class Calendar {
       if (isHoliday) dhCls += ` holiday holiday-${holiday.type}`;
       dh.className = dhCls;
       dh.title = holiday?.label ?? '';
-      // Rediseño elegante del indicador "hoy" en semana
       dh.innerHTML = `
         <span class="dh-num ${isToday ? 'today-num' : ''}">${d.getDate()}</span>
         <span class="day-name">${['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'][d.getDay()]}</span>
@@ -1006,7 +1009,7 @@ export class Calendar {
           (b.booking_units ?? []).some(bu => bu.unit_id === unit.id)
         );
         const cell = document.createElement('div');
-        const wcDow   = d.getDay();
+        const wcDow    = d.getDay();
         const wcIsWknd = wcDow === 0 || wcDow === 6;
         const wcIsPast = iso < today && !isToday;
         let wcCls = 'cal-cell week-cell';
@@ -1022,7 +1025,7 @@ export class Calendar {
         } else {
           const b = dayBookings[0];
           const { color, textColor } = getBookingBarColor(b);
-          const guest = b.guests ? `${b.guests.first_name} ${b.guests.last_name}` : (b.block_reason ?? 'Bloqueo');
+          const guest   = b.guests ? `${b.guests.first_name} ${b.guests.last_name}` : (b.block_reason ?? 'Bloqueo');
           const isStart = b.check_in === iso;
           const barStyle = wcIsPast
             ? `background:${color};filter:saturate(.45) brightness(.72);`
@@ -1044,27 +1047,24 @@ export class Calendar {
       });
     });
 
-    // Leyenda accordion también en vista semana
     this._renderAccordionLegend();
     document.getElementById('cal-month-title').textContent = weekStr;
   }
 
   // ══════════════════════════════════════════════════
-  // DRAG & DROP DE RESERVAS — Fechas + Unidad
+  // DRAG & DROP DE RESERVAS
   // ══════════════════════════════════════════════════
   _setupBarDrag(grid) {
-    // Cleanup previo si existe
     if (this._barDragAbort) this._barDragAbort.abort();
     this._barDragAbort = new AbortController();
     const sig = this._barDragAbort.signal;
 
-    let _ghost = this._ghost;
-    let _dragState = null; // { booking, sourceUnitId, targetUnitId, targetDate, startX, startY, moved }
+    let _ghost     = this._ghost;
+    let _dragState = null;
 
     const resetDrag = () => {
       _ghost.classList.add('hidden');
       _dragState = null;
-      // Limpiar highlights
       document.querySelectorAll('.cal-cell.drop-target, .cal-cell.drop-conflict').forEach(c => {
         c.classList.remove('drop-target', 'drop-conflict');
       });
@@ -1078,19 +1078,17 @@ export class Calendar {
       if (dx > 8 || dy > 8) _dragState.moved = true;
       if (!_dragState.moved) return;
 
-      // Calcular delta de días
-      const daysInMonth = new Date(this.year, this.month+1, 0).getDate();
-      const gridContent = grid.getBoundingClientRect();
-      const labelWidth  = 160; // columna de etiquetas
-      const cellWidth   = (gridContent.width - labelWidth) / daysInMonth;
-      const daysDiff    = Math.round((e.clientX - _dragState.startX) / cellWidth);
+      const daysInMonth  = new Date(this.year, this.month+1, 0).getDate();
+      const gridContent  = grid.getBoundingClientRect();
+      const labelWidth   = 160;
+      const cellWidth    = (gridContent.width - labelWidth) / daysInMonth;
+      const daysDiff     = Math.round((e.clientX - _dragState.startX) / cellWidth);
 
-      const b      = _dragState.booking;
-      const newCI  = this._addDays(b.check_in,  daysDiff);
-      const newCO  = this._addDays(b.check_out, daysDiff);
+      const b     = _dragState.booking;
+      const newCI = this._addDays(b.check_in,  daysDiff);
+      const newCO = this._addDays(b.check_out, daysDiff);
 
-      // Detectar unidad destino
-      const underCell = document.elementFromPoint(e.clientX, e.clientY)?.closest?.('.cal-cell');
+      const underCell    = document.elementFromPoint(e.clientX, e.clientY)?.closest?.('.cal-cell');
       const targetUnitId = underCell?.dataset.unitId ?? _dragState.sourceUnitId;
       _dragState.targetUnitId = targetUnitId;
       _dragState.daysDiff     = daysDiff;
@@ -1100,13 +1098,10 @@ export class Calendar {
       _ghost.style.top   = `${e.clientY - 24}px`;
       _ghost.classList.remove('hidden');
 
-      // Highlight destino
       document.querySelectorAll('.cal-cell.drop-target,.cal-cell.drop-conflict').forEach(c => {
         c.classList.remove('drop-target','drop-conflict');
       });
-      if (underCell && daysDiff !== 0) {
-        underCell.classList.add('drop-target');
-      }
+      if (underCell && daysDiff !== 0) underCell.classList.add('drop-target');
     };
 
     const onMouseUp = async (e) => {
@@ -1118,7 +1113,6 @@ export class Calendar {
       if (!state) return;
 
       if (!state.moved) {
-        // Simple click → abrir detalle
         if (state.booking) await this._openDetailById(state.booking.id);
         return;
       }
@@ -1126,14 +1120,13 @@ export class Calendar {
       const { booking, sourceUnitId, daysDiff } = state;
       if (!booking || daysDiff === 0) return;
 
-      const newCI = this._addDays(booking.check_in,  daysDiff);
-      const newCO = this._addDays(booking.check_out, daysDiff);
+      const newCI        = this._addDays(booking.check_in,  daysDiff);
+      const newCO        = this._addDays(booking.check_out, daysDiff);
       const targetUnitId = state.targetUnitId ?? sourceUnitId;
-      const today = new Date().toISOString().split('T')[0];
+      const today        = new Date().toISOString().split('T')[0];
 
       if (newCI < today && !confirm(`La nueva fecha (${newCI}) es en el pasado. ¿Continuar?`)) return;
 
-      // Verificar disponibilidad
       const { data: conflicts } = await this.db
         .from('booking_units')
         .select('unit_id, bookings!inner(id, check_in, check_out, status)')
@@ -1149,12 +1142,10 @@ export class Calendar {
         return;
       }
 
-      // Actualizar fechas
       const { error } = await this.db.from('bookings')
         .update({ check_in: newCI, check_out: newCO }).eq('id', booking.id);
       if (error) { showToast('Error al mover la reserva', 'error'); return; }
 
-      // Actualizar unidad si cambió
       if (targetUnitId !== sourceUnitId) {
         await this.db.from('booking_units')
           .update({ unit_id: targetUnitId })
@@ -1165,26 +1156,19 @@ export class Calendar {
       await logAction('UPDATE', 'booking', booking.id,
         `Drag: ${booking.check_in}→${newCI}, unidad: ${sourceUnitId}→${targetUnitId}`);
 
-      // Animación de deslizamiento antes del reload
       this._animateDragBar(booking.id, newCI);
-
-      // Invalidar cache del mes actual
       cache.invalidate('bookings');
-
-      // Emitir en el bus para que otros módulos reaccionen
       Bus.emit(EVENTS.BOOKING_DRAG_DONE, { bookingId: booking.id, oldCI: booking.check_in, newCI });
-
       showToast(`✓ Reserva movida a ${newCI} → ${newCO}`, 'success');
       document.dispatchEvent(new CustomEvent('booking:changed'));
       this.load();
     };
 
-    // Mousedown en barra
     grid.addEventListener('mousedown', (e) => {
       const bar = e.target.closest('.bar[data-booking-id]');
       if (!bar) return;
       e.preventDefault();
-      e.stopPropagation(); // Evitar que dispare drag-selection
+      e.stopPropagation();
 
       const bookingId = bar.dataset.bookingId;
       const cell      = bar.closest('.cal-cell');
@@ -1201,19 +1185,17 @@ export class Calendar {
       };
       this._barDrag = { active: true, booking: null, unitId, startX: e.clientX, moved: false };
 
-      // Buscar booking en memoria
       const found = (this._lastRenderedBookings ?? []).find(b => b.id === bookingId);
       if (found) {
-        _dragState.booking = found;
+        _dragState.booking    = found;
         this._barDrag.booking = found;
       } else {
-        // Lazy load desde DB
         this.db.from('bookings')
           .select('id,check_in,check_out,nights,guests(first_name,last_name),booking_units(unit_id)')
           .eq('id', bookingId).single()
           .then(({ data }) => {
             if (data && _dragState) {
-              _dragState.booking = data;
+              _dragState.booking    = data;
               this._barDrag.booking = data;
             }
           });
@@ -1227,7 +1209,7 @@ export class Calendar {
     grid.addEventListener('touchstart', (e) => {
       const bar = e.target.closest('.bar[data-booking-id]');
       if (!bar) return;
-      const t = e.touches[0];
+      const t         = e.touches[0];
       const bookingId = bar.dataset.bookingId;
       const cell      = bar.closest('.cal-cell');
 
@@ -1252,15 +1234,12 @@ export class Calendar {
     }, { passive: false, signal: sig });
   }
 
-  // ── Animación: la barra se desvanece y reaparece ──
   _animateDragBar(bookingId, newCI) {
     const bar = document.querySelector(`.bar[data-booking-id="${bookingId}"]`);
     if (!bar) return;
-    // Fade out rápido — el reload trae la barra en nueva posición
     bar.style.transition = 'opacity .25s, transform .25s';
     bar.style.opacity    = '0';
     bar.style.transform  = 'scaleX(0.8)';
-    // Añadir la nueva reserva al set de pendientes para el pulso de entrada
     this._pendingPulse.add(bookingId);
   }
 

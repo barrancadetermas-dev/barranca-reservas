@@ -1,0 +1,233 @@
+/* =======================================================================
+   MILA PMS — Color System CSS
+   Variables para estados de reserva + estilos del widget de dólar.
+   Este archivo es generado/complementado por color-system.js (injectCSSVariables).
+   ======================================================================= */
+
+/* ─── Variables de color (fallbacks en CSS puro) ──────────────────────────── */
+:root {
+  /* PAID — Verde */
+  --color-paid-bg:        #22c55e;
+  --color-paid-text:      #ffffff;
+  --color-paid-border:    #16a34a;
+  --color-paid-past-bg:   #a8d5b5;
+  --color-paid-past-text: #ffffff;
+
+  /* DEPOSIT — Rojo */
+  --color-deposit-bg:        #ef4444;
+  --color-deposit-text:      #ffffff;
+  --color-deposit-border:    #dc2626;
+  --color-deposit-past-bg:   #d4a8a8;
+  --color-deposit-past-text: #ffffff;
+
+  /* PENDING — Amarillo */
+  --color-pending-bg:        #eab308;
+  --color-pending-text:      #1a1a1a;
+  --color-pending-border:    #ca8a04;
+  --color-pending-past-bg:   #d4c47a;
+  --color-pending-past-text: #555555;
+
+  /* AIRBNB — Naranja */
+  --color-airbnb-bg:        #f97316;
+  --color-airbnb-text:      #ffffff;
+  --color-airbnb-border:    #ea580c;
+  --color-airbnb-past-bg:   #d4a87a;
+  --color-airbnb-past-text: #ffffff;
+
+  /* BOOKING — Azul */
+  --color-booking-bg:        #3b82f6;
+  --color-booking-text:      #ffffff;
+  --color-booking-border:    #2563eb;
+  --color-booking-past-bg:   #a8b8d4;
+  --color-booking-past-text: #ffffff;
+
+  /* CREDIT NOTE — Violeta */
+  --color-credit_note-bg:        #a855f7;
+  --color-credit_note-text:      #ffffff;
+  --color-credit_note-border:    #9333ea;
+  --color-credit_note-past-bg:   #c4a8d4;
+  --color-credit_note-past-text: #ffffff;
+
+  /* BLOCK — Gris oscuro */
+  --color-block-bg:        #374151;
+  --color-block-text:      #ffffff;
+  --color-block-border:    #1f2937;
+  --color-block-past-bg:   #9ca3af;
+  --color-block-past-text: #ffffff;
+}
+
+/* ─── Clases de estado para booking bars ─────────────────────────────────── */
+
+/* Estado ACTIVO */
+.booking-status--paid    { background: var(--color-paid-bg)        !important; color: var(--color-paid-text)        !important; border-color: var(--color-paid-border)        !important; }
+.booking-status--deposit { background: var(--color-deposit-bg)     !important; color: var(--color-deposit-text)     !important; border-color: var(--color-deposit-border)     !important; }
+.booking-status--pending { background: var(--color-pending-bg)     !important; color: var(--color-pending-text)     !important; border-color: var(--color-pending-border)     !important; }
+.booking-status--airbnb  { background: var(--color-airbnb-bg)      !important; color: var(--color-airbnb-text)      !important; border-color: var(--color-airbnb-border)      !important; }
+.booking-status--booking { background: var(--color-booking-bg)     !important; color: var(--color-booking-text)     !important; border-color: var(--color-booking-border)     !important; }
+.booking-status--credit_note { background: var(--color-credit_note-bg) !important; color: var(--color-credit_note-text) !important; border-color: var(--color-credit_note-border) !important; }
+.booking-status--block   { background: var(--color-block-bg)       !important; color: var(--color-block-text)       !important; border-color: var(--color-block-border)       !important; }
+
+/* Estado PASADO — versión desaturada */
+.booking-status--paid.booking-status--past         { background: var(--color-paid-past-bg)        !important; color: var(--color-paid-past-text)        !important; border-color: var(--color-paid-border)        !important; }
+.booking-status--deposit.booking-status--past      { background: var(--color-deposit-past-bg)     !important; color: var(--color-deposit-past-text)     !important; border-color: var(--color-deposit-border)     !important; }
+.booking-status--pending.booking-status--past      { background: var(--color-pending-past-bg)     !important; color: var(--color-pending-past-text)     !important; border-color: var(--color-pending-border)     !important; }
+.booking-status--airbnb.booking-status--past       { background: var(--color-airbnb-past-bg)      !important; color: var(--color-airbnb-past-text)      !important; border-color: var(--color-airbnb-border)      !important; }
+.booking-status--booking.booking-status--past      { background: var(--color-booking-past-bg)     !important; color: var(--color-booking-past-text)     !important; border-color: var(--color-booking-border)     !important; }
+.booking-status--credit_note.booking-status--past  { background: var(--color-credit_note-past-bg) !important; color: var(--color-credit_note-past-text) !important; border-color: var(--color-credit_note-border) !important; }
+.booking-status--block.booking-status--past        { background: var(--color-block-past-bg)       !important; color: var(--color-block-past-text)       !important; border-color: var(--color-block-border)       !important; }
+
+/* Efecto visual adicional para reservas pasadas */
+[data-past="true"],
+.booking-status--past {
+  opacity: 0.85;
+}
+
+/* ─── Leyenda del calendario ─────────────────────────────────────────────── */
+.calendar-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  padding: 12px 0;
+  align-items: center;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: default;
+}
+
+.legend-dot {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  flex-shrink: 0;
+  border: 1px solid rgba(255,255,255,0.2);
+}
+
+/* ─── Dollar Widget ──────────────────────────────────────────────────────── */
+.dollar-widget {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 12px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.1);
+  cursor: default;
+  user-select: none;
+  min-width: 200px;
+}
+
+.dollar-main {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+}
+
+.dollar-icon {
+  font-size: 14px;
+}
+
+.dollar-label {
+  opacity: 0.7;
+  font-size: 11px;
+}
+
+.dollar-values {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.dollar-buy {
+  color: #22c55e;
+  font-weight: 700;
+}
+
+.dollar-sell {
+  color: #f97316;
+  font-weight: 700;
+}
+
+.dollar-sep {
+  opacity: 0.4;
+}
+
+.dollar-meta {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.dollar-sources {
+  opacity: 0.5;
+  font-size: 10px;
+}
+.dollar-sources span {
+  font-size: 10px;
+}
+
+.dollar-updated {
+  opacity: 0.4;
+  font-size: 10px;
+  margin-left: auto;
+}
+
+.dollar-loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  opacity: 0.6;
+  font-size: 11px;
+  padding: 8px;
+  min-width: auto;
+}
+
+.dollar-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  opacity: 0.8;
+  min-width: auto;
+}
+
+.dollar-stale {
+  color: #f59e0b;
+  font-size: 12px;
+  cursor: help;
+}
+
+.dollar-retry {
+  padding: 2px 8px !important;
+  font-size: 10px !important;
+  min-height: auto !important;
+  height: auto !important;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+.spin {
+  animation: spin 1s linear infinite;
+}
+
+/* ─── Responsive: widget de dólar en mobile ──────────────────────────────── */
+@media (max-width: 768px) {
+  .dollar-widget {
+    min-width: auto;
+    padding: 4px 8px;
+  }
+
+  .dollar-sources {
+    display: none; /* Ocultar fuentes en pantallas muy pequeñas */
+  }
+}

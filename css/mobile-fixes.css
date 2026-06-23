@@ -1,0 +1,548 @@
+/* =======================================================================
+   MILA PMS — Mobile & Responsive Fixes
+   Versión: 2.0
+   Agregar como último import en index.html para que sobrescriba estilos base.
+   ======================================================================= */
+
+/* -----------------------------------------------------------------------
+   1. CALENDAR — SCROLL HORIZONTAL & STICKY COLUMNS
+   ----------------------------------------------------------------------- */
+
+/* Wrapper exterior: permite scroll horizontal en cualquier dispositivo */
+.calendar-wrapper,
+.calendar-scroll-container,
+#calendar-container,
+.calendar-outer {
+  overflow-x: auto !important;
+  overflow-y: visible !important;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: var(--primary, #3b82f6) rgba(0,0,0,0.1);
+  /* Padding inferior para que el scrollbar no tape contenido */
+  padding-bottom: 8px;
+}
+
+.calendar-wrapper::-webkit-scrollbar,
+.calendar-scroll-container::-webkit-scrollbar {
+  height: 6px;
+}
+.calendar-wrapper::-webkit-scrollbar-track,
+.calendar-scroll-container::-webkit-scrollbar-track {
+  background: transparent;
+}
+.calendar-wrapper::-webkit-scrollbar-thumb,
+.calendar-scroll-container::-webkit-scrollbar-thumb {
+  background: var(--primary, #3b82f6);
+  border-radius: 3px;
+}
+
+/* Grid / tabla del calendario: ancho mínimo fijo para que no colapse */
+.calendar-grid,
+.calendar-table,
+#calendar-table,
+.cal-table {
+  min-width: max-content !important;
+  width: auto !important;
+  table-layout: fixed;
+  border-collapse: collapse;
+  border-spacing: 0;
+}
+
+/* Celdas de días: ancho fijo */
+.calendar-day-header,
+.calendar-day-cell,
+.day-header-cell,
+.day-cell,
+th.day-col,
+td.day-col,
+[data-date] {
+  min-width: 38px !important;
+  width: 38px !important;
+  max-width: 38px !important;
+  box-sizing: border-box;
+}
+
+@media (max-width: 768px) {
+  .calendar-day-header,
+  .calendar-day-cell,
+  .day-header-cell,
+  .day-cell,
+  th.day-col,
+  td.day-col,
+  [data-date] {
+    min-width: 32px !important;
+    width: 32px !important;
+    max-width: 32px !important;
+  }
+}
+
+/* Columna de nombre de unidad: sticky izquierda */
+.calendar-unit-label,
+.unit-name-col,
+.unit-label-cell,
+th.unit-col,
+td.unit-col,
+.cal-row > .unit-name,
+tr > td:first-child.unit-col {
+  position: sticky !important;
+  left: 0 !important;
+  z-index: 10 !important;
+  min-width: 90px !important;
+  max-width: 110px !important;
+  background: var(--bg-surface, #1e293b) !important;
+  box-shadow: 3px 0 6px rgba(0, 0, 0, 0.25);
+  /* Evitar que el texto se desborde */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Fila header de días: sticky arriba */
+.calendar-header-row,
+.cal-header-row,
+thead tr:first-child,
+.month-header {
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 20 !important;
+  background: var(--bg-surface, #1e293b) !important;
+}
+
+/* Celda esquina (nombre + días header): sticky en ambos ejes */
+.calendar-corner,
+thead tr th:first-child,
+.cal-header-row > .unit-col,
+.cal-corner-cell {
+  position: sticky !important;
+  top: 0 !important;
+  left: 0 !important;
+  z-index: 30 !important;
+  background: var(--bg-surface, #1e293b) !important;
+  box-shadow: 3px 3px 6px rgba(0, 0, 0, 0.3);
+}
+
+/* -----------------------------------------------------------------------
+   2. BOOKING BARS — Ajuste en celdas angostas
+   ----------------------------------------------------------------------- */
+
+.booking-bar,
+.reservation-block,
+.booking-block,
+.cal-booking,
+.event-block {
+  height: 26px !important;
+  min-height: 26px !important;
+  border-radius: 3px !important;
+  overflow: hidden !important;
+  white-space: nowrap !important;
+  font-size: 10px !important;
+  line-height: 26px !important;
+  padding: 0 4px !important;
+  cursor: pointer !important;
+  display: flex !important;
+  align-items: center !important;
+  box-sizing: border-box !important;
+  position: relative;
+}
+
+@media (max-width: 480px) {
+  .booking-bar,
+  .reservation-block,
+  .booking-block,
+  .cal-booking,
+  .event-block {
+    height: 22px !important;
+    min-height: 22px !important;
+    line-height: 22px !important;
+    font-size: 9px !important;
+  }
+}
+
+/* -----------------------------------------------------------------------
+   3. LISTADO DE RESERVAS — Botones y acciones
+   ----------------------------------------------------------------------- */
+
+/* Fila de acciones: no colapsar, no cortar */
+.booking-actions,
+.reservation-actions,
+.action-buttons,
+.row-actions {
+  display: flex !important;
+  flex-direction: row !important;
+  flex-wrap: nowrap !important;
+  gap: 6px !important;
+  align-items: center !important;
+  min-width: fit-content !important;
+}
+
+/* Botones de acción individuales */
+.booking-actions .btn,
+.reservation-actions .btn,
+.action-buttons .btn,
+.row-actions .btn,
+.btn-action {
+  white-space: nowrap !important;
+  flex-shrink: 0 !important;
+  min-width: fit-content !important;
+  overflow: visible !important;
+}
+
+/* Botón "Abono completo" / verde — fix corte */
+.btn-success,
+.btn-pay,
+.btn-abono,
+.btn-full-pay,
+.btn-complete {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 6px 14px !important;
+  white-space: nowrap !important;
+  overflow: visible !important;
+  min-width: fit-content !important;
+  height: auto !important;
+  min-height: 34px !important;
+  line-height: 1.2 !important;
+  gap: 6px !important;
+}
+
+/* Tabla de reservas: scroll horizontal */
+.bookings-table-wrapper,
+.reservations-table-container,
+#bookings-list-container {
+  overflow-x: auto !important;
+  -webkit-overflow-scrolling: touch;
+  width: 100%;
+}
+
+.bookings-table,
+.reservations-table,
+#bookings-table {
+  min-width: 900px;
+  width: 100%;
+}
+
+@media (max-width: 768px) {
+  .bookings-table,
+  .reservations-table,
+  #bookings-table {
+    min-width: 750px;
+  }
+}
+
+/* -----------------------------------------------------------------------
+   4. NAVEGACIÓN — Tabs con scroll horizontal en mobile
+   ----------------------------------------------------------------------- */
+
+.nav-tabs,
+.tabs-container,
+.main-tabs,
+.tab-nav,
+#main-tabs {
+  display: flex !important;
+  flex-direction: row !important;
+  flex-wrap: nowrap !important;
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  gap: 4px;
+  padding-bottom: 2px;
+}
+
+.nav-tabs::-webkit-scrollbar,
+.tabs-container::-webkit-scrollbar {
+  display: none !important;
+}
+
+.nav-tab,
+.tab-item,
+.tab-btn,
+.nav-tabs > button,
+.nav-tabs > a {
+  flex-shrink: 0 !important;
+  white-space: nowrap !important;
+}
+
+/* -----------------------------------------------------------------------
+   5. MODALES — Full screen en mobile
+   ----------------------------------------------------------------------- */
+
+@media (max-width: 600px) {
+  .modal-overlay,
+  .modal-backdrop {
+    align-items: flex-end !important;
+  }
+
+  .modal,
+  .modal-container,
+  .modal-content,
+  .modal-box {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    border-radius: 20px 20px 0 0 !important;
+    position: relative !important;
+    max-height: 92vh !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Handle de drag en modales mobile */
+  .modal::before {
+    content: '';
+    display: block;
+    width: 40px;
+    height: 4px;
+    background: rgba(255,255,255,0.2);
+    border-radius: 2px;
+    margin: 10px auto 0;
+  }
+}
+
+/* -----------------------------------------------------------------------
+   6. FORMULARIOS — Inputs en mobile
+   ----------------------------------------------------------------------- */
+
+@media (max-width: 768px) {
+  .form-row,
+  .form-grid,
+  .input-row {
+    flex-direction: column !important;
+    gap: 12px !important;
+  }
+
+  .form-group,
+  .field-group {
+    width: 100% !important;
+  }
+
+  .form-row > *,
+  .form-grid > * {
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  /* Inputs touch-friendly */
+  input[type="text"],
+  input[type="email"],
+  input[type="number"],
+  input[type="date"],
+  input[type="password"],
+  select,
+  textarea {
+    min-height: 44px;
+    font-size: 16px !important; /* Evita zoom automático en iOS */
+  }
+
+  button,
+  .btn {
+    min-height: 44px;
+  }
+}
+
+/* -----------------------------------------------------------------------
+   7. LAYOUT GENERAL — Responsive
+   ----------------------------------------------------------------------- */
+
+@media (max-width: 768px) {
+  /* Header mobile */
+  .app-header,
+  .main-header {
+    padding: 8px 12px !important;
+  }
+
+  .header-title,
+  .app-title {
+    font-size: 18px !important;
+  }
+
+  /* Sidebar → bottom en mobile (si aplica) */
+  .sidebar {
+    display: none;
+  }
+
+  /* Contenido principal: sin margen de sidebar */
+  .main-content,
+  .content-area,
+  #main-content {
+    margin-left: 0 !important;
+    padding: 12px !important;
+    width: 100% !important;
+  }
+
+  /* Cards: stack vertical */
+  .stats-grid,
+  .cards-grid,
+  .dashboard-grid {
+    grid-template-columns: 1fr !important;
+    gap: 12px !important;
+  }
+
+  /* Panel de control: 1 columna */
+  .control-panel-grid,
+  .panel-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .main-content,
+  .content-area,
+  #main-content {
+    padding: 8px !important;
+  }
+
+  .stats-grid,
+  .cards-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+}
+
+/* -----------------------------------------------------------------------
+   8. LEGEND — Colores sincronizados (sin duplicados)
+   ----------------------------------------------------------------------- */
+
+.calendar-legend,
+.booking-legend {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 8px 16px !important;
+  padding: 12px !important;
+  align-items: center !important;
+}
+
+.legend-item {
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  white-space: nowrap !important;
+  font-size: 12px !important;
+}
+
+.legend-dot,
+.legend-color {
+  width: 12px !important;
+  height: 12px !important;
+  border-radius: 3px !important;
+  flex-shrink: 0 !important;
+}
+
+/* -----------------------------------------------------------------------
+   9. OPERACIONES — Tablas de limpieza/gastos/mantenimiento
+   ----------------------------------------------------------------------- */
+
+.operations-table-wrapper,
+.cleaning-table-wrapper,
+.expenses-table-wrapper,
+.maintenance-table-wrapper {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  width: 100%;
+}
+
+/* -----------------------------------------------------------------------
+   10. AVATAR EDITOR — Panel de control
+   ----------------------------------------------------------------------- */
+
+.avatar-container,
+.avatar-wrapper {
+  position: relative !important;
+  display: inline-block !important;
+  cursor: pointer !important;
+}
+
+.avatar-edit-overlay {
+  position: absolute !important;
+  bottom: 0 !important;
+  right: 0 !important;
+  width: 28px !important;
+  height: 28px !important;
+  background: var(--primary, #3b82f6) !important;
+  border-radius: 50% !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  cursor: pointer !important;
+  border: 2px solid var(--bg-surface, #1e293b) !important;
+  transition: background 0.2s ease !important;
+  z-index: 5 !important;
+}
+
+.avatar-edit-overlay:hover {
+  background: var(--primary-dark, #2563eb) !important;
+}
+
+.avatar-edit-overlay svg,
+.avatar-edit-overlay i {
+  width: 14px !important;
+  height: 14px !important;
+  color: #fff !important;
+  pointer-events: none !important;
+}
+
+/* -----------------------------------------------------------------------
+   11. DOLLAR WIDGET — Cotización
+   ----------------------------------------------------------------------- */
+
+.dollar-widget,
+.exchange-rate-widget {
+  min-width: 220px;
+}
+
+.dollar-sources {
+  font-size: 11px;
+  opacity: 0.7;
+  margin-top: 4px;
+}
+
+.dollar-updated {
+  font-size: 10px;
+  opacity: 0.5;
+  margin-top: 2px;
+}
+
+.dollar-loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+/* -----------------------------------------------------------------------
+   12. UTILITIES — Helpers globales
+   ----------------------------------------------------------------------- */
+
+/* No permitir que ningún contenedor primario oculte overflow en mobile */
+@media (max-width: 768px) {
+  body,
+  #app,
+  .app-container,
+  .app-wrapper,
+  main,
+  .main-view {
+    overflow-x: hidden; /* El scroll lo maneja el elemento hijo que lo necesite */
+  }
+}
+
+/* Touch targets mínimos (WCAG 2.5.5) */
+@media (pointer: coarse) {
+  button,
+  .btn,
+  a,
+  [role="button"],
+  label {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}
+
+/* Fix iOS safari: inputs no se zooman si font >= 16px */
+@supports (-webkit-touch-callout: none) {
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}

@@ -54,34 +54,59 @@ export class BookingForm {
   }
 
   // ── Bind eventos globales del formulario ──────────
+  // Usa event delegation en document para que funcione
+  // aunque el modal HTML se inserte después del constructor.
   _bindEvents() {
-    document.getElementById('booking-modal-close')?.addEventListener('click', () => this.close());
-    document.getElementById('btn-booking-cancel')?.addEventListener('click',  () => this.close());
-    document.getElementById('btn-step-next')?.addEventListener('click', () => this._nextStep());
-    document.getElementById('btn-step-back')?.addEventListener('click', () => this._prevStep());
-    document.getElementById('btn-add-payment-row')?.addEventListener('click', () => this._addPaymentRow());
-
-    // Precio/descuento → recalcular breakdown
-    ['f-price','f-discount','f-surcharge','f-free-nights'].forEach(id => {
-      document.getElementById(id)?.addEventListener('input', () => this._updateBreakdown());
+    // ── Botones del modal — delegation ───────────────
+    document.addEventListener('click', (e) => {
+      if (e.target.closest('#booking-modal-close') || e.target.closest('#btn-booking-cancel')) {
+        this.close();
+        return;
+      }
+      if (e.target.closest('#btn-step-next')) {
+        this._nextStep();
+        return;
+      }
+      if (e.target.closest('#btn-step-back')) {
+        this._prevStep();
+        return;
+      }
+      if (e.target.closest('#btn-add-payment-row')) {
+        this._addPaymentRow();
+        return;
+      }
+      // Voucher: confirmar reserva
+      if (e.target.closest('#btn-voucher-confirm')) {
+        if (this._submitting) return;
+        this._submit();
+        return;
+      }
+      // Step indicators
+      const stepItem = e.target.closest('.step-item');
+      if (stepItem) {
+        const items = [...document.querySelectorAll('.step-item')];
+        const idx   = items.indexOf(stepItem);
+        if (idx >= 0) this._goToStep(idx + 1);
+        return;
+      }
     });
 
-    // Notas counter
-    document.getElementById('f-notes')?.addEventListener('input', e => {
-      document.getElementById('notes-count').textContent = e.target.value.length;
-    });
-
-    // Búsqueda de huéspedes
-    let guestSearchTimer;
-    document.getElementById('guest-search')?.addEventListener('input', e => {
-      clearTimeout(guestSearchTimer);
-      guestSearchTimer = setTimeout(() => this._searchGuests(e.target.value.trim()), 300);
-    });
-
-    // Navegación libre: clic en step indicator
-    document.querySelectorAll('.step-item').forEach((el, i) => {
-      el.style.cursor = 'pointer';
-      el.addEventListener('click', () => this._goToStep(i + 1));
+    // ── Inputs — delegation ──────────────────────────
+    document.addEventListener('input', (e) => {
+      if (['f-price','f-discount','f-surcharge','f-free-nights'].includes(e.target.id)) {
+        this._updateBreakdown();
+        return;
+      }
+      if (e.target.id === 'f-notes') {
+        const counter = document.getElementById('notes-count');
+        if (counter) counter.textContent = e.target.value.length;
+        return;
+      }
+      if (e.target.id === 'guest-search') {
+        clearTimeout(this._guestSearchTimer);
+        this._guestSearchTimer = setTimeout(() => this._searchGuests(e.target.value.trim()), 300);
+        return;
+      }
     });
 
     // Inicializar selector de canal de origen (compacto)
@@ -175,7 +200,10 @@ export class BookingForm {
   async openEdit(bookingId) {
     document.getElementById('booking-modal-title').textContent = 'Editar Reserva';
     this._reset();
+    // Setear editingId DESPUÉS de _reset (que lo limpia) y re-llamar
+    // _goToStep(1) para que el botón muestre el texto correcto de edición.
     this._editingId = bookingId;
+    this._updateNextBtnText();
 
     try {
       const { data: b, error } = await this.db
@@ -232,7 +260,7 @@ export class BookingForm {
       (b.payments ?? []).forEach(p => this._addPaymentRow(p));
       this._updatePaymentSummary();
 
-      document.getElementById('btn-step-next').textContent = 'Guardar cambios';
+      this._updateNextBtnText();
       document.getElementById('overlay-booking').classList.remove('hidden');
     } catch (err) {
       console.error('[BookingForm] openEdit error:', err);
@@ -376,6 +404,7 @@ export class BookingForm {
     this._selectedUnitIds = new Set();
     this._payRowCount     = 0;
     this._cachedTotal     = 0;
+    this._submitting      = false;
 
     ['f-firstname','f-lastname','f-dni','f-phone','f-email','f-notes',
      'f-price','f-discount','f-surcharge','f-free-nights','f-deposit',
@@ -655,27 +684,42 @@ export class BookingForm {
     });
 
     const backBtn  = document.getElementById('btn-step-back');
-    const nextBtn  = document.getElementById('btn-step-next');
     const footer   = document.querySelector('.modal-footer');
 
     // En paso 5 (voucher): ocultar footer normal, mostrar acciones del voucher
     const onVoucher = step === 5;
     if (footer) footer.style.display = onVoucher ? 'none' : '';
     if (backBtn) backBtn.style.visibility = (step > 1 && !onVoucher) ? 'visible' : 'hidden';
-    if (nextBtn) nextBtn.textContent = step === 4
-      ? 'Ver Resumen →'
-      : step < 4
-      ? 'Continuar →'
-      : 'Continuar →';
+
+    this._updateNextBtnText();
 
     if (step === 4) this._updatePaymentSummary();
     if (step === 5) this._renderVoucher();
   }
 
-  // Continuar → siguiente paso O mostrar voucher en paso 5
+  // ── Texto del botón "next" según contexto ─────────
+  _updateNextBtnText() {
+    const btn = document.getElementById('btn-step-next');
+    if (!btn) return;
+    const step = this._currentStep;
+    if (this._editingId) {
+      btn.textContent = step >= 4 ? 'Guardar cambios ✓' : 'Continuar →';
+    } else {
+      btn.textContent = step === 4 ? 'Ver Resumen →' : 'Continuar →';
+    }
+  }
+
+  // Continuar → siguiente paso O guardar
   _nextStep() {
+    if (this._currentStep === 4) {
+      if (!this._validateAll()) return;
+      if (this._editingId) {
+        // Modo edición: guardar directamente sin pasar por voucher
+        this._submit();
+        return;
+      }
+    }
     if (this._currentStep < this._totalSteps) {
-      if (this._currentStep === 4 && !this._validateAll()) return; // validar antes del voucher
       this._goToStep(this._currentStep + 1);
     }
   }
@@ -1158,7 +1202,8 @@ export class BookingForm {
       </div>` : ''}`;
 
     // Wire voucher action buttons
-    document.getElementById('btn-voucher-confirm')?.addEventListener('click', () => this._submit(), { once: true });
+    // El guard _submitting en _submit() evita doble envío (no usar { once: true }
+    // porque si el usuario vuelve al paso anterior el listener se pierde)
     document.getElementById('btn-voucher-pdf')?.addEventListener('click', () => this._exportVoucherPDF());
     document.getElementById('btn-voucher-whatsapp')?.addEventListener('click', () => this._sendVoucherToManager());
   }
@@ -1450,10 +1495,14 @@ ${notes ? `
   }
 
   async _submit() {
+    if (this._submitting) return; // guard contra doble click
     if (!this._validateAll()) return;
 
+    this._submitting = true;
     const btn = document.getElementById('btn-step-next');
-    if (btn) { btn.disabled = true; btn.textContent = 'Guardando...'; }
+    const confirmBtn = document.getElementById('btn-voucher-confirm');
+    if (btn)        { btn.disabled        = true; btn.textContent        = 'Guardando...'; }
+    if (confirmBtn) { confirmBtn.disabled = true; confirmBtn.textContent = 'Guardando...'; }
 
     let _safetyTimer = setTimeout(() => {
       if (btn) { btn.disabled = false; btn.textContent = this._editingId ? 'Guardar cambios' : 'Confirmar reserva'; }
@@ -1695,9 +1744,14 @@ ${notes ? `
       showToast(`❌ ${userMsg}`, 'error');
     } finally {
       clearTimeout(_safetyTimer);
+      this._submitting = false;
       if (btn) {
-        btn.disabled   = false;
-        btn.textContent = this._editingId ? 'Guardar cambios' : 'Confirmar reserva';
+        btn.disabled    = false;
+        this._updateNextBtnText();
+      }
+      if (confirmBtn) {
+        confirmBtn.disabled    = false;
+        confirmBtn.textContent = 'Confirmar reserva';
       }
     }
   }
