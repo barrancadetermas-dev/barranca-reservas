@@ -976,7 +976,8 @@ export class BookingForm {
         .eq('hotel_id', this.ctx.hotelId)
         .not('status', 'in', '(cancelled,blocked)')
         .gt('price_per_night', 0)
-        .like('check_in', `%-${monthPad}-%`)
+        .gte('check_in', `${now.getFullYear()}-${monthPad}-01`)
+        .lte('check_in', `${now.getFullYear()}-${monthPad}-31`)
         .order('check_in', { ascending: false })
         .limit(60);
 

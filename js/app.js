@@ -320,7 +320,7 @@ async function initApp(user) {
         if (title) title.innerHTML = '📊 Paso 1 — Calculá el precio';
         const createBtn = document.getElementById('calc-create-booking');
         if (createBtn) createBtn.textContent = 'Continuar con la reserva →';
-        overlay.classList.remove('hidden');
+        overlay.style.display = 'flex';
         document.getElementById('calc-price')?.focus();
       } else {
         bookingForm.open();
@@ -598,7 +598,7 @@ export function openCancelModal(bookingId, totalPaid) {
   document.getElementById('cancel-paid-display').textContent = formatARS(totalPaid);
   document.getElementById('cancel-refund-option').value = totalPaid > 0 ? 'retain' : 'none';
   document.getElementById('cancel-refund-input')?.classList.add('hidden');
-  overlay.classList.remove('hidden');
+  overlay.style.display = 'flex';
 }
 
 function closeCancelModal() {
@@ -1770,12 +1770,12 @@ function setupCalculator() {
   // Toggle highlight on btn when open
   const setOpen = (open) => {
     if (open) {
-      overlay.classList.remove('hidden');
+      overlay.style.display = 'flex';
       btn?.classList.add('calc-active');
       _calcUpdate();
       document.getElementById('calc-price')?.focus();
     } else {
-      overlay.classList.add('hidden');
+      overlay.style.display = 'none';
       btn?.classList.remove('calc-active');
     }
   };
