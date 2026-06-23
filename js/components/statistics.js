@@ -252,28 +252,9 @@ export class Statistics {
     const RevPAR        = totalRooms > 0 ? Math.round((totalRevenue / (totalRooms * daysInMonth))) : 0;
     const avgStay       = totalBookings > 0 ? (totalNights / totalBookings).toFixed(1) : '0';
 
-    // ── KPI Cards con comparativo real vs mes anterior ─
-    let prevRevenue = 0;
-    try {
-      const prevMonth = month === 0 ? 11 : month - 1;
-      const prevYear2 = month === 0 ? year - 1 : year;
-      const pFirst = `${prevYear2}-${String(prevMonth+1).padStart(2,'0')}-01`;
-      const pLast  = new Date(prevYear2, prevMonth+1, 0).toISOString().slice(0,10);
-      const { data: prev } = await this.db.from('bookings')
-        .select('total_amount')
-        .eq('hotel_id', this.ctx.hotelId)
-        .neq('status','cancelled').neq('status','blocked')
-        .gte('check_in', pFirst).lte('check_in', pLast);
-      prevRevenue = (prev ?? []).reduce((s, b) => s + (b.total_amount ?? 0), 0);
-    } catch { /* comparativo opcional */ }
-
-    const revDelta   = prevRevenue > 0 ? Math.round(((totalRevenue - prevRevenue) / prevRevenue) * 100) : null;
-    const deltaLabel = revDelta === null ? '—' : revDelta >= 0 ? `+${revDelta}% vs mes ant.` : `${revDelta}% vs mes ant.`;
-    const deltaColor = revDelta === null ? 'blue' : revDelta >= 0 ? 'green' : 'rose';
-
     let html = `
       <div class="stats-kpi-row">
-        ${this._kpiCard('Ingreso bruto',  formatARS(totalRevenue), deltaColor, deltaLabel)}
+        ${this._kpiCard('Ingreso bruto',  formatARS(totalRevenue), 'blue', 'vs periodo')}
         ${this._kpiCard('ADR',            formatARS(ADR),          'green',    'Tarifa prom. diaria')}
         ${this._kpiCard('RevPAR',         formatARS(RevPAR),       'purple',   'Ingreso por hab. disp.')}
         ${this._kpiCard('Ocupación',      avgOcc + '%',            avgOcc >= 70 ? 'green' : avgOcc >= 40 ? 'amber' : 'rose', `${totalNights} noches`)}
