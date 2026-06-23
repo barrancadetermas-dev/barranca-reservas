@@ -972,7 +972,7 @@ export class BookingForm {
       // Mes actual (mismo mes, cualquier año)
       const { data: monthData } = await this.db
         .from('bookings')
-        .select('price_per_night, check_in, check_out, booking_units(unit_id)')
+        .select('price_per_night, check_in, check_out')
         .eq('hotel_id', this.ctx.hotelId)
         .not('status', 'in', '(cancelled,blocked)')
         .gt('price_per_night', 0)
@@ -981,7 +981,7 @@ export class BookingForm {
         .limit(60);
 
       const prices = (monthData ?? [])
-        .filter(b => (b.booking_units ?? []).some(bu => bu.unit_id === unitId))
+        
         .map(b => b.price_per_night)
         .filter(p => p > 0);
 
@@ -989,7 +989,7 @@ export class BookingForm {
         // Fallback: cualquier mes reciente para esta unidad
         const { data: anyData } = await this.db
           .from('bookings')
-          .select('price_per_night, check_in, booking_units(unit_id)')
+          .select('price_per_night, check_in')
           .eq('hotel_id', this.ctx.hotelId)
           .not('status', 'in', '(cancelled,blocked)')
           .gt('price_per_night', 0)
@@ -997,7 +997,7 @@ export class BookingForm {
           .limit(50);
 
         const anyPrices = (anyData ?? [])
-          .filter(b => (b.booking_units ?? []).some(bu => bu.unit_id === unitId))
+          
           .map(b => b.price_per_night)
           .filter(p => p > 0);
 

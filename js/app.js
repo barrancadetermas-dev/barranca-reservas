@@ -220,7 +220,7 @@ async function initApp(user) {
     document.getElementById('user-role-badge').textContent = getRoleLabel(AppContext.role);
 
     // Cargar avatar guardado del perfil
-    _loadAndApplyAvatar(supabase, user.id);
+    // _loadAndApplyAvatar(supabase, user.id); // activar tras SQL avatar
 
     // Click en avatar → abrir selector
     document.getElementById('user-avatar')?.addEventListener('click', () => _openAvatarModal(supabase, user.id));
