@@ -2188,6 +2188,16 @@ function _openAvatarModal(supabase, userId) {
     const { error } = await supabase.from('user_profiles')
       .upsert({ id: userId, avatar_id: selAvatar, avatar_color: selColor }, { onConflict: 'id' });
     if (error) {
+      const { error: updateError } = await supabase.from('user_profiles')
+        .update({ avatar_id: selAvatar, avatar_color: selColor })
+        .eq('id', userId);
+      if (!updateError) {
+        await _loadAndApplyAvatar(supabase, userId);
+        close();
+        showToast('Perfil actualizado ✓', 'success');
+        return;
+      }
+      console.error('[Avatar] save error:', error, updateError);
       saveBtn.textContent = 'Guardar'; saveBtn.disabled = false;
       showToast('Error al guardar perfil', 'error');
       return;

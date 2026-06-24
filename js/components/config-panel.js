@@ -725,9 +725,14 @@ export class ConfigPanel {
             id:             userId,
             avatar_id:      selectedId,
             avatar_color:   selectedColor,
-            actualizado_en: new Date().toISOString(),
           }, { onConflict: 'id' });
-        if (error) throw error;
+        if (error) {
+          const { error: updateError } = await this.db
+            .from('user_profiles')
+            .update({ avatar_id: selectedId, avatar_color: selectedColor })
+            .eq('id', userId);
+          if (updateError) throw updateError;
+        }
 
         // Actualizar estado local
         this._currentAvatarId    = selectedId;
