@@ -124,6 +124,12 @@ body.body--modal-open {
   animation: fadeIn 0.18s ease;
 }
 
+/* Compatibilidad con los modales existentes de la app.
+   La mayoría se abre quitando .hidden, no agregando .modal--active. */
+.modal-overlay:not(.hidden) {
+  display: flex;
+}
+
 /* Panel interior */
 .modal-panel {
   background: var(--color-background, #ffffff);
