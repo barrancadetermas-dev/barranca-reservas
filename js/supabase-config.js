@@ -130,7 +130,9 @@ export function getUnitColor(unit) {
 export function getUnitLabel(unit) {
   if (!unit) return '—';
   const num  = unit.sort_order ?? unit.number ?? '?';
-  const name = unit.name ?? `Unidad ${num}`;
+  const name = (unit.name ?? `Unidad ${num}`)
+    .replace('Planta Baja', 'P. Baja')
+    .replace('Planta Alta', 'P. Alta');
   return `#${num} · ${name}`;
 }
 

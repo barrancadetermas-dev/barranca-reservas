@@ -4960,49 +4960,25 @@ select.field-error {
 }
 
 
-/* ── GUEST PROFILE FIXES ───────────────────────── */
+/* ── FIXES JULIO 2026 ──────────────────────────── */
 
-/* Header integrado al borde del modal - sin padding top/sides */
-.modal-guest .modal-body {
-  padding: 0 !important;
-}
-/* Contenido con padding excepto el header */
-.modal-guest #guest-profile-body > *:not(.guest-profile-header) {
-  margin: 0 24px;
-}
-.modal-guest #guest-profile-body > .guest-profile-header {
-  border-radius: 0;
-  margin: 0;
-}
-/* El último elemento necesita padding-bottom */
-.modal-guest #guest-profile-body {
-  padding-bottom: 24px;
-}
+/* Quitar puntito de color en labels de unidad */
+.cal-unit-dot { display: none !important; }
 
-/* Etiquetas — toggle activo */
-.tag-toggle {
-  display: inline-flex; align-items: center; gap: 6px;
-  padding: 5px 12px; border-radius: var(--r-full);
-  font-size: .78rem; font-weight: 500; cursor: pointer;
-  border: 1px solid var(--color-border);
-  background: var(--color-surface);
-  color: var(--color-text-2);
-  transition: all .15s;
-  user-select: none;
-}
-.tag-toggle:hover {
-  border-color: var(--color-primary);
-  color: var(--color-primary);
-}
-.tag-toggle.active {
-  background: var(--color-primary);
-  border-color: var(--color-primary);
-  color: white;
+/* Calculadora normal - botones */
+.calc-norm-btn {
+  padding: 10px 6px;
+  font-size: .95rem;
   font-weight: 600;
+  border: 1px solid var(--color-border);
+  border-radius: var(--r-md);
+  background: var(--color-surface-2);
+  color: var(--color-text);
+  cursor: pointer;
+  transition: background .1s, transform .08s;
+  text-align: center;
+  min-height: 44px;
 }
-
-/* Tags row spacing */
-.tag-checkboxes {
-  display: flex; flex-wrap: wrap; gap: 8px;
-  margin-bottom: 12px;
-}
+.calc-norm-btn:hover   { background: var(--color-border); }
+.calc-norm-btn:active  { transform: scale(.92); }
+.calc-norm-zero        { grid-column: span 2; }

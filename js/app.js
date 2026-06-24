@@ -1841,8 +1841,13 @@ function setupCalculator() {
           } else {
             if (_normDisplay === '0' || ['+','-','×','÷'].includes(_normDisplay)) _normDisplay = '';
             _normDisplay += k;
-            _normExpr = _normExpr.replace(/[^0-9.+\-×÷]$/, '') + k;
-            if (!/[+\-×÷]/.test(_normDisplay)) _normExpr = _normDisplay;
+            // Fix: sync expr correctly for compound expressions
+            const hasOp = /[+\-×÷]/.test(_normExpr);
+            if (hasOp) {
+              _normExpr = _normExpr.replace(/[0-9.]+$/, '') + _normDisplay;
+            } else {
+              _normExpr = _normDisplay;
+            }
           }
         }
         normDisp();
