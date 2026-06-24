@@ -97,11 +97,11 @@ export class GuestsCRM {
       <div class="skeleton-box" style="height:72px"></div>`;
 
     const { data: guests, error } = await this.db
-      .from('guest_profiles')
-      .select('*')
+      .from('guests')
+      .select('id, first_name, last_name, phone, email, dni, tags, bad_experience, created_at')
       .eq('hotel_id', this.ctx.hotelId)
-      .or(`full_name.ilike.%${query}%,phone.ilike.%${query}%,email.ilike.%${query}%,dni.ilike.%${query}%`)
-      .order('last_checkin', { ascending: false, nullsFirst: false })
+      .or(`first_name.ilike.%${query}%,last_name.ilike.%${query}%,phone.ilike.%${query}%,email.ilike.%${query}%,dni.ilike.%${query}%`)
+      .order('created_at', { ascending: false })
       .limit(12);
 
     if (error) { showToast('Error al buscar huéspedes', 'error'); return; }

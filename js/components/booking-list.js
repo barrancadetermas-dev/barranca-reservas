@@ -519,39 +519,33 @@ export class BookingList {
         <div class="booking-row-accent" style="background:${barColor}"></div>
         <div class="booking-row-body">
           <div class="booking-row-main">
-            <div class="booking-guest-col">
+            <div class="bl-col-guest">
               ${BookingList._avatar(g)}
               <div class="booking-guest-info">
                 <span class="booking-guest-name">
-                  ${guest}
-                  ${flagHTML}
+                  ${guest}${flagHTML}
                 </span>
                 <div class="booking-meta-row">
-                  ${unitChips}
-                  ${getSourceBadgeHTML(b.source)}
+                  ${unitChips}${getSourceBadgeHTML(b.source)}
                 </div>
               </div>
             </div>
-            <div class="booking-dates-col">
-              <span class="booking-date-range">
-                ${formatDate(b.check_in)} → ${formatDate(b.check_out)}
-              </span>
-              <span class="booking-nights">${nights} noche${nights !== 1 ? 's' : ''}</span>
+            <div class="bl-col-dates">
+              <span class="booking-date-range">${formatDate(b.check_in)} → ${formatDate(b.check_out)}</span>
+              <span class="booking-nights">${nights}n</span>
             </div>
-            <div class="booking-amount-col">
+            <div class="bl-col-amount">
               <span class="booking-total">${formatARS(b.total_amount)}</span>
               ${b.balance > 0
-                ? `<span class="booking-balance-due">Saldo: ${formatARS(b.balance)}</span>
-                   <button data-action="pay-full" class="bl-action-btn bl-payfull-btn"
-                     title="Registrar pago total" onclick="event.stopPropagation()">
-                     ✅ Cobrar</button>`
-                : `<span class="booking-paid-badge">✓ Pagado</span>`
+                ? `<span class="booking-balance-due">↑ ${formatARS(b.balance)}</span>`
+                : `<span class="booking-paid-badge">✓</span>`
               }
             </div>
-            <div class="booking-status-col">
+            <div class="bl-col-status">
               <span class="status-badge ${statusCls}">${statusLbl}</span>
             </div>
             <div class="booking-actions-cell" onclick="event.stopPropagation()">
+              ${b.balance > 0 ? `<button data-action="pay-full" class="bl-action-btn bl-payfull-btn" title="Registrar pago total">✅ Cobrar</button>` : ''}
               <button data-action="edit"
                 class="bl-action-btn"
                 title="Editar reserva">

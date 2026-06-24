@@ -292,6 +292,8 @@ export class Calendar {
         }
 
         rems.forEach(r => {
+          // Solo mostrar si es general (sin unit_id) o corresponde a esta unidad
+          if (r.unit_id && r.unit_id !== unit.id) return;
           const dot = document.createElement('div');
           dot.className = 'cal-reminder-dot';
           dot.innerHTML = `<div class="tooltip">🔔 ${r.title}${r.units ? ` · #${r.units.sort_order} ${r.units.name}` : ''}</div>`;
@@ -366,7 +368,7 @@ export class Calendar {
       display: flex; align-items: center; padding: 0 8px;
       overflow: hidden; white-space: nowrap;
       cursor: grab; transition: filter .15s, transform .15s, box-shadow .15s;
-      ${isPast ? 'filter: saturate(.4) brightness(.78); opacity: .88;' : ''}
+      ${isPast ? 'filter: grayscale(52%) opacity(.62);' : ''}
     `;
     bar.dataset.bookingId = booking.id;
 
@@ -392,7 +394,7 @@ export class Calendar {
     });
     bar.addEventListener('mousemove',  (e) => this._moveTooltip(e));
     bar.addEventListener('mouseleave', () => {
-      bar.style.filter    = isPast ? 'saturate(.4) brightness(.78)' : '';
+      bar.style.filter    = isPast ? 'grayscale(52%) opacity(.62)' : '';
       bar.style.transform = '';
       bar.style.boxShadow = '';
       this._hideTooltip();
@@ -419,7 +421,7 @@ export class Calendar {
     const left = document.createElement('div');
     left.className = 'bar bar-split-left';
     left.style.background = coColor;
-    if (coIsPast) left.style.filter = 'saturate(.4) brightness(.78)';
+    if (coIsPast) left.style.filter = 'grayscale(52%) opacity(.62)';
     left.dataset.bookingId = coBooking.id;
     left.title = `Sale: ${coBooking.guests?.first_name ?? ''} ${coBooking.guests?.last_name ?? ''}`;
     left.addEventListener('mouseenter', (e) => this._showTooltip(coBooking, e));
@@ -430,7 +432,7 @@ export class Calendar {
     const right = document.createElement('div');
     right.className = 'bar bar-split-right';
     right.style.background = ciColor;
-    if (ciIsPast) right.style.filter = 'saturate(.4) brightness(.78)';
+    if (ciIsPast) right.style.filter = 'grayscale(52%) opacity(.62)';
     right.dataset.bookingId = ciBooking.id;
     right.title = `Entra: ${ciBooking.guests?.first_name ?? ''} ${ciBooking.guests?.last_name ?? ''}`;
     right.addEventListener('mouseenter', (e) => this._showTooltip(ciBooking, e));
@@ -1027,7 +1029,7 @@ export class Calendar {
           const guest   = b.guests ? `${b.guests.first_name} ${b.guests.last_name}` : (b.block_reason ?? 'Bloqueo');
           const isStart = b.check_in === iso;
           const barStyle = wcIsPast
-            ? `background:${color};filter:saturate(.45) brightness(.72);`
+            ? `background:${color};filter:grayscale(52%) opacity(.62);`
             : `background:${color};`;
           cell.innerHTML = `
             <div class="week-bar" style="${barStyle}border-radius:${isStart?'6px 0 0 6px':'0'}" data-id="${b.id}">
