@@ -7,7 +7,7 @@
 import { showToast, AppContext } from '../supabase-config.js';
 import { can } from '../auth/permissions.js';
 import { logAction } from '../services/audit-service.js';
-import { AdminUsers } from './admin-users.js';
+import { AdminUsers } from '../services/admin-users.js';
 
 // Definición completa de la configuración
 const CONFIG_SCHEMA = [

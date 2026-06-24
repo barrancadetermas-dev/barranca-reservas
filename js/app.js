@@ -220,7 +220,7 @@ async function initApp(user) {
     document.getElementById('user-role-badge').textContent = getRoleLabel(AppContext.role);
 
     // Cargar avatar guardado del perfil
-    // _loadAndApplyAvatar(supabase, user.id); // activar tras SQL avatar
+    _loadAndApplyAvatar(supabase, user.id);
 
     // Click en avatar → abrir selector
     document.getElementById('user-avatar')?.addEventListener('click', () => _openAvatarModal(supabase, user.id));
@@ -378,14 +378,12 @@ export function showDemoAction(simulateFn) {
 // NAV POR ROL
 // ══════════════════════════════════════════════════
 function setupNavByRole() {
-  // Admin-only: Auditoría, Config
-  const auditNav    = document.querySelector('.nav-item[data-section="audit"]');
-  const configNav   = document.querySelector('.nav-item[data-section="config"]');
-  const statsNav    = document.querySelector('.nav-item[data-section="statistics"]');
-  const expenseNav  = document.querySelector('#section-statistics .tab[data-tab="expenses"]');
+  const auditNav  = document.querySelector('.nav-item[data-section="audit"]');
+  const configNav = document.querySelector('.nav-item[data-section="config"]');
+  const statsNav  = document.querySelector('.nav-item[data-section="statistics"]');
 
-  if (auditNav)   auditNav.style.display    = can('viewAuditLog')   ? '' : 'none';
-  if (configNav)  configNav.style.display   = can('manageSeasonPricing') ? '' : 'none';
+  if (auditNav)  auditNav.style.display  = can('viewAuditLog')          ? '' : 'none';
+  if (configNav) configNav.style.display = can('manageSeasonPricing')   ? '' : 'none';
   if (statsNav && !can('viewStats') && !isDemo()) statsNav.style.opacity = '.5';
 }
 
@@ -997,9 +995,8 @@ function handlePaymentChange(payload) {
 function handleExpenseChange(payload) {
   cache.invalidate('expenses');
   document.dispatchEvent(new CustomEvent('expense:changed', { detail: payload }));
-  if (currentSection === 'statistics') statistics?.loadExpenses?.();
   if (currentSection === 'operations') operations?.load?.();
-  // Actualizar P&L si está visible
+  // statistics.loadExpenses() fue eliminado — gastos ahora viven en Operaciones
   if (currentSection === 'statistics' && statistics?._tab === 'pl') statistics?.loadPL?.();
 }
 
@@ -1118,12 +1115,10 @@ function setupGlobalShortcuts() {
 // ── Gestión centralizada de modales ──────────────────
 // Asegura que siempre se pueda cerrar cualquier modal
 function _ensureModalCleanup() {
-  // Fix: si el overlay-booking quedó visible sin contexto, permitir cierre con X
+  // Cerrar overlay-booking al hacer clic en el backdrop
   document.getElementById('overlay-booking')?.addEventListener('click', (e) => {
-    // Solo cerrar si clic directo en el backdrop (no en el modal interno)
     if (e.target === e.currentTarget) {
-      e.preventDefault();
-      e.stopPropagation();
+      bookingForm?.close?.();
     }
   });
 }
@@ -1504,7 +1499,7 @@ function setupExpenseModal() {
     if(error){showToast('Error al guardar','error');return;}
     showToast(editingId?'Gasto actualizado ✓':'Gasto registrado ✓','success');close();
     document.getElementById('expense-editing-id').value='';
-    if(currentSection==='statistics')statistics?.loadExpenses();
+    if(currentSection==='statistics')statistics?.loadExpenses?.();
   });
 }
 
@@ -1879,7 +1874,8 @@ function setupCalculator() {
   // Open / close
   btn?.addEventListener('click', (e) => {
     e.stopPropagation();
-    setOpen(overlay.classList.contains('hidden'));
+    const isOpen = overlay.style.display === 'flex';
+    setOpen(!isOpen);
   });
 
   const close = () => setOpen(false);
