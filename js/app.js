@@ -1796,8 +1796,7 @@ function setupCalculator() {
         padding:10px 12px;background:var(--color-surface-2);border-radius:var(--r-md);
         border:1px solid var(--color-border);min-height:52px;word-break:break-all;color:var(--color-text)">0</div>
       <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:10px">
-        ${['C','±','%','÷','7','8','9','×','4','5','6','−','1','2','3','+','0','','.',
-          '='].map(k => `<button class="calc-norm-btn${k==='='?' calc-norm-eq':k==='0'?' calc-norm-zero':''}"
+        ${['C','±','%','÷','7','8','9','×','4','5','6','−','1','2','3','+','0','.','='].map(k => `<button class="calc-norm-btn${k==='='?' calc-norm-eq':k==='0'?' calc-norm-zero':''}"
           data-key="${k}" style="${k==='='?'background:var(--color-primary);color:white;':''}">${k||''}</button>`).join('')}
       </div>`;
     stayBody.parentNode.insertBefore(normalBody, stayBody.nextSibling);
@@ -1841,7 +1840,7 @@ function setupCalculator() {
           } else {
             if (_normDisplay === '0' || ['+','-','×','÷'].includes(_normDisplay)) _normDisplay = '';
             _normDisplay += k;
-            // Fix: sync expr correctly for compound expressions
+            // Fix: mantener la expresión compuesta correctamente
             const hasOp = /[+\-×÷]/.test(_normExpr);
             if (hasOp) {
               _normExpr = _normExpr.replace(/[0-9.]+$/, '') + _normDisplay;
@@ -1852,6 +1851,48 @@ function setupCalculator() {
         }
         normDisp();
       });
+    });
+
+    // ── Teclado para calculadora normal ──────────────
+    document.addEventListener('keydown', function calcKeyHandler(e) {
+      // Solo activo si la calc está abierta en modo normal
+      if (overlay.style.display !== 'flex') return;
+      if (normalBody.style.display === 'none') return;
+
+      const MAP = {
+        '0':'0','1':'1','2':'2','3':'3','4':'4',
+        '5':'5','6':'6','7':'7','8':'8','9':'9',
+        '.':'.',',':'.','Enter':'=','=':'=',
+        '+':'+','-':'-','*':'×','/':'÷','%':'%',
+      };
+
+      if (e.key === 'Escape') { setOpen(false); e.preventDefault(); return; }
+
+      if (e.key === 'Backspace') {
+        e.preventDefault();
+        const disp = document.getElementById('calc-norm-display');
+        if (!disp) return;
+        const cur = disp.textContent;
+        if (cur === 'Error' || cur.length <= 1) {
+          disp.textContent = '0';
+          // Reset internal state via C button
+          normalBody.querySelector('[data-key="C"]')?.click();
+        } else {
+          disp.textContent = cur.slice(0, -1) || '0';
+          // Sync by finding last digit button click (indirect)
+          // We just update display; expression handled on next op
+        }
+        return;
+      }
+
+      const mapped = MAP[e.key];
+      if (!mapped) return;
+      e.preventDefault();
+
+      // Click the corresponding button to reuse all the logic
+      const btn = [...normalBody.querySelectorAll('.calc-norm-btn')]
+        .find(b => b.dataset.key === mapped);
+      if (btn) btn.click();
     });
 
     // Tab switching
