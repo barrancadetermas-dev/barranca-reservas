@@ -63,7 +63,7 @@ export class AdminUsers {
     return `
       <div class="au-toolbar">
         <input type="text" id="au-search" class="form-input"
-               placeholder="🔍 Buscar por email o nombre..." style="max-width:280px">
+               placeholder="🔍 Buscar por email o nombre..." style="max-width:240px">
         <select id="au-role-filter" class="filter-select">
           <option value="">Todos los roles</option>
           <option value="admin">👑 Administrador</option>
@@ -71,7 +71,10 @@ export class AdminUsers {
           <option value="demo">👁 Demo</option>
         </select>
         <button class="btn btn-outline btn-sm" id="au-refresh" title="Actualizar">
-          🔄 Actualizar
+          🔄
+        </button>
+        <button class="btn btn-primary btn-sm" id="au-invite-btn">
+          ✉️ Invitar usuario
         </button>
       </div>
       <div id="au-list" style="margin-top:12px">
@@ -94,6 +97,10 @@ export class AdminUsers {
 
     container.querySelector('#au-refresh')?.addEventListener('click', () => {
       this._fetchAndRender(container);
+    });
+
+    container.querySelector('#au-invite-btn')?.addEventListener('click', () => {
+      this._openInviteModal(container);
     });
   }
 
@@ -163,7 +170,8 @@ export class AdminUsers {
         const userId = btn.dataset.userId;
         const email  = btn.dataset.email;
         if (action === 'change-role')  this._openRoleModal(userId, email, container);
-        if (action === 'reset-pass')   this._sendPasswordReset(email, btn);
+        if (action === 'reset-pass')   this._generateResetLink(email, btn);
+        if (action === 'toggle-ban')   this._toggleBan(userId, btn, container);
       });
     });
   }
@@ -218,8 +226,15 @@ export class AdminUsers {
                   data-au-action="reset-pass"
                   data-user-id="${u.id}"
                   data-email="${u.email ?? ''}"
-                  title="Enviar email de reset de contraseña">
-            🔑 Reset pass
+                  title="Generar link de acceso">
+            🔑 Reset
+          </button>
+          <button class="btn btn-xs" style="${u.status === 'banned' ? 'color:#22c55e;border-color:rgba(34,197,94,.3)' : 'color:#ef4444;border-color:rgba(239,68,68,.3)'};border:1px solid;border-radius:6px;padding:2px 8px;font-size:.7rem;cursor:pointer;background:transparent"
+                  data-au-action="toggle-ban"
+                  data-user-id="${u.id}"
+                  data-email="${u.email ?? ''}"
+                  title="${u.status === 'banned' ? 'Desbloquear usuario' : 'Bloquear acceso'}">
+            ${u.status === 'banned' ? '🔓 Desbloquear' : '🚫 Bloquear'}
           </button>
         </div>
       </div>`;
@@ -321,23 +336,187 @@ export class AdminUsers {
     });
   }
 
-  // ── Reset de contraseña ───────────────────────────
-  async _sendPasswordReset(email, btn) {
+  // ── Invitar usuario nuevo ────────────────────────
+  _openInviteModal(container) {
+    document.getElementById('overlay-au-invite')?.remove();
+    const modal = document.createElement('div');
+    modal.className = 'modal-overlay';
+    modal.id = 'overlay-au-invite';
+    modal.style.zIndex = '300';
+    modal.innerHTML = `
+      <div class="modal" style="max-width:420px">
+        <div class="modal-header">
+          <h3 class="modal-title">✉️ Invitar nuevo usuario</h3>
+          <button class="modal-close" id="au-invite-close">✕</button>
+        </div>
+        <div class="modal-body" style="padding:20px">
+          <p style="font-size:.82rem;color:var(--color-text-2);margin-bottom:16px">
+            Supabase enviará un email de invitación. El usuario clickea el link y elige su contraseña.
+          </p>
+          <div class="form-group" style="margin-bottom:14px">
+            <label class="form-label">Email</label>
+            <input type="email" id="au-invite-email" class="form-input"
+                   placeholder="usuario@ejemplo.com" autocomplete="off">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Rol</label>
+            <select id="au-invite-role" class="form-input">
+              <option value="staff">👤 Staff</option>
+              <option value="admin">👑 Administrador</option>
+              <option value="demo">👁 Demo (solo lectura)</option>
+            </select>
+          </div>
+          <div id="au-invite-result" style="margin-top:14px;display:none"></div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-ghost" id="au-invite-cancel">Cancelar</button>
+          <button class="btn btn-primary" id="au-invite-send">Enviar invitación</button>
+        </div>
+      </div>`;
+    document.body.appendChild(modal);
+
+    const close = () => modal.remove();
+    modal.querySelector('#au-invite-close').onclick  = close;
+    modal.querySelector('#au-invite-cancel').onclick = close;
+    modal.addEventListener('click', e => { if (e.target === modal) close(); });
+
+    modal.querySelector('#au-invite-send').addEventListener('click', async () => {
+      const email = modal.querySelector('#au-invite-email').value.trim();
+      const role  = modal.querySelector('#au-invite-role').value;
+      const btn   = modal.querySelector('#au-invite-send');
+      const res   = modal.querySelector('#au-invite-result');
+
+      if (!email || !email.includes('@')) {
+        showToast('Ingresá un email válido', 'warning'); return;
+      }
+
+      btn.disabled = true; btn.textContent = 'Enviando...';
+      try {
+        const { data, error } = await this.db.functions.invoke('invite-user', {
+          body: { action: 'invite', email, role, hotel_id: this.ctx.hotelId },
+        });
+        if (error || data?.error) throw new Error(error?.message ?? data?.error);
+
+        res.style.display = 'block';
+        res.innerHTML = `<div class="alert" style="background:rgba(34,197,94,.1);border:1px solid #22c55e;
+          border-radius:8px;padding:10px 14px;font-size:.82rem;color:#15803d">
+          ✅ Invitación enviada a <strong>${email}</strong>. El usuario recibirá un email para activar su cuenta.
+        </div>`;
+        btn.textContent = '✓ Enviado';
+        this._fetchAndRender(container);
+        setTimeout(close, 3000);
+      } catch (err) {
+        res.style.display = 'block';
+        res.innerHTML = `<div class="alert" style="background:rgba(239,68,68,.1);border:1px solid #ef4444;
+          border-radius:8px;padding:10px 14px;font-size:.82rem;color:#dc2626">
+          ❌ ${err.message}
+        </div>`;
+        btn.disabled = false; btn.textContent = 'Enviar invitación';
+      }
+    });
+  }
+
+  // ── Generar link de reset (admin lo copia y manda) ─
+  async _generateResetLink(email, btn) {
     if (!email) { showToast('Sin email asociado', 'warning'); return; }
-    if (!confirm(`¿Enviar email de reset de contraseña a ${email}?`)) return;
 
     btn.disabled = true; btn.textContent = '⏳';
     try {
-      const { error } = await this.db.auth.resetPasswordForEmail(email, {
-        redirectTo: window.location.origin + '/index.html',
+      const { data, error } = await this.db.functions.invoke('invite-user', {
+        body: { action: 'reset_password', email, hotel_id: this.ctx.hotelId },
       });
-      if (error) throw error;
-      showToast(`Email de reset enviado a ${email} ✓`, 'success');
+      if (error || data?.error) throw new Error(error?.message ?? data?.error);
+
+      if (data?.link) {
+        // Mostrar modal con el link para copiar
+        this._showLinkModal(email, data.link);
+        showToast('Link generado ✓', 'success');
+      } else {
+        showToast('Link generado — revisar consola', 'info');
+      }
     } catch (err) {
-      console.error('[AdminUsers] reset password:', err);
-      showToast('Error: ' + (err?.message ?? err), 'error');
+      // Fallback: enviar email de reset directo
+      try {
+        const { error: e2 } = await this.db.auth.resetPasswordForEmail(email, {
+          redirectTo: window.location.origin + '/index.html',
+        });
+        if (e2) throw e2;
+        showToast(`Email de reset enviado a ${email} ✓`, 'success');
+      } catch {
+        showToast('Error al resetear contraseña', 'error');
+      }
     } finally {
-      btn.disabled = false; btn.textContent = '🔑 Reset pass';
+      btn.disabled = false; btn.textContent = '🔑 Reset';
+    }
+  }
+
+  _showLinkModal(email, link) {
+    document.getElementById('overlay-au-link')?.remove();
+    const modal = document.createElement('div');
+    modal.className = 'modal-overlay';
+    modal.id = 'overlay-au-link';
+    modal.style.zIndex = '300';
+    modal.innerHTML = `
+      <div class="modal" style="max-width:480px">
+        <div class="modal-header">
+          <h3 class="modal-title">🔑 Link de acceso para ${email}</h3>
+          <button class="modal-close" id="au-link-close">✕</button>
+        </div>
+        <div class="modal-body" style="padding:20px">
+          <p style="font-size:.82rem;color:var(--color-text-2);margin-bottom:12px">
+            Copiá este link y enviáselo al usuario. Expira en 1 hora.
+          </p>
+          <div style="display:flex;gap:8px;align-items:center">
+            <input type="text" id="au-link-input" class="form-input"
+                   value="${link}" readonly style="font-size:.7rem;flex:1">
+            <button class="btn btn-primary btn-sm" id="au-link-copy">📋 Copiar</button>
+          </div>
+          <p style="font-size:.72rem;color:var(--color-text-3);margin-top:10px">
+            ⚠️ Este link permite acceso sin contraseña. Envialo solo al destinatario.
+          </p>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-ghost" id="au-link-close2">Cerrar</button>
+        </div>
+      </div>`;
+    document.body.appendChild(modal);
+
+    const close = () => modal.remove();
+    modal.querySelector('#au-link-close').onclick  = close;
+    modal.querySelector('#au-link-close2').onclick = close;
+    modal.addEventListener('click', e => { if (e.target === modal) close(); });
+
+    modal.querySelector('#au-link-copy').addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(link);
+        showToast('Link copiado ✓', 'success');
+      } catch {
+        modal.querySelector('#au-link-input').select();
+        document.execCommand('copy');
+        showToast('Link copiado ✓', 'success');
+      }
+    });
+  }
+
+  // ── Bloquear / desbloquear usuario ───────────────
+  async _toggleBan(userId, btn, container) {
+    const user = this._users.find(u => u.id === userId);
+    const isBanned = user?.status === 'banned';
+    const action   = isBanned ? 'Desbloquear' : 'Bloquear';
+    if (!confirm(`¿${action} a ${user?.email ?? userId}?`)) return;
+
+    btn.disabled = true;
+    try {
+      const { data, error } = await this.db.functions.invoke('invite-user', {
+        body: { action: 'toggle_ban', user_id: userId, hotel_id: this.ctx.hotelId },
+      });
+      if (error || data?.error) throw new Error(error?.message ?? data?.error);
+      showToast(`${action}ado ✓`, 'success');
+      await this._fetchAndRender(container);
+    } catch (err) {
+      showToast('Error: ' + err.message, 'error');
+    } finally {
+      btn.disabled = false;
     }
   }
 
