@@ -662,11 +662,7 @@ export class OperationsModule {
         ? `<button class="btn btn-primary btn-sm" id="btn-ops-add-expense">+ Nuevo gasto</button>`
         : '';
       header.querySelector('#btn-ops-add-expense')?.addEventListener('click', () => {
-        document.getElementById('expense-editing-id').value = '';
-        ['expense-desc','expense-amount','expense-due'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
-        const t = document.getElementById('expense-modal-title');
-        if (t) t.textContent = 'Nuevo Gasto';
-        document.getElementById('overlay-expense')?.classList.remove('hidden');
+        this._openExpenseModal(null, reload);
       });
     }
 
@@ -707,8 +703,13 @@ export class OperationsModule {
     panel.querySelector('#ops-exp-year')?.addEventListener('change',  reload);
     await reload();
 
-    // Escuchar cuando se guarde un gasto desde el modal
-    document.addEventListener('expense:changed', reload, { once: false });
+    // ── FIX: remover listener anterior antes de agregar el nuevo ──
+    // Evita acumulación de listeners al cambiar de tab o recargar.
+    if (this._expenseChangedHandler) {
+      document.removeEventListener('expense:changed', this._expenseChangedHandler);
+    }
+    this._expenseChangedHandler = reload;
+    document.addEventListener('expense:changed', reload);
   }
 
   _renderExpensesInOps(panel, expenses) {
@@ -771,14 +772,13 @@ export class OperationsModule {
         const id = btn.dataset.expId;
         const { data: e } = await this.db.from('expenses').select('*').eq('id', id).single();
         if (!e) return;
-        document.getElementById('expense-editing-id').value = id;
-        document.getElementById('expense-category').value   = e.category ?? 'otros';
-        document.getElementById('expense-desc').value       = e.description ?? '';
-        document.getElementById('expense-amount').value     = e.amount ?? '';
-        document.getElementById('expense-due').value        = e.due_date ?? '';
-        const t = document.getElementById('expense-modal-title');
-        if (t) t.textContent = 'Editar Gasto';
-        document.getElementById('overlay-expense')?.classList.remove('hidden');
+        // Pasar _reload para refrescar la lista al guardar
+        const _reload = async () => {
+          const panel = document.getElementById('ops-panel');
+          const hdr   = document.getElementById('ops-header-actions');
+          if (panel && hdr) await this._loadExpenses(panel, hdr);
+        };
+        this._openExpenseModal(e, _reload);
       });
     });
     list.querySelectorAll('.ops-exp-del').forEach(btn => {
@@ -789,6 +789,116 @@ export class OperationsModule {
         document.getElementById(`ops-exp-${id}`)?.remove();
         showToast('Gasto eliminado', 'success');
       });
+    });
+  }
+
+  // ══════════════════════════════════════════════════
+  // MODAL DE GASTO (auto-contenido, no depende de HTML estático)
+  // ══════════════════════════════════════════════════
+  _openExpenseModal(expense = null, onSaved = null) {
+    const existing = document.getElementById('overlay-ops-expense');
+    if (existing) existing.remove();
+
+    const isEdit = !!expense;
+    const CATEGORIES = ['servicios','mantenimiento','limpieza','impuestos','personal','otros'];
+
+    const modal = document.createElement('div');
+    modal.className = 'modal-overlay';
+    modal.id = 'overlay-ops-expense';
+    modal.innerHTML = `
+      <div class="modal modal-sm">
+        <div class="modal-header">
+          <h3 class="modal-title">${isEdit ? 'Editar Gasto' : 'Nuevo Gasto'}</h3>
+          <button class="modal-close" id="oe-close">✕</button>
+        </div>
+        <div class="modal-body">
+          <div class="form-grid-2">
+            <div class="form-group">
+              <label>Categoría</label>
+              <select id="oe-category" class="filter-select">
+                ${CATEGORIES.map(c => `<option value="${c}" ${expense?.category === c ? 'selected' : ''}>${c.charAt(0).toUpperCase() + c.slice(1)}</option>`).join('')}
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Fecha de vencimiento</label>
+              <input type="date" id="oe-due" value="${expense?.due_date ?? ''}">
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Descripción <span class="req">*</span></label>
+            <input type="text" id="oe-desc" placeholder="Ej: Factura de gas" value="${expense?.description ?? ''}">
+          </div>
+          <div class="form-group">
+            <label>Monto (ARS) <span class="req">*</span></label>
+            <input type="number" id="oe-amount" min="0" step="0.01" placeholder="0.00" value="${expense?.amount ?? ''}">
+          </div>
+          <div class="form-group">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+              <input type="checkbox" id="oe-paid" ${expense?.paid ? 'checked' : ''}
+                     style="width:16px;height:16px;accent-color:var(--color-primary)">
+              Marcar como pagado
+            </label>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-outline" id="oe-cancel">Cancelar</button>
+          <button class="btn btn-primary" id="oe-save">${isEdit ? 'Guardar cambios' : 'Registrar gasto'}</button>
+        </div>
+      </div>`;
+
+    document.body.appendChild(modal);
+    modal.style.zIndex = '210';
+
+    const close = () => {
+      modal.remove();
+      if (escHandler) document.removeEventListener('keydown', escHandler);
+    };
+    const escHandler = (e) => { if (e.key === 'Escape') close(); };
+    document.addEventListener('keydown', escHandler);
+    modal.querySelector('#oe-close').onclick  = close;
+    modal.querySelector('#oe-cancel').onclick = close;
+    modal.addEventListener('click', e => { if (e.target === modal) close(); });
+    setTimeout(() => modal.querySelector('#oe-desc')?.focus(), 80);
+
+    modal.querySelector('#oe-save').addEventListener('click', async () => {
+      const desc   = modal.querySelector('#oe-desc').value.trim();
+      const amount = parseFloat(modal.querySelector('#oe-amount').value);
+      if (!desc || isNaN(amount) || amount <= 0) {
+        showToast('Descripción y monto son requeridos', 'warning');
+        return;
+      }
+      const saveBtn = modal.querySelector('#oe-save');
+      saveBtn.disabled = true; saveBtn.textContent = 'Guardando...';
+
+      const payload = {
+        hotel_id:    this.ctx.hotelId,
+        category:    modal.querySelector('#oe-category').value,
+        description: desc,
+        amount,
+        due_date:    modal.querySelector('#oe-due').value || null,
+        paid:        modal.querySelector('#oe-paid').checked,
+        paid_at:     modal.querySelector('#oe-paid').checked ? new Date().toISOString() : null,
+      };
+
+      try {
+        let error;
+        if (isEdit) {
+          ({ error } = await this.db.from('expenses').update(payload).eq('id', expense.id));
+        } else {
+          ({ error } = await this.db.from('expenses').insert(payload));
+        }
+        if (error) throw error;
+        showToast(isEdit ? 'Gasto actualizado ✓' : 'Gasto registrado ✓', 'success');
+        close();
+        // Notificar a cualquier listener de expense:changed
+        document.dispatchEvent(new CustomEvent('expense:changed'));
+        if (onSaved) await onSaved();
+      } catch (err) {
+        console.error('[Operations] expense save:', err);
+        showToast('Error: ' + (err?.message ?? err), 'error');
+        saveBtn.disabled = false;
+        saveBtn.textContent = isEdit ? 'Guardar cambios' : 'Registrar gasto';
+      }
     });
   }
 

@@ -704,13 +704,10 @@ export class Calendar {
   async _openDetailById(bookingId) {
     if (!bookingId) return;
     try {
-      const { data: booking } = await this.db
-        .from('bookings')
-        .select('*, guests!bookings_guest_id_fkey(*), booking_units(unit_id, units(name,sort_order,color,max_guests)), payments(*)')
-        .eq('id', bookingId).single();
-      this.bookingForm.openEdit(bookingId);
+      // Abrir directamente el formulario de edición (no el panel de solo lectura)
+      await this.bookingForm.openEdit(bookingId);
     } catch (err) {
-      console.error('[Calendar] Error al abrir detalle:', err);
+      console.error('[Calendar] Error al abrir reserva:', err);
       showToast('Error al cargar la reserva', 'error');
     }
   }

@@ -72,7 +72,6 @@ export class Statistics {
       savePeriod();
       // Auto-reload the active tab when period changes
       if (this._tab === 'units')    this.loadUnits();
-      else if (this._tab === 'expenses') this.loadExpenses();
       else if (this._tab === 'charts')   this.loadCharts?.();
       else if (this._tab === 'pl')       this.loadPL?.();
       else if (this._tab === 'revenue')  this._revenuePanel?.load?.();
@@ -90,7 +89,6 @@ export class Statistics {
         this._tab = tab.dataset.tab;
         this._showPanel(this._tab);
         if (this._tab === 'units')    this.loadUnits();
-        if (this._tab === 'expenses') this.loadExpenses();
         if (this._tab === 'pl')       this.loadPL();
         if (this._tab === 'heatmap')  this.loadHeatmap();
         if (this._tab === 'charts')   this.loadCharts();
@@ -100,7 +98,7 @@ export class Statistics {
   }
 
   _showPanel(tab) {
-    ['units','expenses','pl','heatmap','charts','revenue'].forEach(t => {
+    ['units','pl','heatmap','charts','revenue'].forEach(t => {
       document.getElementById(`stats-${t}-panel`)?.classList.toggle('hidden', t !== tab);
     });
   }
@@ -111,7 +109,6 @@ export class Statistics {
       if (btn) { btn.disabled = true; btn.textContent = 'Generando...'; }
       try {
         if (this._tab === 'units')    await this.loadUnits();
-        else if (this._tab === 'expenses') await this.loadExpenses();
         else if (this._tab === 'heatmap')  await this.loadHeatmap?.();
         else if (this._tab === 'charts')   await this.loadCharts?.();
         else if (this._tab === 'pl')       await this.loadPL?.();
@@ -123,14 +120,7 @@ export class Statistics {
         if (btn) { btn.disabled = false; btn.textContent = 'Generar Reporte'; }
       }
     });
-    document.getElementById('btn-add-expense')?.addEventListener('click', () => {
-      document.getElementById('expense-editing-id').value = '';
-      document.getElementById('expense-desc').value    = '';
-      document.getElementById('expense-amount').value  = '';
-      document.getElementById('expense-due').value     = '';
-      document.getElementById('expense-modal-title').textContent = 'Nuevo Gasto';
-      document.getElementById('overlay-expense').classList.remove('hidden');
-    });
+    // Los gastos se gestionan desde el módulo Operaciones
   }
 
   // ══════════════════════════════════════════════════
@@ -538,82 +528,6 @@ export class Statistics {
     }
   }
 
-  // ══════════════════════════════════════════════════
-  // GASTOS OPERATIVOS (preservado)
-  // ══════════════════════════════════════════════════
-  async loadExpenses() {
-    const month = parseInt(document.getElementById('stats-month')?.value ?? new Date().getMonth());
-    const year  = parseInt(document.getElementById('stats-year')?.value  ?? new Date().getFullYear());
-    const firstDay   = `${year}-${String(month+1).padStart(2,'0')}-01`;
-    const lastDay    = new Date(year, month + 1, 0);
-    const lastDayStr = `${year}-${String(month+1).padStart(2,'0')}-${String(lastDay.getDate()).padStart(2,'0')}`;
-    try {
-      const { data: expenses } = await this.db.from('expenses').select('*')
-        .eq('hotel_id', this.ctx.hotelId)
-        .or(`due_date.is.null,and(due_date.gte.${firstDay},due_date.lte.${lastDayStr})`)
-        .order('due_date', { ascending: true, nullsFirst: false });
-      this._renderExpenses(expenses ?? []);
-    } catch (err) { console.error('[Statistics] expenses error:', err); }
-  }
-
-  _renderExpenses(expenses) {
-    const container = document.getElementById('expenses-list');
-    const summary   = document.getElementById('expenses-summary');
-    if (!container) return;
-    const totalAmt   = expenses.reduce((s,e) => s+e.amount, 0);
-    const paidAmt    = expenses.filter(e=>e.paid).reduce((s,e) => s+e.amount, 0);
-    const pendingAmt = totalAmt - paidAmt;
-    if (summary) {
-      summary.innerHTML = `
-        <div class="expense-summary-item"><label>Total</label><strong>${formatARS(totalAmt)}</strong></div>
-        <div class="expense-summary-item"><label style="color:var(--color-success)">Pagados</label><strong style="color:var(--color-success)">${formatARS(paidAmt)}</strong></div>
-        <div class="expense-summary-item"><label style="color:var(--color-warning)">Pendientes</label><strong style="color:var(--color-warning)">${formatARS(pendingAmt)}</strong></div>`;
-    }
-    if (!expenses.length) {
-      container.innerHTML = `<div class="empty-state"><span class="empty-state-icon">💰</span><p>Sin gastos en este período.</p></div>`;
-      return;
-    }
-    container.innerHTML = expenses.map(e => `
-      <div class="expense-row ${e.paid ? 'paid':''}" id="exp-row-${e.id}">
-        <div class="expense-category-dot" style="background:${CATEGORY_COLORS[e.category]??'#94A3B8'}"></div>
-        <div class="expense-info">
-          <div class="expense-desc">${e.description}</div>
-          <div class="expense-meta">${e.category}${e.due_date?` · Vence: ${e.due_date}`:''}${e.paid&&e.paid_at?` · Pagado: ${e.paid_at.slice(0,10)}`:''}</div>
-        </div>
-        <strong class="expense-amount" style="color:${e.paid?'var(--color-success)':'var(--color-text)'}">${formatARS(e.amount)}</strong>
-        <label class="expense-paid-toggle" title="${e.paid?'Marcar pendiente':'Marcar pagado'}">
-          <input type="checkbox" ${e.paid?'checked':''} onchange="window._statsInstance.toggleExpense('${e.id}',this.checked)">
-        </label>
-        <button class="btn btn-ghost btn-xs" onclick="window._statsInstance.editExpense('${e.id}')" title="Editar">✏️</button>
-        <button class="btn btn-ghost btn-xs" onclick="window._statsInstance.deleteExpense('${e.id}')" title="Eliminar" style="color:var(--color-danger)">🗑️</button>
-      </div>`).join('');
-  }
-
-  async toggleExpense(id, paid) {
-    const { error } = await this.db.from('expenses').update({ paid, paid_at: paid ? new Date().toISOString() : null }).eq('id', id);
-    if (error) { showToast('Error', 'error'); return; }
-    document.getElementById(`exp-row-${id}`)?.classList.toggle('paid', paid);
-    showToast(paid ? 'Pagado ✓' : 'Marcado como pendiente', 'success');
-  }
-  async editExpense(id) {
-    const { data: e } = await this.db.from('expenses').select('*').eq('id', id).single();
-    if (!e) return;
-    document.getElementById('expense-editing-id').value = id;
-    document.getElementById('expense-category').value   = e.category ?? 'otros';
-    document.getElementById('expense-desc').value       = e.description ?? '';
-    document.getElementById('expense-amount').value     = e.amount ?? '';
-    document.getElementById('expense-due').value        = e.due_date ?? '';
-    document.getElementById('expense-modal-title').textContent = 'Editar Gasto';
-    document.getElementById('overlay-expense').classList.remove('hidden');
-  }
-  async deleteExpense(id) {
-    if (!confirm('¿Eliminar este gasto?')) return;
-    await this.db.from('expenses').delete().eq('id', id);
-    document.getElementById(`exp-row-${id}`)?.remove();
-    showToast('Gasto eliminado', 'success');
-  }
-
-  // ══════════════════════════════════════════════════
   // P&L (preservado, fuente de verdad)
   // ══════════════════════════════════════════════════
   async loadPL() {

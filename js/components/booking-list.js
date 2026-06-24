@@ -390,7 +390,9 @@ export class BookingList {
     modal.querySelector('#pf-confirm').addEventListener('click', async () => {
       const btn = modal.querySelector('#pf-confirm');
       btn.disabled = true; btn.textContent = '⏳ Registrando…';
-      const { error } = await this.db.from('payments').insert({
+
+      // 1. Insertar el pago (el trigger SQL recalcula total_paid y balance automáticamente)
+      const { error: payErr } = await this.db.from('payments').insert({
         booking_id:   id,
         hotel_id:     this.ctx.hotelId,
         amount:       balance,
@@ -400,11 +402,17 @@ export class BookingList {
         payment_date: document.getElementById('pf-date').value,
         notes:        document.getElementById('pf-notes').value.trim() || null,
       });
-      if (error) {
-        showToast('Error: ' + error.message, 'error');
+      if (payErr) {
+        showToast('Error al registrar pago: ' + payErr.message, 'error');
         btn.disabled = false; btn.textContent = `Confirmar pago ${formatARS(balance)}`;
         return;
       }
+
+      // 2. Actualizar status de la reserva a 'paid'
+      await this.db.from('bookings')
+        .update({ status: 'paid', updated_at: new Date().toISOString() })
+        .eq('id', id);
+
       close();
       showToast('✅ Pago registrado — reserva abonada en su totalidad', 'success');
       document.dispatchEvent(new CustomEvent('booking:changed'));
