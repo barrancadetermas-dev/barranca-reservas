@@ -1021,7 +1021,7 @@ export class BookingForm {
         .not('status', 'in', '(cancelled,blocked)')
         .gt('price_per_night', 0)
         .gte('check_in', `${now.getFullYear()}-${monthPad}-01`)
-        .lte('check_in', `${now.getFullYear()}-${monthPad}-31`)
+        .lte('check_in', `${now.getFullYear()}-${monthPad}-${String(new Date(now.getFullYear(), now.getMonth()+1, 0).getDate()).padStart(2,'0')}`)
         .order('check_in', { ascending: false })
         .limit(60);
 
