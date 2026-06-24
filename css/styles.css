@@ -1202,6 +1202,7 @@ select { appearance: auto; cursor: pointer; }
   border-radius: 999px !important;
   display: inline-block !important;
   flex-shrink: 0 !important;
+  box-sizing: border-box !important;
   box-shadow: 0 0 0 2px rgba(255,255,255,.85);
 }
 

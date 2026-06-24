@@ -857,7 +857,7 @@ window.openCancelModal = openCancelModal;
 function _updateDollarUI(rates) {
   if (!rates) return;
 
-  // Badge compacto en el header
+  // Badge compacto en el header: promedio de las fuentes oficiales disponibles.
   const badgeEl = document.getElementById('dollar-badge-value');
   if (badgeEl && rates.oficial?.sell) {
     badgeEl.textContent = `$${Math.round(rates.oficial.sell).toLocaleString('es-AR')}`;
@@ -879,6 +879,8 @@ function _updateDollarUI(rates) {
   setEl('dol-ambito-sell',     fmt(ambito?.sell));
   setEl('dol-dolarapi-sell',   fmt(bna?.sell));          // legacy campo
   setEl('dol-bluelytics-sell', fmt(argdat?.sell));       // legacy campo
+  setEl('dol-source-count',     String(sources.length || '—'));
+  setEl('dol-source-status',    rates.failedSources?.length ? 'Parcial' : 'OK');
 
   // Timestamp
   const updEl = document.getElementById('dollar-updated-at');
@@ -1814,17 +1816,9 @@ function setupCalculator() {
         else if (k === '=') {
           try {
             const safe = _normExpr.replace(/×/g,'*').replace(/÷/g,'/').replace(/−/g,'-');
-            // Safe eval using basic parser (no Function() - blocked by some CSP)
-          let result = NaN;
-          try {
-            const m = safe.match(/^(-?[\d.]+)\s*([+\-*/])\s*(-?[\d.]+)$/);
-            if (m) {
-              const a = parseFloat(m[1]), op = m[2], b = parseFloat(m[3]);
-              result = op==='+' ? a+b : op==='-' ? a-b : op==='*' ? a*b : op==='/' ? a/b : NaN;
-            } else {
-              result = parseFloat(safe) || 0;
-            }
-          } catch { result = NaN; }
+            if (!/^[\d+\-*/%.()\s]+$/.test(safe)) throw new Error('Invalid expression');
+            const result = Function(`"use strict"; return (${safe})`)();
+            if (!Number.isFinite(result)) throw new Error('Invalid result');
             _normDisplay = String(parseFloat(result.toFixed(10)));
             _normExpr = _normDisplay;
             _normHasResult = true;
@@ -1971,8 +1965,8 @@ function setupCalculator() {
     // USD equivalente — usa BNA oficial venta
     const dollarEl  = document.getElementById('dollar-badge-value');
     const rateText  = dollarEl?.textContent?.replace(/[^0-9]/g, '');
-    const blueRate  = parseInt(rateText) || 0;
-    const usdEq     = blueRate > 0 ? (total / blueRate).toFixed(0) : null;
+    const officialRate = parseInt(rateText) || 0;
+    const usdEq        = officialRate > 0 ? (total / officialRate).toFixed(0) : null;
 
     const fmt = n => '$' + Math.round(n).toLocaleString('es-AR');
 

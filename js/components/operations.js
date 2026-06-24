@@ -543,17 +543,16 @@ export class OperationsModule {
       if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Guardando...'; }
       try {
         const unitVal = modal.querySelector('#mi-unit').value;
-        const { data, error } = await this._withTimeout(this.db.from('maintenance_issues').insert({
+        const { error } = await this._withTimeout(this.db.from('maintenance_issues').insert({
           hotel_id:    this.ctx.hotelId,
           unit_id:     unitVal || null,
           category:    modal.querySelector('#mi-cat')?.value || null,
           title,
-          status:      'open',
+          status:      'pending',
           priority:    modal.querySelector('#mi-priority').value || 'medium',
           assigned_to: modal.querySelector('#mi-assigned').value.trim() || null,
-        }).select('id').single(), 'Crear incidencia de mantenimiento');
+        }), 'Crear incidencia de mantenimiento');
         if (error) throw error;
-        if (!data?.id) throw new Error('Supabase no devolvió la incidencia creada.');
         showToast('Incidencia registrada ✓', 'success');
         close();
         const container = document.getElementById('operations-container');

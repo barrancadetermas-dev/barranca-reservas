@@ -337,17 +337,17 @@
             </div>
             <div class="dollar-avg-row">
               <div class="dollar-avg-col">
-                <div class="dollar-avg-label">Oficial</div>
+              <div class="dollar-avg-label">Promedio oficial</div>
                 <div class="dollar-avg-vals">
                   <span>C: <strong id="dol-of-buy">—</strong></span>
                   <span>V: <strong id="dol-of-sell">—</strong></span>
                 </div>
               </div>
               <div class="dollar-avg-col">
-                <div class="dollar-avg-label">Blue</div>
-                <div class="dollar-avg-vals">
-                  <span>C: <strong id="dol-bl-buy">—</strong></span>
-                  <span>V: <strong id="dol-bl-sell">—</strong></span>
+              <div class="dollar-avg-label">Fuentes activas</div>
+              <div class="dollar-avg-vals">
+                  <span>OK: <strong id="dol-source-count">—</strong></span>
+                  <span>Estado: <strong id="dol-source-status">—</strong></span>
                 </div>
               </div>
             </div>
@@ -355,7 +355,7 @@
             <div class="dollar-sources-row">
               <div class="dollar-source-item"><span class="dollar-source-label">Ámbito</span><strong id="dol-ambito-sell">—</strong></div>
               <div class="dollar-source-item"><span class="dollar-source-label">DolarAPI</span><strong id="dol-dolarapi-sell">—</strong></div>
-              <div class="dollar-source-item"><span class="dollar-source-label">Bluelytics</span><strong id="dol-bluelytics-sell">—</strong></div>
+              <div class="dollar-source-item"><span class="dollar-source-label">ArgentinaDatos</span><strong id="dol-bluelytics-sell">—</strong></div>
             </div>
             <p class="dollar-updated-at" id="dollar-updated-at"
                style="font-size:.65rem;color:var(--color-text-3);margin-top:8px"></p>
@@ -486,7 +486,7 @@
         </div>
 
         <div class="tabs-bar">
-          <button class="tab active" data-tab="active">Activas y Futuras</button>
+          <button class="tab active" data-tab="active">Reservas abiertas</button>
           <button class="tab" data-tab="archive">Historial</button>
         </div>
 
@@ -503,10 +503,10 @@
           </div>
         </div>
         <div class="tabs-bar">
-          <button class="tab active" data-tab="units">Rendimiento</button>
+          <button class="tab active" data-tab="units">Departamentos</button>
           <button class="tab" data-tab="charts">📊 Gráficos</button>
           <button class="tab" data-tab="revenue">💡 Revenue</button>
-          <button class="tab" data-tab="pl">P&L</button>
+          <button class="tab" data-tab="pl">Resultado</button>
         </div>
         <div id="stats-units-panel" class="stats-panel">
           <div id="stats-units-grid" class="stats-units-grid"></div>
@@ -1095,7 +1095,7 @@
           <strong id="cr-net">—</strong>
         </div>
         <div class="calc-result-row calc-usd" id="cr-usd-row">
-          <span>Equiv. USD blue</span>
+          <span>Equiv. USD oficial</span>
           <strong id="cr-usd">—</strong>
         </div>
       </div>

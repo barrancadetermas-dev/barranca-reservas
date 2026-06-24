@@ -8,6 +8,7 @@ import { showToast, AppContext } from '../supabase-config.js';
 import { can } from '../auth/permissions.js';
 import { logAction } from '../services/audit-service.js';
 import { AdminUsers } from '../services/admin-users.js';
+import { AVATARS } from './AvatarPicker.js';
 
 // Definición completa de la configuración
 const CONFIG_SCHEMA = [
@@ -578,16 +579,7 @@ export class ConfigPanel {
   // ── Avatar helpers ────────────────────────────────
 
   // Los 8 avatares: emoji + etiqueta
-  static AVATARS = [
-    { id: 1, emoji: '😊', label: 'Sonrisa'   },
-    { id: 2, emoji: '🏡', label: 'Casa'       },
-    { id: 3, emoji: '⭐', label: 'Estrella'   },
-    { id: 4, emoji: '🌴', label: 'Palmera'    },
-    { id: 5, emoji: '🔑', label: 'Llave'      },
-    { id: 6, emoji: '☀️', label: 'Sol'         },
-    { id: 7, emoji: '🌙', label: 'Luna'        },
-    { id: 8, emoji: '🎯', label: 'Target'     },
-  ];
+  static AVATARS = AVATARS;
 
   _renderAvatarEl(avatarId, avatarColor) {
     const av     = ConfigPanel.AVATARS.find(a => a.id === avatarId) ?? ConfigPanel.AVATARS[0];
