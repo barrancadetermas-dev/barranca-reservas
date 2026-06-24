@@ -292,7 +292,6 @@ export class Calendar {
         }
 
         rems.forEach(r => {
-          // Solo mostrar si es general (sin unit_id) o corresponde a esta unidad
           if (r.unit_id && r.unit_id !== unit.id) return;
           const dot = document.createElement('div');
           dot.className = 'cal-reminder-dot';

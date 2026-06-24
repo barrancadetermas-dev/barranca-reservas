@@ -98,11 +98,24 @@ export class GuestsCRM {
 
     const { data: guests, error } = await this.db
       .from('guests')
-      .select('id, first_name, last_name, phone, email, dni, tags, bad_experience, created_at')
+      .select(`
+        id, first_name, last_name, phone, email, dni, tags, bad_experience, created_at,
+        bookings!bookings_guest_id_fkey(id, total_paid, check_in, status)
+      `)
       .eq('hotel_id', this.ctx.hotelId)
       .or(`first_name.ilike.%${query}%,last_name.ilike.%${query}%,phone.ilike.%${query}%,email.ilike.%${query}%,dni.ilike.%${query}%`)
       .order('created_at', { ascending: false })
       .limit(12);
+
+    // Compute derived fields from bookings
+    if (guests) {
+      guests.forEach(g => {
+        const bks = (g.bookings ?? []).filter(b => b.status !== 'blocked' && b.status !== 'cancelled');
+        g.total_bookings = bks.length;
+        g.total_spent    = bks.reduce((s, b) => s + (b.total_paid ?? 0), 0);
+        g.last_checkin   = bks.sort((a,b) => b.check_in.localeCompare(a.check_in))[0]?.check_in ?? null;
+      });
+    }
 
     if (error) { showToast('Error al buscar huéspedes', 'error'); return; }
 
@@ -177,21 +190,23 @@ export class GuestsCRM {
     overlay.classList.remove('hidden');
 
     try {
-      const { data: guest } = await this.db
-        .from('guests')
-        .select(`
-          *,
-          bookings(
+      // Queries separadas para evitar problemas de RLS en nested join
+      const [{ data: guest }, { data: guestBookings }] = await Promise.all([
+        this.db.from('guests').select('*').eq('id', guestId).single(),
+        this.db.from('bookings')
+          .select(`
             id, check_in, check_out, nights, status,
             total_amount, total_paid, balance, notes, price_per_night,
             booking_units(units(name, sort_order, color, max_guests)),
             payments(amount, method, payment_date)
-          )
-        `)
-        .eq('id', guestId)
-        .single();
+          `)
+          .eq('guest_id', guestId)
+          .eq('hotel_id', this.ctx.hotelId)
+          .order('check_in', { ascending: false })
+      ]);
 
       if (!guest) { showToast('Huésped no encontrado', 'error'); return; }
+      guest.bookings = guestBookings ?? [];
       this._currentGuest = guest;
       body.innerHTML = this._buildProfileHTML(guest);
 
