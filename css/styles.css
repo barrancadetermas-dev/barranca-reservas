@@ -266,16 +266,24 @@ svg { flex-shrink: 0; }
 .sidebar-divider { height: 1px; background: rgba(255,255,255,.06); margin: var(--sp-4) var(--sp-16); }
 
 .sidebar-footer { padding: var(--sp-16) var(--sp-12); border-top: 1px solid rgba(255,255,255,.06); }
-.sidebar-user { display: flex; align-items: center; gap: var(--sp-10); }
+.sidebar-user { display: flex; align-items: center; gap: var(--sp-10); min-width: 0; }
 .user-avatar {
   width: 34px; height: 34px; border-radius: 50%;
   background: linear-gradient(135deg, #6366F1, #8B5CF6);
   display: flex; align-items: center; justify-content: center;
-  color: white; font-size: .82rem; font-weight: 700; flex-shrink: 0;
+  color: white; font-size: 1.05rem; font-weight: 700; flex-shrink: 0;
+  box-shadow: 0 0 0 2px rgba(255,255,255,.08);
+  line-height: 1;
 }
-.user-name  { display: block; font-size: .82rem; font-weight: 600; color: #E2E8F0; }
-.user-role  { display: block; font-size: .72rem; color: var(--sidebar-text); }
-.user-info  { flex: 1; }
+.user-name  {
+  display: block; font-size: .8rem; font-weight: 700; color: #E2E8F0;
+  max-width: 128px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.user-role  {
+  display: block; font-size: .68rem; color: var(--sidebar-text);
+  max-width: 128px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.user-info  { flex: 1; min-width: 0; }
 .btn-logout { color: #64748B; padding: var(--sp-6); border-radius: var(--r-sm); transition: color var(--t-fast); }
 .btn-logout:hover { color: #FB7185; background: rgba(248,113,130,.1); }
 
@@ -1187,6 +1195,15 @@ select { appearance: auto; cursor: pointer; }
 
 /* ── UNIT COLOR BORDER IN CALENDAR ──────────────── */
 .cal-unit-label { border-left: 3px solid var(--unit-color, #6366F1) !important; }
+.cal-unit-dot {
+  width: 10px !important;
+  height: 10px !important;
+  min-width: 10px !important;
+  border-radius: 999px !important;
+  display: inline-block !important;
+  flex-shrink: 0 !important;
+  box-shadow: 0 0 0 2px rgba(255,255,255,.85);
+}
 
 /* ── MODAL: GUEST PROFILE ────────────────────────── */
 .modal-guest { max-width: 720px; max-height: 90dvh; }

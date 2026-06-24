@@ -37,6 +37,16 @@ export class OperationsModule {
     this._tab = 'cleaning';
   }
 
+  _withTimeout(promise, label = 'operación', ms = 12000) {
+    let timeoutId;
+    const timeout = new Promise((_, reject) => {
+      timeoutId = setTimeout(() => {
+        reject(new Error(`${label} tardó demasiado. Revisá conexión/permisos e intentá nuevamente.`));
+      }, ms);
+    });
+    return Promise.race([promise, timeout]).finally(() => clearTimeout(timeoutId));
+  }
+
   async load() {
     const container = document.getElementById('operations-container');
     if (!container) return;
@@ -320,13 +330,13 @@ export class OperationsModule {
       const saveBtn = modal.querySelector('#ct-save');
       if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Guardando...'; }
       try {
-        const { error } = await this.db.from('cleaning_tasks').insert({
+        const { error } = await this._withTimeout(this.db.from('cleaning_tasks').insert({
           hotel_id:     this.ctx.hotelId,
           unit_id:      modal.querySelector('#ct-unit').value || null,
           title, scheduled_date: date, status: 'pending',
           assigned_to:  modal.querySelector('#ct-assigned').value.trim() || null,
           notes:        modal.querySelector('#ct-notes').value.trim() || null,
-        });
+        }), 'Crear tarea de limpieza');
         if (error) throw error;
         showToast('Tarea de limpieza creada ✓', 'success');
         close();
@@ -533,7 +543,7 @@ export class OperationsModule {
       if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Guardando...'; }
       try {
         const unitVal = modal.querySelector('#mi-unit').value;
-        const { error } = await this.db.from('maintenance_issues').insert({
+        const { data, error } = await this._withTimeout(this.db.from('maintenance_issues').insert({
           hotel_id:    this.ctx.hotelId,
           unit_id:     unitVal || null,
           category:    modal.querySelector('#mi-cat')?.value || null,
@@ -541,8 +551,9 @@ export class OperationsModule {
           status:      'open',
           priority:    modal.querySelector('#mi-priority').value || 'medium',
           assigned_to: modal.querySelector('#mi-assigned').value.trim() || null,
-        });
+        }).select('id').single(), 'Crear incidencia de mantenimiento');
         if (error) throw error;
+        if (!data?.id) throw new Error('Supabase no devolvió la incidencia creada.');
         showToast('Incidencia registrada ✓', 'success');
         close();
         const container = document.getElementById('operations-container');
@@ -883,9 +894,9 @@ export class OperationsModule {
       try {
         let error;
         if (isEdit) {
-          ({ error } = await this.db.from('expenses').update(payload).eq('id', expense.id));
+          ({ error } = await this._withTimeout(this.db.from('expenses').update(payload).eq('id', expense.id), 'Actualizar gasto'));
         } else {
-          ({ error } = await this.db.from('expenses').insert(payload));
+          ({ error } = await this._withTimeout(this.db.from('expenses').insert(payload), 'Crear gasto'));
         }
         if (error) throw error;
         showToast(isEdit ? 'Gasto actualizado ✓' : 'Gasto registrado ✓', 'success');

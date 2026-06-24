@@ -2106,7 +2106,7 @@ async function _loadAndApplyAvatar(supabase, userId) {
     if (el) {
       el.textContent = av.emoji;
       el.style.background = data.avatar_color ?? '#4F46E5';
-      el.style.fontSize   = '1.1rem';
+      el.style.fontSize   = '1.05rem';
       el.style.cursor     = 'pointer';
       el.title = 'Cambiar avatar';
     }

@@ -248,7 +248,7 @@ export class Calendar {
       const hasNotes = !!unit.internal_notes;
       label.innerHTML = `
         <div style="display:flex;align-items:center;gap:6px">
-          <span style="width:10px;height:10px;border-radius:50%;background:${unitColor};flex-shrink:0"></span>
+          <span class="cal-unit-dot" style="background-color:${unitColor}"></span>
           <span style="font-size:.82rem;font-weight:700;color:var(--color-text)">${unitLabel}</span>
           ${hasNotes ? `<span title="${unit.internal_notes}" style="cursor:help;font-size:.85rem" onclick="window._calInstance._showUnitNote(event,'${unit.internal_notes?.replace(/'/g,"\\'") ?? ''}')">📝</span>` : ''}
           ${can('manageUnitNotes') ? `<button class="btn btn-ghost btn-xs" style="padding:1px 4px;font-size:.65rem;opacity:.5" onclick="window._calInstance.editUnitNotes('${unit.id}','${(unit.internal_notes??'').replace(/'/g,"\\'")}')">✏️</button>` : ''}
@@ -995,7 +995,7 @@ export class Calendar {
       label.style.borderLeftColor = unitColor;
       label.innerHTML = `
         <div style="display:flex;align-items:center;gap:6px">
-          <span style="width:10px;height:10px;border-radius:50%;background:${unitColor};flex-shrink:0"></span>
+          <span class="cal-unit-dot" style="background-color:${unitColor}"></span>
           <span style="font-size:.82rem;font-weight:700">${unitLabel}</span>
         </div>`;
       grid.appendChild(label);

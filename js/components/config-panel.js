@@ -729,12 +729,12 @@ export class ConfigPanel {
       try {
         const { error } = await this.db
           .from('user_profiles')
-          .update({
+          .upsert({
+            id:             userId,
             avatar_id:      selectedId,
             avatar_color:   selectedColor,
             actualizado_en: new Date().toISOString(),
-          })
-          .eq('id', userId);
+          }, { onConflict: 'id' });
         if (error) throw error;
 
         // Actualizar estado local
@@ -751,6 +751,14 @@ export class ConfigPanel {
         document.querySelectorAll('.user-avatar-display').forEach(el => {
           el.innerHTML = this._renderAvatarEl(selectedId, selectedColor);
         });
+        const sidebarAvatar = document.getElementById('user-avatar');
+        if (sidebarAvatar) {
+          const av = ConfigPanel.AVATARS.find(a => a.id === selectedId) ?? ConfigPanel.AVATARS[0];
+          sidebarAvatar.textContent = av.emoji;
+          sidebarAvatar.style.background = selectedColor;
+          sidebarAvatar.style.fontSize = '1.05rem';
+          sidebarAvatar.title = 'Cambiar avatar';
+        }
 
         showToast('Avatar actualizado ✓', 'success');
         close();

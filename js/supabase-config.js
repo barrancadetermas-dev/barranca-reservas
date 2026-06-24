@@ -121,8 +121,9 @@ export function getBookingColor(status, checkOut) {
 /** Color de un unit: prioridad DB > color default por índice */
 export function getUnitColor(unit) {
   if (!unit) return '#6366F1';
-  // Usar || en lugar de ?? para manejar strings vacíos "" además de null/undefined
-  return unit.color || getDefaultColor(unit.sort_order ?? 1);
+  const color = String(unit.color ?? '').trim();
+  if (/^#[0-9a-f]{6}$/i.test(color) || /^#[0-9a-f]{3}$/i.test(color)) return color;
+  return getDefaultColor(unit.sort_order ?? unit.number ?? 1);
 }
 
 /** Formato estándar: "#1 · Nombre Unidad" */

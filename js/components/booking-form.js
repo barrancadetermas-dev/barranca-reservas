@@ -53,6 +53,16 @@ export class BookingForm {
     this._bindEvents();
   }
 
+  _withTimeout(promise, label = 'operación', ms = 15000) {
+    let timeoutId;
+    const timeout = new Promise((_, reject) => {
+      timeoutId = setTimeout(() => {
+        reject(new Error(`${label} tardó demasiado. Revisá conexión/permisos e intentá nuevamente.`));
+      }, ms);
+    });
+    return Promise.race([promise, timeout]).finally(() => clearTimeout(timeoutId));
+  }
+
   // ── Bind eventos globales del formulario ──────────
   // Usa event delegation en document para que funcione
   // aunque el modal HTML se inserte después del constructor.
@@ -1574,11 +1584,16 @@ ${notes ? `
       };
 
       if (guestId) {
-        const { error: gUpErr } = await this.db.from('guests').update(guestPayload).eq('id', guestId);
+        const { error: gUpErr } = await this._withTimeout(
+          this.db.from('guests').update(guestPayload).eq('id', guestId),
+          'Actualizar huésped'
+        );
         if (gUpErr) throw new Error('No fue posible actualizar el huesped: ' + gUpErr.message);
       } else {
-        const { data: newGuest, error: gErr } = await this.db
-          .from('guests').insert(guestPayload).select('id').single();
+        const { data: newGuest, error: gErr } = await this._withTimeout(
+          this.db.from('guests').insert(guestPayload).select('id').single(),
+          'Crear huésped'
+        );
         if (gErr) throw gErr;
         guestId = newGuest.id;
       }
@@ -1610,29 +1625,41 @@ ${notes ? `
       let bookingId = this._editingId;
       if (bookingId) {
         // UPDATE — intentar con free_nights primero
-        let { error: upErr } = await this.db.from('bookings').update({
+        let { error: upErr } = await this._withTimeout(this.db.from('bookings').update({
           ...corePayload, free_nights: freeN
-        }).eq('id', bookingId);
+        }).eq('id', bookingId), 'Actualizar reserva');
         if (upErr?.message?.includes('free_nights')) {
           // Columna no existe aún → guardar sin ella
-          const { error: upErr2 } = await this.db.from('bookings').update(corePayload).eq('id', bookingId);
+          const { error: upErr2 } = await this._withTimeout(
+            this.db.from('bookings').update(corePayload).eq('id', bookingId),
+            'Actualizar reserva'
+          );
           if (upErr2) throw new Error('No fue posible actualizar la reserva: ' + upErr2.message);
         } else if (upErr) {
           throw new Error('No fue posible actualizar la reserva: ' + upErr.message);
         }
-        const { error: buDelErr } = await this.db.from('booking_units').delete().eq('booking_id', bookingId);
+        const { error: buDelErr } = await this._withTimeout(
+          this.db.from('booking_units').delete().eq('booking_id', bookingId),
+          'Limpiar unidades de la reserva'
+        );
         if (buDelErr) throw new Error('Error limpiando unidades anteriores: ' + buDelErr.message);
-        const { error: payDelErr } = await this.db.from('payments').delete().eq('booking_id', bookingId);
+        const { error: payDelErr } = await this._withTimeout(
+          this.db.from('payments').delete().eq('booking_id', bookingId),
+          'Limpiar pagos de la reserva'
+        );
         if (payDelErr) throw new Error('Error limpiando pagos anteriores: ' + payDelErr.message);
       } else {
         // INSERT — intentar con free_nights primero
-        let { data: newB, error: insErr } = await this.db
-          .from('bookings').insert({ ...corePayload, free_nights: freeN })
-          .select('id').single();
+        let { data: newB, error: insErr } = await this._withTimeout(
+          this.db.from('bookings').insert({ ...corePayload, free_nights: freeN }).select('id').single(),
+          'Crear reserva'
+        );
         if (insErr?.message?.includes('free_nights') || insErr?.message?.includes('does not exist')) {
           // Columna no existe → reintentar sin ella
-          const { data: newB2, error: insErr2 } = await this.db
-            .from('bookings').insert(corePayload).select('id').single();
+          const { data: newB2, error: insErr2 } = await this._withTimeout(
+            this.db.from('bookings').insert(corePayload).select('id').single(),
+            'Crear reserva'
+          );
           if (insErr2) throw new Error('No fue posible crear la reserva: ' + insErr2.message);
           newB = newB2;
         } else if (insErr) {
@@ -1643,7 +1670,10 @@ ${notes ? `
 
       // ── Columnas opcionales (pax, comisiones) — silencioso si no existen ──
       try {
-        await this.db.from('bookings').update({ pax, adults, children }).eq('id', bookingId);
+        await this._withTimeout(
+          this.db.from('bookings').update({ pax, adults, children }).eq('id', bookingId),
+          'Actualizar pasajeros'
+        );
       } catch { /* columnas opcionales */ }
 
       // Insertar unidades — upsert para evitar duplicate key en edición
@@ -1651,9 +1681,10 @@ ${notes ? `
         booking_id: bookingId, unit_id: uid,
       }));
       if (unitRows.length) {
-        const { error: buErr } = await this.db
-          .from('booking_units')
-          .upsert(unitRows, { onConflict: 'booking_id,unit_id', ignoreDuplicates: true });
+        const { error: buErr } = await this._withTimeout(
+          this.db.from('booking_units').upsert(unitRows, { onConflict: 'booking_id,unit_id', ignoreDuplicates: true }),
+          'Asignar unidades'
+        );
         if (buErr) throw new Error('Error asignando unidades: ' + buErr.message);
       }
 
@@ -1679,18 +1710,21 @@ ${notes ? `
         }
       });
       if (payRows.length) {
-        const { error: pmErr } = await this.db.from('payments').insert(payRows);
+        const { error: pmErr } = await this._withTimeout(
+          this.db.from('payments').insert(payRows),
+          'Registrar pago'
+        );
         if (pmErr) throw new Error('Error registrando pago: ' + pmErr.message);
       }
 
       const persistedPaid = payRows.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
       const persistedBalance = Math.max(0, total - persistedPaid);
       const persistedStatus = persistedBalance <= 0 ? 'paid' : persistedPaid > 0 ? 'partial' : 'pending';
-      const { error: totalsErr } = await this.db.from('bookings').update({
+      const { error: totalsErr } = await this._withTimeout(this.db.from('bookings').update({
         total_paid: persistedPaid,
         balance: persistedBalance,
         status: persistedStatus,
-      }).eq('id', bookingId);
+      }).eq('id', bookingId), 'Recalcular saldo');
       if (totalsErr) throw new Error('Error recalculando saldo: ' + totalsErr.message);
 
       const _logVerb    = this._editingId ? 'UPDATE' : 'CREATE';
