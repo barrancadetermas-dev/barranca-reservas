@@ -422,7 +422,7 @@ svg { flex-shrink: 0; }
   border-radius: var(--r-xl);
   border: 1px solid var(--color-border);
   background: var(--color-surface);
-  overflow: hidden;
+  overflow: clip; /* FIX: hidden rompía position:sticky en .cal-unit-label */
   box-shadow: var(--sh-sm);
   min-width: 900px;
 }
@@ -2394,6 +2394,73 @@ select {
   flex-wrap: wrap;
 }
 
+/* Columnas del listado de reservas — faltaban en CSS */
+.booking-guest-col {
+  flex: 1;
+  min-width: 160px;
+}
+.booking-dates-col {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 150px;
+  flex-shrink: 0;
+}
+.booking-date-range {
+  font-size: .82rem;
+  font-weight: 600;
+  color: var(--color-text);
+  white-space: nowrap;
+}
+.booking-nights {
+  font-size: .72rem;
+  color: var(--color-text-3);
+}
+.booking-amount-col {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  min-width: 110px;
+  flex-shrink: 0;
+}
+.booking-balance-due {
+  font-size: .72rem;
+  color: var(--color-warning);
+  font-weight: 600;
+}
+.booking-paid-badge {
+  font-size: .72rem;
+  color: var(--color-success);
+  font-weight: 600;
+}
+.booking-status-col {
+  min-width: 80px;
+  flex-shrink: 0;
+}
+
+/* Status badge — unificado */
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: var(--r-full);
+  font-size: .7rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.status-pending  { background: rgba(245,158,11,.12); color: #92400e; }
+.status-partial  { background: rgba(244,63,94,.1);   color: #9f1239; }
+.status-paid     { background: rgba(34,197,94,.1);   color: #14532d; }
+.status-blocked  { background: rgba(148,163,184,.1); color: #475569; }
+.status-cancelled{ background: rgba(148,163,184,.1); color: #475569; }
+
+[data-theme="dark"] .status-pending  { background: rgba(245,158,11,.15); color: #fde68a; }
+[data-theme="dark"] .status-partial  { background: rgba(244,63,94,.15);  color: #fda4af; }
+[data-theme="dark"] .status-paid     { background: rgba(34,197,94,.15);  color: #86efac; }
+[data-theme="dark"] .status-blocked  { background: rgba(148,163,184,.15);color: #94a3b8; }
+[data-theme="dark"] .status-cancelled{ background: rgba(148,163,184,.15);color: #94a3b8; }
+
 /* ══════════════════════════════════════════════════
    MILA v6.4 — 8 FUNCIONALIDADES
    ══════════════════════════════════════════════════ */
@@ -3317,6 +3384,25 @@ input[type="color"].unit-color-input::-webkit-color-swatch { border: none; borde
   background: rgba(34,197,94,.1);
   border-color: #22c55e;
   color: #22c55e;
+}
+
+/* FIX: botón "Cobrar" — necesita ancho automático (no 34x34) */
+.bl-action-btn.bl-payfull-btn {
+  width: auto !important;
+  padding: 0 10px !important;
+  font-size: .76rem !important;
+  font-weight: 600 !important;
+  color: #16a34a;
+  border-color: rgba(34,197,94,.35);
+  background: rgba(34,197,94,.08);
+  gap: 4px;
+  white-space: nowrap;
+}
+.bl-action-btn.bl-payfull-btn:hover {
+  background: rgba(34,197,94,.18) !important;
+  border-color: #22c55e !important;
+  color: #15803d !important;
+  transform: translateY(-1px);
 }
 
 /* ── DETAIL MODAL: Desglose financiero completo */
