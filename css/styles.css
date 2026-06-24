@@ -1186,7 +1186,7 @@ select { appearance: auto; cursor: pointer; }
 .kpi-value { transition: none; }
 
 /* ── UNIT COLOR BORDER IN CALENDAR ──────────────── */
-.cal-unit-label { border-left: 3px solid var(--unit-color, #6366F1); }
+.cal-unit-label { border-left: 3px solid var(--unit-color, #6366F1) !important; }
 
 /* ── MODAL: GUEST PROFILE ────────────────────────── */
 .modal-guest { max-width: 720px; max-height: 90dvh; }
@@ -2840,7 +2840,13 @@ input[type="color"].unit-color-input::-webkit-color-swatch { border: none; borde
 [data-theme="dark"] .week-cell { background: #1e293b !important; border-color: #334155 !important; }
 [data-theme="dark"] .week-cell:hover { background: #243044 !important; }
 [data-theme="dark"] .cal-day-header { background: #162032 !important; border-color: #334155 !important; }
-[data-theme="dark"] .cal-unit-label { background: #1e293b !important; border-color: #334155 !important; }
+[data-theme="dark"] .cal-unit-label {
+  background: #1e293b !important;
+  border-top-color: #334155 !important;
+  border-right-color: #334155 !important;
+  border-bottom-color: #334155 !important;
+  border-left-color: var(--unit-color, #6366F1) !important;
+}
 [data-theme="dark"] .cal-unit-label-header { background: #162032 !important; border-color: #334155 !important; }
 
 /* ── INPUT WRAPPER fix ───────────────────────────── */

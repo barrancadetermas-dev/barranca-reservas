@@ -244,6 +244,7 @@ export class Calendar {
       const label = document.createElement('div');
       label.className = 'cal-unit-label';
       label.style.setProperty('--unit-color', unitColor);
+      label.style.borderLeftColor = unitColor;
       const hasNotes = !!unit.internal_notes;
       label.innerHTML = `
         <div style="display:flex;align-items:center;gap:6px">
@@ -991,6 +992,7 @@ export class Calendar {
       const label = document.createElement('div');
       label.className = 'cal-unit-label';
       label.style.setProperty('--unit-color', unitColor);
+      label.style.borderLeftColor = unitColor;
       label.innerHTML = `
         <div style="display:flex;align-items:center;gap:6px">
           <span style="width:10px;height:10px;border-radius:50%;background:${unitColor};flex-shrink:0"></span>

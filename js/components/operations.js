@@ -430,7 +430,9 @@ export class OperationsModule {
 
   _maintenanceRowHTML(issue) {
     const pr       = PRIORITY_CONFIG[issue.priority ?? 'medium'];
-    const unitName = issue.units?.name ?? 'General';
+    const unitName = issue.unit_name ?? issue.units?.name ??
+                     this.ctx.units?.find(u => String(u.id) === String(issue.unit_id))?.name ??
+                     'General';
     const isOpen   = issue.status !== 'resolved';
 
     return `
@@ -543,10 +545,8 @@ export class OperationsModule {
         if (error) throw error;
         showToast('Incidencia registrada ✓', 'success');
         close();
-        // Reload sólo el panel de mantenimiento
-        const panel = document.getElementById('ops-panel');
-        const hdrEl = document.getElementById('ops-header-actions');
-        if (panel && hdrEl) await this._loadMaintenance(panel, hdrEl);
+        const container = document.getElementById('operations-container');
+        if (container) await this._loadTab('maintenance', container);
         if (typeof updateOperationsBadge === 'function') updateOperationsBadge();
       } catch (err) {
         console.error('[Operations] maintenance insert:', err);

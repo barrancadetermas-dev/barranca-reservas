@@ -1115,10 +1115,10 @@ function setupGlobalShortcuts() {
 // ── Gestión centralizada de modales ──────────────────
 // Asegura que siempre se pueda cerrar cualquier modal
 function _ensureModalCleanup() {
-  // Cerrar overlay-booking al hacer clic en el backdrop
+  // El formulario de reserva no se cierra al tocar afuera: evita perder datos cargados.
   document.getElementById('overlay-booking')?.addEventListener('click', (e) => {
     if (e.target === e.currentTarget) {
-      bookingForm?.close?.();
+      e.preventDefault();
     }
   });
 }
