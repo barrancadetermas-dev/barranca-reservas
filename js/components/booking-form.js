@@ -200,10 +200,40 @@ export class BookingForm {
       if (discEl) discEl.value = prefill.discountPct;
     }
 
+    // Precargar datos de huésped si viene desde la ficha
+    if (prefill.prefillGuestId) {
+      this._prefillGuestAsync(prefill.prefillGuestId, prefill.prefillGuest);
+    }
+
     document.getElementById('overlay-booking').classList.remove('hidden');
 
     // Historial de precios — se carga async en background
     if (prefill.unitId) this._loadPriceHistory(prefill.unitId);
+  }
+
+  // Precarga datos del huésped en los campos del formulario (step 2)
+  async _prefillGuestAsync(guestId, guestData = null) {
+    let g = guestData;
+    if (!g) {
+      const { data } = await this.db.from('guests')
+        .select('id, first_name, last_name, dni, phone, email')
+        .eq('id', guestId).single();
+      g = data;
+    }
+    if (!g) return;
+
+    this._selectedGuestId = g.id;
+
+    // Rellenar campos del paso 2
+    const set = (id, val) => { const el = document.getElementById(id); if (el && val) el.value = val; };
+    set('f-firstname', g.first_name);
+    set('f-lastname',  g.last_name);
+    set('f-dni',       g.dni);
+    set('f-phone',     g.phone);
+    set('f-email',     g.email);
+
+    // Ir al paso 2 directamente para que el usuario vea los datos pre-cargados
+    this._goToStep(2);
   }
 
   // ── Abrir para editar reserva existente ───────────

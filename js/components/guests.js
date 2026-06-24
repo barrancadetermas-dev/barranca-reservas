@@ -97,25 +97,12 @@ export class GuestsCRM {
       <div class="skeleton-box" style="height:72px"></div>`;
 
     const { data: guests, error } = await this.db
-      .from('guests')
-      .select(`
-        id, first_name, last_name, phone, email, dni, tags, bad_experience, created_at,
-        bookings!bookings_guest_id_fkey(id, total_paid, check_in, status)
-      `)
+      .from('guest_profiles')
+      .select('*')
       .eq('hotel_id', this.ctx.hotelId)
-      .or(`first_name.ilike.%${query}%,last_name.ilike.%${query}%,phone.ilike.%${query}%,email.ilike.%${query}%,dni.ilike.%${query}%`)
-      .order('created_at', { ascending: false })
+      .or(`full_name.ilike.%${query}%,phone.ilike.%${query}%,email.ilike.%${query}%,dni.ilike.%${query}%`)
+      .order('last_checkin', { ascending: false, nullsFirst: false })
       .limit(12);
-
-    // Compute derived fields from bookings
-    if (guests) {
-      guests.forEach(g => {
-        const bks = (g.bookings ?? []).filter(b => b.status !== 'blocked' && b.status !== 'cancelled');
-        g.total_bookings = bks.length;
-        g.total_spent    = bks.reduce((s, b) => s + (b.total_paid ?? 0), 0);
-        g.last_checkin   = bks.sort((a,b) => b.check_in.localeCompare(a.check_in))[0]?.check_in ?? null;
-      });
-    }
 
     if (error) { showToast('Error al buscar huéspedes', 'error'); return; }
 
@@ -190,23 +177,21 @@ export class GuestsCRM {
     overlay.classList.remove('hidden');
 
     try {
-      // Queries separadas para evitar problemas de RLS en nested join
-      const [{ data: guest }, { data: guestBookings }] = await Promise.all([
-        this.db.from('guests').select('*').eq('id', guestId).single(),
-        this.db.from('bookings')
-          .select(`
+      const { data: guest } = await this.db
+        .from('guests')
+        .select(`
+          *,
+          bookings(
             id, check_in, check_out, nights, status,
             total_amount, total_paid, balance, notes, price_per_night,
             booking_units(units(name, sort_order, color, max_guests)),
             payments(amount, method, payment_date)
-          `)
-          .eq('guest_id', guestId)
-          .eq('hotel_id', this.ctx.hotelId)
-          .order('check_in', { ascending: false })
-      ]);
+          )
+        `)
+        .eq('id', guestId)
+        .single();
 
       if (!guest) { showToast('Huésped no encontrado', 'error'); return; }
-      guest.bookings = guestBookings ?? [];
       this._currentGuest = guest;
       body.innerHTML = this._buildProfileHTML(guest);
 
@@ -453,14 +438,52 @@ export class GuestsCRM {
         toggle.querySelector('input').checked = toggle.classList.contains('active');
       });
     });
-    // Save tags
+
+    // Save tags — Supabase no tira error, devuelve {error}
     document.getElementById('btn-save-tags')?.addEventListener('click', async () => {
       const tags = [...document.querySelectorAll('.tag-toggle.active')].map(t => t.dataset.tag);
-      try {
-        await this.db.from('guests').update({ tags }).eq('id', guest.id);
-        showToast('Etiquetas guardadas ✓', 'success');
-      } catch { showToast('Error al guardar etiquetas', 'error'); }
+      const btn  = document.getElementById('btn-save-tags');
+      if (btn) btn.textContent = 'Guardando...';
+      const { error } = await this.db.from('guests').update({ tags }).eq('id', guest.id);
+      if (btn) btn.textContent = 'Guardar etiquetas';
+      if (error) { showToast('Error al guardar etiquetas', 'error'); return; }
+      showToast('Etiquetas guardadas ✓', 'success');
     });
+
+    // Mala experiencia — marcar
+    document.getElementById('btn-mark-bad-exp')?.addEventListener('click', () => {
+      document.getElementById('bad-exp-new-form')?.classList.remove('hidden');
+    });
+    document.getElementById('btn-cancel-bad-exp-new')?.addEventListener('click', () => {
+      document.getElementById('bad-exp-new-form')?.classList.add('hidden');
+    });
+    document.getElementById('btn-confirm-bad-exp')?.addEventListener('click', async () => {
+      const note = document.getElementById('bad-exp-note-input')?.value.trim();
+      if (!note) { showToast('Escribí el motivo', 'warning'); return; }
+      await this._markBadExperience(guest.id, note);
+    });
+    document.getElementById('btn-edit-bad-exp')?.addEventListener('click', () => {
+      document.getElementById('bad-exp-editor')?.classList.remove('hidden');
+    });
+    document.getElementById('btn-cancel-bad-exp-edit')?.addEventListener('click', () => {
+      document.getElementById('bad-exp-editor')?.classList.add('hidden');
+    });
+    document.getElementById('btn-save-bad-exp')?.addEventListener('click', async () => {
+      const note = document.getElementById('bad-exp-note-input')?.value.trim();
+      await this._markBadExperience(guest.id, note);
+    });
+    document.getElementById('btn-clear-bad-exp')?.addEventListener('click', async () => {
+      if (!confirm('¿Eliminar el antecedente de mala experiencia?')) return;
+      await this._clearBadExperience(guest.id);
+    });
+
+    // Header: Nueva Reserva
+    document.getElementById('guest-new-booking-btn')?.addEventListener('click', () => {
+      this.openBookingForGuest(guest.id, guest);
+    });
+
+    // Global reference
+    window._guestsCRM = this;
   }
 
   _bindProfileActions_orig(guest) {
@@ -666,9 +689,9 @@ export class GuestsCRM {
     });
   }
 
-  openBookingForGuest(guestId) {
+  openBookingForGuest(guestId, guestData = null) {
     document.getElementById('overlay-guest-profile')?.classList.add('hidden');
-    this.bookingForm.open({ prefillGuestId: guestId });
+    this.bookingForm.open({ prefillGuestId: guestId, prefillGuest: guestData });
   }
 
   // ══════════════════════════════════════════════════
