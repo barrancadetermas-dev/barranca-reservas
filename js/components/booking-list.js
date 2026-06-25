@@ -666,17 +666,21 @@ export class BookingList {
       const notes   = modal.querySelector('#flag-notes').value.trim();
 
       try {
-        await this.db.from('guests').update({
+        const { error: updateErr } = await this.db.from('guests').update({
           bad_experience:      badExp,
           bad_experience_note: notes || null,
           tags:                newTags,
+          updated_at:          new Date().toISOString(),
         }).eq('id', guest.id);
+
+        if (updateErr) throw new Error(updateErr.message);
 
         await logAction('UPDATE', 'guest', guest.id, `Etiquetas actualizadas: ${newTags.join(', ')}`);
         showToast('Huésped actualizado ✓', 'success');
         close();
         await this.load();
       } catch (err) {
+        console.error('[FlagModal] Error al guardar etiquetas:', err);
         showToast('Error al guardar: ' + err.message, 'error');
       }
     });
