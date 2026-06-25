@@ -83,17 +83,21 @@ export class GuestsCRM {
     this._loadAll();
   }
 
-  _setLimit(n) {
-    this._guestLimit = n;
-    localStorage.setItem('mila_guest_limit', n);
+  _updateLimitButtons(n) {
     [25,50,100].forEach(x => {
       const btn = document.getElementById(`bl-limit-${x}`);
       if (btn) {
-        btn.style.background = x===n ? 'var(--color-primary)' : 'var(--color-surface-2)';
-        btn.style.color = x===n ? 'white' : 'var(--color-text-2)';
-        btn.style.borderColor = x===n ? 'var(--color-primary)' : 'var(--color-border)';
+        btn.style.background  = x===n ? 'var(--color-primary)'   : 'var(--color-surface-2)';
+        btn.style.color       = x===n ? 'white'                  : 'var(--color-text-2)';
+        btn.style.borderColor = x===n ? 'var(--color-primary)'   : 'var(--color-border)';
       }
     });
+  }
+
+  _setLimit(n) {
+    this._guestLimit = n;
+    localStorage.setItem('mila_guest_limit', n);
+    this._updateLimitButtons(n);
     const q = document.getElementById('guests-search-input')?.value.trim();
     if (q && q.length >= 2) this._search(q); else this._loadAll();
   }
@@ -123,7 +127,7 @@ export class GuestsCRM {
     area.innerHTML = guests.map(g => this._renderGuestCard(g)).join('');
     area.querySelectorAll('.guest-card').forEach(card =>
       card.addEventListener('click', () => this._openProfile(card.dataset.guestId)));
-    this._setLimit(limit);
+    this._updateLimitButtons(limit);
   }
 
   // ══════════════════════════════════════════════════
