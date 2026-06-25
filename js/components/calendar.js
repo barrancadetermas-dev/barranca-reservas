@@ -898,33 +898,27 @@ export class Calendar {
     const todayStr = new Date().toISOString().split('T')[0];
     const tomorrowStr = (() => { const d = new Date(); d.setDate(d.getDate()+1); return d.toISOString().split('T')[0]; })();
     filterPanel.style.cssText = `
-      display:none;align-items:center;gap:10px;flex-wrap:wrap;
+      display:none;align-items:center;gap:8px;flex-wrap:nowrap;overflow-x:auto;
       background:var(--color-surface-2,#f8f9fa);border:1px solid var(--color-border,#e5e7eb);
-      border-radius:10px;padding:10px 14px;margin-top:8px;
-      font-size:.8rem;color:var(--color-text);
+      border-radius:10px;padding:8px 14px;margin-top:8px;
+      font-size:.78rem;color:var(--color-text);
     `;
     filterPanel.innerHTML = `
-      <span style="font-weight:600;font-size:.78rem;color:var(--color-text-3);text-transform:uppercase;letter-spacing:.05em">🔍 Buscar disponibilidad</span>
-      <label style="display:flex;align-items:center;gap:5px">
-        <span style="font-size:.75rem;color:var(--color-text-3)">Check-in</span>
-        <input type="date" id="avail-checkin" value="${todayStr}"
-          style="border:1px solid var(--color-border,#e5e7eb);border-radius:6px;padding:3px 7px;font-size:.78rem;background:var(--color-surface);color:var(--color-text)">
-      </label>
-      <label style="display:flex;align-items:center;gap:5px">
-        <span style="font-size:.75rem;color:var(--color-text-3)">Check-out</span>
-        <input type="date" id="avail-checkout" value="${tomorrowStr}"
-          style="border:1px solid var(--color-border,#e5e7eb);border-radius:6px;padding:3px 7px;font-size:.78rem;background:var(--color-surface);color:var(--color-text)">
-      </label>
-      <label style="display:flex;align-items:center;gap:5px">
-        <span style="font-size:.75rem;color:var(--color-text-3)">Personas</span>
-        <input type="number" id="avail-guests" min="1" max="20" value="2"
-          style="width:58px;border:1px solid var(--color-border,#e5e7eb);border-radius:6px;padding:3px 7px;font-size:.78rem;background:var(--color-surface);color:var(--color-text)">
-      </label>
+      <span style="font-weight:600;font-size:.72rem;color:var(--color-text-3);text-transform:uppercase;letter-spacing:.05em;white-space:nowrap">🔍 Disponibilidad</span>
+      <span style="font-size:.72rem;color:var(--color-text-3);white-space:nowrap">Check-in</span>
+      <input type="date" id="avail-checkin" value="${todayStr}"
+        style="border:1px solid var(--color-border,#e5e7eb);border-radius:6px;padding:3px 6px;font-size:.75rem;background:var(--color-surface);color:var(--color-text);min-width:0">
+      <span style="font-size:.72rem;color:var(--color-text-3);white-space:nowrap">Check-out</span>
+      <input type="date" id="avail-checkout" value="${tomorrowStr}"
+        style="border:1px solid var(--color-border,#e5e7eb);border-radius:6px;padding:3px 6px;font-size:.75rem;background:var(--color-surface);color:var(--color-text);min-width:0">
+      <span style="font-size:.72rem;color:var(--color-text-3);white-space:nowrap">Pers.</span>
+      <input type="number" id="avail-guests" min="1" max="20" value="2"
+        style="width:48px;border:1px solid var(--color-border,#e5e7eb);border-radius:6px;padding:3px 6px;font-size:.75rem;background:var(--color-surface);color:var(--color-text)">
       <button id="avail-search-btn"
-        style="padding:4px 12px;border-radius:6px;border:none;background:var(--color-primary,#6366f1);color:#fff;font-size:.78rem;font-weight:600;cursor:pointer">
+        style="padding:4px 11px;border-radius:6px;border:none;background:var(--color-primary,#6366f1);color:#fff;font-size:.75rem;font-weight:600;cursor:pointer;white-space:nowrap;flex-shrink:0">
         Ver disponibles
       </button>
-      <div id="avail-results" style="width:100%;margin-top:2px"></div>
+      <div id="avail-results" style="flex:1;min-width:200px"></div>
     `;
 
     // Insertar panel entre toolbar y cal-wrapper
@@ -975,6 +969,31 @@ export class Calendar {
     };
 
     // ── Buscar unidades disponibles para rango + personas ──
+    // ── Resaltar rango en el calendario ──
+    const _highlightRange = (ci, co) => {
+      const grid = document.getElementById('calendar-grid');
+      if (!grid) return;
+      grid.querySelectorAll('.cal-cell.avail-range').forEach(c => c.classList.remove('avail-range','avail-range-start','avail-range-end'));
+      if (!ci || !co) return;
+      grid.querySelectorAll('.cal-cell[data-date]').forEach(c => {
+        const d = c.dataset.date;
+        if (d >= ci && d < co) {
+          c.classList.add('avail-range');
+          if (d === ci)  c.classList.add('avail-range-start');
+          // last day before co
+          const next = new Date(d); next.setDate(next.getDate()+1);
+          const nextStr = next.toISOString().split('T')[0];
+          if (nextStr === co) c.classList.add('avail-range-end');
+        }
+      });
+    };
+
+    const _clearRangeHighlight = () => {
+      const grid = document.getElementById('calendar-grid');
+      if (!grid) return;
+      grid.querySelectorAll('.cal-cell.avail-range').forEach(c => c.classList.remove('avail-range','avail-range-start','avail-range-end'));
+    };
+
     const _searchAvailability = () => {
       const ci      = document.getElementById('avail-checkin')?.value;
       const co      = document.getElementById('avail-checkout')?.value;
@@ -983,8 +1002,10 @@ export class Calendar {
       if (!ci || !co || !results) return;
       if (ci >= co) {
         results.innerHTML = `<span style="color:#ef4444;font-size:.76rem">⚠️ El check-out debe ser posterior al check-in.</span>`;
+        _clearRangeHighlight();
         return;
       }
+      _highlightRange(ci, co);
       const bookings = this._lastRenderedBookings ?? [];
       // Unidades ocupadas en CUALQUIER día del rango ci..co (excluyendo co, ya que ese día es salida)
       const occupiedIds = new Set();
@@ -1040,6 +1061,7 @@ export class Calendar {
         _applyPercentBadges();
       } else {
         _clearPercentBadges();
+        _clearRangeHighlight();
         const results = document.getElementById('avail-results');
         if (results) results.innerHTML = '';
       }
