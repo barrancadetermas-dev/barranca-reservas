@@ -951,33 +951,67 @@ export class Calendar {
     const _applyPercentBadges = () => {
       const grid = document.getElementById('calendar-grid');
       if (!grid) return;
-      const daysInMonth = new Date(this.year, this.month+1, 0).getDate();
-      const totalUnits  = this.ctx.units.length || 1;
-      const bookings    = this._lastRenderedBookings ?? [];
+
+      const totalUnits = this.ctx.units.length || 1;
+      const bookings   = this._lastRenderedBookings ?? [];
+
+      // ── 1. Pre-calcular ocupación por fecha (todo en JS, sin DOM) ──
+      const year  = this.year;
+      const month = this.month;
+      const daysInMonth = new Date(year, month + 1, 0).getDate();
+      const prefix = `${year}-${String(month + 1).padStart(2, '0')}-`;
+
+      // mapa dateStr → Set de unit_ids ocupados
+      const occupancyMap = new Map();
       for (let d = 1; d <= daysInMonth; d++) {
-        const dateStr = `${this.year}-${String(this.month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-        const occupiedUnits = new Set();
-        bookings.forEach(b => {
-          if (b.status === 'cancelled') return;
-          if (b.check_in <= dateStr && b.check_out > dateStr) {
-            (b.booking_units ?? []).forEach(bu => occupiedUnits.add(bu.unit_id));
+        occupancyMap.set(prefix + String(d).padStart(2, '0'), new Set());
+      }
+      bookings.forEach(b => {
+        if (b.status === 'cancelled') return;
+        const units = b.booking_units ?? [];
+        if (!units.length) return;
+        for (let d = 1; d <= daysInMonth; d++) {
+          const ds = prefix + String(d).padStart(2, '0');
+          if (b.check_in <= ds && b.check_out > ds) {
+            const set = occupancyMap.get(ds);
+            units.forEach(bu => set.add(bu.unit_id));
           }
-        });
-        const cells = grid.querySelectorAll(`.cal-cell[data-date="${dateStr}"]`);
+        }
+      });
+
+      // ── 2. Un único querySelectorAll para celdas, agrupar por fecha en Map ──
+      const cellsByDate = new Map();
+      grid.querySelectorAll('.cal-cell[data-date]').forEach(c => {
+        const d = c.dataset.date;
+        if (!cellsByDate.has(d)) cellsByDate.set(d, []);
+        cellsByDate.get(d).push(c);
+      });
+
+      // ── 3. Headers: un único querySelectorAll ──
+      const hdrs = grid.querySelectorAll('.cal-day-header');
+
+      // ── 4. Aplicar clases y badges en un solo recorrido ──
+      // Usar un DocumentFragment para los badges no ayuda (van a nodos ya en DOM),
+      // pero agrupar classList evita reflows repetidos
+      const fragment = document.createDocumentFragment(); // dummy, no usado
+      for (let d = 1; d <= daysInMonth; d++) {
+        const ds          = prefix + String(d).padStart(2, '0');
+        const occupied    = occupancyMap.get(ds) ?? new Set();
+        const cells       = cellsByDate.get(ds) ?? [];
+
         cells.forEach(c => {
-          const uid = c.dataset.unitId;
-          if (!occupiedUnits.has(uid)) c.classList.add('avail-free');
-          else c.classList.add('avail-occupied');
+          if (occupied.has(c.dataset.unitId)) c.classList.add('avail-occupied');
+          else                                c.classList.add('avail-free');
         });
-        const free = totalUnits - occupiedUnits.size;
+
+        const free = totalUnits - occupied.size;
         const pct  = Math.round((free / totalUnits) * 100);
-        const hdrs = grid.querySelectorAll('.cal-day-header');
         const hdr  = hdrs[d - 1];
         if (hdr && !hdr.querySelector('.avail-pct')) {
           const badge = document.createElement('div');
           badge.className = 'avail-pct';
           badge.textContent = `${pct}%`;
-          badge.style.cssText = `font-size:.55rem;font-weight:700;color:${pct > 60 ? '#16a34a' : pct > 30 ? '#f59e0b' : '#ef4444'};line-height:1`;
+          badge.style.cssText = `font-size:.55rem;font-weight:700;line-height:1;color:${pct > 60 ? '#16a34a' : pct > 30 ? '#f59e0b' : '#ef4444'}`;
           hdr.appendChild(badge);
         }
       }
@@ -986,8 +1020,9 @@ export class Calendar {
     const _clearPercentBadges = () => {
       const grid = document.getElementById('calendar-grid');
       if (!grid) return;
-      grid.querySelectorAll('.avail-free').forEach(c => c.classList.remove('avail-free'));
-      grid.querySelectorAll('.avail-occupied').forEach(c => c.classList.remove('avail-occupied'));
+      // Un solo recorrido para limpiar clases de celdas
+      grid.querySelectorAll('.avail-free, .avail-occupied').forEach(c =>
+        c.classList.remove('avail-free', 'avail-occupied'));
       grid.querySelectorAll('.avail-pct').forEach(el => el.remove());
     };
 
