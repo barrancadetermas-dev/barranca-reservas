@@ -19,6 +19,12 @@ self.addEventListener('activate', e => {
             .map(k => caches.delete(k))
       )
     ).then(() => self.clients.claim())
+      .then(() => {
+        // Forzar recarga de todos los tabs al activar nuevo SW
+        return self.clients.matchAll({ type: 'window' }).then(clients => {
+          clients.forEach(client => client.navigate(client.url));
+        });
+      })
   );
 });
 
