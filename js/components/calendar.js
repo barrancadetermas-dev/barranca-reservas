@@ -1180,7 +1180,8 @@ export class Calendar {
       cache.invalidate('bookings');
       Bus.emit(EVENTS.BOOKING_DRAG_DONE, { bookingId: booking.id, oldCI: booking.check_in, newCI });
       showToast(`✓ Reserva movida a ${newCI} → ${newCO}`, 'success');
-      document.dispatchEvent(new CustomEvent('booking:changed'));
+      // NO dispatch booking:changed aquí — evita el loop Bus↔DOM del bridge bidireccional.
+      // this.load() recarga el calendario directamente.
       this.load();
     };
 
