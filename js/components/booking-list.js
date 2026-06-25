@@ -6,7 +6,7 @@ import { can, isDemo } from "../auth/permissions.js";
 // + Exportar PDF y Excel desde la lista
 // ═══════════════════════════════════════════════════
 
-import { formatARS, formatDate, showToast, getUnitChipHTML, getSourceBadgeHTML, getBookingBarColor, getUnitLabel, getUnitColor } from '../supabase-config.js';
+import { formatARS, formatDate, showToast, getUnitChipHTML, getSourceBadgeHTML, getBookingBarColor, getUnitLabel, getUnitColor, SOURCE_CONFIG } from '../supabase-config.js';
 import { logAction } from '../services/audit-service.js';
 
 const STATUS_LABELS = {
@@ -47,6 +47,7 @@ export class BookingList {
     this._bindFilters();
     this._bindSourceFilters();
     this._populateUnitFilter();
+    this._bindGuestNameTooltip();
 
     // Event delegation en capture phase para evitar que stopPropagation de hijos bloquee
     document.getElementById('bookings-list')?.addEventListener('click', (e) => {
@@ -535,7 +536,7 @@ export class BookingList {
             <div class="bl-col-guest">
               ${BookingList._avatar(g)}
               <div class="bl-guest-info">
-                <div class="bl-guest-name">${guest}${flagHTML ? ' '+flagHTML : ''}</div>
+                <div class="bl-guest-name bl-guest-name-hover" data-booking-id="${b.id}">${guest}${flagHTML ? ' '+flagHTML : ''}</div>
                 <div class="bl-guest-meta">${unitChips}${getSourceBadgeHTML(b.source)}</div>
               </div>
             </div>
@@ -832,5 +833,114 @@ export class BookingList {
       badge.style.display  = pending > 0 ? 'inline' : 'none';
       badge.textContent    = pending;
     }
+  }
+
+  // ── Tooltip enriquecido al pasar el mouse sobre el nombre del huésped ──
+  // Mismo diseño/contenido que el tooltip de las barras del calendario (.cal-tooltip).
+  // Usa delegación de eventos sobre el contenedor, ya que las filas se
+  // reconstruyen en cada _render().
+  _bindGuestNameTooltip() {
+    const list = document.getElementById('bookings-list');
+    if (!list || list._guestTooltipBound) return;
+    list._guestTooltipBound = true;
+
+    list.addEventListener('mouseover', (e) => {
+      const nameEl = e.target.closest('.bl-guest-name-hover');
+      if (!nameEl || nameEl._tooltipActive) return;
+      const booking = this._allBookings?.find(b => b.id === nameEl.dataset.bookingId);
+      if (!booking) return;
+      nameEl._tooltipActive = true;
+      this._showGuestTooltip(booking, e);
+    });
+
+    list.addEventListener('mousemove', (e) => {
+      if (!this._guestTooltip) return;
+      if (!e.target.closest('.bl-guest-name-hover')) return;
+      this._moveGuestTooltip(e);
+    });
+
+    list.addEventListener('mouseout', (e) => {
+      const nameEl = e.target.closest('.bl-guest-name-hover');
+      if (!nameEl) return;
+      // Solo ocultar si realmente salimos del elemento (no de un hijo, como el flag)
+      if (nameEl.contains(e.relatedTarget)) return;
+      nameEl._tooltipActive = false;
+      this._hideGuestTooltip();
+    });
+  }
+
+  _showGuestTooltip(booking, e) {
+    this._hideGuestTooltip();
+    const guest     = booking.guests ? `${booking.guests.first_name ?? ''} ${booking.guests.last_name ?? ''}`.trim() : (booking.is_blocked ? 'Bloqueo' : 'Sin huésped');
+    const { color: barColor, label: barLabel } = getBookingBarColor(booking);
+    const source    = booking.source ?? 'direct';
+    const srcCfg    = SOURCE_CONFIG[source] ?? {};
+    const units     = (booking.booking_units ?? []).map(bu => {
+      const u = bu.units ?? {};
+      return `#${u.sort_order ?? '?'} · ${u.name ?? '?'}`;
+    }).join(', ');
+    const hasBadExp = booking.guests?.bad_experience;
+    const nights    = booking.nights ?? Math.round((new Date(booking.check_out) - new Date(booking.check_in)) / 86400000);
+
+    const tip = document.createElement('div');
+    tip.className = 'cal-tooltip';
+
+    const totalAmount = booking.total_amount ?? 0;
+    const totalPaid   = booking.total_paid   ?? 0;
+    const balance     = booking.balance      ?? (totalAmount - totalPaid);
+    const saldado     = balance <= 0;
+
+    const payRow = totalAmount > 0 ? `
+      <div style="border-top:1px solid rgba(255,255,255,.1);padding-top:9px;margin-top:9px">
+        <div style="display:flex;justify-content:space-between;gap:10px;margin-bottom:5px">
+          <div>
+            <div style="font-size:.65rem;color:#64748B;text-transform:uppercase;letter-spacing:.04em">Total</div>
+            <div style="font-weight:700;color:#F8FAFC;font-size:.88rem">${formatARS(totalAmount)}</div>
+          </div>
+          ${totalPaid > 0 ? `<div>
+            <div style="font-size:.65rem;color:#64748B;text-transform:uppercase;letter-spacing:.04em">Señas / depósitos</div>
+            <div style="font-weight:600;color:#A78BFA;font-size:.85rem">${formatARS(totalPaid)}</div>
+          </div>` : ''}
+          <div style="text-align:right">
+            <div style="font-size:.65rem;color:#64748B;text-transform:uppercase;letter-spacing:.04em">Saldo al ingreso</div>
+            <div style="font-weight:700;font-size:.88rem;color:${saldado ? '#34D399' : '#EAB308'}">${saldado ? '✓ Saldado' : formatARS(balance)}</div>
+          </div>
+        </div>
+      </div>` : '';
+
+    tip.innerHTML = `
+      <div class="ct-guest">${guest}${hasBadExp ? ' <span style="color:#EF4444">⚠️</span>' : ''}</div>
+      <div class="ct-unit">🛏️ ${units || '—'}</div>
+      <div class="ct-dates" style="margin-top:6px">📅 ${booking.check_in} → ${booking.check_out}</div>
+      <div class="ct-nights">🌙 ${nights} noches${booking.pax ? ` · 👥 ${booking.adults ?? booking.pax} adultos${booking.children ? ` + ${booking.children} menores` : ''}` : ''}</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">
+        <span style="padding:2px 8px;border-radius:99px;font-size:.7rem;font-weight:700;
+          background:${barColor}22;color:${barColor};
+          border:1px solid ${barColor}40">${barLabel}</span>
+        ${source !== 'direct' && source !== 'blocked' ? `<span style="padding:2px 8px;border-radius:99px;font-size:.7rem;font-weight:700;
+          background:${srcCfg.color??''}22;color:${srcCfg.color??'#64748B'};border:1px solid ${srcCfg.color??''}40">
+          ${srcCfg.emoji??''} ${srcCfg.label??''}</span>` : ''}
+      </div>
+      ${payRow}
+      ${booking.notes ? `<div style="margin-top:8px;font-size:.7rem;color:#94A3B8;font-style:italic;border-top:1px solid rgba(255,255,255,.07);padding-top:7px">📝 ${booking.notes.length > 80 ? booking.notes.slice(0,80)+'…' : booking.notes}</div>` : ''}
+    `;
+    document.body.appendChild(tip);
+    this._guestTooltip = tip;
+    this._moveGuestTooltip(e);
+  }
+
+  _moveGuestTooltip(e) {
+    if (!this._guestTooltip) return;
+    const tw = this._guestTooltip.offsetWidth  || 220;
+    const th = this._guestTooltip.offsetHeight || 140;
+    const x  = e.clientX + 18;
+    const y  = e.clientY - 10;
+    this._guestTooltip.style.left = `${x+tw>window.innerWidth ? x-tw-36 : x}px`;
+    this._guestTooltip.style.top  = `${y+th>window.innerHeight ? y-th : y}px`;
+  }
+
+  _hideGuestTooltip() {
+    this._guestTooltip?.remove();
+    this._guestTooltip = null;
   }
 }
