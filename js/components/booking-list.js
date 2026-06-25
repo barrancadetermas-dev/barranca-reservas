@@ -418,6 +418,11 @@ export class BookingList {
     });
   }
 
+  // ── Rebuild sin recargar de Supabase (para filtros/sort locales) ──
+  _rebuildList() {
+    this._render(new Date().toISOString().split('T')[0]);
+  }
+
   // ── Render principal ──────────────────────────────
   _render(today) {
     const container = document.getElementById('bookings-list');
@@ -500,9 +505,20 @@ export class BookingList {
     const isVIP   = (g?.tags ?? []).includes('vip');
     const isFrecuente = (g?.tags ?? []).includes('frecuente');
 
+    // Detectar cliente recurrente: cuántas reservas no canceladas tiene en toda la lista
+    const prevStays = g?.id
+      ? (this._allBookings ?? []).filter(x =>
+          x.guests?.id === g.id &&
+          x.id !== b.id &&
+          x.status !== 'cancelled'
+        ).length
+      : 0;
+    const isRecurring = prevStays > 0;
+
     const flagHTML = isBad ? `<span class="guest-flag flag-bad" title="${g?.bad_experience_note ?? 'Mala experiencia'}">⚑ Conflictivo</span>`
                   : isVIP ? `<span class="guest-flag flag-vip" title="Huésped VIP">★ VIP</span>`
                   : isFrecuente ? `<span class="guest-flag flag-freq" title="Huésped frecuente">♺ Frecuente</span>`
+                  : isRecurring ? `<span class="guest-flag flag-recurring" title="Ya se hospedó ${prevStays} vez${prevStays > 1 ? 'ces' : ''} antes">↩ Cliente</span>`
                   : '';
 
     const isToday  = b.check_in === today || b.check_out === today;
@@ -525,7 +541,7 @@ export class BookingList {
             </div>
             <div class="bl-col-dates">
               <span class="bl-dates">${formatDate(b.check_in)} → ${formatDate(b.check_out)}</span>
-              <span class="bl-nights">${nights}n</span>
+              <span class="bl-nights">${nights} ${nights === 1 ? 'noche' : 'noches'}</span>
             </div>
             <div class="bl-col-amount">
               <div class="bl-amount-total">${formatARS(b.total_amount)}</div>
