@@ -216,18 +216,33 @@ export function generateMockDashboard(units, bookings) {
   const checkins   = bookings.filter(b => b.check_in  === today && b.status !== 'cancelled');
   const checkouts  = bookings.filter(b => b.check_out === today && b.status !== 'cancelled');
   const active     = bookings.filter(b => b.check_in <= today && b.check_out > today && b.status !== 'cancelled' && !b.is_blocked);
-  const recambios  = checkins.filter(ci =>
-    checkouts.some(co =>
-      (co.booking_units?.[0]?.unit_id) === (ci.booking_units?.[0]?.unit_id)
-    )
-  );
+
+  const guestName = b => b.guests ? `${b.guests.first_name ?? ''} ${b.guests.last_name ?? ''}`.trim() : '—';
+
+  const recambios = [];
+  checkins.forEach(ci => {
+    const ciUnitId = ci.booking_units?.[0]?.unit_id;
+    const co = checkouts.find(co => (co.booking_units?.[0]?.unit_id) === ciUnitId);
+    if (co) {
+      recambios.push({
+        unitName: ci.booking_units?.[0]?.units?.name ?? 'Unidad',
+        outGuest: guestName(co),
+        inGuest:  guestName(ci),
+      });
+    }
+  });
+
   const occupied = new Set(active.flatMap(b => (b.booking_units ?? []).map(bu => bu.unit_id)));
+  const occupiedDetail = active.flatMap(b =>
+    (b.booking_units ?? []).map(bu => ({ unitName: bu.units?.name ?? '—', guestName: guestName(b) }))
+  );
 
   return {
     checkins,
     checkouts,
-    recambios: recambios.map(r => r.booking_units?.[0]?.units?.name ?? 'Unidad'),
+    recambios,
     occupiedUnits: occupied.size,
+    occupiedDetail,
     arrivals: checkins.slice(0, 3),
   };
 }

@@ -20,7 +20,7 @@ import { BookingForm }  from './components/booking-form.js';
 import { BookingList }  from './components/booking-list.js';
 import { Statistics }   from './components/statistics.js';
 import { GuestsCRM }    from './components/guests.js';
-import { fetchDollarRates, startDollarAutoRefresh, formatDollarBadge } from './services/dollar-api.js';
+import { fetchDollarRates, startDollarAutoRefresh, formatDollarBadge, formatDollarHeaderLabel, getOfficialAverageRate } from './services/dollar-api.js';
 import { ConfigPanel }    from './components/config-panel.js';
 import { AuditPanel }     from './components/audit-panel.js';
 import { OperationsModule } from './components/operations.js';
@@ -859,10 +859,18 @@ window.openCancelModal = openCancelModal;
 function _updateDollarUI(rates) {
   if (!rates) return;
 
-  // Badge compacto en el header: promedio de las fuentes oficiales disponibles.
+  // Badge del header: SIEMPRE el promedio oficial (Compra y Venta), nunca una fuente sola.
   const badgeEl = document.getElementById('dollar-badge-value');
   if (badgeEl && rates.oficial?.sell) {
     badgeEl.textContent = `$${Math.round(rates.oficial.sell).toLocaleString('es-AR')}`;
+  }
+  const badgeBuyEl = document.getElementById('dollar-badge-buy');
+  if (badgeBuyEl && rates.oficial?.buy) {
+    badgeBuyEl.textContent = `$${Math.round(rates.oficial.buy).toLocaleString('es-AR')}`;
+  }
+  const badgeWrap = document.getElementById('dollar-header-badge');
+  if (badgeWrap) {
+    badgeWrap.title = formatDollarHeaderLabel(rates);
   }
 
   // El widget del dashboard se actualiza via dashboard._renderDollar()
@@ -1937,17 +1945,15 @@ function setupCalculator() {
     if (lbl) lbl.textContent = e.target.value + '%';
   });
 
-  // Precio en USD — usa dólar oficial BNA (badge del header)
+  // Precio en USD — usa SIEMPRE el dólar oficial promedio (fuente única de verdad)
   document.getElementById('calc-use-dollar')?.addEventListener('click', () => {
-    const dollarEl = document.getElementById('dollar-badge-value');
-    const rateText = dollarEl?.textContent?.replace(/[^0-9]/g, '');
-    const rate = parseInt(rateText);
-    if (!rate) { showToast('No hay cotización disponible', 'warning'); return; }
+    const { buy } = getOfficialAverageRate();
+    if (!buy) { showToast('No hay cotización disponible', 'warning'); return; }
     const priceEl = document.getElementById('calc-price');
     if (priceEl) {
-      const usdAmount = prompt(`Cotización oficial: $${rate.toLocaleString('es-AR')}/USD\n¿Cuántos dólares por noche?`, '50');
+      const usdAmount = prompt(`Dólar oficial promedio compra: $${Math.round(buy).toLocaleString('es-AR')}\n¿Cuántos dólares por noche?`, '50');
       if (!usdAmount) return;
-      priceEl.value = Math.round(parseFloat(usdAmount) * rate);
+      priceEl.value = Math.round(parseFloat(usdAmount) * buy);
       _calcUpdate();
     }
   });
@@ -1998,11 +2004,9 @@ function setupCalculator() {
     const commAmt   = total * (commPct / 100);
     const net       = total - commAmt;
 
-    // USD equivalente — usa BNA oficial venta
-    const dollarEl  = document.getElementById('dollar-badge-value');
-    const rateText  = dollarEl?.textContent?.replace(/[^0-9]/g, '');
-    const officialRate = parseInt(rateText) || 0;
-    const usdEq        = officialRate > 0 ? (total / officialRate).toFixed(0) : null;
+    // USD equivalente — usa dólar oficial promedio COMPRA (fuente única de verdad)
+    const { buy: officialBuy } = getOfficialAverageRate();
+    const usdEq = officialBuy > 0 ? (total / officialBuy).toFixed(0) : null;
 
     const fmt = n => '$' + Math.round(n).toLocaleString('es-AR');
 

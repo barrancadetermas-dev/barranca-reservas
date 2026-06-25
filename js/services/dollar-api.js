@@ -128,10 +128,33 @@ export function clearDollarCache() { _cache = null; _cacheTs = 0; }
 export function getCachedOfficialSell() { return _cache?.oficial?.sell ?? null; }
 export function getCachedBNASell()      { return _cache?.bna?.sell      ?? null; }
 
+/**
+ * Fuente única de verdad para el dólar oficial promedio (compra y venta).
+ * Cualquier parte de la app que necesite convertir o mostrar el dólar
+ * oficial DEBE usar esta función — nunca leer el badge del DOM ni
+ * recalcular el promedio por su cuenta.
+ * Devuelve { buy, sell } o { buy: null, sell: null } si todavía no hay datos.
+ */
+export function getOfficialAverageRate() {
+  return {
+    buy:  _cache?.oficial?.buy  ?? null,
+    sell: _cache?.oficial?.sell ?? null,
+  };
+}
+
 /** Badge compacto para el header */
 export function formatDollarBadge(rates) {
   if (!rates?.oficial?.sell) return '—';
   return `$${Math.round(rates.oficial.sell).toLocaleString('es-AR')}`;
+}
+
+/** Texto completo "Dólar Oficial Promedio Compra: $X Venta: $Y" para el header */
+export function formatDollarHeaderLabel(rates) {
+  const buy  = rates?.oficial?.buy;
+  const sell = rates?.oficial?.sell;
+  if (!buy && !sell) return 'Dólar Oficial Promedio — sin datos';
+  const fmt = v => v ? `$${Math.round(v).toLocaleString('es-AR')}` : '—';
+  return `Dólar Oficial Promedio Compra: ${fmt(buy)} Venta: ${fmt(sell)}`;
 }
 
 // ── Helper fetch con timeout ──────────────────────

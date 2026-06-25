@@ -559,8 +559,11 @@ export class Calendar {
       endDate = cell.dataset.date;
 
       if (startDate && endDate) {
-        const d1 = new Date(Math.min(new Date(startDate), new Date(endDate)));
-        const d2 = new Date(Math.max(new Date(startDate), new Date(endDate)));
+        // Parsear con mediodía fijo (T12:00:00) para evitar que el navegador
+        // interprete la fecha en UTC y la muestre un día antes en horario
+        // de Argentina (UTC-3). Sin esto, "26-jun" se mostraba como "25-jun".
+        const d1 = new Date(Math.min(new Date(startDate + 'T12:00:00'), new Date(endDate + 'T12:00:00')));
+        const d2 = new Date(Math.max(new Date(startDate + 'T12:00:00'), new Date(endDate + 'T12:00:00')));
         const nights = Math.round((d2-d1)/86400000)+1;
         const modeLabel = isBlocking ? '🔒 Bloquear:' : '';
         this._ghost.textContent = `${modeLabel} ${d1.toLocaleDateString('es-AR',{day:'2-digit',month:'short'})} → ${d2.toLocaleDateString('es-AR',{day:'2-digit',month:'short'})} · ${nights} día${nights!==1?'s':''}`;
@@ -752,7 +755,6 @@ export class Calendar {
       const u = bu.units ?? {};
       return `#${u.sort_order ?? '?'} · ${u.name ?? '?'}`;
     }).join(', ');
-    const balance   = (booking.balance ?? 0);
     const hasBadExp = booking.guests?.bad_experience;
 
     const tip = document.createElement('div');
@@ -1038,9 +1040,9 @@ export class Calendar {
         if (d >= ci && d < co) {
           c.classList.add('avail-range');
           if (d === ci)  c.classList.add('avail-range-start');
-          // last day before co
-          const next = new Date(d); next.setDate(next.getDate()+1);
-          const nextStr = next.toISOString().split('T')[0];
+          // last day before co — usar mediodía fijo para evitar corrimiento UTC/local
+          const next = new Date(d + 'T12:00:00'); next.setDate(next.getDate()+1);
+          const nextStr = toISODate(next);
           if (nextStr === co) c.classList.add('avail-range-end');
         }
       });

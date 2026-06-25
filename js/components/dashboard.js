@@ -172,22 +172,43 @@ export class Dashboard {
       .eq('check_out', today)
       .neq('status', 'cancelled');
 
-    // Unidades ocupadas hoy (para ocupación)
+    // Unidades ocupadas hoy (para ocupación) — con detalle de huésped para tooltip
     const occupiedUnitIds = new Set();
-    (activeBookings ?? []).forEach(b =>
-      (b.booking_units ?? []).forEach(bu => occupiedUnitIds.add(bu.unit_id))
-    );
+    const occupiedDetail  = []; // [{ unitName, guestName }]
+    (activeBookings ?? []).forEach(b => {
+      const guestName = b.guests ? `${b.guests.first_name ?? ''} ${b.guests.last_name ?? ''}`.trim() : '—';
+      (b.booking_units ?? []).forEach(bu => {
+        occupiedUnitIds.add(bu.unit_id);
+        occupiedDetail.push({
+          unitName:  bu.units?.name ?? '—',
+          guestName,
+        });
+      });
+    });
 
-    // Detectar recambios: unidades con checkout Y checkin el mismo día
+    // Detectar recambios: misma unidad con check-out = hoy Y check-in = hoy.
+    // Se listan con el huésped que sale y el que entra, no solo el nombre de la unidad.
     const recambios = [];
     if (checkins && checkouts) {
-      const checkinUnitIds  = new Set(checkins.flatMap(b => (b.booking_units ?? []).map(bu => bu.unit_id)));
-      const checkoutUnitIds = new Set(checkouts.flatMap(b => (b.booking_units ?? []).map(bu => bu.unit_id)));
-      checkinUnitIds.forEach(uid => {
-        if (checkoutUnitIds.has(uid)) {
-          const unit = this.ctx.units.find(u => u.id === uid);
-          if (unit) recambios.push(unit.name);
-        }
+      const checkinByUnit  = new Map(); // unitId -> { unitName, guestName, bookingId }
+      checkins.forEach(b => {
+        const guestName = b.guests ? `${b.guests.first_name ?? ''} ${b.guests.last_name ?? ''}`.trim() : '—';
+        (b.booking_units ?? []).forEach(bu => {
+          checkinByUnit.set(bu.unit_id, { unitName: bu.units?.name ?? '—', guestName, bookingId: b.id });
+        });
+      });
+      checkouts.forEach(b => {
+        const guestName = b.guests ? `${b.guests.first_name ?? ''} ${b.guests.last_name ?? ''}`.trim() : '—';
+        (b.booking_units ?? []).forEach(bu => {
+          const incoming = checkinByUnit.get(bu.unit_id);
+          if (incoming) {
+            recambios.push({
+              unitName:    bu.units?.name ?? incoming.unitName ?? '—',
+              outGuest:    guestName,
+              inGuest:     incoming.guestName,
+            });
+          }
+        });
       });
     }
 
@@ -238,6 +259,7 @@ export class Dashboard {
       checkouts:     checkouts ?? [],
       recambios,
       occupiedUnits: occupiedUnitIds.size,
+      occupiedDetail,
       arrivals:      checkins ?? [],
       revenue,
       upcoming:      upcoming ?? [],
@@ -259,34 +281,112 @@ export class Dashboard {
 
   // ── Render KPI cards ──────────────────────────────
   _renderKPIs(kpis, today) {
-    // Check-ins (con contador animado)
+    // Check-ins (con contador animado + tooltip on-hover)
     const ciEl = document.getElementById('kpi-checkins-val');
     this._setKPI('kpi-checkins-val', kpis.checkins.length);
     this._animateCounter(ciEl, kpis.checkins.length);
-    this._setSubList('kpi-checkins-list', kpis.checkins.map(b =>
-      `${b.guests?.first_name ?? ''} ${b.guests?.last_name ?? ''} — ${(b.booking_units?.[0]?.units?.name ?? '')}`
-    ));
+    this._bindKpiTooltip('kpi-checkins', {
+      emptyText: 'No hay ingresos programados para hoy.',
+      lines: kpis.checkins.map(b => {
+        const guest = b.guests ? `${b.guests.first_name ?? ''} ${b.guests.last_name ?? ''}`.trim() : '—';
+        const unit  = b.booking_units?.[0]?.units?.name ?? '—';
+        return `Departamento ${unit} — ${guest}`;
+      }),
+    });
 
     const coEl = document.getElementById('kpi-checkouts-val');
     this._setKPI('kpi-checkouts-val', kpis.checkouts.length);
     this._animateCounter(coEl, kpis.checkouts.length);
-    this._setSubList('kpi-checkouts-list', kpis.checkouts.map(b =>
-      `${b.guests?.first_name ?? ''} ${b.guests?.last_name ?? ''} — ${(b.booking_units?.[0]?.units?.name ?? '')}`
-    ));
+    this._bindKpiTooltip('kpi-checkouts', {
+      emptyText: 'No hay egresos programados para hoy.',
+      lines: kpis.checkouts.map(b => {
+        const guest = b.guests ? `${b.guests.first_name ?? ''} ${b.guests.last_name ?? ''}`.trim() : '—';
+        const unit  = b.booking_units?.[0]?.units?.name ?? '—';
+        return `Departamento ${unit} — ${guest}`;
+      }),
+    });
 
     const rcEl = document.getElementById('kpi-recambios-val');
     this._setKPI('kpi-recambios-val', kpis.recambios.length);
     this._animateCounter(rcEl, kpis.recambios.length);
-    this._setSubList('kpi-recambios-list', kpis.recambios.map(n => `${n}`));
+    this._bindKpiTooltip('kpi-recambios', {
+      emptyText: 'No hay recambios programados para hoy.',
+      blocks: kpis.recambios.map(r => ({
+        title: `Departamento ${r.unitName}`,
+        rows: [`Sale: ${r.outGuest}`, '↓', `Entra: ${r.inGuest}`],
+      })),
+    });
 
     const guEl = document.getElementById('kpi-guests-val');
     this._setKPI('kpi-guests-val', kpis.occupiedUnits);
     this._animateCounter(guEl, kpis.occupiedUnits);
+    this._bindKpiTooltip('kpi-guests', {
+      emptyText: 'No hay unidades ocupadas.',
+      lines: (kpis.occupiedDetail ?? []).map(o => `Departamento ${o.unitName} — ${o.guestName}`),
+    });
 
     // Nuevos widgets
     this._renderRevenueCard(kpis.revenue ?? {});
     this._renderUpcoming(kpis.upcoming  ?? []);
     this._renderPendingOps(kpis.pendingClean ?? 0);
+  }
+
+  // ── Tooltip on-hover para tarjetas KPI ─────────────
+  // content: { emptyText, lines? } o { emptyText, blocks: [{title, rows}] } (para recambios)
+  _bindKpiTooltip(cardId, content) {
+    const card = document.getElementById(cardId);
+    if (!card) return;
+
+    // Evitar bind duplicado de listeners en cada render
+    if (!card._kpiTooltipBound) {
+      card.addEventListener('mouseenter', (e) => this._showKpiTooltip(card, e));
+      card.addEventListener('mousemove',  (e) => this._moveKpiTooltip(e));
+      card.addEventListener('mouseleave', ()  => this._hideKpiTooltip());
+      card._kpiTooltipBound = true;
+    }
+    card._kpiTooltipContent = content;
+  }
+
+  _showKpiTooltip(card, e) {
+    this._hideKpiTooltip();
+    const content = card._kpiTooltipContent;
+    if (!content) return;
+
+    const tip = document.createElement('div');
+    tip.className = 'cal-tooltip kpi-tooltip';
+
+    let html;
+    if (content.blocks?.length) {
+      html = content.blocks.map(b => `
+        <div class="kpi-tip-block">
+          <div class="kpi-tip-title">${b.title}</div>
+          ${b.rows.map(r => `<div class="kpi-tip-row">${r}</div>`).join('')}
+        </div>`).join('<div class="kpi-tip-sep"></div>');
+    } else if (content.lines?.length) {
+      html = content.lines.map(l => `<div class="kpi-tip-row">${l}</div>`).join('');
+    } else {
+      html = `<div class="kpi-tip-empty">${content.emptyText}</div>`;
+    }
+
+    tip.innerHTML = html;
+    document.body.appendChild(tip);
+    this._kpiTooltip = tip;
+    this._moveKpiTooltip(e);
+  }
+
+  _moveKpiTooltip(e) {
+    if (!this._kpiTooltip) return;
+    const tw = this._kpiTooltip.offsetWidth  || 220;
+    const th = this._kpiTooltip.offsetHeight || 80;
+    const x  = e.clientX + 16;
+    const y  = e.clientY + 16;
+    this._kpiTooltip.style.left = `${x + tw > window.innerWidth ? x - tw - 32 : x}px`;
+    this._kpiTooltip.style.top  = `${y + th > window.innerHeight ? y - th - 24 : y}px`;
+  }
+
+  _hideKpiTooltip() {
+    this._kpiTooltip?.remove();
+    this._kpiTooltip = null;
   }
 
   _renderRevenueCard(rev) {
@@ -390,17 +490,6 @@ export class Dashboard {
   _setKPI(id, value) {
     const el = document.getElementById(id);
     if (el) el.textContent = value;
-  }
-
-  _setSubList(id, items) {
-    const el = document.getElementById(id);
-    if (!el) return;
-    el.innerHTML = items.slice(0, 3).map(text =>
-      `<div class="kpi-sub-item">${text}</div>`
-    ).join('');
-    if (items.length > 3) {
-      el.innerHTML += `<div class="kpi-sub-item">+ ${items.length - 3} más</div>`;
-    }
   }
 
   // ── Render Occupancy Ring ─────────────────────────
