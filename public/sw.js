@@ -1,9 +1,9 @@
 // ═══════════════════════════════════════════════════
-// sw.js v8.2.0 — MILA Service Worker
+// sw.js v8.4.0 — MILA Service Worker
 // HTML siempre de red, assets cacheados, offline queue
 // ═══════════════════════════════════════════════════
 
-const V  = '8.3.0';
+const V  = '8.4.0'; // bumped to force cache clear
 const CA = `mila-app-${V}`;
 
 self.addEventListener('install', e => {
