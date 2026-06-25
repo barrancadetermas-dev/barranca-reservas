@@ -4032,6 +4032,22 @@ input[type="color"].unit-color-input::-webkit-color-swatch { border: none; borde
 #avail-filter-panel input[type="date"]:focus,
 #avail-filter-panel input[type="number"]:focus { border-color:var(--color-primary) !important; box-shadow:0 0 0 2px var(--color-primary-l,rgba(99,102,241,.15)); }
 #avail-search-btn:hover { opacity:.88; }
+/* ── Celdas ocupadas en modo disponibilidad: diagonal / ── */
+.cal-cell.avail-occupied {
+  position: relative;
+  background: rgba(239,68,68,.04) !important;
+}
+.cal-cell.avail-occupied::before {
+  content: '';
+  position: absolute; inset: 0; pointer-events: none; z-index: 1;
+  background: repeating-linear-gradient(
+    135deg,
+    transparent,
+    transparent 4px,
+    rgba(239,68,68,.18) 4px,
+    rgba(239,68,68,.18) 5px
+  );
+}
 /* ── Resaltado de rango en calendario ── */
 .cal-cell.avail-range { background: rgba(99,102,241,.13) !important; border-top: 2px solid rgba(99,102,241,.5) !important; }
 .cal-cell.avail-range-start { border-left: 2px solid rgba(99,102,241,.7) !important; border-radius: 4px 0 0 4px; }

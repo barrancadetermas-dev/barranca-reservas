@@ -757,6 +757,31 @@ export class Calendar {
 
     const tip = document.createElement('div');
     tip.className = 'cal-tooltip';
+
+    const totalAmount = booking.total_amount ?? 0;
+    const totalPaid   = booking.total_paid   ?? 0;
+    const balance     = booking.balance      ?? (totalAmount - totalPaid);
+    const saldado     = balance <= 0;
+
+    // Fila de pago: señas/depósito vs saldo al ingreso
+    const payRow = totalAmount > 0 ? `
+      <div style="border-top:1px solid rgba(255,255,255,.1);padding-top:9px;margin-top:9px">
+        <div style="display:flex;justify-content:space-between;gap:10px;margin-bottom:5px">
+          <div>
+            <div style="font-size:.65rem;color:#64748B;text-transform:uppercase;letter-spacing:.04em">Total</div>
+            <div style="font-weight:700;color:#F8FAFC;font-size:.88rem">${formatARS(totalAmount)}</div>
+          </div>
+          ${totalPaid > 0 ? `<div>
+            <div style="font-size:.65rem;color:#64748B;text-transform:uppercase;letter-spacing:.04em">Señas / depósitos</div>
+            <div style="font-weight:600;color:#A78BFA;font-size:.85rem">${formatARS(totalPaid)}</div>
+          </div>` : ''}
+          <div style="text-align:right">
+            <div style="font-size:.65rem;color:#64748B;text-transform:uppercase;letter-spacing:.04em">Saldo al ingreso</div>
+            <div style="font-weight:700;font-size:.88rem;color:${saldado ? '#34D399' : '#EAB308'}">${saldado ? '✓ Saldado' : formatARS(balance)}</div>
+          </div>
+        </div>
+      </div>` : '';
+
     tip.innerHTML = `
       <div class="ct-guest">${guest}${hasBadExp ? ' <span style="color:#EF4444">⚠️</span>' : ''}</div>
       <div class="ct-unit">🛏️ ${units || '—'}</div>
@@ -770,14 +795,8 @@ export class Calendar {
           background:${srcCfg.color??''}22;color:${srcCfg.color??'#64748B'};border:1px solid ${srcCfg.color??''}40">
           ${srcCfg.emoji??''} ${srcCfg.label??''}</span>` : ''}
       </div>
-      ${booking.total_amount ? `
-        <div style="border-top:1px solid rgba(255,255,255,.08);padding-top:8px;margin-top:8px;display:flex;justify-content:space-between;gap:12px">
-          <div><div style="font-size:.7rem;color:#64748B">Total</div><div style="font-weight:700;color:#F8FAFC">${formatARS(booking.total_amount)}</div></div>
-          <div style="text-align:right">
-            <div style="font-size:.7rem;color:#64748B">Saldo</div>
-            <div style="font-weight:700;color:${balance>0?'#EAB308':'#34D399'}">${balance>0?formatARS(balance):'✓ Saldado'}</div>
-          </div>
-        </div>` : ''}
+      ${payRow}
+      ${booking.notes ? `<div style="margin-top:8px;font-size:.7rem;color:#94A3B8;font-style:italic;border-top:1px solid rgba(255,255,255,.07);padding-top:7px">📝 ${booking.notes.length > 80 ? booking.notes.slice(0,80)+'…' : booking.notes}</div>` : ''}
     `;
     document.body.appendChild(tip);
     this._tooltip = tip;
@@ -948,6 +967,7 @@ export class Calendar {
         cells.forEach(c => {
           const uid = c.dataset.unitId;
           if (!occupiedUnits.has(uid)) c.classList.add('avail-free');
+          else c.classList.add('avail-occupied');
         });
         const free = totalUnits - occupiedUnits.size;
         const pct  = Math.round((free / totalUnits) * 100);
@@ -967,6 +987,7 @@ export class Calendar {
       const grid = document.getElementById('calendar-grid');
       if (!grid) return;
       grid.querySelectorAll('.avail-free').forEach(c => c.classList.remove('avail-free'));
+      grid.querySelectorAll('.avail-occupied').forEach(c => c.classList.remove('avail-occupied'));
       grid.querySelectorAll('.avail-pct').forEach(el => el.remove());
     };
 
