@@ -111,7 +111,8 @@ export class GuestsCRM {
     const { data: guests } = await this.db
       .from('guests')
       .select(`id, first_name, last_name, phone, email, dni, nationality, tags, bad_experience, created_at,
-        bookings!bookings_guest_id_fkey(id, total_paid, check_in, status)`)
+        bookings!bookings_guest_id_fkey(id, total_paid, check_in, check_out, status,
+          booking_units(units(name, color)))`)
       .eq('hotel_id', this.ctx.hotelId)
       .order('created_at', { ascending: false })
       .limit(limit);
@@ -123,7 +124,11 @@ export class GuestsCRM {
       const bks = (g.bookings ?? []).filter(b => b.status !== 'blocked' && b.status !== 'cancelled');
       g.total_bookings = bks.length;
       g.total_spent    = bks.reduce((s, b) => s + (b.total_paid ?? 0), 0);
-      g.last_checkin   = bks.sort((a,b) => b.check_in.localeCompare(a.check_in))[0]?.check_in ?? null;
+      const sorted     = bks.sort((a,b) => b.check_in.localeCompare(a.check_in));
+      g.last_checkin   = sorted[0]?.check_in ?? null;
+      g.last_checkout  = sorted[0]?.check_out ?? null;
+      g.last_unit      = sorted[0]?.booking_units?.[0]?.units ?? null;
+      g.prev_units     = [...new Set(sorted.slice(1,4).map(b => b.booking_units?.[0]?.units?.name).filter(Boolean))];
     });
     area.innerHTML = guests.map(g => this._renderGuestCard(g)).join('');
     area.querySelectorAll('.guest-row-item').forEach(card =>
@@ -148,7 +153,8 @@ export class GuestsCRM {
     const { data: guests, error } = await this.db
       .from('guests')
       .select(`id, first_name, last_name, phone, email, dni, nationality, tags, bad_experience, created_at,
-        bookings!bookings_guest_id_fkey(id, total_paid, check_in, status)`)
+        bookings!bookings_guest_id_fkey(id, total_paid, check_in, check_out, status,
+          booking_units(units(name, color)))`)
       .eq('hotel_id', this.ctx.hotelId)
       .or(`first_name.ilike.%${query}%,last_name.ilike.%${query}%,phone.ilike.%${query}%,email.ilike.%${query}%,dni.ilike.%${query}%`)
       .order('created_at', { ascending: false })
@@ -157,7 +163,11 @@ export class GuestsCRM {
       const bks = (g.bookings ?? []).filter(b => b.status !== 'blocked' && b.status !== 'cancelled');
       g.total_bookings = bks.length;
       g.total_spent    = bks.reduce((s, b) => s + (b.total_paid ?? 0), 0);
-      g.last_checkin   = bks.sort((a,b) => b.check_in.localeCompare(a.check_in))[0]?.check_in ?? null;
+      const sorted     = bks.sort((a,b) => b.check_in.localeCompare(a.check_in));
+      g.last_checkin   = sorted[0]?.check_in ?? null;
+      g.last_checkout  = sorted[0]?.check_out ?? null;
+      g.last_unit      = sorted[0]?.booking_units?.[0]?.units ?? null;
+      g.prev_units     = [...new Set(sorted.slice(1,4).map(b => b.booking_units?.[0]?.units?.name).filter(Boolean))];
     });
 
     if (error) { showToast('Error al buscar huéspedes', 'error'); return; }
@@ -179,53 +189,102 @@ export class GuestsCRM {
   }
 
   _renderGuestCard(g) {
-    const initials  = `${g.first_name?.[0] ?? ''}${g.last_name?.[0] ?? ''}`.toUpperCase();
-    const lastVisit = g.last_checkin ? formatDate(g.last_checkin) : null;
-    const badColor  = g.bad_experience ? 'background:linear-gradient(135deg,#EF4444,#DC2626)' : '';
-    const tagsBadge = (g.tags?.length)
+    const initials   = `${g.first_name?.[0] ?? ''}${g.last_name?.[0] ?? ''}`.toUpperCase();
+    const tagsBadge  = (g.tags?.length)
       ? g.tags.slice(0,2).map(t => ({vip:'👑',frecuente:'🔄',empresa:'🏢',referido:'👥',sin_cargo:'🎁'}[t] ?? '🏷️')).join(' ')
       : '';
 
+    // Última visita
+    const lastCI    = g.last_checkin  ? formatDate(g.last_checkin)  : null;
+    const lastCO    = g.last_checkout ? formatDate(g.last_checkout) : null;
+    const unitName  = g.last_unit?.name  ?? null;
+    const unitColor = g.last_unit?.color ?? null;
+
+    // Línea de contacto
+    const contactLine = [g.phone, g.email, g.dni ? `DNI ${g.dni}` : null].filter(Boolean).join(' · ');
+
+    // Chip de depto + fechas última visita
+    const unitChip = unitName
+      ? `<span style="display:inline-block;padding:0 5px;border-radius:3px;font-size:.62rem;font-weight:700;color:#fff;background:${unitColor ?? 'var(--color-primary)'};">${unitName}</span>`
+      : '';
+    const visitLine = lastCI
+      ? `${unitChip} ${lastCI}${lastCO ? ' → ' + lastCO : ''}`
+      : null;
+
+    // Tooltip nativo al hacer hover (title con saltos de línea)
+    const tipParts = [
+      g.phone       ? '📱 ' + g.phone       : null,
+      g.email       ? '✉️ ' + g.email       : null,
+      g.dni         ? '🪪 DNI ' + g.dni     : null,
+      g.nationality && g.nationality !== 'Argentina' ? '🌍 ' + g.nationality : null,
+      lastCI        ? '📅 Última entrada: ' + lastCI + (lastCO ? ' → ' + lastCO : '') : null,
+      unitName      ? '🏠 Depto: ' + unitName : null,
+      g.prev_units?.length ? '📋 También estuvo en: ' + g.prev_units.join(', ') : null,
+      g.total_bookings > 0 ? '🔢 ' + g.total_bookings + ' estadía' + (g.total_bookings > 1 ? 's' : '') : null,
+      g.total_spent  ? '💰 ' + formatARS(g.total_spent) + ' total abonado' : null,
+      g.tags?.length ? '🏷️ ' + g.tags.join(', ') : null,
+      g.bad_experience ? '⚠️ Mala experiencia registrada' : null,
+    ].filter(Boolean).join('\n');
+
     return `
       <div class="guest-row-item" data-guest-id="${g.id}"
-        style="display:flex;align-items:center;gap:10px;padding:7px 10px;
+        title="${tipParts}"
+        style="display:flex;align-items:center;gap:10px;padding:8px 10px;
           border-bottom:1px solid var(--color-border);cursor:pointer;
           transition:background .12s;border-radius:6px"
         onmouseenter="this.style.background='var(--color-surface-2)'"
         onmouseleave="this.style.background=''">
-        <!-- Avatar mini -->
-        <div style="width:32px;height:32px;border-radius:50%;flex-shrink:0;
+
+        <!-- Avatar -->
+        <div style="width:34px;height:34px;border-radius:50%;flex-shrink:0;
           display:flex;align-items:center;justify-content:center;
-          font-size:.72rem;font-weight:700;color:#fff;
-          background:${g.bad_experience ? 'linear-gradient(135deg,#EF4444,#DC2626)' : 'var(--color-primary)'}">${initials}</div>
-        <!-- Nombre + datos -->
+          font-size:.73rem;font-weight:700;color:#fff;
+          background:${g.bad_experience ? 'linear-gradient(135deg,#EF4444,#DC2626)' : 'var(--color-primary)'}">` + initials + `</div>
+
+        <!-- Info principal -->
         <div style="flex:1;min-width:0;overflow:hidden">
-          <div style="display:flex;align-items:center;gap:6px">
-            <span style="font-weight:600;font-size:.84rem;color:var(--color-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
+
+          <!-- Fila 1: nombre + badges -->
+          <div style="display:flex;align-items:center;gap:5px;margin-bottom:1px">
+            <span style="font-weight:600;font-size:.84rem;color:var(--color-text);
+              white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:200px">
               ${g.first_name} ${g.last_name}</span>
-            ${g.bad_experience ? '<span style="font-size:.65rem;color:#EF4444">⚠️</span>' : ''}
-            ${tagsBadge ? `<span style="font-size:.7rem">${tagsBadge}</span>` : ''}
+            ${g.bad_experience ? '<span style="font-size:.6rem;color:#EF4444" title="Mala experiencia">⚠️</span>' : ''}
+            ${tagsBadge ? `<span style="font-size:.68rem">${tagsBadge}</span>` : ''}
           </div>
-          <div style="font-size:.72rem;color:var(--color-text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
-            ${[g.phone, g.email].filter(Boolean).join(' · ') || (lastVisit ? `Última: ${lastVisit}` : 'Sin datos de contacto')}
-          </div>
+
+          <!-- Fila 2: contacto -->
+          ${contactLine ? `<div style="font-size:.71rem;color:var(--color-text-3);
+            white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:2px">
+            ${contactLine}</div>` : ''}
+
+          <!-- Fila 3: última visita + depto -->
+          ${visitLine ? `<div style="font-size:.68rem;color:var(--color-text-3);
+            display:flex;align-items:center;gap:4px;margin-top:1px">
+            <span style="opacity:.6">↩</span> <span>${visitLine}</span></div>` : ''}
+
         </div>
+
         <!-- Estadías + total -->
-        <div style="text-align:right;flex-shrink:0;min-width:56px">
-          <div style="font-size:.8rem;font-weight:700;color:var(--color-text)">${g.total_bookings ?? 0} <span style="font-weight:400;font-size:.68rem;color:var(--color-text-3)">est.</span></div>
-          ${g.total_spent ? `<div style="font-size:.7rem;color:var(--color-success);font-weight:600">${formatARS(g.total_spent)}</div>` : ''}
+        <div style="text-align:right;flex-shrink:0;min-width:50px">
+          <div style="font-size:.8rem;font-weight:700;color:var(--color-text)">
+            ${g.total_bookings ?? 0}
+            <span style="font-weight:400;font-size:.66rem;color:var(--color-text-3)">est.</span>
+          </div>
+          ${g.total_spent ? `<div style="font-size:.69rem;color:var(--color-success);font-weight:600;white-space:nowrap">${formatARS(g.total_spent)}</div>` : ''}
         </div>
+
         <!-- Botón borrar -->
-        <button class="btn-delete-guest" data-guest-id="${g.id}"
+        <button class="btn-delete-guest"
           onclick="event.stopPropagation();window._guestsCRM?._confirmDelete('${g.id}','${g.first_name} ${g.last_name}')"
           style="flex-shrink:0;width:26px;height:26px;border-radius:6px;border:none;
-            background:transparent;cursor:pointer;color:var(--color-text-3);font-size:.85rem;
-            display:flex;align-items:center;justify-content:center;opacity:.5;transition:opacity .15s"
+            background:transparent;cursor:pointer;color:var(--color-text-3);font-size:.82rem;
+            display:flex;align-items:center;justify-content:center;opacity:.35;transition:all .15s"
           onmouseenter="this.style.opacity='1';this.style.background='#FEE2E2';this.style.color='#DC2626'"
-          onmouseleave="this.style.opacity='.5';this.style.background='transparent';this.style.color='var(--color-text-3)'"
+          onmouseleave="this.style.opacity='.35';this.style.background='transparent';this.style.color='var(--color-text-3)'"
           title="Eliminar huésped">🗑️</button>
-        <!-- Flecha -->
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"
+
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"
           style="color:var(--color-text-3);flex-shrink:0"><polyline points="9 18 15 12 9 6"/></svg>
       </div>`;
   }
