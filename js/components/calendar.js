@@ -886,54 +886,172 @@ export class Calendar {
       });
   }
 
-  // ── Setup toggle Mes/Semana/Lista ─────────────────
+  // ── Setup toggle Disponibilidad ─────────────────
   setupViewToggle() {
     let _availMode = false;
     const availBtn = document.getElementById('cal-avail-toggle');
-    if (availBtn) {
-      availBtn.addEventListener('click', () => {
-        _availMode = !_availMode;
-        availBtn.textContent = _availMode ? '✕ Ocultar disponibilidad' : '👁 Disponibilidad';
-        availBtn.classList.toggle('active', _availMode);
-        const grid = document.getElementById('calendar-grid');
-        if (!grid) return;
-        if (_availMode) {
-          const daysInMonth = new Date(this.year, this.month+1, 0).getDate();
-          const totalUnits  = this.ctx.units.length || 1;
-          const bookings    = this._lastRenderedBookings ?? [];
-          for (let d = 1; d <= daysInMonth; d++) {
-            const dateStr = `${this.year}-${String(this.month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-            // FIX: calcular desde datos de reservas, no desde DOM
-            const occupiedUnits = new Set();
-            bookings.forEach(b => {
-              if (b.status === 'cancelled') return;
-              if (b.check_in <= dateStr && b.check_out > dateStr) {
-                (b.booking_units ?? []).forEach(bu => occupiedUnits.add(bu.unit_id));
-              }
-            });
-            const cells = grid.querySelectorAll(`.cal-cell[data-date="${dateStr}"]`);
-            cells.forEach(c => {
-              const uid = c.dataset.unitId;
-              if (!occupiedUnits.has(uid)) c.classList.add('avail-free');
-            });
-            const free = totalUnits - occupiedUnits.size;
-            const pct  = Math.round((free / totalUnits) * 100);
-            const hdrs = grid.querySelectorAll('.cal-day-header');
-            const hdr  = hdrs[d - 1]; // d arranca en 1, índice arranca en 0
-            if (hdr && !hdr.querySelector('.avail-pct')) {
-              const badge = document.createElement('div');
-              badge.className = 'avail-pct';
-              badge.textContent = `${pct}%`;
-              badge.style.cssText = `font-size:.55rem;font-weight:700;color:${pct > 60 ? '#16a34a' : pct > 30 ? '#f59e0b' : '#ef4444'};line-height:1`;
-              hdr.appendChild(badge);
-            }
+    if (!availBtn) return;
+
+    // ── Crear panel de filtro de disponibilidad ──
+    const filterPanel = document.createElement('div');
+    filterPanel.id = 'avail-filter-panel';
+    const todayStr = new Date().toISOString().split('T')[0];
+    const tomorrowStr = (() => { const d = new Date(); d.setDate(d.getDate()+1); return d.toISOString().split('T')[0]; })();
+    filterPanel.style.cssText = `
+      display:none;align-items:center;gap:10px;flex-wrap:wrap;
+      background:var(--color-surface-2,#f8f9fa);border:1px solid var(--color-border,#e5e7eb);
+      border-radius:10px;padding:10px 14px;margin-top:8px;
+      font-size:.8rem;color:var(--color-text);
+    `;
+    filterPanel.innerHTML = `
+      <span style="font-weight:600;font-size:.78rem;color:var(--color-text-3);text-transform:uppercase;letter-spacing:.05em">🔍 Buscar disponibilidad</span>
+      <label style="display:flex;align-items:center;gap:5px">
+        <span style="font-size:.75rem;color:var(--color-text-3)">Check-in</span>
+        <input type="date" id="avail-checkin" value="${todayStr}"
+          style="border:1px solid var(--color-border,#e5e7eb);border-radius:6px;padding:3px 7px;font-size:.78rem;background:var(--color-surface);color:var(--color-text)">
+      </label>
+      <label style="display:flex;align-items:center;gap:5px">
+        <span style="font-size:.75rem;color:var(--color-text-3)">Check-out</span>
+        <input type="date" id="avail-checkout" value="${tomorrowStr}"
+          style="border:1px solid var(--color-border,#e5e7eb);border-radius:6px;padding:3px 7px;font-size:.78rem;background:var(--color-surface);color:var(--color-text)">
+      </label>
+      <label style="display:flex;align-items:center;gap:5px">
+        <span style="font-size:.75rem;color:var(--color-text-3)">Personas</span>
+        <input type="number" id="avail-guests" min="1" max="20" value="2"
+          style="width:58px;border:1px solid var(--color-border,#e5e7eb);border-radius:6px;padding:3px 7px;font-size:.78rem;background:var(--color-surface);color:var(--color-text)">
+      </label>
+      <button id="avail-search-btn"
+        style="padding:4px 12px;border-radius:6px;border:none;background:var(--color-primary,#6366f1);color:#fff;font-size:.78rem;font-weight:600;cursor:pointer">
+        Ver disponibles
+      </button>
+      <div id="avail-results" style="width:100%;margin-top:2px"></div>
+    `;
+
+    // Insertar panel entre toolbar y cal-wrapper
+    const calWrapper = document.querySelector('.cal-wrapper') ?? availBtn.closest('.cal-toolbar')?.nextElementSibling;
+    if (calWrapper) calWrapper.insertAdjacentElement('beforebegin', filterPanel);
+    else availBtn.parentNode.appendChild(filterPanel);
+
+    // ── Aplicar marcas de % al calendario ──
+    const _applyPercentBadges = () => {
+      const grid = document.getElementById('calendar-grid');
+      if (!grid) return;
+      const daysInMonth = new Date(this.year, this.month+1, 0).getDate();
+      const totalUnits  = this.ctx.units.length || 1;
+      const bookings    = this._lastRenderedBookings ?? [];
+      for (let d = 1; d <= daysInMonth; d++) {
+        const dateStr = `${this.year}-${String(this.month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+        const occupiedUnits = new Set();
+        bookings.forEach(b => {
+          if (b.status === 'cancelled') return;
+          if (b.check_in <= dateStr && b.check_out > dateStr) {
+            (b.booking_units ?? []).forEach(bu => occupiedUnits.add(bu.unit_id));
           }
-        } else {
-          grid.querySelectorAll('.avail-free').forEach(c => c.classList.remove('avail-free'));
-          grid.querySelectorAll('.avail-pct').forEach(el => el.remove());
+        });
+        const cells = grid.querySelectorAll(`.cal-cell[data-date="${dateStr}"]`);
+        cells.forEach(c => {
+          const uid = c.dataset.unitId;
+          if (!occupiedUnits.has(uid)) c.classList.add('avail-free');
+        });
+        const free = totalUnits - occupiedUnits.size;
+        const pct  = Math.round((free / totalUnits) * 100);
+        const hdrs = grid.querySelectorAll('.cal-day-header');
+        const hdr  = hdrs[d - 1];
+        if (hdr && !hdr.querySelector('.avail-pct')) {
+          const badge = document.createElement('div');
+          badge.className = 'avail-pct';
+          badge.textContent = `${pct}%`;
+          badge.style.cssText = `font-size:.55rem;font-weight:700;color:${pct > 60 ? '#16a34a' : pct > 30 ? '#f59e0b' : '#ef4444'};line-height:1`;
+          hdr.appendChild(badge);
+        }
+      }
+    };
+
+    const _clearPercentBadges = () => {
+      const grid = document.getElementById('calendar-grid');
+      if (!grid) return;
+      grid.querySelectorAll('.avail-free').forEach(c => c.classList.remove('avail-free'));
+      grid.querySelectorAll('.avail-pct').forEach(el => el.remove());
+    };
+
+    // ── Buscar unidades disponibles para rango + personas ──
+    const _searchAvailability = () => {
+      const ci      = document.getElementById('avail-checkin')?.value;
+      const co      = document.getElementById('avail-checkout')?.value;
+      const guests  = parseInt(document.getElementById('avail-guests')?.value ?? '2', 10);
+      const results = document.getElementById('avail-results');
+      if (!ci || !co || !results) return;
+      if (ci >= co) {
+        results.innerHTML = `<span style="color:#ef4444;font-size:.76rem">⚠️ El check-out debe ser posterior al check-in.</span>`;
+        return;
+      }
+      const bookings = this._lastRenderedBookings ?? [];
+      // Unidades ocupadas en CUALQUIER día del rango ci..co (excluyendo co, ya que ese día es salida)
+      const occupiedIds = new Set();
+      bookings.forEach(b => {
+        if (b.status === 'cancelled') return;
+        // Solapa si check_in < co y check_out > ci
+        if (b.check_in < co && b.check_out > ci) {
+          (b.booking_units ?? []).forEach(bu => occupiedIds.add(bu.unit_id));
         }
       });
-    }
+      const available = this.ctx.units.filter(u => !occupiedIds.has(u.id) && (u.max_guests ?? 0) >= guests);
+      const occupied  = this.ctx.units.filter(u => occupiedIds.has(u.id));
+      const tooSmall  = this.ctx.units.filter(u => !occupiedIds.has(u.id) && (u.max_guests ?? 0) < guests);
+
+      if (!available.length) {
+        results.innerHTML = `<span style="color:#ef4444;font-size:.76rem">😔 Sin unidades disponibles para ${guests} personas en esas fechas.</span>`;
+        return;
+      }
+      const chip = u => {
+        const color = u.color ?? 'var(--color-primary)';
+        return `<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:5px;
+          background:${color}22;border:1px solid ${color}55;color:var(--color-text);font-size:.75rem;font-weight:600">
+          <span style="width:8px;height:8px;border-radius:50%;background:${color};flex-shrink:0"></span>
+          #${u.sort_order} · ${u.name}
+          <span style="font-size:.68rem;color:var(--color-text-3);font-weight:400">hasta ${u.max_guests} pers.</span>
+        </span>`;
+      };
+      const fmt = s => s.split('-').reverse().join('/');
+      results.innerHTML = `
+        <div style="margin-top:4px">
+          <div style="font-size:.74rem;font-weight:700;color:#16a34a;margin-bottom:5px">
+            ✅ ${available.length} unidad${available.length > 1 ? 'es' : ''} disponible${available.length > 1 ? 's' : ''} · ${fmt(ci)} → ${fmt(co)} · ${guests} pers.
+          </div>
+          <div style="display:flex;flex-wrap:wrap;gap:5px">
+            ${available.map(chip).join('')}
+          </div>
+          ${tooSmall.length ? `<div style="margin-top:6px;font-size:.71rem;color:var(--color-text-3)">
+            ⚠️ Sin capacidad suficiente: ${tooSmall.map(u => `#${u.sort_order} ${u.name} (max. ${u.max_guests})`).join(', ')}
+          </div>` : ''}
+          ${occupied.length ? `<div style="margin-top:3px;font-size:.71rem;color:var(--color-text-3)">
+            🔴 Ocupadas: ${occupied.map(u => `#${u.sort_order} ${u.name}`).join(', ')}
+          </div>` : ''}
+        </div>`;
+    };
+
+    // ── Toggle principal ──
+    availBtn.addEventListener('click', () => {
+      _availMode = !_availMode;
+      availBtn.textContent = _availMode ? '✕ Ocultar disponibilidad' : '👁 Disponibilidad';
+      availBtn.classList.toggle('active', _availMode);
+      filterPanel.style.display = _availMode ? 'flex' : 'none';
+      if (_availMode) {
+        _applyPercentBadges();
+      } else {
+        _clearPercentBadges();
+        const results = document.getElementById('avail-results');
+        if (results) results.innerHTML = '';
+      }
+    });
+
+    // ── Botón buscar ──
+    filterPanel.querySelector('#avail-search-btn')?.addEventListener('click', _searchAvailability);
+
+    // Buscar también al pulsar Enter en los inputs de fecha/personas
+    filterPanel.querySelectorAll('input').forEach(inp =>
+      inp.addEventListener('keydown', e => { if (e.key === 'Enter') _searchAvailability(); })
+    );
   }
 
   // ── Vista Semanal ─────────────────────────────────

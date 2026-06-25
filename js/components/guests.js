@@ -225,27 +225,25 @@ export class GuestsCRM {
       ? (g.latest_note.length > 80 ? g.latest_note.slice(0, 80) + '…' : g.latest_note)
       : null;
 
-    // ── Tooltip: nombre + todo ──
+    // ── Tooltip: estructura nueva ──
     const fullName = `${g.first_name} ${g.last_name}`;
     const tipParts = [
       '👤 ' + fullName,
-      '─────────────────',
-      g.phone       ? '📱 ' + g.phone       : null,
-      g.email       ? '✉️  ' + g.email      : null,
-      g.dni         ? '🪪 DNI ' + g.dni     : null,
-      g.nationality && g.nationality !== 'Argentina' ? '🌍 ' + g.nationality : null,
-      lastCI ? '─────────────────' : null,
+      g.dni         ? '🪪  DNI ' + g.dni      : null,
+      g.phone       ? '📱  ' + g.phone         : null,
+      g.email       ? '✉️   ' + g.email        : null,
+      // separador antes de estadía (solo si hay datos de estadía)
+      lastCI ? '' : null,
       lastCI ? '📅 Última entrada: ' + lastCI + (lastCO ? ' → ' + lastCO : '') : null,
-      unitName      ? '🏠 Depto: ' + unitName : null,
-      g.prev_units?.length ? '📋 También en: ' + g.prev_units.join(', ') : null,
+      unitName      ? '🏠 Depto: ' + unitName   : null,
       g.total_bookings > 0 ? '🔢 ' + g.total_bookings + ' estadía' + (g.total_bookings > 1 ? 's' : '') : null,
       g.total_spent  ? '💰 ' + formatARS(g.total_spent) + ' total abonado' : null,
-      g.latest_note ? '─────────────────' : null,
+      // separador antes de nota (solo si hay nota)
+      g.latest_note || g.bad_experience || g.tags?.length ? '' : null,
       g.latest_note ? '📝 ' + g.latest_note : null,
-      g.tags?.length ? '─────────────────' : null,
       g.tags?.length ? '🏷️  ' + g.tags.join(', ') : null,
       g.bad_experience ? '⚠️  Mala experiencia registrada' : null,
-    ].filter(Boolean).join('\n');
+    ].filter(v => v !== null).join('\n');
 
     return `
       <div class="guest-row-item" data-guest-id="${g.id}"

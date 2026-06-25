@@ -4024,6 +4024,15 @@ input[type="color"].unit-color-input::-webkit-color-swatch { border: none; borde
 #cal-avail-toggle.active { background: var(--color-primary); color: white; border-color: var(--color-primary); }
 .cal-block-hint { font-size: .68rem; color: var(--color-text-3); padding: 3px 8px; border-radius: var(--r-sm); background: var(--color-surface-2); border: 1px solid var(--color-border); white-space: nowrap; }
 .cal-block-hint kbd { font-size: .65rem; background: var(--color-surface-3, var(--color-border)); padding: 1px 4px; border-radius: 3px; border: 1px solid var(--color-border); font-family: monospace; }
+/* ── Panel filtro disponibilidad ── */
+#avail-filter-panel { animation: slideDown .18s ease; }
+@keyframes slideDown { from { opacity:0; transform:translateY(-6px); } to { opacity:1; transform:none; } }
+#avail-filter-panel input[type="date"],
+#avail-filter-panel input[type="number"] { outline:none; }
+#avail-filter-panel input[type="date"]:focus,
+#avail-filter-panel input[type="number"]:focus { border-color:var(--color-primary) !important; box-shadow:0 0 0 2px var(--color-primary-l,rgba(99,102,241,.15)); }
+#avail-search-btn:hover { opacity:.88; }
+
 
 /* ── Dashboard: action cards ─────────────────────── */
 .dash-action-card { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 14px; border: 1px solid var(--color-border); border-radius: var(--r-lg); background: var(--color-surface-2); margin-bottom: 8px; transition: all var(--t-fast); }
