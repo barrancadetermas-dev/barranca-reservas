@@ -898,27 +898,29 @@ export class Calendar {
     const todayStr = new Date().toISOString().split('T')[0];
     const tomorrowStr = (() => { const d = new Date(); d.setDate(d.getDate()+1); return d.toISOString().split('T')[0]; })();
     filterPanel.style.cssText = `
-      display:none;align-items:center;gap:8px;flex-wrap:nowrap;overflow-x:auto;
+      display:none;flex-direction:column;
       background:var(--color-surface-2,#f8f9fa);border:1px solid var(--color-border,#e5e7eb);
-      border-radius:10px;padding:8px 14px;margin-top:8px;
+      border-radius:10px;overflow:hidden;margin-top:8px;
       font-size:.78rem;color:var(--color-text);
     `;
     filterPanel.innerHTML = `
-      <span style="font-weight:600;font-size:.72rem;color:var(--color-text-3);text-transform:uppercase;letter-spacing:.05em;white-space:nowrap">🔍 Disponibilidad</span>
-      <span style="font-size:.72rem;color:var(--color-text-3);white-space:nowrap">Check-in</span>
-      <input type="date" id="avail-checkin" value="${todayStr}"
-        style="border:1px solid var(--color-border,#e5e7eb);border-radius:6px;padding:3px 6px;font-size:.75rem;background:var(--color-surface);color:var(--color-text);min-width:0">
-      <span style="font-size:.72rem;color:var(--color-text-3);white-space:nowrap">Check-out</span>
-      <input type="date" id="avail-checkout" value="${tomorrowStr}"
-        style="border:1px solid var(--color-border,#e5e7eb);border-radius:6px;padding:3px 6px;font-size:.75rem;background:var(--color-surface);color:var(--color-text);min-width:0">
-      <span style="font-size:.72rem;color:var(--color-text-3);white-space:nowrap">Pers.</span>
-      <input type="number" id="avail-guests" min="1" max="20" value="2"
-        style="width:48px;border:1px solid var(--color-border,#e5e7eb);border-radius:6px;padding:3px 6px;font-size:.75rem;background:var(--color-surface);color:var(--color-text)">
-      <button id="avail-search-btn"
-        style="padding:4px 11px;border-radius:6px;border:none;background:var(--color-primary,#6366f1);color:#fff;font-size:.75rem;font-weight:600;cursor:pointer;white-space:nowrap;flex-shrink:0">
-        Ver disponibles
-      </button>
-      <div id="avail-results" style="flex:1;min-width:200px"></div>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:nowrap;overflow-x:auto;padding:8px 14px">
+        <span style="font-weight:600;font-size:.72rem;color:var(--color-text-3);text-transform:uppercase;letter-spacing:.05em;white-space:nowrap">🔍 Disponibilidad</span>
+        <span style="font-size:.72rem;color:var(--color-text-3);white-space:nowrap">Check-in</span>
+        <input type="date" id="avail-checkin" value="${todayStr}"
+          style="border:1px solid var(--color-border,#e5e7eb);border-radius:6px;padding:3px 6px;font-size:.75rem;background:var(--color-surface);color:var(--color-text);min-width:0">
+        <span style="font-size:.72rem;color:var(--color-text-3);white-space:nowrap">Check-out</span>
+        <input type="date" id="avail-checkout" value="${tomorrowStr}"
+          style="border:1px solid var(--color-border,#e5e7eb);border-radius:6px;padding:3px 6px;font-size:.75rem;background:var(--color-surface);color:var(--color-text);min-width:0">
+        <span style="font-size:.72rem;color:var(--color-text-3);white-space:nowrap">Pers.</span>
+        <input type="number" id="avail-guests" min="1" max="20" value="2"
+          style="width:48px;border:1px solid var(--color-border,#e5e7eb);border-radius:6px;padding:3px 6px;font-size:.75rem;background:var(--color-surface);color:var(--color-text)">
+        <button id="avail-search-btn"
+          style="padding:4px 11px;border-radius:6px;border:none;background:var(--color-primary,#6366f1);color:#fff;font-size:.75rem;font-weight:600;cursor:pointer;white-space:nowrap;flex-shrink:0">
+          Ver disponibles
+        </button>
+      </div>
+      <div id="avail-results" style="display:none;width:100%;padding:6px 14px 8px;border-top:1px solid var(--color-border,#e5e7eb);margin-top:0"></div>
     `;
 
     // Insertar panel entre toolbar y cal-wrapper
@@ -1021,33 +1023,36 @@ export class Calendar {
       const tooSmall  = this.ctx.units.filter(u => !occupiedIds.has(u.id) && (u.max_guests ?? 0) < guests);
 
       if (!available.length) {
+        results.style.display = 'block';
         results.innerHTML = `<span style="color:#ef4444;font-size:.76rem">😔 Sin unidades disponibles para ${guests} personas en esas fechas.</span>`;
         return;
       }
       const chip = u => {
         const color = u.color ?? 'var(--color-primary)';
-        return `<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:5px;
-          background:${color}22;border:1px solid ${color}55;color:var(--color-text);font-size:.75rem;font-weight:600">
-          <span style="width:8px;height:8px;border-radius:50%;background:${color};flex-shrink:0"></span>
-          #${u.sort_order} · ${u.name}
-          <span style="font-size:.68rem;color:var(--color-text-3);font-weight:400">hasta ${u.max_guests} pers.</span>
+        return `<span title="#${u.sort_order} · ${u.name} (hasta ${u.max_guests} pers.)"
+          style="display:inline-flex;align-items:center;gap:4px;padding:2px 7px;border-radius:4px;
+          background:${color}20;border:1px solid ${color}55;font-size:.74rem;font-weight:700;color:var(--color-text);cursor:default">
+          <span style="width:7px;height:7px;border-radius:50%;background:${color};flex-shrink:0"></span>#${u.sort_order}
         </span>`;
       };
       const fmt = s => s.split('-').reverse().join('/');
+      results.style.display = 'block';
       results.innerHTML = `
-        <div style="margin-top:4px">
-          <div style="font-size:.74rem;font-weight:700;color:#16a34a;margin-bottom:5px">
-            ✅ ${available.length} unidad${available.length > 1 ? 'es' : ''} disponible${available.length > 1 ? 's' : ''} · ${fmt(ci)} → ${fmt(co)} · ${guests} pers.
-          </div>
-          <div style="display:flex;flex-wrap:wrap;gap:5px">
-            ${available.map(chip).join('')}
-          </div>
-          ${tooSmall.length ? `<div style="margin-top:6px;font-size:.71rem;color:var(--color-text-3)">
-            ⚠️ Sin capacidad suficiente: ${tooSmall.map(u => `#${u.sort_order} ${u.name} (max. ${u.max_guests})`).join(', ')}
-          </div>` : ''}
-          ${occupied.length ? `<div style="margin-top:3px;font-size:.71rem;color:var(--color-text-3)">
-            🔴 Ocupadas: ${occupied.map(u => `#${u.sort_order} ${u.name}`).join(', ')}
-          </div>` : ''}
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+          <span style="font-size:.72rem;font-weight:600;color:#16a34a;white-space:nowrap">
+            ✅ ${available.length} disponible${available.length > 1 ? 's' : ''} · ${fmt(ci)} → ${fmt(co)} · ${guests} pers.
+          </span>
+          ${available.map(chip).join('')}
+          ${tooSmall.length ? tooSmall.map(u => `<span title="#${u.sort_order} · ${u.name} — capacidad insuficiente (max. ${u.max_guests})"
+            style="display:inline-flex;align-items:center;gap:4px;padding:2px 7px;border-radius:4px;
+            background:#f3f4f6;border:1px solid #d1d5db;font-size:.74rem;font-weight:700;color:#9ca3af;cursor:default;text-decoration:line-through">
+            <span style="width:7px;height:7px;border-radius:50%;background:#d1d5db;flex-shrink:0"></span>#${u.sort_order}
+          </span>`).join('') : ''}
+          ${occupied.length ? occupied.map(u => `<span title="#${u.sort_order} · ${u.name} — ocupada"
+            style="display:inline-flex;align-items:center;gap:4px;padding:2px 7px;border-radius:4px;
+            background:#fee2e255;border:1px solid #fca5a5;font-size:.74rem;font-weight:700;color:#ef4444;cursor:default">
+            <span style="width:7px;height:7px;border-radius:50%;background:#ef4444;flex-shrink:0"></span>#${u.sort_order}
+          </span>`).join('') : ''}
         </div>`;
     };
 
@@ -1063,7 +1068,7 @@ export class Calendar {
         _clearPercentBadges();
         _clearRangeHighlight();
         const results = document.getElementById('avail-results');
-        if (results) results.innerHTML = '';
+        if (results) { results.innerHTML = ''; results.style.display = 'none'; }
       }
     });
 
