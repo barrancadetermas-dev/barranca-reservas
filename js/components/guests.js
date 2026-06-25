@@ -105,8 +105,8 @@ export class GuestsCRM {
     area.innerHTML = `<div style="padding:16px;text-align:center;color:var(--color-text-3)">⟳ Cargando...</div>`;
     const { data: guests } = await this.db
       .from('guests')
-      .select(\`id, first_name, last_name, phone, email, dni, nationality, tags, bad_experience, created_at,
-        bookings!bookings_guest_id_fkey(id, total_paid, check_in, status)\`)
+      .select(`id, first_name, last_name, phone, email, dni, nationality, tags, bad_experience, created_at,
+        bookings!bookings_guest_id_fkey(id, total_paid, check_in, status)`)
       .eq('hotel_id', this.ctx.hotelId)
       .order('created_at', { ascending: false })
       .limit(limit);
