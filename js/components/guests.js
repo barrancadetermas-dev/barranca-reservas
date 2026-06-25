@@ -59,11 +59,12 @@ export class GuestsCRM {
         </div>
       </div>
 
-      <div style="display:flex;gap:5px;margin:6px 0 4px;align-items:center">
+      <div style="display:flex;gap:5px;margin:6px 0 4px;align-items:center;flex-wrap:wrap">
         <span style="font-size:.7rem;color:var(--color-text-3)">Mostrar:</span>
-        ${[25,50,100].map(n => `<button onclick="window._guestsCRM?._setLimit(${n})"
+        ${[10,25,50,100].map(n => `<button onclick="window._guestsCRM?._setLimit(${n})"
           id="bl-limit-${n}" style="font-size:.68rem;padding:2px 9px;border-radius:999px;cursor:pointer;
           border:1px solid var(--color-border);background:var(--color-surface-2);color:var(--color-text-2)">${n}</button>`).join('')}
+        <span style="font-size:.7rem;color:var(--color-text-3);margin-left:8px" id="bl-total-label"></span>
       </div>
       <div id="guests-results-area">
         <div style="padding:16px;text-align:center;color:var(--color-text-3)">⟳ Cargando...</div>
@@ -79,12 +80,12 @@ export class GuestsCRM {
       this._searchTimer = setTimeout(() => this._search(q), 280);
     });
 
-    this._guestLimit = parseInt(localStorage.getItem('mila_guest_limit') ?? '25');
+    this._guestLimit = parseInt(localStorage.getItem('mila_guest_limit') ?? '10');
     this._loadAll();
   }
 
   _updateLimitButtons(n) {
-    [25,50,100].forEach(x => {
+    [10,25,50,100].forEach(x => {
       const btn = document.getElementById(`bl-limit-${x}`);
       if (btn) {
         btn.style.background  = x===n ? 'var(--color-primary)'   : 'var(--color-surface-2)';
@@ -125,8 +126,10 @@ export class GuestsCRM {
       g.last_checkin   = bks.sort((a,b) => b.check_in.localeCompare(a.check_in))[0]?.check_in ?? null;
     });
     area.innerHTML = guests.map(g => this._renderGuestCard(g)).join('');
-    area.querySelectorAll('.guest-card').forEach(card =>
+    area.querySelectorAll('.guest-search-result').forEach(card =>
       card.addEventListener('click', () => this._openProfile(card.dataset.guestId)));
+    const lbl = document.getElementById('bl-total-label');
+    if (lbl) lbl.textContent = guests.length >= limit ? `Mostrando los últimos ${limit}` : `${guests.length} huéspedes`;
     this._updateLimitButtons(limit);
   }
 
@@ -170,48 +173,77 @@ export class GuestsCRM {
 
     area.innerHTML = guests.map(g => this._renderGuestCard(g)).join('');
 
-    area.querySelectorAll('.guest-search-result').forEach(card => {
+    area.querySelectorAll('.guest-row-item,.guest-search-result').forEach(card => {
       card.addEventListener('click', () => this._openProfile(card.dataset.guestId));
     });
   }
 
   _renderGuestCard(g) {
-    const initials = `${g.first_name?.[0] ?? ''}${g.last_name?.[0] ?? ''}`.toUpperCase();
-    const lastVisit = g.last_checkin
-      ? `Última visita: ${formatDate(g.last_checkin)}`
-      : 'Sin reservas registradas';
-    const badExpHtml = g.bad_experience
-      ? `<span class="bad-exp-badge">⚠️ Antecedente de mala experiencia</span>`
+    const initials  = `${g.first_name?.[0] ?? ''}${g.last_name?.[0] ?? ''}`.toUpperCase();
+    const lastVisit = g.last_checkin ? formatDate(g.last_checkin) : null;
+    const badColor  = g.bad_experience ? 'background:linear-gradient(135deg,#EF4444,#DC2626)' : '';
+    const tagsBadge = (g.tags?.length)
+      ? g.tags.slice(0,2).map(t => ({vip:'👑',frecuente:'🔄',empresa:'🏢',referido:'👥',sin_cargo:'🎁'}[t] ?? '🏷️')).join(' ')
       : '';
 
     return `
-      <div class="guest-search-result" data-guest-id="${g.id}">
-        <div class="guest-avatar-lg" style="${g.bad_experience ? 'background:linear-gradient(135deg,#EF4444,#DC2626)' : ''}">${initials}</div>
-        <div style="flex:1;min-width:0">
-          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-            <span style="font-weight:700;font-size:.92rem;color:var(--color-text)">${g.first_name} ${g.last_name}</span>
-            ${badExpHtml}
+      <div class="guest-row-item" data-guest-id="${g.id}"
+        style="display:flex;align-items:center;gap:10px;padding:7px 10px;
+          border-bottom:1px solid var(--color-border);cursor:pointer;
+          transition:background .12s;border-radius:6px"
+        onmouseenter="this.style.background='var(--color-surface-2)'"
+        onmouseleave="this.style.background=''">
+        <!-- Avatar mini -->
+        <div style="width:32px;height:32px;border-radius:50%;flex-shrink:0;
+          display:flex;align-items:center;justify-content:center;
+          font-size:.72rem;font-weight:700;color:#fff;
+          background:${g.bad_experience ? 'linear-gradient(135deg,#EF4444,#DC2626)' : 'var(--color-primary)'}">${initials}</div>
+        <!-- Nombre + datos -->
+        <div style="flex:1;min-width:0;overflow:hidden">
+          <div style="display:flex;align-items:center;gap:6px">
+            <span style="font-weight:600;font-size:.84rem;color:var(--color-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
+              ${g.first_name} ${g.last_name}</span>
+            ${g.bad_experience ? '<span style="font-size:.65rem;color:#EF4444">⚠️</span>' : ''}
+            ${tagsBadge ? `<span style="font-size:.7rem">${tagsBadge}</span>` : ''}
           </div>
-          <div class="guest-meta-row" style="margin-top:4px">
-            ${g.phone ? `<span class="guest-meta-item">📱 ${g.phone}</span>` : ''}
-            ${g.email ? `<span class="guest-meta-item">✉️ ${g.email}</span>` : ''}
-            ${g.dni   ? `<span class="guest-meta-item">🪪 ${g.dni}</span>` : ''}
-            ${g.nationality && g.nationality !== 'Argentina' ? `<span class="guest-meta-item">🌍 ${g.nationality}</span>` : ''}
+          <div style="font-size:.72rem;color:var(--color-text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
+            ${[g.phone, g.email].filter(Boolean).join(' · ') || (lastVisit ? `Última: ${lastVisit}` : 'Sin datos de contacto')}
           </div>
-          <div style="font-size:.75rem;color:var(--color-text-3);margin-top:4px">${lastVisit}</div>
         </div>
-        <div style="text-align:right;flex-shrink:0">
-          <div style="font-size:1.1rem;font-weight:800;color:var(--color-text)">${g.total_bookings ?? 0}</div>
-          <div style="font-size:.7rem;color:var(--color-text-3)">estadías</div>
-          <div style="font-size:.82rem;font-weight:700;color:var(--color-success);margin-top:4px">
-            ${formatARS(g.total_spent ?? 0)}
-          </div>
+        <!-- Estadías + total -->
+        <div style="text-align:right;flex-shrink:0;min-width:56px">
+          <div style="font-size:.8rem;font-weight:700;color:var(--color-text)">${g.total_bookings ?? 0} <span style="font-weight:400;font-size:.68rem;color:var(--color-text-3)">est.</span></div>
+          ${g.total_spent ? `<div style="font-size:.7rem;color:var(--color-success);font-weight:600">${formatARS(g.total_spent)}</div>` : ''}
         </div>
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"
-          style="color:var(--color-text-3);flex-shrink:0">
-          <polyline points="9 18 15 12 9 6"/>
-        </svg>
+        <!-- Botón borrar -->
+        <button class="btn-delete-guest" data-guest-id="${g.id}"
+          onclick="event.stopPropagation();window._guestsCRM?._confirmDelete('${g.id}','${g.first_name} ${g.last_name}')"
+          style="flex-shrink:0;width:26px;height:26px;border-radius:6px;border:none;
+            background:transparent;cursor:pointer;color:var(--color-text-3);font-size:.85rem;
+            display:flex;align-items:center;justify-content:center;opacity:.5;transition:opacity .15s"
+          onmouseenter="this.style.opacity='1';this.style.background='#FEE2E2';this.style.color='#DC2626'"
+          onmouseleave="this.style.opacity='.5';this.style.background='transparent';this.style.color='var(--color-text-3)'"
+          title="Eliminar huésped">🗑️</button>
+        <!-- Flecha -->
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"
+          style="color:var(--color-text-3);flex-shrink:0"><polyline points="9 18 15 12 9 6"/></svg>
       </div>`;
+  }
+
+  async _confirmDelete(guestId, name) {
+    if (!confirm(`¿Eliminar a ${name} del registro?\n\nSi tiene reservas asociadas no se podrá eliminar.`)) return;
+    try {
+      const { error } = await this.db.from('guests').delete().eq('id', guestId);
+      if (error) {
+        showToast('No se puede eliminar: ' + (error.message.includes('foreign') ? 'tiene reservas asociadas.' : error.message), 'error');
+        return;
+      }
+      showToast(`${name} eliminado ✓`, 'success');
+      const row = document.querySelector(`.guest-row-item[data-guest-id="${guestId}"]`);
+      if (row) row.remove();
+    } catch (err) {
+      showToast('Error al eliminar: ' + err.message, 'error');
+    }
   }
 
   // ══════════════════════════════════════════════════
