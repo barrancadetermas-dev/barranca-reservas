@@ -332,7 +332,7 @@ export class Statistics {
                 <td>
                   <div style="display:flex;align-items:center;gap:8px">
                     <span style="width:10px;height:10px;border-radius:50%;background:${color};flex-shrink:0"></span>
-                    <span style="font-weight:600;font-size:.82rem">${rank} ${s.unit.name}</span>
+                    <span style="font-weight:600;font-size:.82rem">${rank} ${getUnitLabel(s.unit).replace(/^#\d+ · /, "")}</span>
                   </div>
                 </td>
                 <td>
