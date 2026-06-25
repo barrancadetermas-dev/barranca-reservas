@@ -112,7 +112,8 @@ export class GuestsCRM {
       .from('guests')
       .select(`id, first_name, last_name, phone, email, dni, nationality, tags, bad_experience, created_at,
         bookings!bookings_guest_id_fkey(id, total_paid, check_in, check_out, status,
-          booking_units(units(name, color)))`)
+          booking_units(units(name, color))),
+        guest_notes!guest_notes_guest_id_fkey(body, category, created_at)`)
       .eq('hotel_id', this.ctx.hotelId)
       .order('created_at', { ascending: false })
       .limit(limit);
@@ -129,6 +130,9 @@ export class GuestsCRM {
       g.last_checkout  = sorted[0]?.check_out ?? null;
       g.last_unit      = sorted[0]?.booking_units?.[0]?.units ?? null;
       g.prev_units     = [...new Set(sorted.slice(1,4).map(b => b.booking_units?.[0]?.units?.name).filter(Boolean))];
+      // Nota más reciente
+      const allNotes   = (g.guest_notes ?? []).sort((a,b) => b.created_at.localeCompare(a.created_at));
+      g.latest_note    = allNotes[0]?.body ?? null;
     });
     area.innerHTML = guests.map(g => this._renderGuestCard(g)).join('');
     area.querySelectorAll('.guest-row-item').forEach(card =>
@@ -154,7 +158,8 @@ export class GuestsCRM {
       .from('guests')
       .select(`id, first_name, last_name, phone, email, dni, nationality, tags, bad_experience, created_at,
         bookings!bookings_guest_id_fkey(id, total_paid, check_in, check_out, status,
-          booking_units(units(name, color)))`)
+          booking_units(units(name, color))),
+        guest_notes!guest_notes_guest_id_fkey(body, category, created_at)`)
       .eq('hotel_id', this.ctx.hotelId)
       .or(`first_name.ilike.%${query}%,last_name.ilike.%${query}%,phone.ilike.%${query}%,email.ilike.%${query}%,dni.ilike.%${query}%`)
       .order('created_at', { ascending: false })
@@ -168,6 +173,8 @@ export class GuestsCRM {
       g.last_checkout  = sorted[0]?.check_out ?? null;
       g.last_unit      = sorted[0]?.booking_units?.[0]?.units ?? null;
       g.prev_units     = [...new Set(sorted.slice(1,4).map(b => b.booking_units?.[0]?.units?.name).filter(Boolean))];
+      const allNotes   = (g.guest_notes ?? []).sort((a,b) => b.created_at.localeCompare(a.created_at));
+      g.latest_note    = allNotes[0]?.body ?? null;
     });
 
     if (error) { showToast('Error al buscar huéspedes', 'error'); return; }
@@ -194,84 +201,116 @@ export class GuestsCRM {
       ? g.tags.slice(0,2).map(t => ({vip:'👑',frecuente:'🔄',empresa:'🏢',referido:'👥',sin_cargo:'🎁'}[t] ?? '🏷️')).join(' ')
       : '';
 
-    // Última visita
+    // ── Datos última visita ──
     const lastCI    = g.last_checkin  ? formatDate(g.last_checkin)  : null;
     const lastCO    = g.last_checkout ? formatDate(g.last_checkout) : null;
     const unitName  = g.last_unit?.name  ?? null;
-    const unitColor = g.last_unit?.color ?? null;
+    const unitColor = g.last_unit?.color ?? 'var(--color-primary)';
 
-    // Línea de contacto
-    const contactLine = [g.phone, g.email, g.dni ? `DNI ${g.dni}` : null].filter(Boolean).join(' · ');
-
-    // Chip de depto + fechas última visita
+    // Chip de depto
     const unitChip = unitName
-      ? `<span style="display:inline-block;padding:0 5px;border-radius:3px;font-size:.62rem;font-weight:700;color:#fff;background:${unitColor ?? 'var(--color-primary)'};">${unitName}</span>`
+      ? `<span style="display:inline-block;padding:1px 6px;border-radius:3px;font-size:.62rem;
+          font-weight:700;color:#fff;background:${unitColor};">${unitName}</span>`
       : '';
-    const visitLine = lastCI
-      ? `${unitChip} ${lastCI}${lastCO ? ' → ' + lastCO : ''}`
+
+    // ── Contacto ──
+    const contactLine = [
+      g.phone ? '📱 ' + g.phone : null,
+      g.email ? g.email         : null,
+      g.dni   ? 'DNI ' + g.dni  : null,
+    ].filter(Boolean).join('  ·  ');
+
+    // ── Nota más reciente (truncada a 80 chars) ──
+    const noteText = g.latest_note
+      ? (g.latest_note.length > 80 ? g.latest_note.slice(0, 80) + '…' : g.latest_note)
       : null;
 
-    // Tooltip nativo al hacer hover (title con saltos de línea)
+    // ── Tooltip: nombre + todo ──
+    const fullName = `${g.first_name} ${g.last_name}`;
     const tipParts = [
+      '👤 ' + fullName,
+      '─────────────────',
       g.phone       ? '📱 ' + g.phone       : null,
-      g.email       ? '✉️ ' + g.email       : null,
+      g.email       ? '✉️  ' + g.email      : null,
       g.dni         ? '🪪 DNI ' + g.dni     : null,
       g.nationality && g.nationality !== 'Argentina' ? '🌍 ' + g.nationality : null,
-      lastCI        ? '📅 Última entrada: ' + lastCI + (lastCO ? ' → ' + lastCO : '') : null,
+      lastCI ? '─────────────────' : null,
+      lastCI ? '📅 Última entrada: ' + lastCI + (lastCO ? ' → ' + lastCO : '') : null,
       unitName      ? '🏠 Depto: ' + unitName : null,
-      g.prev_units?.length ? '📋 También estuvo en: ' + g.prev_units.join(', ') : null,
+      g.prev_units?.length ? '📋 También en: ' + g.prev_units.join(', ') : null,
       g.total_bookings > 0 ? '🔢 ' + g.total_bookings + ' estadía' + (g.total_bookings > 1 ? 's' : '') : null,
       g.total_spent  ? '💰 ' + formatARS(g.total_spent) + ' total abonado' : null,
-      g.tags?.length ? '🏷️ ' + g.tags.join(', ') : null,
-      g.bad_experience ? '⚠️ Mala experiencia registrada' : null,
+      g.latest_note ? '─────────────────' : null,
+      g.latest_note ? '📝 ' + g.latest_note : null,
+      g.tags?.length ? '─────────────────' : null,
+      g.tags?.length ? '🏷️  ' + g.tags.join(', ') : null,
+      g.bad_experience ? '⚠️  Mala experiencia registrada' : null,
     ].filter(Boolean).join('\n');
 
     return `
       <div class="guest-row-item" data-guest-id="${g.id}"
         title="${tipParts}"
-        style="display:flex;align-items:center;gap:10px;padding:8px 10px;
+        style="display:flex;align-items:flex-start;gap:10px;padding:9px 10px;
           border-bottom:1px solid var(--color-border);cursor:pointer;
           transition:background .12s;border-radius:6px"
         onmouseenter="this.style.background='var(--color-surface-2)'"
         onmouseleave="this.style.background=''">
 
         <!-- Avatar -->
-        <div style="width:34px;height:34px;border-radius:50%;flex-shrink:0;
+        <div style="width:34px;height:34px;border-radius:50%;flex-shrink:0;margin-top:1px;
           display:flex;align-items:center;justify-content:center;
           font-size:.73rem;font-weight:700;color:#fff;
           background:${g.bad_experience ? 'linear-gradient(135deg,#EF4444,#DC2626)' : 'var(--color-primary)'}">` + initials + `</div>
 
-        <!-- Info principal -->
+        <!-- Bloque info -->
         <div style="flex:1;min-width:0;overflow:hidden">
 
-          <!-- Fila 1: nombre + badges -->
-          <div style="display:flex;align-items:center;gap:5px;margin-bottom:1px">
-            <span style="font-weight:600;font-size:.84rem;color:var(--color-text);
-              white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:200px">
-              ${g.first_name} ${g.last_name}</span>
-            ${g.bad_experience ? '<span style="font-size:.6rem;color:#EF4444" title="Mala experiencia">⚠️</span>' : ''}
-            ${tagsBadge ? `<span style="font-size:.68rem">${tagsBadge}</span>` : ''}
+          <!-- SECCIÓN 1: datos del huésped -->
+          <div style="margin-bottom:5px">
+            <!-- Nombre + badges -->
+            <div style="display:flex;align-items:center;gap:5px;margin-bottom:2px">
+              <span style="font-weight:600;font-size:.85rem;color:var(--color-text);
+                white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:210px">
+                ${g.first_name} ${g.last_name}</span>
+              ${g.bad_experience ? '<span style="font-size:.6rem;color:#EF4444" title="Mala experiencia">⚠️</span>' : ''}
+              ${tagsBadge ? `<span style="font-size:.68rem">${tagsBadge}</span>` : ''}
+            </div>
+            <!-- Contacto -->
+            ${contactLine ? `<div style="font-size:.71rem;color:var(--color-text-3);
+              white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
+              ${contactLine}</div>` : ''}
           </div>
 
-          <!-- Fila 2: contacto -->
-          ${contactLine ? `<div style="font-size:.71rem;color:var(--color-text-3);
-            white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:2px">
-            ${contactLine}</div>` : ''}
+          <!-- SEPARADOR + SECCIÓN 2: última visita -->
+          ${lastCI ? `
+          <div style="border-top:1px dashed var(--color-border);margin:5px 0 4px"></div>
+          <div style="font-size:.68rem;color:var(--color-text-3);display:flex;align-items:center;gap:5px;flex-wrap:wrap">
+            <span style="font-size:.6rem;font-weight:600;text-transform:uppercase;
+              letter-spacing:.05em;color:var(--color-text-3);opacity:.6">Última visita</span>
+            ${unitChip}
+            <span>${lastCI}${lastCO ? ' → ' + lastCO : ''}</span>
+            ${g.prev_units?.length ? `<span style="opacity:.5">· también: ${g.prev_units.join(', ')}</span>` : ''}
+          </div>` : ''}
 
-          <!-- Fila 3: última visita + depto -->
-          ${visitLine ? `<div style="font-size:.68rem;color:var(--color-text-3);
-            display:flex;align-items:center;gap:4px;margin-top:1px">
-            <span style="opacity:.6">↩</span> <span>${visitLine}</span></div>` : ''}
+          <!-- SECCIÓN 3: nota más reciente -->
+          ${noteText ? `
+          <div style="margin-top:4px;font-size:.69rem;color:var(--color-text-2);
+            font-style:italic;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+            padding:3px 6px;background:var(--color-surface-2);border-radius:4px;
+            border-left:2px solid var(--color-primary)">
+            📝 ${noteText}
+          </div>` : ''}
 
         </div>
 
-        <!-- Estadías + total -->
-        <div style="text-align:right;flex-shrink:0;min-width:50px">
+        <!-- Estadías + total (columna derecha) -->
+        <div style="text-align:right;flex-shrink:0;min-width:50px;padding-top:1px">
           <div style="font-size:.8rem;font-weight:700;color:var(--color-text)">
             ${g.total_bookings ?? 0}
-            <span style="font-weight:400;font-size:.66rem;color:var(--color-text-3)">est.</span>
+            <span style="font-weight:400;font-size:.65rem;color:var(--color-text-3)">est.</span>
           </div>
-          ${g.total_spent ? `<div style="font-size:.69rem;color:var(--color-success);font-weight:600;white-space:nowrap">${formatARS(g.total_spent)}</div>` : ''}
+          ${g.total_spent ? `<div style="font-size:.68rem;color:var(--color-success);
+            font-weight:600;white-space:nowrap">${formatARS(g.total_spent)}</div>` : ''}
         </div>
 
         <!-- Botón borrar -->
@@ -279,15 +318,18 @@ export class GuestsCRM {
           onclick="event.stopPropagation();window._guestsCRM?._confirmDelete('${g.id}','${g.first_name} ${g.last_name}')"
           style="flex-shrink:0;width:26px;height:26px;border-radius:6px;border:none;
             background:transparent;cursor:pointer;color:var(--color-text-3);font-size:.82rem;
-            display:flex;align-items:center;justify-content:center;opacity:.35;transition:all .15s"
+            display:flex;align-items:center;justify-content:center;opacity:.3;transition:all .15s;
+            margin-top:1px"
           onmouseenter="this.style.opacity='1';this.style.background='#FEE2E2';this.style.color='#DC2626'"
-          onmouseleave="this.style.opacity='.35';this.style.background='transparent';this.style.color='var(--color-text-3)'"
+          onmouseleave="this.style.opacity='.3';this.style.background='transparent';this.style.color='var(--color-text-3)'"
           title="Eliminar huésped">🗑️</button>
 
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"
-          style="color:var(--color-text-3);flex-shrink:0"><polyline points="9 18 15 12 9 6"/></svg>
+          style="color:var(--color-text-3);flex-shrink:0;margin-top:5px">
+          <polyline points="9 18 15 12 9 6"/></svg>
       </div>`;
   }
+
 
   async _confirmDelete(guestId, name) {
     if (!confirm(`¿Eliminar a ${name} del registro?\n\nSi tiene reservas asociadas no se podrá eliminar.`)) return;
@@ -598,19 +640,27 @@ export class GuestsCRM {
     });
     // Guardar tags
     document.getElementById('btn-save-tags')?.addEventListener('click', async () => {
-      const tags = [...document.querySelectorAll('.tag-toggle.active')].map(t => t.dataset.tag);
-      const btn  = document.getElementById('btn-save-tags');
+      const tags   = [...document.querySelectorAll('.tag-toggle.active')].map(t => t.dataset.tag);
+      const btn    = document.getElementById('btn-save-tags');
+      const guestId = guest?.id;
+      console.log('[Tags] Guardando tags:', tags, '→ guest.id:', guestId);
+      if (!guestId) { showToast('Error: no se encontró el ID del huésped', 'error'); return; }
       if (btn) { btn.textContent = 'Guardando...'; btn.disabled = true; }
-      const { error } = await this.db.from('guests')
+      const { data, error, count, status, statusText } = await this.db.from('guests')
         .update({ tags, updated_at: new Date().toISOString() })
-        .eq('id', guest.id);
+        .eq('id', guestId)
+        .select('id, tags');
+      console.log('[Tags] Respuesta Supabase → status:', status, statusText, '| data:', data, '| error:', error);
       if (btn) { btn.textContent = 'Guardar etiquetas'; btn.disabled = false; }
       if (error) {
         console.error('[Tags] Error Supabase:', error);
-        showToast('Error al guardar etiquetas: ' + error.message, 'error');
+        showToast('Error: ' + error.message, 'error');
         return;
       }
-      // Refrescar badges en el perfil visualmente
+      if (!data?.length) {
+        showToast('Sin permiso para modificar este huésped (RLS)', 'error');
+        return;
+      }
       const badgesEl = document.querySelector('.guest-tags-row');
       if (badgesEl) badgesEl.innerHTML = window._guestsCRM._buildTagBadges(tags);
       showToast('Etiquetas guardadas ✓', 'success');
