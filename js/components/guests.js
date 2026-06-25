@@ -97,21 +97,12 @@ export class GuestsCRM {
       <div class="skeleton-box" style="height:72px"></div>`;
 
     const { data: guests, error } = await this.db
-      .from('guests')
-      .select(`id, first_name, last_name, phone, email, dni, tags, bad_experience, created_at,
-        bookings!bookings_guest_id_fkey(id, total_paid, check_in, status)`)
+      .from('guest_profiles')
+      .select('*')
       .eq('hotel_id', this.ctx.hotelId)
-      .or(`first_name.ilike.%${query}%,last_name.ilike.%${query}%,phone.ilike.%${query}%,email.ilike.%${query}%,dni.ilike.%${query}%`)
-      .order('created_at', { ascending: false })
+      .or(`full_name.ilike.%${query}%,phone.ilike.%${query}%,email.ilike.%${query}%,dni.ilike.%${query}%`)
+      .order('last_checkin', { ascending: false, nullsFirst: false })
       .limit(12);
-
-    // Calcular totales desde reservas
-    if (guests) guests.forEach(g => {
-      const bks = (g.bookings ?? []).filter(b => b.status !== 'blocked' && b.status !== 'cancelled');
-      g.total_bookings = bks.length;
-      g.total_spent    = bks.reduce((s, b) => s + (b.total_paid ?? 0), 0);
-      g.last_checkin   = bks.sort((a, b) => b.check_in.localeCompare(a.check_in))[0]?.check_in ?? null;
-    });
 
     if (error) { showToast('Error al buscar huéspedes', 'error'); return; }
 
@@ -149,9 +140,10 @@ export class GuestsCRM {
             ${badExpHtml}
           </div>
           <div class="guest-meta-row" style="margin-top:4px">
-            ${g.phone ? `<span class="guest-meta-item">📱 ${g.phone}</span>` : ''}
-            ${g.email ? `<span class="guest-meta-item">✉️ ${g.email}</span>` : ''}
-            ${g.dni   ? `<span class="guest-meta-item">🪪 ${g.dni}</span>`   : ''}
+            ${g.phone       ? `<span class="guest-meta-item">📱 ${g.phone}</span>` : ''}
+            ${g.email       ? `<span class="guest-meta-item">✉️ ${g.email}</span>` : ''}
+            ${g.dni         ? `<span class="guest-meta-item">🪪 ${g.dni}</span>` : ''}
+            ${g.nationality ? `<span class="guest-meta-item">🌍 ${g.nationality}</span>` : ''}
           </div>
           <div style="font-size:.75rem;color:var(--color-text-3);margin-top:4px">${lastVisit}</div>
         </div>
@@ -186,24 +178,28 @@ export class GuestsCRM {
     overlay.classList.remove('hidden');
 
     try {
-      // Queries separadas — el nested join falla con RLS cuando hotel_id no está en el contexto
-      const [{ data: guest, error: gErr }, { data: guestBookings }] = await Promise.all([
-        this.db.from('guests').select('*').eq('id', guestId).single(),
-        this.db.from('bookings')
-          .select(`id, check_in, check_out, nights, status,
+      const { data: guest } = await this.db
+        .from('guests')
+        .select(`
+          *,
+          bookings(
+            id, check_in, check_out, nights, status,
             total_amount, total_paid, balance, notes, price_per_night,
             booking_units(units(name, sort_order, color, max_guests)),
-            payments(amount, method, payment_date)`)
-          .eq('guest_id', guestId)
-          .eq('hotel_id', this.ctx.hotelId)
-          .order('check_in', { ascending: false }),
-      ]);
+            payments(amount, method, payment_date)
+          )
+        `)
+        .eq('id', guestId)
+        .single();
 
-      if (gErr || !guest) { showToast('Huésped no encontrado', 'error'); return; }
-      guest.bookings = guestBookings ?? [];
+      if (!guest) { showToast('Huésped no encontrado', 'error'); return; }
       this._currentGuest = guest;
       body.innerHTML = this._buildProfileHTML(guest);
+
+      // Cargar notas internas
       await this._loadGuestNotes(guest.id, body);
+
+      // Bind action buttons
       this._bindProfileActions(guest);
 
     } catch (err) {
@@ -237,9 +233,10 @@ export class GuestsCRM {
               ${g.first_name} ${g.last_name}
             </div>
             <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:6px">
-              ${g.phone ? `<span style="font-size:.8rem;color:#94A3B8">📱 ${g.phone}</span>` : ''}
-              ${g.email ? `<span style="font-size:.8rem;color:#94A3B8">✉️ ${g.email}</span>` : ''}
-              ${g.dni   ? `<span style="font-size:.8rem;color:#94A3B8">🪪 ${g.dni}</span>`   : ''}
+              ${g.phone       ? `<span style="font-size:.8rem;color:#94A3B8">📱 ${g.phone}</span>` : ''}
+              ${g.email       ? `<span style="font-size:.8rem;color:#94A3B8">✉️ ${g.email}</span>` : ''}
+              ${g.dni         ? `<span style="font-size:.8rem;color:#94A3B8">🪪 ${g.dni}</span>` : ''}
+              ${g.nationality ? `<span style="font-size:.8rem;color:#94A3B8">🌍 ${g.nationality}</span>` : ''}
             </div>
           </div>
           ${g.bad_experience ? `<div class="bad-exp-badge" style="margin-left:auto;font-size:.8rem;padding:4px 12px">
@@ -258,6 +255,36 @@ export class GuestsCRM {
               <span class="gps-lbl">${lbl}</span>
             </div>`).join('')}
         </div>
+      </div>
+
+      <!-- ── DATOS DE CONTACTO ── -->
+      <div style="margin-bottom:14px;padding:14px 16px;background:var(--color-surface-2);border-radius:var(--r-xl)">
+        <div style="font-size:.65rem;font-weight:700;color:var(--color-text-3);letter-spacing:.06em;margin-bottom:10px">DATOS DE CONTACTO</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <div>
+            <label style="font-size:.7rem;color:var(--color-text-3);display:block;margin-bottom:3px">Teléfono</label>
+            <input id="gp-phone" class="form-input" style="font-size:.82rem" value="${g.phone ?? ''}" placeholder="+54...">
+          </div>
+          <div>
+            <label style="font-size:.7rem;color:var(--color-text-3);display:block;margin-bottom:3px">DNI / Pasaporte</label>
+            <input id="gp-dni" class="form-input" style="font-size:.82rem" value="${g.dni ?? ''}" placeholder="12345678">
+          </div>
+          <div>
+            <label style="font-size:.7rem;color:var(--color-text-3);display:block;margin-bottom:3px">Email</label>
+            <input id="gp-email" class="form-input" style="font-size:.82rem" value="${g.email ?? ''}" placeholder="email@...">
+          </div>
+          <div>
+            <label style="font-size:.7rem;color:var(--color-text-3);display:block;margin-bottom:3px">🌍 Nacionalidad</label>
+            <select id="gp-nationality" class="form-input" style="font-size:.82rem">
+              ${['Argentina','Uruguay','Brasil','Paraguay','Chile','Bolivia','Perú','Colombia','Venezuela','Ecuador','España','México','EE.UU.','Otro'].map(n =>
+                `<option value="${n}" ${(g.nationality ?? 'Argentina') === n ? 'selected' : ''}>${n}</option>`
+              ).join('')}
+            </select>
+          </div>
+        </div>
+        <button id="btn-save-contact" class="btn btn-outline btn-sm" style="margin-top:10px;font-size:.76rem">
+          💾 Guardar datos
+        </button>
       </div>
 
       <!-- ── ETIQUETAS DEL HUÉSPED ── -->
@@ -440,50 +467,17 @@ export class GuestsCRM {
     document.querySelectorAll('.tag-toggle').forEach(toggle => {
       toggle.addEventListener('click', () => {
         toggle.classList.toggle('active');
-        const inp = toggle.querySelector('input');
-        if (inp) inp.checked = toggle.classList.contains('active');
+        toggle.querySelector('input').checked = toggle.classList.contains('active');
       });
     });
-
-    // Save tags — Supabase devuelve {error}, no tira excepción
+    // Save tags
     document.getElementById('btn-save-tags')?.addEventListener('click', async () => {
       const tags = [...document.querySelectorAll('.tag-toggle.active')].map(t => t.dataset.tag);
-      const btn  = document.getElementById('btn-save-tags');
-      if (btn) btn.textContent = 'Guardando...';
-      const { error } = await this.db.from('guests').update({ tags }).eq('id', guest.id);
-      if (btn) btn.textContent = 'Guardar etiquetas';
-      if (error) { showToast('Error al guardar', 'error'); return; }
-      showToast('Etiquetas guardadas ✓', 'success');
+      try {
+        await this.db.from('guests').update({ tags }).eq('id', guest.id);
+        showToast('Etiquetas guardadas ✓', 'success');
+      } catch { showToast('Error al guardar etiquetas', 'error'); }
     });
-
-    // Mala experiencia
-    document.getElementById('btn-mark-bad-exp')?.addEventListener('click', () =>
-      document.getElementById('bad-exp-new-form')?.classList.remove('hidden'));
-    document.getElementById('btn-cancel-bad-exp-new')?.addEventListener('click', () =>
-      document.getElementById('bad-exp-new-form')?.classList.add('hidden'));
-    document.getElementById('btn-confirm-bad-exp')?.addEventListener('click', async () => {
-      const note = document.getElementById('bad-exp-note-input')?.value.trim();
-      if (!note) { showToast('Escribí el motivo', 'warning'); return; }
-      await this._markBadExperience(guest.id, note);
-    });
-    document.getElementById('btn-edit-bad-exp')?.addEventListener('click', () =>
-      document.getElementById('bad-exp-editor')?.classList.remove('hidden'));
-    document.getElementById('btn-cancel-bad-exp-edit')?.addEventListener('click', () =>
-      document.getElementById('bad-exp-editor')?.classList.add('hidden'));
-    document.getElementById('btn-save-bad-exp')?.addEventListener('click', async () => {
-      const note = document.getElementById('bad-exp-note-input')?.value.trim();
-      await this._markBadExperience(guest.id, note);
-    });
-    document.getElementById('btn-clear-bad-exp')?.addEventListener('click', async () => {
-      if (!confirm('¿Eliminar el antecedente de mala experiencia?')) return;
-      await this._clearBadExperience(guest.id);
-    });
-
-    // Botón Nueva Reserva del header del modal
-    document.getElementById('guest-new-booking-btn')?.addEventListener('click', () =>
-      this.openBookingForGuest(guest.id, guest));
-
-    window._guestsCRM = this;
   }
 
   _bindProfileActions_orig(guest) {
@@ -519,6 +513,25 @@ export class GuestsCRM {
     });
 
     // Nueva reserva para este huésped
+    document.getElementById('guest-new-booking-btn')?.addEventListener('click', () =>
+      this.openBookingForGuest(guest.id, guest));
+
+    // Guardar datos de contacto + nacionalidad
+    document.getElementById('btn-save-contact')?.addEventListener('click', async () => {
+      const btn = document.getElementById('btn-save-contact');
+      if (btn) { btn.disabled = true; btn.textContent = 'Guardando...'; }
+      const updates = {
+        phone:       document.getElementById('gp-phone')?.value.trim()      || null,
+        dni:         document.getElementById('gp-dni')?.value.trim()         || null,
+        email:       document.getElementById('gp-email')?.value.trim()       || null,
+        nationality: document.getElementById('gp-nationality')?.value || 'Argentina',
+      };
+      const { error } = await this.db.from('guests').update(updates).eq('id', guest.id);
+      if (btn) { btn.disabled = false; btn.textContent = '💾 Guardar datos'; }
+      if (error) { showToast('Error: ' + error.message, 'error'); return; }
+      showToast('Datos guardados ✓', 'success');
+    });
+
     window._guestsCRM = this;
   }
 
@@ -689,9 +702,9 @@ export class GuestsCRM {
     });
   }
 
-  openBookingForGuest(guestId, guestData = null) {
+  openBookingForGuest(guestId) {
     document.getElementById('overlay-guest-profile')?.classList.add('hidden');
-    this.bookingForm.open({ prefillGuestId: guestId, prefillGuest: guestData });
+    this.bookingForm.open({ prefillGuestId: guestId });
   }
 
   // ══════════════════════════════════════════════════

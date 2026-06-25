@@ -325,11 +325,10 @@ export class BookingList {
     ];
     return `
       <div class="bl-sort-wrap">
-        <span class="bl-sort-label">Orden:</span>
-        ${OPTS.map(o => `
-          <button type="button" class="bl-sort-tab ${this._sortBy === o.value ? 'bl-sort-tab--active' : ''}"
-            data-sortby="${o.value}">${o.label}</button>
-        `).join('')}
+        <span class="bl-sort-label">Ordenar:</span>
+        <select class="bl-sort-select filter-select" id="bl-sort-select" style="font-size:.78rem;padding:4px 8px">
+          ${OPTS.map(o => `<option value="${o.value}" ${this._sortBy === o.value ? 'selected' : ''}>${o.label}</option>`).join('')}
+        </select>
       </div>`;
   }
 
@@ -470,12 +469,10 @@ export class BookingList {
     container.innerHTML = html;
 
     // Bind sort tabs
-    container.querySelectorAll('.bl-sort-tab').forEach(btn => {
-      btn.addEventListener('click', () => {
-        this._sortBy = btn.dataset.sortby;
-        this._page   = 1;
-        this._render(new Date().toISOString().split('T')[0]);
-      });
+    container.querySelector('#bl-sort-select')?.addEventListener('change', (e) => {
+      this._sortBy = e.target.value;
+      this._page = 1;
+    });
     });
 
     // Bind botones de exportación
@@ -518,34 +515,39 @@ export class BookingList {
            style="cursor:pointer">
         <div class="booking-row-accent" style="background:${barColor}"></div>
         <div class="booking-row-body">
-          <div class="booking-row-main">
+          <!-- Fila principal -->
+          <div class="bl-row-main">
+            <!-- Col 1: Avatar + Nombre + Unidad -->
             <div class="bl-col-guest">
               ${BookingList._avatar(g)}
-              <div class="booking-guest-info">
-                <span class="booking-guest-name">
-                  ${guest}${flagHTML}
-                </span>
-                <div class="booking-meta-row">
-                  ${unitChips}${getSourceBadgeHTML(b.source)}
-                </div>
+              <div class="bl-guest-info">
+                <div class="bl-guest-name">${guest}${flagHTML ? ' ' + flagHTML : ''}</div>
+                <div class="bl-guest-meta">${unitChips}${getSourceBadgeHTML(b.source)}</div>
               </div>
             </div>
+            <!-- Col 2: Fechas -->
             <div class="bl-col-dates">
-              <span class="booking-date-range">${formatDate(b.check_in)} → ${formatDate(b.check_out)}</span>
-              <span class="booking-nights">${nights}n</span>
+              <span class="bl-dates">${formatDate(b.check_in)} → ${formatDate(b.check_out)}</span>
+              <span class="bl-nights">${nights}n</span>
             </div>
+            <!-- Col 3: Montos -->
             <div class="bl-col-amount">
-              <span class="booking-total">${formatARS(b.total_amount)}</span>
-              ${b.balance > 0
-                ? `<span class="booking-balance-due">↑ ${formatARS(b.balance)}</span>`
-                : `<span class="booking-paid-badge">✓</span>`
-              }
+              <div class="bl-amount-total">${formatARS(b.total_amount)}</div>
+              ${b.total_paid > 0 && b.balance > 0 ? `
+                <div class="bl-amount-breakdown">
+                  <span class="bl-paid">−${formatARS(b.total_paid)}</span>
+                  <span class="bl-sep">=</span>
+                  <span class="bl-balance">${formatARS(b.balance)}</span>
+                </div>` : b.balance <= 0 ? `<div class="bl-amount-paid">✓ Pagado</div>` : ''}
             </div>
+            <!-- Col 4: Estado + Cobrar -->
             <div class="bl-col-status">
               <span class="status-badge ${statusCls}">${statusLbl}</span>
+              ${b.balance > 0 ? `<button data-action="pay-full" class="bl-action-btn bl-payfull-btn"
+                onclick="event.stopPropagation()" title="Registrar pago">✅ Cobrar</button>` : ''}
             </div>
+            <!-- Col 5: Acciones -->
             <div class="booking-actions-cell" onclick="event.stopPropagation()">
-              ${b.balance > 0 ? `<button data-action="pay-full" class="bl-action-btn bl-payfull-btn" title="Registrar pago total">✅ Cobrar</button>` : ''}
               <button data-action="edit"
                 class="bl-action-btn"
                 title="Editar reserva">
@@ -584,6 +586,7 @@ export class BookingList {
           ${isToday ? `<div class="booking-today-banner" style="background:${barColor}18;border-color:${barColor}">
             ${b.check_in === today ? '🟢 CHECK-IN HOY' : '🔵 CHECK-OUT HOY'}
           </div>` : ''}
+          ${b.notes ? `<div class="bl-notes-row"><span class="bl-notes-icon">💬</span>${b.notes.length > 100 ? b.notes.slice(0,100)+'…' : b.notes}</div>` : ''}
         </div>
       </div>`;
   }

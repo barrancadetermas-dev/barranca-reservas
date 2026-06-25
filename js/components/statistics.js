@@ -332,7 +332,7 @@ export class Statistics {
                 <td>
                   <div style="display:flex;align-items:center;gap:8px">
                     <span style="width:10px;height:10px;border-radius:50%;background:${color};flex-shrink:0"></span>
-                    <span style="font-weight:600;font-size:.82rem">${rank} ${getUnitLabel(s.unit).replace(/^#\d+ · /, "")}</span>
+                    <span style="font-weight:600;font-size:.82rem">${rank} ${s.unit.name}</span>
                   </div>
                 </td>
                 <td>
@@ -784,7 +784,7 @@ export class Statistics {
         ${this._sdcDonutChannels(cur, fmt)}
         ${this._sdcAreaADR(adrData, fmt)}
         ${this._sdcBarCountBookings(monthlyData)}
-        ${this._sdcHorizUnits(month, year, fmt)}
+        ${await this._sdcHorizUnits(month, year, fmt)}
         ${this._sdcRevPAR(revParData, fmtK, totalUnits)}
         ${this._sdcKPICard('Cancelaciones', cancelCount + ' este año', totalBookings, totalRev, fmt)}
         ${this._sdcAreaRevPARTrend(revParData, fmtK)}
@@ -1007,17 +1007,38 @@ export class Statistics {
   }
 
   // ── Card 6: Horizontal — top departamentos ───────
-  _sdcHorizUnits(month, year, fmt) {
-    // Usar datos ya en memoria si están disponibles
+  async _sdcHorizUnits(month, year, fmt) {
+    // Datos del mes actual directamente desde DB (evita bug de índice)
     const unitStats = (this.ctx.units ?? []).map(u => ({
-      name: u.name, color: getUnitColor(u), rev: 0, nights: 0,
+      id: u.id, name: u.name, color: getUnitColor(u), rev: 0, nights: 0,
     }));
-    // Si hay datos en caché de loadUnits, usarlos
+
+    // Primero intentar desde caché pero matchear por unit.id (no por índice)
     const cached = this._lastUnitStats;
     if (cached?.length) {
-      cached.forEach((s, i) => {
-        if (unitStats[i]) { unitStats[i].rev = s.revenue; unitStats[i].nights = s.nightsOcc; }
+      cached.forEach(s => {
+        const entry = unitStats.find(u => u.id === s.unit?.id);
+        if (entry) { entry.rev = s.revenue ?? 0; entry.nights = s.nightsOcc ?? 0; }
       });
+    } else {
+      // Sin caché: cargar datos del mes actual
+      try {
+        const month = parseInt(document.getElementById('stats-month')?.value ?? new Date().getMonth());
+        const year  = parseInt(document.getElementById('stats-year')?.value  ?? new Date().getFullYear());
+        const first = `${year}-${String(month+1).padStart(2,'0')}-01`;
+        const last  = new Date(Date.UTC(year, month+1, 0)).toISOString().slice(0,10);
+        const { data: bks } = await this.db.from('bookings')
+          .select('total_amount, nights, booking_units(unit_id)')
+          .eq('hotel_id', this.ctx.hotelId)
+          .not('status','in','(cancelled,blocked)')
+          .gte('check_in', first).lte('check_in', last);
+        (bks ?? []).forEach(b => {
+          (b.booking_units ?? []).forEach(bu => {
+            const entry = unitStats.find(u => u.id === bu.unit_id);
+            if (entry) { entry.rev += b.total_amount ?? 0; entry.nights += b.nights ?? 0; }
+          });
+        });
+      } catch { /* silencioso */ }
     }
     const sorted = [...unitStats].sort((a,b) => b.rev - a.rev);
     const maxRev = sorted[0]?.rev ?? 1;
@@ -1037,7 +1058,7 @@ export class Statistics {
     const bars = sorted.map(u => {
       const pct = Math.max(2, Math.round((u.rev / maxRev) * 100));
       return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
-        <div style="width:80px;font-size:.7rem;color:var(--color-text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${u.name}</div>
+        <div style="width:80px;font-size:.7rem;color:var(--color-text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${u.name.replace("Planta Baja","P. Baja").replace("Planta Alta","P. Alta")}</div>
         <div style="flex:1;height:8px;background:var(--color-surface-2);border-radius:4px;overflow:hidden">
           <div style="height:100%;width:${pct}%;background:${u.color};border-radius:4px;transition:width .6s"></div>
         </div>
