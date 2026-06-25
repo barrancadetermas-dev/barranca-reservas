@@ -5044,3 +5044,66 @@ select.field-error {
   .kpi-grid { grid-template-columns:1fr 1fr !important; gap:8px !important; }
   .main-content { padding:var(--sp-8) !important; }
 }
+
+
+/* ════════════════════════════════════════════════
+   VIEWPORT FIX — layout al 100% zoom en desktop
+   ════════════════════════════════════════════════ */
+
+/* Evitar overflow horizontal en el layout principal */
+html, body {
+  overflow-x: hidden;
+  max-width: 100vw;
+}
+
+.app-shell {
+  min-width: 0;
+  max-width: 100vw;
+  overflow: hidden;
+}
+
+.main-content {
+  min-width: 0;
+  overflow-x: hidden;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+/* Header: comprimir cuando no hay espacio */
+.main-header {
+  min-width: 0;
+  overflow: hidden;
+}
+.main-header-actions {
+  flex-shrink: 0;
+  gap: 4px !important;
+}
+
+/* En pantallas < 1280px comprimir el sidebar */
+@media (max-width: 1280px) {
+  :root { --sidebar-w: 192px; }
+}
+@media (max-width: 1100px) {
+  :root { --sidebar-w: 56px; }
+  .sidebar-name, .sidebar-sub,
+  .nav-label, .sidebar-logo-name,
+  .sidebar-footer .user-info,
+  .sidebar-footer .btn-logout { display: none !important; }
+  .sidebar-logo { justify-content: center; padding: 12px 0; }
+  .nav-item { justify-content: center !important; padding: 10px 0 !important; }
+  .sidebar { border-right: 1px solid rgba(255,255,255,.05); }
+}
+
+/* Calendario: scroll horizontal propio, no página */
+#section-calendar .main-content-inner,
+.cal-wrapper {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Tabla de stats: comprimir en screens medianos */
+@media (max-width: 1200px) {
+  .stats-dashboard-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+}
