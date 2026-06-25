@@ -126,7 +126,7 @@ export class GuestsCRM {
       g.last_checkin   = bks.sort((a,b) => b.check_in.localeCompare(a.check_in))[0]?.check_in ?? null;
     });
     area.innerHTML = guests.map(g => this._renderGuestCard(g)).join('');
-    area.querySelectorAll('.guest-search-result').forEach(card =>
+    area.querySelectorAll('.guest-row-item').forEach(card =>
       card.addEventListener('click', () => this._openProfile(card.dataset.guestId)));
     const lbl = document.getElementById('bl-total-label');
     if (lbl) lbl.textContent = guests.length >= limit ? `Mostrando los últimos ${limit}` : `${guests.length} huéspedes`;
@@ -537,14 +537,23 @@ export class GuestsCRM {
         if (inp) inp.checked = toggle.classList.contains('active');
       });
     });
-    // Guardar tags — Supabase devuelve {error}, no tira excepción
+    // Guardar tags
     document.getElementById('btn-save-tags')?.addEventListener('click', async () => {
       const tags = [...document.querySelectorAll('.tag-toggle.active')].map(t => t.dataset.tag);
       const btn  = document.getElementById('btn-save-tags');
-      if (btn) btn.textContent = 'Guardando...';
-      const { error } = await this.db.from('guests').update({ tags }).eq('id', guest.id);
-      if (btn) btn.textContent = 'Guardar etiquetas';
-      if (error) { showToast('Error al guardar: ' + error.message, 'error'); return; }
+      if (btn) { btn.textContent = 'Guardando...'; btn.disabled = true; }
+      const { error } = await this.db.from('guests')
+        .update({ tags, updated_at: new Date().toISOString() })
+        .eq('id', guest.id);
+      if (btn) { btn.textContent = 'Guardar etiquetas'; btn.disabled = false; }
+      if (error) {
+        console.error('[Tags] Error Supabase:', error);
+        showToast('Error al guardar etiquetas: ' + error.message, 'error');
+        return;
+      }
+      // Refrescar badges en el perfil visualmente
+      const badgesEl = document.querySelector('.guest-tags-row');
+      if (badgesEl) badgesEl.innerHTML = window._guestsCRM._buildTagBadges(tags);
       showToast('Etiquetas guardadas ✓', 'success');
     });
     // Mala experiencia
