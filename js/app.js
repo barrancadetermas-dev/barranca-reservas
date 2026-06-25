@@ -947,8 +947,9 @@ function handleBookingChange(payload) {
   cache.invalidate('bookings', 'reminders');
 
   // Emitir en el bus con información granular
+  // NOTA: bridgeToDOM en event-bus.js ya propaga esto al DOM automáticamente.
+  // NO llamar dispatchEvent acá o se arma un loop Bus→DOM→Bus→DOM→ stack overflow.
   Bus.emit(EVENTS.BOOKING_CHANGED, payload);
-  document.dispatchEvent(new CustomEvent('booking:changed', { detail: payload }));
 
   // Actualización granular de la barra en el calendario
   if (newRecord?.id) {

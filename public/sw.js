@@ -29,6 +29,9 @@ self.addEventListener('activate', e => {
 });
 
 self.addEventListener('fetch', e => {
+  // Ignorar requests de schemes no-http (chrome-extension, etc.)
+  if (!e.request.url.startsWith('http')) return;
+
   const u = new URL(e.request.url);
 
   // 1. Supabase, APIs externas → network only, sin interceptar
