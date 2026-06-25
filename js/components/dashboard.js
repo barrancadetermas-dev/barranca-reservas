@@ -194,7 +194,6 @@ export class Dashboard {
     // Revenue del mes actual — usar Date.UTC para evitar bug de timezone (UTC-3)
     const [_mYear, _mMonth] = today.split('-').map(Number);
     const monthStart = `${_mYear}-${String(_mMonth).padStart(2,'0')}-01`;
-    // Date.UTC(year, month, 0) = último día del mes anterior → último día del mes actual
     const monthEnd = new Date(Date.UTC(_mYear, _mMonth, 0)).toISOString().slice(0,10);
     const { data: monthBookings } = await this.db
       .from('bookings')
@@ -211,17 +210,17 @@ export class Dashboard {
     };
 
     // Próximas llegadas (7 días)
-    const _upcomingDays = parseInt(localStorage.getItem('mila_upcoming_days') ?? '7');
-    const _nextDate = new Date(today + 'T12:00:00');
-    _nextDate.setDate(_nextDate.getDate() + _upcomingDays);
-    const _nextStr = _nextDate.toISOString().slice(0,10);
+    const _upDays2 = parseInt(localStorage.getItem('mila_upcoming_days') ?? '7');
+    const next7 = new Date(today + 'T12:00:00');
+    next7.setDate(next7.getDate() + _upDays2);
+    const next7str = next7.toISOString().slice(0,10);
     const { data: upcoming } = await this.db
       .from('bookings')
       .select('check_in, check_out, guests!bookings_guest_id_fkey(first_name,last_name), booking_units(units(name,color))')
       .eq('hotel_id', hotelId)
       .neq('status', 'cancelled')
       .gt('check_in', today)
-      .lte('check_in', _nextStr)
+      .lte('check_in', next7str)
       .order('check_in', { ascending: true })
       .limit(20);
 
@@ -321,21 +320,20 @@ export class Dashboard {
     const el = document.getElementById('dashboard-upcoming');
     if (!el) return;
     const _upDays = parseInt(localStorage.getItem('mila_upcoming_days') ?? '7');
-    const selectorBar = `<div style="display:flex;gap:5px;margin-bottom:10px;align-items:center">
+    const sBar = `<div style="display:flex;gap:5px;margin-bottom:10px;align-items:center">
       <span style="font-size:.7rem;color:var(--color-text-3)">Próximas:</span>
-      ${[7,14,28].map(d => `<button
-        onclick="localStorage.setItem('mila_upcoming_days','${d}');window._dashboardInstance?.load?.()"
+      ${[7,14,28].map(d => `<button onclick="localStorage.setItem('mila_upcoming_days','${d}');window._dashboardInstance?.load?.()"
         style="font-size:.68rem;padding:2px 9px;border-radius:999px;cursor:pointer;
         border:1px solid var(--color-border);
         background:${d===_upDays?'var(--color-primary)':'transparent'};
         color:${d===_upDays?'white':'var(--color-text-3)'}">${d}d</button>`).join('')}
     </div>`;
     if (!bookings.length) {
-      el.innerHTML = selectorBar + '<p class="empty-state-sm">Sin llegadas en los próximos ' + _upDays + ' días</p>';
+      el.innerHTML = sBar + '<p class="empty-state-sm">Sin llegadas en los próximos ' + _upDays + ' días</p>';
       return;
     }
     const fmt = iso => new Date(iso+'T12:00:00').toLocaleDateString('es-AR',{weekday:'short',day:'numeric',month:'short'});
-    el.innerHTML = selectorBar + bookings.map(b => {
+    el.innerHTML = sBar + bookings.map(b => {
       const guest = b.guests ? `${b.guests.first_name} ${b.guests.last_name}` : 'Sin nombre';
       const unit  = b.booking_units?.[0]?.units;
       const color = unit?.color ?? '#6366f1';

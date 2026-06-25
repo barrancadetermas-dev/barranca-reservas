@@ -326,7 +326,7 @@ export class BookingList {
     return `
       <div class="bl-sort-wrap">
         <span class="bl-sort-label">Ordenar:</span>
-        <select class="bl-sort-select filter-select" id="bl-sort-select" style="font-size:.78rem;padding:4px 8px">
+        <select id="bl-sort-select" class="filter-select" style="font-size:.78rem;padding:4px 8px">
           ${OPTS.map(o => `<option value="${o.value}" ${this._sortBy === o.value ? 'selected' : ''}>${o.label}</option>`).join('')}
         </select>
       </div>`;
@@ -472,8 +472,8 @@ export class BookingList {
     container.querySelector('#bl-sort-select')?.addEventListener('change', (e) => {
       this._sortBy = e.target.value;
       this._page = 1;
-    });
-    });
+      this._rebuildList();
+    });;
 
     // Bind botones de exportación
     document.getElementById('btn-export-excel-list')?.addEventListener('click', () => this._exportExcel(filtered));
@@ -515,38 +515,36 @@ export class BookingList {
            style="cursor:pointer">
         <div class="booking-row-accent" style="background:${barColor}"></div>
         <div class="booking-row-body">
-          <!-- Fila principal -->
           <div class="bl-row-main">
-            <!-- Col 1: Avatar + Nombre + Unidad -->
             <div class="bl-col-guest">
               ${BookingList._avatar(g)}
               <div class="bl-guest-info">
-                <div class="bl-guest-name">${guest}${flagHTML ? ' ' + flagHTML : ''}</div>
+                <div class="bl-guest-name">${guest}${flagHTML ? ' '+flagHTML : ''}</div>
                 <div class="bl-guest-meta">${unitChips}${getSourceBadgeHTML(b.source)}</div>
               </div>
             </div>
-            <!-- Col 2: Fechas -->
             <div class="bl-col-dates">
               <span class="bl-dates">${formatDate(b.check_in)} → ${formatDate(b.check_out)}</span>
               <span class="bl-nights">${nights}n</span>
             </div>
-            <!-- Col 3: Montos -->
             <div class="bl-col-amount">
               <div class="bl-amount-total">${formatARS(b.total_amount)}</div>
-              ${b.total_paid > 0 && b.balance > 0 ? `
-                <div class="bl-amount-breakdown">
-                  <span class="bl-paid">−${formatARS(b.total_paid)}</span>
-                  <span class="bl-sep">=</span>
-                  <span class="bl-balance">${formatARS(b.balance)}</span>
-                </div>` : b.balance <= 0 ? `<div class="bl-amount-paid">✓ Pagado</div>` : ''}
+              ${b.total_paid > 0 && b.balance > 0
+                ? `<div class="bl-amount-breakdown">
+                    <span class="bl-paid">−${formatARS(b.total_paid)}</span>
+                    <span class="bl-sep">=</span>
+                    <span class="bl-balance">${formatARS(b.balance)}</span>
+                   </div>`
+                : b.balance <= 0
+                  ? `<div class="bl-amount-paid">✓ Pagado</div>`
+                  : ''
+              }
             </div>
-            <!-- Col 4: Estado + Cobrar -->
             <div class="bl-col-status">
               <span class="status-badge ${statusCls}">${statusLbl}</span>
               ${b.balance > 0 ? `<button data-action="pay-full" class="bl-action-btn bl-payfull-btn"
-                onclick="event.stopPropagation()" title="Registrar pago">✅ Cobrar</button>` : ''}
+                onclick="event.stopPropagation()">✅ Cobrar</button>` : ''}
             </div>
-            <!-- Col 5: Acciones -->
             <div class="booking-actions-cell" onclick="event.stopPropagation()">
               <button data-action="edit"
                 class="bl-action-btn"
@@ -586,8 +584,8 @@ export class BookingList {
           ${isToday ? `<div class="booking-today-banner" style="background:${barColor}18;border-color:${barColor}">
             ${b.check_in === today ? '🟢 CHECK-IN HOY' : '🔵 CHECK-OUT HOY'}
           </div>` : ''}
-          ${b.notes ? `<div class="bl-notes-row"><span class="bl-notes-icon">💬</span>${b.notes.length > 100 ? b.notes.slice(0,100)+'…' : b.notes}</div>` : ''}
         </div>
+          ${b.notes ? `<div class="bl-notes-row">💬 ${b.notes.length > 100 ? b.notes.slice(0,100)+'…' : b.notes}</div>` : ''}
       </div>`;
   }
 

@@ -290,7 +290,6 @@ async function initApp(user) {
     notifService = new NotificationService(supabase);
     trySetup('realNotif',     () => setupRealNotifications(notifService));
     // Emitir sonido de login — defer until first user interaction (iOS Safari requires it)
-    // Flag para evitar doble sonido (touchstart + click disparan juntos en mobile)
     let _loginSoundPlayed = false;
     const playLoginSound = () => {
       if (_loginSoundPlayed) return;
@@ -299,7 +298,6 @@ async function initApp(user) {
       document.removeEventListener('click',     playLoginSound);
       document.removeEventListener('touchstart', playLoginSound);
     };
-    // En mobile esperar primer tap; en desktop tocar inmediato
     if (document.hasFocus() && !navigator.userAgent.match(/Mobi|Android|iPhone|iPad/i)) {
       setTimeout(playLoginSound, 300);
     } else {
@@ -1800,8 +1798,7 @@ function setupCalculator() {
         padding:10px 12px;background:var(--color-surface-2);border-radius:var(--r-md);
         border:1px solid var(--color-border);min-height:52px;word-break:break-all;color:var(--color-text)">0</div>
       <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:10px">
-        ${['C','±','%','÷','7','8','9','×','4','5','6','−','1','2','3','+','0','','.',
-          '='].map(k => `<button class="calc-norm-btn${k==='='?' calc-norm-eq':k==='0'?' calc-norm-zero':''}"
+        ${['C','±','%','÷','7','8','9','×','4','5','6','−','1','2','3','+','0','.','='].map(k => `<button class="calc-norm-btn${k==='='?' calc-norm-eq':k==='0'?' calc-norm-zero':''}"
           data-key="${k}" style="${k==='='?'background:var(--color-primary);color:white;':''}">${k||''}</button>`).join('')}
       </div>`;
     stayBody.parentNode.insertBefore(normalBody, stayBody.nextSibling);
@@ -1845,12 +1842,46 @@ function setupCalculator() {
           } else {
             if (_normDisplay === '0' || ['+','-','×','÷'].includes(_normDisplay)) _normDisplay = '';
             _normDisplay += k;
-            _normExpr = _normExpr.replace(/[^0-9.+\-×÷]$/, '') + k;
-            if (!/[+\-×÷]/.test(_normDisplay)) _normExpr = _normDisplay;
+            const hasOp = /[+\-×÷]/.test(_normExpr);
+            if (hasOp) {
+              _normExpr = _normExpr.replace(/[0-9.]+$/, '') + _normDisplay;
+            } else {
+              _normExpr = _normDisplay;
+            }
           }
         }
         normDisp();
       });
+    });
+
+    // ── Teclado para calculadora normal ──────────────
+    document.addEventListener('keydown', function calcKB(e) {
+      if (overlay.style.display !== 'flex') return;
+      if (normalBody.style.display === 'none') return;
+      const MAP = {
+        '0':'0','1':'1','2':'2','3':'3','4':'4',
+        '5':'5','6':'6','7':'7','8':'8','9':'9',
+        '.':'.', ',':'.', 'Enter':'=', '=':'=',
+        '+':'+', '-':'-', '*':'×', '/':'÷', '%':'%',
+      };
+      if (e.key === 'Escape') { setOpen(false); e.preventDefault(); return; }
+      if (e.key === 'Backspace') {
+        e.preventDefault();
+        const d = document.getElementById('calc-norm-display');
+        if (d) {
+          const cur = d.textContent;
+          if (cur === 'Error' || cur === '0') {
+            normalBody.querySelector('[data-key="C"]')?.click();
+          } else {
+            d.textContent = cur.length > 1 ? cur.slice(0,-1) : '0';
+          }
+        }
+        return;
+      }
+      const mapped = MAP[e.key];
+      if (!mapped) return;
+      e.preventDefault();
+      [...normalBody.querySelectorAll('.calc-norm-btn')].find(b => b.dataset.key === mapped)?.click();
     });
 
     // Tab switching

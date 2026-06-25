@@ -3409,6 +3409,16 @@ input[type="color"].unit-color-input::-webkit-color-swatch { border: none; borde
   border-color: #22c55e;
   color: #22c55e;
 }
+.bl-action-btn.bl-payfull-btn {
+  width: auto !important; padding: 0 8px !important; height: 26px !important;
+  font-size: .72rem !important; font-weight: 700 !important;
+  color: #16a34a; border-color: rgba(34,197,94,.35);
+  background: rgba(34,197,94,.08); white-space: nowrap;
+}
+.bl-action-btn.bl-payfull-btn:hover {
+  background: rgba(34,197,94,.18) !important;
+  border-color: #22c55e !important;
+}
 
 /* FIX: botón "Cobrar" — necesita ancho automático (no 34x34) */
 .bl-action-btn.bl-payfull-btn {
@@ -4961,229 +4971,76 @@ select.field-error {
 
 
 /* ════════════════════════════════════════════════
-   FIXES MOBILE + CONSOLIDADOS — Junio 2026
+   FIXES CONSOLIDADOS
    ════════════════════════════════════════════════ */
 
-/* 1. Cal dots: quitar puntitos de color en labels */
+/* 1. Quitar puntitos de color en labels del calendario */
 .cal-unit-dot { display: none !important; }
 
-/* 2. Cal grid: fix overflow para sticky */
-.cal-grid { overflow: clip !important; }
+/* 2. Disponibilidad % badge */
+.avail-pct { font-size:.55rem; font-weight:700; line-height:1; display:block; text-align:center; margin-top:1px; }
 
-/* 3. Sidebar user — alineación y tamaños correctos */
-.sidebar-user {
-  display: flex !important; align-items: center !important;
-  gap: 10px !important; padding: 4px 0; min-width: 0;
-}
-.user-info {
-  flex: 1 !important; min-width: 0 !important;
-  display: flex !important; flex-direction: column !important;
-  gap: 1px !important; overflow: hidden;
-}
-.user-name, #user-name {
-  display: block !important; font-size: .78rem !important;
-  font-weight: 700 !important; color: #E2E8F0 !important;
-  white-space: nowrap !important; overflow: hidden !important;
-  text-overflow: ellipsis !important; line-height: 1.3 !important;
-}
-.user-role, #user-role-badge {
-  display: block !important; font-size: .66rem !important;
-  color: rgba(148,163,184,.8) !important; white-space: nowrap !important;
-  overflow: hidden !important; text-overflow: ellipsis !important;
-  line-height: 1.3 !important;
-}
-.user-avatar { flex-shrink: 0 !important; cursor: pointer; }
-.btn-logout  { flex-shrink: 0 !important; }
+/* 3. Sidebar user — alineación */
+.sidebar-user { display:flex !important; align-items:center !important; gap:10px !important; padding:4px 0; min-width:0; }
+.user-info { flex:1 !important; min-width:0 !important; display:flex !important; flex-direction:column !important; gap:1px !important; overflow:hidden; }
+.user-name, #user-name { display:block !important; font-size:.78rem !important; font-weight:700 !important; color:#E2E8F0 !important; white-space:nowrap !important; overflow:hidden !important; text-overflow:ellipsis !important; line-height:1.3 !important; }
+.user-role, #user-role-badge { display:block !important; font-size:.66rem !important; color:rgba(148,163,184,.8) !important; white-space:nowrap !important; overflow:hidden !important; text-overflow:ellipsis !important; }
+.user-avatar { flex-shrink:0 !important; cursor:pointer; }
+.btn-logout  { flex-shrink:0 !important; }
 
-/* 4. Tag toggles — estados visuales */
-.tag-toggle {
-  display: inline-flex; align-items: center; gap: 5px;
-  padding: 5px 12px; border-radius: var(--r-full);
-  font-size: .78rem; font-weight: 500; cursor: pointer;
-  border: 1px solid var(--color-border); background: var(--color-surface);
-  color: var(--color-text-2); transition: all .15s; user-select: none;
-}
-.tag-toggle:hover  { border-color: var(--color-primary); color: var(--color-primary); }
-.tag-toggle.active { background: var(--color-primary); border-color: var(--color-primary); color: white; font-weight: 600; }
-.tag-checkboxes    { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+/* 4. Tag toggles — estados */
+.tag-toggle { display:inline-flex; align-items:center; gap:5px; padding:5px 12px; border-radius:var(--r-full); font-size:.78rem; font-weight:500; cursor:pointer; border:1px solid var(--color-border); background:var(--color-surface); color:var(--color-text-2); transition:all .15s; user-select:none; }
+.tag-toggle:hover  { border-color:var(--color-primary); color:var(--color-primary); }
+.tag-toggle.active { background:var(--color-primary); border-color:var(--color-primary); color:white; font-weight:600; }
+.tag-checkboxes    { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:12px; }
 
-/* 5. Guest profile header - nombre sin cortar en mobile */
-.guest-profile-header {
-  overflow: visible !important;
-  min-height: 110px !important;
-}
-.guest-profile-header h2,
-.guest-profile-header [style*="font-size:1.3rem"] {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 85%;
-}
+/* 5. Guest profile header — nombre sin cortar */
+.guest-profile-header { overflow:visible !important; min-height:110px !important; }
 
-/* 6. Cobrar button — visible y con texto */
-.bl-action-btn.bl-payfull-btn {
-  width: auto !important; padding: 0 8px !important;
-  font-size: .72rem !important; font-weight: 700 !important;
-  color: #16a34a; border-color: rgba(34,197,94,.35);
-  background: rgba(34,197,94,.08); white-space: nowrap;
-}
-.bl-action-btn.bl-payfull-btn:hover {
-  background: rgba(34,197,94,.18) !important;
-}
+/* 6. BOOKING LIST — Rediseño tabla */
+.booking-row { border-bottom:1px solid var(--color-border); transition:background .1s; }
+.booking-row:last-child { border-bottom:none; }
+.booking-row:hover { background:var(--color-surface-2); }
+.bl-row-main { display:grid; grid-template-columns:2fr 160px 155px 120px auto; align-items:center; padding:8px 12px; min-height:52px; }
+.bl-col-guest { display:flex; align-items:center; gap:10px; min-width:0; padding-right:8px; }
+.bl-guest-info { min-width:0; }
+.bl-guest-name { font-size:.83rem; font-weight:600; color:var(--color-text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:220px; }
+.bl-guest-meta { display:flex; align-items:center; gap:4px; flex-wrap:nowrap; overflow:hidden; margin-top:3px; }
+.bl-col-dates { display:flex; flex-direction:column; gap:2px; border-left:1px solid var(--color-border); padding:0 12px; }
+.bl-dates { font-size:.76rem; color:var(--color-text-2); white-space:nowrap; }
+.bl-nights { font-size:.68rem; color:var(--color-text-3); background:var(--color-surface-2); padding:1px 5px; border-radius:4px; width:fit-content; }
+.bl-col-amount { display:flex; flex-direction:column; gap:3px; border-left:1px solid var(--color-border); padding:0 12px; align-items:flex-end; }
+.bl-amount-total { font-size:.85rem; font-weight:700; color:var(--color-text); }
+.bl-amount-breakdown { display:flex; align-items:center; gap:4px; font-size:.72rem; font-weight:600; }
+.bl-paid    { color:var(--color-warning); }
+.bl-sep     { color:var(--color-text-3); }
+.bl-balance { color:#ef4444; }
+.bl-amount-paid { font-size:.72rem; color:var(--color-success); font-weight:700; }
+.bl-col-status { display:flex; flex-direction:column; align-items:center; gap:5px; border-left:1px solid var(--color-border); padding:0 10px; }
+.booking-actions-cell { display:flex; align-items:center; gap:3px; border-left:1px solid var(--color-border); padding-left:8px; flex-shrink:0; }
+.booking-actions-cell .bl-action-btn { width:28px !important; height:28px !important; }
+.bl-notes-row { padding:3px 12px 8px 56px; font-size:.72rem; color:var(--color-text-3); display:flex; align-items:flex-start; gap:5px; line-height:1.4; border-top:1px solid var(--color-border); }
+.bl-sort-select { min-width:140px; }
 
-/* 7. Stats table — dots más pequeños */
-@media (max-width: 480px) {
-  .stats-unit-table td { padding: 8px 4px; }
-  .stats-unit-table td:first-child { min-width: 100px; }
+/* 7. Calculadora normal — botones */
+.calc-norm-btn { padding:10px 6px; font-size:.95rem; font-weight:600; border:1px solid var(--color-border); border-radius:var(--r-md); background:var(--color-surface-2); color:var(--color-text); cursor:pointer; transition:background .1s,transform .08s; text-align:center; min-height:44px; }
+.calc-norm-btn:hover  { background:var(--color-border); }
+.calc-norm-btn:active { transform:scale(.92); }
+.calc-norm-zero { grid-column:span 2; }
+
+/* 8. Mobile responsive */
+@media (max-width:768px) {
+  .bl-row-main { grid-template-columns:1fr auto; grid-template-rows:auto auto auto; gap:6px 0; padding:10px 12px; }
+  .bl-col-guest   { grid-column:1; grid-row:1; border:none; }
+  .bl-col-dates   { grid-column:2; grid-row:1; border:none; padding:0 0 0 8px; }
+  .bl-col-amount  { grid-column:1; grid-row:2; border:none; padding:0; align-items:flex-start; }
+  .bl-col-status  { grid-column:2; grid-row:2; border:none; padding:0; flex-direction:row; justify-content:flex-end; }
+  .booking-actions-cell { grid-column:1/-1; grid-row:3; border:none; padding:0; justify-content:flex-start; }
+  .modal-overlay  { align-items:flex-end !important; padding:0 !important; }
+  .modal:not(.modal-sm) { width:100% !important; max-width:100% !important; border-radius:var(--r-2xl) var(--r-2xl) 0 0 !important; max-height:93dvh !important; overflow-y:auto !important; margin:0 !important; }
+  .form-group input, .form-group select, .form-group textarea { font-size:16px !important; }
 }
-
-/* 8. Modal bottom sheet en mobile */
-@media (max-width: 600px) {
-  .modal-overlay { align-items: flex-end !important; padding: 0 !important; }
-  .modal:not(.modal-sm) {
-    width: 100% !important; max-width: 100% !important;
-    border-radius: var(--r-2xl) var(--r-2xl) 0 0 !important;
-    max-height: 93dvh !important; overflow-y: auto !important;
-    margin: 0 !important;
-  }
-  .modal-header::before {
-    content: ''; display: block; width: 36px; height: 4px;
-    background: var(--color-border-2); border-radius: 2px;
-    margin: 0 auto 12px;
-  }
-}
-
-/* 9. Booking form mobile — inputs más grandes */
-@media (max-width: 640px) {
-  .form-group input, .form-group select, .form-group textarea {
-    font-size: 16px !important; /* previene zoom iOS */
-  }
-  .step-indicators { gap: 6px; }
-  .step-indicator  { width: 28px; height: 28px; font-size: .7rem; }
-}
-
-/* 10. Disponibilidad badge en headers */
-.avail-pct {
-  font-size: .55rem; font-weight: 700; line-height: 1;
-  display: block; text-align: center; margin-top: 1px;
-}
-
-
-/* ════════════════════════════════════════════════
-   BOOKING LIST — Rediseño tabla
-   ════════════════════════════════════════════════ */
-
-/* Row */
-.booking-row { border-bottom: 1px solid var(--color-border); transition: background .1s; }
-.booking-row:last-child { border-bottom: none; }
-.booking-row:hover { background: var(--color-surface-2); }
-.booking-row-bad { background: rgba(239,68,68,.03); }
-
-.booking-row-body { padding: 0; }
-
-.bl-row-main {
-  display: grid;
-  grid-template-columns: 2fr 160px 150px 120px auto;
-  align-items: center;
-  gap: 0;
-  min-height: 52px;
-  padding: 8px 12px;
-}
-
-/* Col: Guest */
-.bl-col-guest {
-  display: flex; align-items: center; gap: 10px;
-  min-width: 0; padding-right: 8px;
-}
-.bl-guest-info { min-width: 0; }
-.bl-guest-name {
-  font-size: .83rem; font-weight: 600; color: var(--color-text);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  max-width: 240px;
-}
-.bl-guest-meta {
-  display: flex; align-items: center; gap: 4px;
-  flex-wrap: nowrap; overflow: hidden; margin-top: 3px;
-}
-
-/* Col: Dates */
-.bl-col-dates {
-  display: flex; flex-direction: column; gap: 2px;
-  border-left: 1px solid var(--color-border); padding: 0 12px;
-}
-.bl-dates { font-size: .76rem; color: var(--color-text-2); white-space: nowrap; }
-.bl-nights {
-  font-size: .68rem; color: var(--color-text-3);
-  background: var(--color-surface-2);
-  padding: 1px 5px; border-radius: 4px; width: fit-content;
-}
-
-/* Col: Amount */
-.bl-col-amount {
-  display: flex; flex-direction: column; gap: 3px;
-  border-left: 1px solid var(--color-border); padding: 0 12px;
-  align-items: flex-end;
-}
-.bl-amount-total { font-size: .85rem; font-weight: 700; color: var(--color-text); }
-.bl-amount-breakdown {
-  display: flex; align-items: center; gap: 4px;
-  font-size: .7rem; font-weight: 600;
-}
-.bl-paid    { color: var(--color-warning); }
-.bl-sep     { color: var(--color-text-3); }
-.bl-balance { color: var(--color-danger, #ef4444); }
-.bl-amount-paid { font-size: .7rem; color: var(--color-success); font-weight: 700; }
-
-/* Col: Status */
-.bl-col-status {
-  display: flex; flex-direction: column; align-items: center;
-  gap: 5px; border-left: 1px solid var(--color-border); padding: 0 10px;
-}
-
-/* Col: Actions */
-.booking-actions-cell {
-  display: flex; align-items: center; gap: 3px;
-  border-left: 1px solid var(--color-border); padding-left: 8px;
-  flex-shrink: 0;
-}
-
-/* Cobrar button */
-.bl-action-btn.bl-payfull-btn {
-  width: auto !important; padding: 0 8px !important; height: 26px !important;
-  font-size: .7rem !important; font-weight: 700 !important;
-  color: #16a34a; border-color: rgba(34,197,94,.35);
-  background: rgba(34,197,94,.08); white-space: nowrap; border-radius: 5px !important;
-}
-.bl-action-btn.bl-payfull-btn:hover { background: rgba(34,197,94,.18) !important; }
-
-/* Notes row */
-.bl-notes-row {
-  padding: 3px 12px 8px calc(12px + 36px + 10px);
-  font-size: .72rem; color: var(--color-text-3);
-  display: flex; align-items: flex-start; gap: 5px;
-  line-height: 1.4;
-}
-.bl-notes-icon { flex-shrink: 0; }
-
-/* Action buttons smaller */
-.booking-actions-cell .bl-action-btn {
-  width: 28px !important; height: 28px !important;
-}
-
-/* Sort select */
-.bl-sort-select { min-width: 140px; }
-
-/* Responsive */
-@media (max-width: 768px) {
-  .bl-row-main {
-    grid-template-columns: 1fr auto;
-    grid-template-rows: auto auto auto;
-    gap: 6px 0;
-    padding: 10px 12px;
-  }
-  .bl-col-guest { grid-column: 1; grid-row: 1; border: none; }
-  .bl-col-dates { grid-column: 2; grid-row: 1; border: none; padding: 0 0 0 8px; }
-  .bl-col-amount { grid-column: 1; grid-row: 2; border: none; padding: 0; align-items: flex-start; }
-  .bl-col-status { grid-column: 2; grid-row: 2; border: none; padding: 0; flex-direction: row; justify-content: flex-end; }
-  .booking-actions-cell { grid-column: 1 / -1; grid-row: 3; border: none; padding: 0; justify-content: flex-start; }
+@media (max-width:480px) {
+  .kpi-grid { grid-template-columns:1fr 1fr !important; gap:8px !important; }
+  .main-content { padding:var(--sp-8) !important; }
 }

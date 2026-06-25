@@ -1008,12 +1008,10 @@ export class Statistics {
 
   // ── Card 6: Horizontal — top departamentos ───────
   async _sdcHorizUnits(month, year, fmt) {
-    // Datos del mes actual directamente desde DB (evita bug de índice)
     const unitStats = (this.ctx.units ?? []).map(u => ({
       id: u.id, name: u.name, color: getUnitColor(u), rev: 0, nights: 0,
     }));
-
-    // Primero intentar desde caché pero matchear por unit.id (no por índice)
+    // Matchear por unit.id (no por índice) para evitar asignación errónea
     const cached = this._lastUnitStats;
     if (cached?.length) {
       cached.forEach(s => {
@@ -1021,10 +1019,8 @@ export class Statistics {
         if (entry) { entry.rev = s.revenue ?? 0; entry.nights = s.nightsOcc ?? 0; }
       });
     } else {
-      // Sin caché: cargar datos del mes actual
+      // Sin caché: consulta directa al mes actual
       try {
-        const month = parseInt(document.getElementById('stats-month')?.value ?? new Date().getMonth());
-        const year  = parseInt(document.getElementById('stats-year')?.value  ?? new Date().getFullYear());
         const first = `${year}-${String(month+1).padStart(2,'0')}-01`;
         const last  = new Date(Date.UTC(year, month+1, 0)).toISOString().slice(0,10);
         const { data: bks } = await this.db.from('bookings')

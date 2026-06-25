@@ -292,6 +292,7 @@ export class Calendar {
         }
 
         rems.forEach(r => {
+          if (r.unit_id && r.unit_id !== unit.id) return;
           const dot = document.createElement('div');
           dot.className = 'cal-reminder-dot';
           dot.innerHTML = `<div class="tooltip">🔔 ${r.title}${r.units ? ` · #${r.units.sort_order} ${r.units.name}` : ''}</div>`;
@@ -366,7 +367,7 @@ export class Calendar {
       display: flex; align-items: center; padding: 0 8px;
       overflow: hidden; white-space: nowrap;
       cursor: grab; transition: filter .15s, transform .15s, box-shadow .15s;
-      ${isPast ? 'filter: saturate(.4) brightness(.78); opacity: .88;' : ''}
+      ${isPast ? 'filter: grayscale(52%) opacity(.62);' : ''}
     `;
     bar.dataset.bookingId = booking.id;
 
@@ -392,7 +393,7 @@ export class Calendar {
     });
     bar.addEventListener('mousemove',  (e) => this._moveTooltip(e));
     bar.addEventListener('mouseleave', () => {
-      bar.style.filter    = isPast ? 'saturate(.4) brightness(.78)' : '';
+      bar.style.filter    = isPast ? 'grayscale(52%) opacity(.62)' : '';
       bar.style.transform = '';
       bar.style.boxShadow = '';
       this._hideTooltip();
@@ -419,7 +420,7 @@ export class Calendar {
     const left = document.createElement('div');
     left.className = 'bar bar-split-left';
     left.style.background = coColor;
-    if (coIsPast) left.style.filter = 'saturate(.4) brightness(.78)';
+    if (coIsPast) left.style.filter = 'grayscale(52%) opacity(.62)';
     left.dataset.bookingId = coBooking.id;
     left.title = `Sale: ${coBooking.guests?.first_name ?? ''} ${coBooking.guests?.last_name ?? ''}`;
     left.addEventListener('mouseenter', (e) => this._showTooltip(coBooking, e));
@@ -430,7 +431,7 @@ export class Calendar {
     const right = document.createElement('div');
     right.className = 'bar bar-split-right';
     right.style.background = ciColor;
-    if (ciIsPast) right.style.filter = 'saturate(.4) brightness(.78)';
+    if (ciIsPast) right.style.filter = 'grayscale(52%) opacity(.62)';
     right.dataset.bookingId = ciBooking.id;
     right.title = `Entra: ${ciBooking.guests?.first_name ?? ''} ${ciBooking.guests?.last_name ?? ''}`;
     right.addEventListener('mouseenter', (e) => this._showTooltip(ciBooking, e));
@@ -900,32 +901,21 @@ export class Calendar {
           const daysInMonth = new Date(this.year, this.month+1, 0).getDate();
           const totalUnits  = this.ctx.units.length || 1;
           const bookings    = this._lastRenderedBookings ?? [];
-
           for (let d = 1; d <= daysInMonth; d++) {
             const dateStr = `${this.year}-${String(this.month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-
             // FIX: calcular desde datos de reservas, no desde DOM
-            // Una barra solo existe en la celda check_in, las celdas siguientes quedan vacías
             const occupiedUnits = new Set();
             bookings.forEach(b => {
               if (b.status === 'cancelled') return;
-              // Ocupado si check_in <= fecha < check_out (check_out es día libre)
               if (b.check_in <= dateStr && b.check_out > dateStr) {
                 (b.booking_units ?? []).forEach(bu => occupiedUnits.add(bu.unit_id));
               }
             });
-
             const cells = grid.querySelectorAll(`.cal-cell[data-date="${dateStr}"]`);
-            const occupiedCells = new Set();
             cells.forEach(c => {
-              const unitId = c.dataset.unitId;
-              if (occupiedUnits.has(unitId)) {
-                occupiedCells.add(unitId);
-              } else {
-                c.classList.add('avail-free');
-              }
+              const uid = c.dataset.unitId;
+              if (!occupiedUnits.has(uid)) c.classList.add('avail-free');
             });
-
             const free = totalUnits - occupiedUnits.size;
             const pct  = Math.round((free / totalUnits) * 100);
             const hdrs = grid.querySelectorAll('.cal-day-header');
@@ -1047,7 +1037,7 @@ export class Calendar {
           const guest   = b.guests ? `${b.guests.first_name} ${b.guests.last_name}` : (b.block_reason ?? 'Bloqueo');
           const isStart = b.check_in === iso;
           const barStyle = wcIsPast
-            ? `background:${color};filter:saturate(.45) brightness(.72);`
+            ? `background:${color};filter:grayscale(52%) opacity(.62);`
             : `background:${color};`;
           cell.innerHTML = `
             <div class="week-bar" style="${barStyle}border-radius:${isStart?'6px 0 0 6px':'0'}" data-id="${b.id}">
