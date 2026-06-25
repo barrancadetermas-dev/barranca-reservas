@@ -217,3 +217,96 @@
 [data-theme="dark"] .cal-wrapper::-webkit-scrollbar-thumb {
   background: #334155;
 }
+
+/* -----------------------------------------------------------------------
+   12. FIXES ADICIONALES — Panel cortado + opciones ocultas en mobile
+   ----------------------------------------------------------------------- */
+
+/* Evitar que el contenido quede oculto bajo bottom nav */
+@media (max-width: 768px) {
+  .main-content {
+    padding-bottom: calc(70px + env(safe-area-inset-bottom, 0px)) !important;
+    min-height: calc(100dvh - var(--header-h, 56px));
+  }
+
+  /* Sidebar overlay: asegurar que cubre todo y scroll interno funciona */
+  .sidebar {
+    height: 100dvh !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Header: no cortar botones en pantallas angostas */
+  .main-header {
+    padding: 0 var(--sp-12) !important;
+    gap: var(--sp-8) !important;
+  }
+  .header-right {
+    gap: var(--sp-6) !important;
+    flex-wrap: nowrap;
+    overflow: visible;
+  }
+  /* Ocultar etiquetas de texto en header si no entran */
+  .header-right .btn-label {
+    display: none !important;
+  }
+
+  /* Paneles flotantes (notificaciones, tema, etc) no salirse de pantalla */
+  [id$="-panel"], .dropdown-panel, .notif-panel, #notif-panel, #theme-panel {
+    max-width: calc(100vw - 16px) !important;
+    right: 8px !important;
+    left: auto !important;
+  }
+  /* Si el panel está muy abajo, asegurar que no quede tapado por bottom nav */
+  [id$="-panel"], .dropdown-panel {
+    max-height: calc(100dvh - var(--header-h, 56px) - 70px) !important;
+    overflow-y: auto !important;
+  }
+
+  /* KPI cards: mínimo 2 columnas, sin overflow */
+  .kpi-grid {
+    grid-template-columns: 1fr 1fr !important;
+    gap: var(--sp-8) !important;
+    overflow: visible !important;
+  }
+
+  /* Toolbar del calendario: scroll horizontal para no cortar botones */
+  .cal-toolbar {
+    overflow-x: auto !important;
+    overflow-y: visible !important;
+    flex-wrap: nowrap !important;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    gap: 6px !important;
+    padding-bottom: 2px;
+  }
+  .cal-toolbar::-webkit-scrollbar { display: none; }
+  .cal-toolbar > * { flex-shrink: 0 !important; }
+
+  /* Sección activa: no cortar contenido horizontal */
+  .section.active {
+    max-width: 100vw;
+    overflow-x: hidden;
+  }
+
+  /* Tables: scroll horizontal */
+  .table-container, .ops-list, .bl-list {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch;
+    max-width: 100%;
+  }
+}
+
+/* Extra small: < 400px */
+@media (max-width: 400px) {
+  .main-content {
+    padding: var(--sp-8) !important;
+    padding-bottom: calc(70px + env(safe-area-inset-bottom, 0px)) !important;
+  }
+  .kpi-card {
+    padding: var(--sp-10) !important;
+  }
+  .kpi-value {
+    font-size: 1.2rem !important;
+  }
+}

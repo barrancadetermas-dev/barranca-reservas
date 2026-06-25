@@ -919,7 +919,7 @@ export class Calendar {
             const free = totalUnits - occupiedUnits.size;
             const pct  = Math.round((free / totalUnits) * 100);
             const hdrs = grid.querySelectorAll('.cal-day-header');
-            const hdr  = hdrs[d];
+            const hdr  = hdrs[d - 1]; // d arranca en 1, índice arranca en 0
             if (hdr && !hdr.querySelector('.avail-pct')) {
               const badge = document.createElement('div');
               badge.className = 'avail-pct';
@@ -1133,8 +1133,19 @@ export class Calendar {
       const newCO        = this._addDays(booking.check_out, daysDiff);
       const targetUnitId = state.targetUnitId ?? sourceUnitId;
       const today        = new Date().toISOString().split('T')[0];
+      const unitChanged  = targetUnitId !== sourceUnitId;
 
-      if (newCI < today && !confirm(`La nueva fecha (${newCI}) es en el pasado. ¿Continuar?`)) return;
+      // Modal de confirmación personalizado (evita cambios accidentales por drag)
+      const confirmed = await this._confirmDragChange({
+        guestName:  booking.guest_name ?? (booking.guests ? `${booking.guests.first_name ?? ''} ${booking.guests.last_name ?? ''}`.trim() : 'Reserva'),
+        oldCI:      booking.check_in,
+        oldCO:      booking.check_out,
+        newCI,
+        newCO,
+        unitChanged,
+        isPast:     newCI < today,
+      });
+      if (!confirmed) { this.load(); return; }
 
       const { data: conflicts } = await this.db
         .from('booking_units')
@@ -1252,7 +1263,93 @@ export class Calendar {
     this._pendingPulse.add(bookingId);
   }
 
-  _addDays(isoDate, n) {
+  // ── Modal de confirmación para drag ─────────────────────────────
+  _confirmDragChange({ guestName, oldCI, oldCO, newCI, newCO, unitChanged, isPast }) {
+    return new Promise(resolve => {
+      // Eliminar cualquier modal previo
+      document.getElementById('drag-confirm-overlay')?.remove();
+
+      const fmt = iso => {
+        const [y,m,d] = iso.split('-');
+        return `${d}/${m}/${y}`;
+      };
+
+      const overlay = document.createElement('div');
+      overlay.id = 'drag-confirm-overlay';
+      overlay.style.cssText = `
+        position:fixed;inset:0;z-index:9999;
+        background:rgba(0,0,0,.45);
+        display:flex;align-items:center;justify-content:center;
+        padding:16px;
+      `;
+
+      const pastHtml = isPast
+        ? `<div style="background:#fef3c7;border:1px solid #f59e0b;border-radius:8px;padding:8px 12px;font-size:.8rem;color:#92400e;margin-bottom:12px;">
+             ⚠️ La nueva fecha de ingreso es en el pasado.
+           </div>`
+        : '';
+
+      const unitHtml = unitChanged
+        ? `<div style="font-size:.8rem;color:#6366f1;margin-top:6px;font-weight:600;">📦 Cambia de departamento</div>`
+        : '';
+
+      overlay.innerHTML = `
+        <div style="
+          background:var(--color-background-primary,#fff);
+          border-radius:16px;
+          box-shadow:0 20px 60px rgba(0,0,0,.25);
+          padding:24px;
+          max-width:380px;
+          width:100%;
+        ">
+          <div style="font-size:1rem;font-weight:700;color:var(--color-text,#111);margin-bottom:4px;">
+            ✏️ Confirmar cambio de fechas
+          </div>
+          <div style="font-size:.8rem;color:var(--color-text-secondary,#666);margin-bottom:16px;">
+            ${guestName}
+          </div>
+          ${pastHtml}
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+            <div style="background:var(--color-background-secondary,#f8f9fa);border-radius:10px;padding:10px 12px;">
+              <div style="font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--color-text-tertiary,#999);margin-bottom:4px;">Antes</div>
+              <div style="font-size:.82rem;font-weight:600;color:var(--color-text,#111);">📅 ${fmt(oldCI)} → ${fmt(oldCO)}</div>
+            </div>
+            <div style="background:#ede9fe;border-radius:10px;padding:10px 12px;">
+              <div style="font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#7c3aed;margin-bottom:4px;">Nuevo</div>
+              <div style="font-size:.82rem;font-weight:600;color:#5b21b6;">📅 ${fmt(newCI)} → ${fmt(newCO)}</div>
+            </div>
+          </div>
+          ${unitHtml}
+          <div style="display:flex;gap:10px;margin-top:18px;">
+            <button id="drag-cancel-btn" style="
+              flex:1;padding:10px;border-radius:10px;
+              border:1.5px solid var(--color-border-secondary,#e2e8f0);
+              background:transparent;cursor:pointer;
+              font-size:.85rem;font-weight:600;color:var(--color-text,#111);
+            ">Cancelar</button>
+            <button id="drag-confirm-btn" style="
+              flex:1;padding:10px;border-radius:10px;
+              border:none;background:#6366f1;color:#fff;cursor:pointer;
+              font-size:.85rem;font-weight:700;
+            ">Confirmar cambio</button>
+          </div>
+        </div>
+      `;
+
+      document.body.appendChild(overlay);
+
+      const cleanup = (result) => {
+        overlay.remove();
+        resolve(result);
+      };
+
+      document.getElementById('drag-confirm-btn').addEventListener('click', () => cleanup(true));
+      document.getElementById('drag-cancel-btn').addEventListener('click', () => cleanup(false));
+      overlay.addEventListener('click', e => { if (e.target === overlay) cleanup(false); });
+    });
+  }
+
+    _addDays(isoDate, n) {
     const d = new Date(isoDate + 'T12:00:00');
     d.setDate(d.getDate() + n);
     return d.toISOString().split('T')[0];
