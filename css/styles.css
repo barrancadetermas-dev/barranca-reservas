@@ -436,7 +436,7 @@ svg { flex-shrink: 0; }
 .cal-nav { display: flex; align-items: center; gap: var(--sp-12); }
 .cal-month-title { font-size: 1.1rem; font-weight: 700; color: var(--color-text); min-width: 200px; text-align: center; }
 
-.cal-wrapper { overflow-x: auto; }
+.cal-wrapper { overflow-x: auto; width: 100%; }
 .cal-grid {
   display: grid;
   border-radius: var(--r-xl);
@@ -445,6 +445,7 @@ svg { flex-shrink: 0; }
   overflow: clip; /* FIX: hidden rompía position:sticky en .cal-unit-label */
   box-shadow: var(--sh-sm);
   min-width: 900px;
+  width: 100%;
 }
 
 /* Calendar header row */

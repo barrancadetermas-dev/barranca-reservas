@@ -190,9 +190,9 @@ export class Calendar {
 
     // ── FIX MOBILE: ancho fijo por celda + scroll horizontal ──
     const cellW = window.innerWidth <= 768 ? 32 : 38;
-    grid.style.gridTemplateColumns = `160px repeat(${daysInMonth}, ${cellW}px)`;
+    grid.style.gridTemplateColumns = `160px repeat(${daysInMonth}, minmax(${cellW}px, 1fr))`;
     grid.style.minWidth = `${160 + daysInMonth * cellW}px`;
-    grid.style.width    = 'max-content';
+    grid.style.width    = '100%';
 
     // Forzar scroll en el contenedor padre
     const gridParent = grid.parentElement;
