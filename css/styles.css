@@ -6,50 +6,56 @@
 /* ── 1. DESIGN TOKENS ─────────────────────────────── */
 :root {
   /* Core palette */
-  --color-bg:        #F8FAFC;
+  --color-bg:        #F0F4FA;
   --color-surface:   #FFFFFF;
-  --color-surface-2: #F1F5F9;
-  --color-border:    #E2E8F0;
-  --color-border-2:  #CBD5E1;
-  --color-text:      #0F172A;
-  --color-text-2:    #475569;
-  --color-text-3:    #94A3B8;
+  --color-surface-2: #E8EEF8;
+  --color-border:    #C8D6EC;
+  --color-border-2:  #9FB3D4;
+  --color-text:      #0B1A35;
+  --color-text-2:    #3A5278;
+  --color-text-3:    #7B9ABE;
 
-  /* Sidebar */
-  --sidebar-bg:      #0F172A;
-  --sidebar-hover:   #1E293B;
-  --sidebar-active:  #1E293B;
-  --sidebar-text:    #94A3B8;
-  --sidebar-text-a:  #F8FAFC;
-  --sidebar-accent:  #818CF8;
+  /* Sidebar — azul profundo del logo */
+  --sidebar-bg:      #0D1F42;
+  --sidebar-hover:   #162B58;
+  --sidebar-active:  #1A3472;
+  --sidebar-text:    #7B9ABE;
+  --sidebar-text-a:  #E8F0FF;
+  --sidebar-accent:  #60A5FA;
   --sidebar-w:       232px;
 
-  /* Brand / Primary */
-  --color-primary:   #6366F1;
-  --color-primary-h: #4F46E5;
-  --color-primary-l: #EEF2FF;
-  --color-primary-t: rgba(99,102,241,.12);
+  /* Brand / Primary — azul MILA */
+  --color-primary:   #1E4DB7;
+  --color-primary-h: #1A3A90;
+  --color-primary-l: #DDEAFF;
+  --color-primary-t: rgba(30,77,183,.12);
 
-  /* KPI cards */
-  --kpi-blue-bg:  #EFF6FF; --kpi-blue-acc:  #3B82F6; --kpi-blue-txt: #1D4ED8;
-  --kpi-amber-bg: #FFFBEB; --kpi-amber-acc: #F59E0B; --kpi-amber-txt:#92400E;
-  --kpi-rose-bg:  #FFF1F2; --kpi-rose-acc:  #F43F5E; --kpi-rose-txt: #9F1239;
-  --kpi-green-bg: #F0FDF4; --kpi-green-acc: #22C55E; --kpi-green-txt:#14532D;
+  /* KPI cards — 5 colores: 1 pizarra + 4 azules del logo */
+  /* Pizarra */
+  --kpi-slate-bg:   #F1F5F9; --kpi-slate-acc: #475569; --kpi-slate-txt: #1E293B;
+  /* Azul profundo (logo oscuro) */
+  --kpi-navy-bg:    #DDEAFF; --kpi-navy-acc:  #1A3A90; --kpi-navy-txt:  #0D1F42;
+  /* Azul real (logo principal) */
+  --kpi-blue-bg:    #DBEAFE; --kpi-blue-acc:  #1E4DB7; --kpi-blue-txt:  #1e3a8a;
+  /* Azul medio */
+  --kpi-sky-bg:     #E0F2FE; --kpi-sky-acc:   #0284C7; --kpi-sky-txt:   #0C4A6E;
+  /* Celeste suave */
+  --kpi-ice-bg:     #EFF6FF; --kpi-ice-acc:   #3B82F6; --kpi-ice-txt:   #1D4ED8;
 
-  /* Booking status × time */
-  --booking-pending-f: #F59E0B;   /* future */
-  --booking-pending-p: #B45309;   /* past */
-  --booking-partial-f: #FB7185;
-  --booking-partial-p: #9F1239;
-  --booking-paid-f:    #34D399;
-  --booking-paid-p:    #065F46;
-  --booking-blocked:   #94A3B8;
-
-  /* Semantic */
+  /* Colores semánticos — mantenemos verde, rojo y azul info */
   --color-success: #22C55E;
-  --color-warning: #F59E0B;
+  --color-warning: #3B82F6;   /* reemplaza amber por azul info */
   --color-danger:  #EF4444;
-  --color-info:    #3B82F6;
+  --color-info:    #0284C7;
+
+  /* Booking status × time — paleta azul MILA */
+  --booking-pending-f: #1E4DB7;   /* futuro sin seña */
+  --booking-pending-p: #475569;   /* pasado */
+  --booking-partial-f: #0284C7;   /* futuro con seña */
+  --booking-partial-p: #374151;   /* pasado */
+  --booking-paid-f:    #34D399;   /* pagado futuro */
+  --booking-paid-p:    #065F46;   /* pagado pasado */
+  --booking-blocked:   #7B9ABE;
 
   /* Spacing scale */
   --sp-2:  2px;  --sp-4:  4px;  --sp-6:  6px;  --sp-8:  8px;
@@ -124,8 +130,8 @@ svg { flex-shrink: 0; }
   position: absolute; border-radius: 50%;
   filter: blur(80px); opacity: .25; pointer-events: none;
 }
-.login-glow-1 { width: 400px; height: 400px; background: #6366F1; top: -100px; right: 10%; }
-.login-glow-2 { width: 350px; height: 350px; background: #8B5CF6; bottom: -80px; left: 15%; }
+.login-glow-1 { width: 400px; height: 400px; background: #1E4DB7; top: -100px; right: 10%; }
+.login-glow-2 { width: 350px; height: 350px; background: #0D2A6E; bottom: -80px; left: 15%; }
 
 .login-card {
   position: relative; z-index: 2;
@@ -142,9 +148,10 @@ svg { flex-shrink: 0; }
 }
 .login-logo-icon {
   width: 52px; height: 52px; border-radius: var(--r-lg);
-  background: linear-gradient(135deg, #6366F1, #8B5CF6);
+  background: transparent;
   display: flex; align-items: center; justify-content: center;
   color: white; flex-shrink: 0;
+  overflow: hidden;
 }
 .login-hotel-name { font-size: 1.25rem; font-weight: 700; color: #F8FAFC; line-height: 1.2; }
 .login-subtitle { font-size: .8rem; color: #94A3B8; margin-top: 2px; }
@@ -234,8 +241,9 @@ svg { flex-shrink: 0; }
 }
 .sidebar-logo-mark {
   width: 38px; height: 38px; border-radius: var(--r-md);
-  background: linear-gradient(135deg, #6366F1, #8B5CF6);
+  background: transparent;
   display: flex; align-items: center; justify-content: center; color: white; flex-shrink: 0;
+  overflow: hidden;
 }
 .sidebar-name { display: block; font-size: .9rem; font-weight: 700; color: #F8FAFC; }
 .sidebar-sub  { display: block; font-size: .73rem; color: var(--sidebar-text); }
@@ -361,9 +369,9 @@ svg { flex-shrink: 0; }
 /* Fix: .kpi-body faltaba en la versión original */
 .kpi-body { display: flex; flex-direction: column; gap: 2px; flex: 1; }
 
-.kpi-blue  { background: var(--kpi-blue-bg);  border-color: rgba(59,130,246,.15); }
-.kpi-amber { background: var(--kpi-amber-bg); border-color: rgba(245,158,11,.15); }
-.kpi-rose  { background: var(--kpi-rose-bg);  border-color: rgba(244,63,94,.15); }
+.kpi-blue  { background: var(--kpi-blue-bg);  border-color: rgba(30,77,183,.15); }
+.kpi-amber { background: var(--kpi-navy-bg);  border-color: rgba(26,58,144,.15); }
+.kpi-rose  { background: var(--kpi-sky-bg);   border-color: rgba(2,132,199,.15); }
 .kpi-green { background: var(--kpi-green-bg); border-color: rgba(34,197,94,.15); }
 
 .kpi-icon-wrap {
@@ -372,15 +380,15 @@ svg { flex-shrink: 0; }
   margin-bottom: var(--sp-12); background: rgba(255,255,255,.6);
 }
 .kpi-blue  .kpi-icon-wrap { color: var(--kpi-blue-acc); }
-.kpi-amber .kpi-icon-wrap { color: var(--kpi-amber-acc); }
-.kpi-rose  .kpi-icon-wrap { color: var(--kpi-rose-acc); }
+.kpi-amber .kpi-icon-wrap { color: var(--kpi-navy-acc); }
+.kpi-rose  .kpi-icon-wrap { color: var(--kpi-sky-acc); }
 .kpi-green .kpi-icon-wrap { color: var(--kpi-green-acc); }
 
 .kpi-label { display: block; font-size: .78rem; font-weight: 500; color: var(--color-text-2); margin-bottom: 4px; }
 .kpi-value { display: block; font-size: 2rem; font-weight: 800; line-height: 1; }
 .kpi-blue  .kpi-value { color: var(--kpi-blue-txt); }
-.kpi-amber .kpi-value { color: var(--kpi-amber-txt); }
-.kpi-rose  .kpi-value { color: var(--kpi-rose-txt); }
+.kpi-amber .kpi-value { color: var(--kpi-navy-txt); }
+.kpi-rose  .kpi-value { color: var(--kpi-sky-txt); }
 .kpi-green .kpi-value { color: var(--kpi-green-txt); }
 
 .kpi-card { cursor: default; }
@@ -422,8 +430,8 @@ svg { flex-shrink: 0; }
 
 .reminder-item {
   display: flex; align-items: center; gap: var(--sp-10); padding: 8px 12px;
-  background: var(--kpi-amber-bg); border-radius: var(--r-md);
-  border: 1px solid rgba(245,158,11,.15); font-size: .82rem;
+  background: var(--kpi-sky-bg); border-radius: var(--r-md);
+  border: 1px solid rgba(2,132,199,.15); font-size: .82rem;
 }
 .reminder-item.done { opacity: .5; text-decoration: line-through; }
 
@@ -966,22 +974,28 @@ select { appearance: auto; cursor: pointer; }
 
 /* ── DARK MODE ───────────────────────────────────── */
 [data-theme="dark"] {
-  --color-bg:        #0F172A;
-  --color-surface:   #1E293B;
-  --color-surface-2: #0F172A;
-  --color-border:    #334155;
-  --color-border-2:  #475569;
-  --color-text:      #F8FAFC;
-  --color-text-2:    #CBD5E1;
-  --color-text-3:    #64748B;
-  --color-primary-l: rgba(99,102,241,.15);
-  --color-primary-t: rgba(99,102,241,.2);
-  --kpi-blue-bg:    rgba(59,130,246,.12);
-  --kpi-amber-bg:   rgba(245,158,11,.1);
-  --kpi-rose-bg:    rgba(244,63,94,.1);
+  --color-bg:        #091428;
+  --color-surface:   #0D1F42;
+  --color-surface-2: #091428;
+  --color-border:    #1A3472;
+  --color-border-2:  #2A4A8A;
+  --color-text:      #E8F0FF;
+  --color-text-2:    #A0BDDC;
+  --color-text-3:    #4A6FA0;
+  --color-primary:   #3B82F6;
+  --color-primary-h: #2563EB;
+  --color-primary-l: rgba(30,77,183,.18);
+  --color-primary-t: rgba(59,130,246,.2);
+  --kpi-blue-bg:    rgba(30,77,183,.18);
+  --kpi-navy-bg:    rgba(26,58,144,.15);
+  --kpi-sky-bg:     rgba(2,132,199,.12);
   --kpi-green-bg:   rgba(34,197,94,.1);
-  --sh-sm: 0 1px 3px rgba(0,0,0,.4);
-  --sh-md: 0 4px 6px -1px rgba(0,0,0,.4);
+  --kpi-blue-acc:   #60A5FA; --kpi-blue-txt: #93C5FD;
+  --kpi-navy-acc:   #818CF8; --kpi-navy-txt: #A5B4FC;
+  --kpi-sky-acc:    #38BDF8; --kpi-sky-txt:  #7DD3FC;
+  --kpi-slate-bg:   rgba(71,85,105,.15); --kpi-slate-acc: #94A3B8; --kpi-slate-txt: #CBD5E1;
+  --sh-sm: 0 1px 3px rgba(0,0,0,.5);
+  --sh-md: 0 4px 6px -1px rgba(0,0,0,.5);
 }
 [data-theme="dark"] .main-header   { background: #1E293B; border-color: #334155; }
 [data-theme="dark"] .cal-unit-label{ background: #1A2438; }
@@ -1744,26 +1758,28 @@ select { appearance: auto; cursor: pointer; }
 
 /* ── DARK MODE — TOKENS FALTANTES ────────────────── */
 [data-theme="dark"] {
-  --color-bg:        #0F172A;
-  --color-surface:   #1E293B;
-  --color-surface-2: #1E293B;
-  --color-border:    #334155;
-  --color-border-2:  #475569;
-  --color-text:      #F1F5F9;
-  --color-text-2:    #94A3B8;
-  --color-text-3:    #64748B;
-  --color-primary-l: rgba(99,102,241,.15);
-  --sh-sm: 0 1px 3px rgba(0,0,0,.3), 0 1px 2px rgba(0,0,0,.2);
-  --sh-md: 0 4px 6px -1px rgba(0,0,0,.3), 0 2px 4px -2px rgba(0,0,0,.2);
-  --sh-lg: 0 10px 15px -3px rgba(0,0,0,.3), 0 4px 6px -4px rgba(0,0,0,.2);
-  --kpi-blue-bg:  #1e3a8a18; --kpi-blue-acc:  #60a5fa; --kpi-blue-txt: #93c5fd;
-  --kpi-amber-bg: #78350f18; --kpi-amber-acc: #fbbf24; --kpi-amber-txt:#fde68a;
-  --kpi-rose-bg:  #881337 18; --kpi-rose-acc:  #fb7185; --kpi-rose-txt: #fda4af;
-  --kpi-green-bg: #14532d18; --kpi-green-acc: #4ade80; --kpi-green-txt:#86efac;
-  --booking-pending-f: #ca8a04;
-  --booking-partial-f: #f43f5e;
-  --booking-paid-f:    #22c55e;
-  --booking-blocked:   #6b7280;
+  --color-bg:        #091428;
+  --color-surface:   #0D1F42;
+  --color-surface-2: #0D1F42;
+  --color-border:    #1A3472;
+  --color-border-2:  #2A4A8A;
+  --color-text:      #E8F0FF;
+  --color-text-2:    #A0BDDC;
+  --color-text-3:    #4A6FA0;
+  --color-primary:   #3B82F6;
+  --color-primary-h: #2563EB;
+  --color-primary-l: rgba(30,77,183,.18);
+  --sh-sm: 0 1px 3px rgba(0,0,0,.4), 0 1px 2px rgba(0,0,0,.3);
+  --sh-md: 0 4px 6px -1px rgba(0,0,0,.4), 0 2px 4px -2px rgba(0,0,0,.3);
+  --sh-lg: 0 10px 15px -3px rgba(0,0,0,.4), 0 4px 6px -4px rgba(0,0,0,.3);
+  --kpi-blue-bg:  #1E3A8A22; --kpi-blue-acc:  #60A5FA; --kpi-blue-txt: #93C5FD;
+  --kpi-navy-bg:  #1A2A6422; --kpi-navy-acc:  #818CF8; --kpi-navy-txt: #A5B4FC;
+  --kpi-sky-bg:   #0C406422; --kpi-sky-acc:   #38BDF8; --kpi-sky-txt:  #7DD3FC;
+  --kpi-green-bg: #14532D18; --kpi-green-acc: #4ADE80; --kpi-green-txt:#86EFAC;
+  --booking-pending-f: #3B82F6;
+  --booking-partial-f: #0284C7;
+  --booking-paid-f:    #22C55E;
+  --booking-blocked:   #4A6FA0;
 }
 [data-theme="dark"] .config-input  { background: #0f172a; }
 [data-theme="dark"] .src-chip      { background: #1e293b; }
@@ -4144,13 +4160,13 @@ input[type="color"].unit-color-input::-webkit-color-swatch { border: none; borde
 }
 
 .kpi-blue  { border-top-color: var(--kpi-blue-acc);  }
-.kpi-amber { border-top-color: var(--kpi-amber-acc); }
-.kpi-rose  { border-top-color: var(--kpi-rose-acc);  }
+.kpi-amber { border-top-color: var(--kpi-navy-acc); }
+.kpi-rose  { border-top-color: var(--kpi-sky-acc);  }
 .kpi-green { border-top-color: var(--kpi-green-acc); }
 
 .kpi-blue::before  { background: radial-gradient(ellipse at top left, var(--kpi-blue-acc),  transparent 70%); }
-.kpi-amber::before { background: radial-gradient(ellipse at top left, var(--kpi-amber-acc), transparent 70%); }
-.kpi-rose::before  { background: radial-gradient(ellipse at top left, var(--kpi-rose-acc),  transparent 70%); }
+.kpi-amber::before { background: radial-gradient(ellipse at top left, var(--kpi-navy-acc), transparent 70%); }
+.kpi-rose::before  { background: radial-gradient(ellipse at top left, var(--kpi-sky-acc),  transparent 70%); }
 .kpi-green::before { background: radial-gradient(ellipse at top left, var(--kpi-green-acc), transparent 70%); }
 
 .kpi-card:hover {
