@@ -393,15 +393,15 @@ function setupNavByRole() {
 // NAVEGACIÓN
 // ══════════════════════════════════════════════════
 const SECTION_META = {
-  dashboard:  { title: 'Panel de Hoy',            icon: '🏠', sub: 'Resumen operativo diario' },
-  calendar:   { title: 'Calendario de Ocupación', icon: '📅', sub: 'Vista mensual · Drag & Drop · SHIFT+arrastre para bloquear' },
-  bookings:   { title: 'Reservas',                icon: '📋', sub: 'Gestión completa de reservas' },
-  statistics: { title: 'Estadísticas',            icon: '📊', sub: 'Ingresos · Ocupación · ADR · RevPAR' },
-  reminders:  { title: 'Recordatorios',           icon: '🔔', sub: 'Recordatorios y mantenimiento programado' },
-  guests:     { title: 'Huéspedes / CRM',         icon: '👥', sub: 'Historial · Notas · Antecedentes' },
-  operations: { title: 'Operaciones',             icon: '🔧', sub: 'Limpieza · Mantenimiento' },
-  audit:      { title: 'Auditoría',               icon: '📜', sub: 'Registro de acciones del sistema' },
-  config:     { title: 'Configuración',           icon: '⚙️', sub: 'Comisiones · Tarifas · Departamentos' },
+  dashboard:  { title: 'Dashboard',                  icon: '🏠', sub: 'Panel de Hoy · Resumen operativo diario' },
+  calendar:   { title: 'Calendario de Ocupación',    icon: '📅', sub: 'Panel de Reservas · Drag & Drop · SHIFT+arrastre para bloquear' },
+  bookings:   { title: 'Reservas',                   icon: '📋', sub: 'Planilla de Reservas · Gestión completa' },
+  statistics: { title: 'Estadísticas',               icon: '📊', sub: 'Panel de Rendimiento · Ingresos · Ocupación · ADR · RevPAR' },
+  reminders:  { title: 'Recordatorios',              icon: '🔔', sub: 'Agenda de Tareas · Mantenimiento programado' },
+  guests:     { title: 'Huéspedes',                  icon: '👥', sub: 'CRM · Historial · Notas · Antecedentes' },
+  operations: { title: 'Operaciones',                icon: '🔧', sub: 'Panel Operativo · Limpieza · Mantenimiento' },
+  audit:      { title: 'Auditoría',                  icon: '📜', sub: 'Registro del Sistema · Historial de acciones' },
+  config:     { title: 'Configuración',              icon: '⚙️', sub: 'Panel de Administración · Comisiones · Tarifas · Departamentos' },
 };
 const SECTION_TITLES = Object.fromEntries(Object.entries(SECTION_META).map(([k,v]) => [k, v.title]));
 
@@ -432,7 +432,9 @@ export async function navigateTo(section) {
     el.classList.toggle('active', el.dataset.section === section));
   document.querySelectorAll('.section').forEach(el => el.classList.remove('active'));
   document.getElementById(`section-${section}`)?.classList.add('active');
-  document.getElementById('header-title').textContent = SECTION_TITLES[section] ?? section;
+  document.getElementById('header-title').textContent = SECTION_META[section]?.title ?? section;
+  const subEl = document.getElementById('header-sub');
+  if (subEl) subEl.textContent = SECTION_META[section]?.sub ?? '';
 
   Sound?.click();
   updateHeaderDate();
@@ -455,8 +457,10 @@ export async function navigateTo(section) {
 }
 
 function updateHeaderDate() {
-  document.getElementById('header-date').textContent =
-    new Date().toLocaleDateString('es-AR', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
+  const dateStr = new Date().toLocaleDateString('es-AR', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
+  // Keep the legacy element working if it exists
+  const dateEl = document.getElementById('header-date');
+  if (dateEl) dateEl.textContent = dateStr;
 }
 
 // ══════════════════════════════════════════════════

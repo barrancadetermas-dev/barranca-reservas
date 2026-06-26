@@ -235,7 +235,7 @@ svg { flex-shrink: 0; }
   z-index: 50;
 }
 .sidebar-logo {
-  display: flex; align-items: center; gap: var(--sp-12);
+  display: flex; align-items: center; gap: var(--sp-8);
   padding: 0 var(--sp-16);
   height: 64px;
   border-bottom: 1px solid rgba(255,255,255,.06);
@@ -319,7 +319,9 @@ svg { flex-shrink: 0; }
 .header-left  { display: flex; align-items: center; gap: var(--sp-16); }
 .header-right { display: flex; align-items: center; gap: var(--sp-12); }
 .sidebar-toggle { color: var(--color-text-2); display: none; padding: var(--sp-8); border-radius: var(--r-sm); }
-.header-title { font-size: 1rem; font-weight: 700; color: var(--color-text); }
+.header-title-block { display: flex; flex-direction: column; gap: 1px; }
+.header-title { font-size: 1rem; font-weight: 700; color: var(--color-text); line-height: 1.2; }
+.header-sub   { font-size: .7rem; color: var(--color-text-3); line-height: 1; }
 .header-date  { font-size: .78rem; color: var(--color-text-3); }
 
 .dollar-badge {
