@@ -145,6 +145,7 @@ export class Dashboard {
       `)
       .eq('hotel_id', hotelId)
       .neq('status', 'cancelled')
+      .neq('status', 'blocked')
       .lte('check_in',  today)
       .gt('check_out', today);
 
@@ -158,7 +159,8 @@ export class Dashboard {
       `)
       .eq('hotel_id', hotelId)
       .eq('check_in', today)
-      .neq('status', 'cancelled');
+      .neq('status', 'cancelled')
+      .neq('status', 'blocked');
 
     // Check-outs hoy
     const { data: checkouts } = await this.db
@@ -170,7 +172,8 @@ export class Dashboard {
       `)
       .eq('hotel_id', hotelId)
       .eq('check_out', today)
-      .neq('status', 'cancelled');
+      .neq('status', 'cancelled')
+      .neq('status', 'blocked');
 
     // Unidades ocupadas hoy (para ocupación) — con detalle de huésped para tooltip
     const occupiedUnitIds = new Set();
