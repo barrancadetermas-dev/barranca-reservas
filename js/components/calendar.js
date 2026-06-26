@@ -82,7 +82,6 @@ export class Calendar {
       const cellMap     = this._buildCellMap(bookings);
       const reminderMap = this._buildReminderMap(reminders);
       this._render(cellMap, reminderMap);
-      this._renderAccordionLegend();
       if (!this._dragBound) {
         const grid = document.getElementById('calendar-grid');
         if (grid) {
@@ -455,83 +454,6 @@ export class Calendar {
       this._ctxTarget = { unitId, day, dateISO };
       this._showContextMenu(e.clientX, e.clientY);
     });
-  }
-
-  // ── ACCORDION LEGEND ─────────────────────────────
-  _renderAccordionLegend() {
-    const container = document.getElementById('cal-legend-container');
-    if (!container) return;
-
-    const STATUS_ITEMS = [
-      { color: '#EAB308', label: 'Sin seña (directo)' },
-      { color: '#DC2626', label: 'Con seña / depósito' },
-      { color: '#16A34A', label: 'Pagado' },
-      { color: '#374151', label: 'Bloqueo / No disponible' },
-    ];
-
-    const CHANNEL_ITEMS = Object.entries(SOURCE_CONFIG)
-      .filter(([k]) => k !== 'direct')
-      .map(([, cfg]) => ({ color: cfg.dot ?? cfg.color ?? '#64748b', label: cfg.label }));
-
-    const UNIT_ITEMS = this.ctx.units.map(u => ({
-      color: getUnitColor(u), label: getUnitLabel(u),
-    }));
-
-    const CAL_ITEMS = [
-      { color: 'rgba(99,102,241,.15)', border: '#6366f1', label: 'Fin de semana' },
-      { color: 'rgba(239,68,68,.12)',  border: '#ef4444', label: 'Feriado nacional' },
-      { color: 'rgba(168,85,247,.10)', border: '#a855f7', label: 'Puente turístico' },
-      { color: 'rgba(20,184,166,.10)', border: '#14b8a6', label: 'Vacaciones invierno' },
-    ];
-
-    const savedState = JSON.parse(localStorage.getItem('mila_legend_state') ?? 'null') ?? {
-      status: true, channels: false, units: false, calendar: false
-    };
-
-    const section = (key, title, items, isUnit = false) => {
-      const open = savedState[key];
-      return `
-        <div class="legend-accordion">
-          <button class="legend-acc-header ${open ? 'open' : ''}"
-                  onclick="window._calInstance._legendToggle('${key}')">
-            <span class="legend-acc-title">${title}</span>
-            <svg class="legend-acc-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                 stroke-width="2.5" width="14" height="14">
-              <polyline points="6 9 12 15 18 9"/>
-            </svg>
-          </button>
-          <div class="legend-acc-body ${open ? 'open' : ''}">
-            ${items.map(i => `
-              <div class="legend-item">
-                ${isUnit
-                  ? `<div class="legend-swatch-circle" style="background:${i.color}"></div><span style="color:${i.color};font-weight:700">${i.label}</span>`
-                  : i.border
-                    ? `<div class="legend-swatch" style="background:${i.color};border:1px solid ${i.border}"></div><span>${i.label}</span>`
-                    : `<div class="legend-swatch" style="background:${i.color}"></div><span>${i.label}</span>`
-                }
-              </div>`).join('')}
-          </div>
-        </div>`;
-    };
-
-    container.innerHTML = `
-      <div class="legend-accordion-wrapper">
-        ${section('status',   '📊 Estado',        STATUS_ITEMS)}
-        ${section('channels', '🔗 Canales',        CHANNEL_ITEMS)}
-        ${section('units',    '🛏️ Departamentos', UNIT_ITEMS, true)}
-        ${section('calendar', '📅 Calendario',     CAL_ITEMS)}
-      </div>`;
-
-    window._calInstance._legendToggle = this._legendToggle.bind(this);
-  }
-
-  _legendToggle(key) {
-    const saved = JSON.parse(localStorage.getItem('mila_legend_state') ?? 'null') ?? {
-      status: true, channels: false, units: false, calendar: false
-    };
-    saved[key] = !saved[key];
-    localStorage.setItem('mila_legend_state', JSON.stringify(saved));
-    this._renderAccordionLegend();
   }
 
   // ── Drag selection (crear reserva o bloqueo) ────────
@@ -1259,7 +1181,6 @@ export class Calendar {
       });
     });
 
-    this._renderAccordionLegend();
     document.getElementById('cal-month-title').textContent = weekStr;
   }
 
