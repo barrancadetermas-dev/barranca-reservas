@@ -98,8 +98,7 @@ async function boot() {
 // DARK MODE
 // ══════════════════════════════════════════════════
 function initDarkMode() {
-  const saved = localStorage.getItem('pms-theme') ??
-    (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+  const saved = localStorage.getItem('pms-theme') ?? 'light';
   applyDarkMode(saved);
 }
 function applyDarkMode(theme) {

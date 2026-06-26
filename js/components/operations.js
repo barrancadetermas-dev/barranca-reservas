@@ -640,7 +640,7 @@ export class OperationsModule {
           status:      'open',
           priority:    modal.querySelector('#mi-priority').value || 'medium',
           assigned_to: modal.querySelector('#mi-assigned').value.trim() || null,
-        }), 'Crear incidencia de mantenimiento');
+        }), 'Crear incidencia de mantenimiento', 8000);
         if (error) throw error;
         showToast('Incidencia registrada ✓', 'success');
         close();
@@ -649,7 +649,12 @@ export class OperationsModule {
         if (typeof updateOperationsBadge === 'function') updateOperationsBadge();
       } catch (err) {
         console.error('[Operations] maintenance insert:', err);
-        showToast('Error: ' + (err?.message ?? 'Verificá migration_complete_v8.sql'), 'error');
+        // Si el error es de permisos RLS, dar instrucción específica
+        const isRLS = err?.message?.includes('policy') || err?.message?.includes('permission') || err?.message?.includes('tardó demasiado');
+        const msg = isRLS
+          ? 'Sin permiso para insertar. Ejecutá fix_all_rls.sql en Supabase → SQL Editor.'
+          : 'Error: ' + (err?.message ?? 'Intentá nuevamente');
+        showToast(msg, 'error');
         if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Registrar'; }
       }
     });

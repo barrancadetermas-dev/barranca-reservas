@@ -1,19 +1,11 @@
 /* =======================================================================
-   MILA PMS — Mobile Fixes v2.1 (selectores corregidos)
+   MILA PMS — Mobile Fixes v3.0
    Carga DESPUÉS de styles.css — solo overrides necesarios
    ======================================================================= */
 
 /* -----------------------------------------------------------------------
    1. CALENDARIO — Scroll horizontal + sticky correctos
    ----------------------------------------------------------------------- */
-
-/* El scroll container ya existe (.cal-wrapper { overflow-x: auto })
-   El sticky ya existe en .cal-unit-label y .cal-unit-label-header.
-   El único fix necesario en JS: grid.style.width = 'max-content'
-   (ya está en calendar.js v4.1).
-
-   En mobile: asegurar que .cal-wrapper ocupe el ancho disponible
-   y que el scrollbar sea visible y usable */
 
 .cal-wrapper {
   -webkit-overflow-scrolling: touch;
@@ -39,7 +31,6 @@
 
 /* -----------------------------------------------------------------------
    2. BOTÓN "COBRAR" — ya tiene CSS específico en styles.css v2.1
-      Redundancia eliminada. El fix está en .bl-action-btn.bl-payfull-btn
    ----------------------------------------------------------------------- */
 
 /* -----------------------------------------------------------------------
@@ -47,22 +38,15 @@
    ----------------------------------------------------------------------- */
 
 @media (max-width: 640px) {
-  /* Fila de reserva: stack en mobile */
   .booking-row-main {
     gap: 8px !important;
   }
-
-  /* Ocultar columna de fechas en pantallas muy chicas si hay espacio */
   .booking-dates-col {
     min-width: 120px !important;
   }
-
-  /* Columna de monto: más compacta */
   .booking-amount-col {
     min-width: 90px !important;
   }
-
-  /* Acciones: más pequeñas */
   .booking-actions-cell {
     gap: 4px !important;
   }
@@ -70,7 +54,6 @@
     width: 30px !important;
     height: 30px !important;
   }
-  /* Excepto el botón Cobrar que necesita texto */
   .bl-action-btn.bl-payfull-btn {
     width: auto !important;
     height: 30px !important;
@@ -142,7 +125,7 @@
   .form-group input[type="password"],
   .form-group select,
   .form-group textarea {
-    font-size: 16px !important; /* Evita zoom automático en iOS Safari */
+    font-size: 16px !important;
     min-height: 44px;
   }
 }
@@ -219,24 +202,24 @@
 }
 
 /* -----------------------------------------------------------------------
-   12. FIXES ADICIONALES — Panel cortado + opciones ocultas en mobile
+   12. FIXES ADICIONALES — Panel + overflow + calendario
    ----------------------------------------------------------------------- */
 
-/* Evitar que el contenido quede oculto bajo bottom nav */
 @media (max-width: 768px) {
+  /* Espacio para bottom nav */
   .main-content {
     padding-bottom: calc(70px + env(safe-area-inset-bottom, 0px)) !important;
     min-height: calc(100dvh - var(--header-h, 56px));
   }
 
-  /* Sidebar overlay: asegurar que cubre todo y scroll interno funciona */
+  /* Sidebar overlay */
   .sidebar {
     height: 100dvh !important;
     overflow-y: auto !important;
     -webkit-overflow-scrolling: touch;
   }
 
-  /* Header: no cortar botones en pantallas angostas */
+  /* Header: no cortar botones */
   .main-header {
     padding: 0 var(--sp-12) !important;
     gap: var(--sp-8) !important;
@@ -246,31 +229,31 @@
     flex-wrap: nowrap;
     overflow: visible;
   }
-  /* Ocultar etiquetas de texto en header si no entran */
   .header-right .btn-label {
     display: none !important;
   }
 
-  /* Paneles flotantes (notificaciones, tema, etc) no salirse de pantalla */
+  /* Paneles flotantes: no salirse de pantalla, por ENCIMA del bottom nav */
   [id$="-panel"], .dropdown-panel, .notif-panel, #notif-panel, #theme-panel {
     max-width: calc(100vw - 16px) !important;
     right: 8px !important;
     left: auto !important;
+    /* Asegurar que aparecen sobre el calendario y el bottom nav */
+    z-index: 500 !important;
   }
-  /* Si el panel está muy abajo, asegurar que no quede tapado por bottom nav */
   [id$="-panel"], .dropdown-panel {
     max-height: calc(100dvh - var(--header-h, 56px) - 70px) !important;
     overflow-y: auto !important;
   }
 
-  /* KPI cards: mínimo 2 columnas, sin overflow */
+  /* KPI cards */
   .kpi-grid {
     grid-template-columns: 1fr 1fr !important;
     gap: var(--sp-8) !important;
     overflow: visible !important;
   }
 
-  /* Toolbar del calendario: scroll horizontal para no cortar botones */
+  /* Toolbar del calendario: scroll horizontal */
   .cal-toolbar {
     overflow-x: auto !important;
     overflow-y: visible !important;
@@ -283,10 +266,31 @@
   .cal-toolbar::-webkit-scrollbar { display: none; }
   .cal-toolbar > * { flex-shrink: 0 !important; }
 
-  /* Sección activa: no cortar contenido horizontal */
+  /* ── CALENDARIO: fix superposición ──────────────────────────────
+     .section.active NO debe tener overflow-x:hidden porque corta
+     el calendario al hacer scroll horizontal.
+     El scroll está contenido en .cal-wrapper, no en la sección.
+  ─────────────────────────────────────────────────────────────── */
   .section.active {
     max-width: 100vw;
-    overflow-x: hidden;
+    overflow-x: visible;  /* ← era hidden, cortaba el cal al scrollear */
+    overflow-y: visible;
+  }
+
+  /* El calendario en sí: el wrapper controla el scroll */
+  .cal-wrapper {
+    width: 100%;
+    max-width: 100vw;
+    overflow-x: auto !important;
+    overflow-y: visible !important;  /* permite que barras no se corten */
+    position: relative;
+    z-index: 1;  /* debajo de paneles flotantes (z-index: 500) */
+  }
+
+  /* Las barras de reserva no deben sobresalir del grid */
+  .cal-grid {
+    position: relative;
+    z-index: 1;
   }
 
   /* Tables: scroll horizontal */
@@ -308,5 +312,16 @@
   }
   .kpi-value {
     font-size: 1.2rem !important;
+  }
+}
+
+/* -----------------------------------------------------------------------
+   13. MOBILE-ONLY HIDDEN — Auditoría y Estadísticas solo en desktop
+   ----------------------------------------------------------------------- */
+
+@media (max-width: 768px) {
+  /* Ocultar en sidebar mobile */
+  .nav-item.mobile-hidden {
+    display: none !important;
   }
 }
