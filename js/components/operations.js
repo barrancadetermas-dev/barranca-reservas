@@ -5,7 +5,7 @@
 // • Stock e Insumos (alertas de stock bajo)
 // ══════════════════════════════════════════════════
 
-import { showToast, toISODate, formatDate, formatARS } from '../supabase-config.js';
+import { showToast, toISODate, formatDate, formatARS, getUnitColor, getUnitChipHTML } from '../supabase-config.js';
 import { can } from '../auth/permissions.js';
 import { logAction } from '../services/audit-service.js';
 
@@ -18,7 +18,8 @@ const PRIORITY_CONFIG = {
 
 const MAINTENANCE_CATEGORIES = [
   'Aire acondicionado','Termotanque','Televisor','WiFi / Internet',
-  'Plomería','Electricidad','Mobiliario','Electrodoméstico','Estructural','Otro',
+  'Plomería','Electricidad','Mobiliario','Electrodoméstico','Estructural',
+  'Bloqueo calendario','Otro',
 ];
 
 const STOCK_ITEMS = [
@@ -359,7 +360,8 @@ export class OperationsModule {
     header.innerHTML = can('manageReminders')
       ? `<button class="btn btn-primary btn-sm" id="btn-add-maint">+ Nueva incidencia</button>`
       : '';
-    header.querySelector('#btn-add-maint')?.addEventListener('click', () => this._openMaintenanceModal());
+    const addMaintBtn = header.querySelector('#btn-add-maint');
+    if (addMaintBtn) addMaintBtn.addEventListener('click', () => this._openMaintenanceModal(panel, header));
 
     try {
       // Cargar maintenance_issues y bloqueos huérfanos en paralelo
@@ -449,6 +451,16 @@ export class OperationsModule {
             panel.dataset.maintBound = '';
             await this._loadMaintenance(panel, header);
             if (typeof updateOperationsBadge === 'function') updateOperationsBadge();
+          }
+
+          if (btn.classList.contains('maint-edit-btn')) {
+            const issueId = btn.dataset.id;
+            const allIssues = [...panel.querySelectorAll('.ops-row[data-id]')].map(r => r.dataset.id);
+            // Fetch the issue data from DB and open edit modal
+            const { data: iss } = await this.db.from('maintenance_issues')
+              .select('*').eq('id', issueId).single();
+            if (iss) this._openMaintenanceEditModal(iss, panel, header);
+            return;
           }
 
           if (btn.classList.contains('maint-delete-btn')) {
@@ -542,12 +554,13 @@ export class OperationsModule {
           ${isOpen
             ? `<button class="btn btn-primary btn-xs maint-resolve-btn" data-id="${issue.id}">✓ Resolver</button>`
             : `<span style="font-size:.72rem;color:var(--color-text-3)">Resuelto</span>`}
+          <button class="btn btn-ghost btn-xs maint-edit-btn" data-id="${issue.id}" title="Editar" style="font-size:.85rem;">✏️</button>
           <button class="btn btn-ghost btn-xs maint-delete-btn" data-id="${issue.id}" title="Eliminar">🗑️</button>
         </div>
       </div>`;
   }
 
-  _openMaintenanceModal() {
+  _openMaintenanceModal(panel, header) {
     const units = this.ctx.units ?? [];
     const existing = document.getElementById('overlay-maint-issue');
     if (existing) existing.remove();
@@ -624,20 +637,115 @@ export class OperationsModule {
           unit_id:     unitVal || null,
           category:    modal.querySelector('#mi-cat')?.value || null,
           title,
-          status:      'pending',
+          status:      'open',
           priority:    modal.querySelector('#mi-priority').value || 'medium',
           assigned_to: modal.querySelector('#mi-assigned').value.trim() || null,
         }), 'Crear incidencia de mantenimiento');
         if (error) throw error;
         showToast('Incidencia registrada ✓', 'success');
         close();
-        const container = document.getElementById('operations-container');
-        if (container) await this._loadTab('maintenance', container);
+        panel.dataset.maintBound = '';
+        await this._loadMaintenance(panel, header);
         if (typeof updateOperationsBadge === 'function') updateOperationsBadge();
       } catch (err) {
         console.error('[Operations] maintenance insert:', err);
         showToast('Error: ' + (err?.message ?? 'Verificá migration_complete_v8.sql'), 'error');
         if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Registrar'; }
+      }
+    });
+  }
+
+
+  // ── Modal de edición de incidencia de mantenimiento ──
+  _openMaintenanceEditModal(issue, panel, header) {
+    const existing = document.getElementById('overlay-maint-edit');
+    if (existing) existing.remove();
+
+    const unitObj  = this.ctx.units?.find(u => String(u.id) === String(issue.unit_id));
+    const unitChip = unitObj ? getUnitChipHTML(unitObj, 'sm') : '<span style="color:var(--color-text-3);font-size:.8rem;">General / Sin unidad</span>';
+
+    const modal = document.createElement('div');
+    modal.className = 'modal-overlay';
+    modal.id = 'overlay-maint-edit';
+    modal.innerHTML = `
+      <div class="modal modal-sm">
+        <div class="modal-header" style="background:var(--color-surface-2);">
+          <div style="display:flex;flex-direction:column;gap:4px;">
+            <h3 class="modal-title">✏️ Editar incidencia</h3>
+            <div>${unitChip}</div>
+          </div>
+          <button class="modal-close" id="me-close">✕</button>
+        </div>
+        <div class="modal-body">
+          <div class="form-grid-2">
+            <div class="form-group">
+              <label>Categoría</label>
+              <select id="me-cat" class="filter-select">
+                ${MAINTENANCE_CATEGORIES.map(c => `<option${c === issue.category ? ' selected' : ''}>${c}</option>`).join('')}
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Prioridad</label>
+              <select id="me-priority" class="filter-select">
+                ${['low','medium','high','urgent'].map(p => `<option value="${p}"${p === issue.priority ? ' selected' : ''}>${{low:'Baja',medium:'Media',high:'Alta',urgent:'Urgente'}[p]}</option>`).join('')}
+              </select>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Título / Descripción</label>
+            <input type="text" id="me-title" value="${(issue.title ?? '').replace(/"/g, '&quot;')}" placeholder="Descripción de la incidencia">
+          </div>
+          <div class="form-group">
+            <label>Notas adicionales</label>
+            <textarea id="me-notes" rows="2" placeholder="Notas, detalles, presupuesto...">${issue.description ?? ''}</textarea>
+          </div>
+          <div class="form-group">
+            <label>Responsable</label>
+            <input type="text" id="me-assigned" value="${(issue.assigned_to ?? '').replace(/"/g, '&quot;')}" placeholder="Nombre / empresa">
+          </div>
+        </div>
+        <div class="modal-footer" style="flex-wrap:wrap;gap:8px;">
+          <button class="btn btn-outline" id="me-cancel">Cancelar</button>
+          <button class="btn btn-primary" id="me-save">Guardar cambios</button>
+        </div>
+      </div>`;
+
+    document.body.appendChild(modal);
+    modal.style.zIndex = '210';
+
+    const close = () => {
+      modal.remove();
+      if (escHandler) document.removeEventListener('keydown', escHandler);
+    };
+    const escHandler = (e) => { if (e.key === 'Escape') close(); };
+    document.addEventListener('keydown', escHandler);
+    modal.querySelector('#me-close').onclick = close;
+    modal.querySelector('#me-cancel').onclick = close;
+    modal.addEventListener('click', e => { if (e.target === modal) close(); });
+    setTimeout(() => modal.querySelector('#me-title')?.focus(), 80);
+
+    modal.querySelector('#me-save').addEventListener('click', async () => {
+      const title = modal.querySelector('#me-title').value.trim();
+      if (!title) { showToast('Ingresá una descripción', 'warning'); return; }
+      const saveBtn = modal.querySelector('#me-save');
+      saveBtn.disabled = true; saveBtn.textContent = 'Guardando...';
+      try {
+        const { error } = await this.db.from('maintenance_issues').update({
+          title,
+          description:  modal.querySelector('#me-notes').value.trim() || null,
+          category:     modal.querySelector('#me-cat').value || null,
+          priority:     modal.querySelector('#me-priority').value || 'medium',
+          assigned_to:  modal.querySelector('#me-assigned').value.trim() || null,
+        }).eq('id', issue.id);
+        if (error) throw error;
+        showToast('Incidencia actualizada ✓', 'success');
+        close();
+        panel.dataset.maintBound = '';
+        await this._loadMaintenance(panel, header);
+      } catch (err) {
+        console.error('[Operations] maint edit:', err);
+        showToast('Error: ' + (err?.message ?? String(err)), 'error');
+        saveBtn.disabled = false; saveBtn.textContent = 'Guardar cambios';
       }
     });
   }

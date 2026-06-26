@@ -697,12 +697,11 @@ export class Calendar {
             <input type="text" id="block-reason" value="${bookingData.block_reason ?? ''}" placeholder="Mantenimiento, uso propio, reparación...">
           </div>
         </div>
-        <div class="modal-footer" style="justify-content:space-between;">
-          <button class="btn btn-outline" id="block-delete-btn" style="color:#dc2626;border-color:#fecaca;">🗑️ Eliminar bloqueo</button>
-          <div style="display:flex;gap:8px;">
-            <button class="btn btn-outline" id="block-cancel-btn">Cancelar</button>
-            <button class="btn btn-primary" id="block-save-btn">Guardar cambios</button>
-          </div>
+        <div class="modal-footer" style="flex-wrap:wrap;gap:8px;">
+          <button class="btn btn-outline" id="block-delete-btn"
+                  style="color:#dc2626;border-color:#fecaca;margin-right:auto;">🗑️ Eliminar</button>
+          <button class="btn btn-outline" id="block-cancel-btn">Cancelar</button>
+          <button class="btn btn-primary" id="block-save-btn">Guardar cambios</button>
         </div>
       </div>`;
 
