@@ -485,18 +485,6 @@ svg { flex-shrink: 0; }
 }
 .cal-unit-label .unit-floor { font-size: .68rem; color: var(--color-text-3); font-weight: 500; letter-spacing: .01em; }
 
-/* Zebra striping */
-.cal-unit-label[data-row-parity="odd"],
-.cal-cell[data-row-parity="odd"] {
-  background-color: var(--color-surface-2);
-}
-.cal-unit-label[data-row-parity="even"],
-.cal-cell[data-row-parity="even"] {
-  background-color: var(--color-surface);
-}
-.cal-cell[data-row-parity="odd"]:hover  { background: var(--color-primary-l) !important; }
-.cal-cell[data-row-parity="even"]:hover { background: var(--color-primary-l) !important; }
-
 /* Calendar cells */
 .cal-cell {
   position: relative; height: 44px;
@@ -2124,14 +2112,14 @@ select {
 
 /* ── CALENDARIO: FIN DE SEMANA ──────────────────── */
 .cal-day-header.weekend {
-  background: rgba(99,102,241,.07);
-  color: #6366f1;
+  background: rgba(148,163,184,.10);
+  color: var(--color-text-2);
 }
-.cal-day-header.weekend .day-name { color: rgba(99,102,241,.6); }
+.cal-day-header.weekend .day-name { color: var(--color-text-3); }
 .weekend-col {
-  background: rgba(99,102,241,.03);
+  background: rgba(148,163,184,.055);
 }
-.weekend-col:hover { background: rgba(99,102,241,.08) !important; }
+.weekend-col:hover { background: rgba(99,102,241,.07) !important; }
 
 /* ── CALENDARIO: FERIADOS ───────────────────────── */
 .cal-day-header.holiday {
@@ -2178,8 +2166,8 @@ select {
 }
 
 /* ── DARK MODE: feriados/weekends ─────────────────── */
-[data-theme="dark"] .cal-day-header.weekend { background: rgba(99,102,241,.12); }
-[data-theme="dark"] .weekend-col { background: rgba(99,102,241,.05); }
+[data-theme="dark"] .cal-day-header.weekend { background: rgba(148,163,184,.09); }
+[data-theme="dark"] .weekend-col { background: rgba(148,163,184,.055) !important; }
 [data-theme="dark"] .cal-day-header.holiday { background: rgba(239,68,68,.12); }
 [data-theme="dark"] .holiday-col  { background: rgba(239,68,68,.07); }
 [data-theme="dark"] .vacation-col { background: rgba(20,184,166,.08); }
@@ -2400,7 +2388,7 @@ select {
 /* ── 6. DARK MODE: Calendar mejorado ─────────────── */
 [data-theme="dark"] .cal-cell:hover { background: rgba(99,102,241,.1) !important; }
 [data-theme="dark"] .today-col { background: rgba(99,102,241,.1) !important; }
-[data-theme="dark"] .weekend-col { background: rgba(99,102,241,.06) !important; }
+[data-theme="dark"] .weekend-col { background: rgba(148,163,184,.055) !important; }
 [data-theme="dark"] .cal-unit-label { background: #1a2535; }
 [data-theme="dark"] .cal-unit-label-header { background: #1a2535; }
 [data-theme="dark"] .cal-day-header { background: #141f30; }
@@ -2844,7 +2832,7 @@ input[type="color"].unit-color-input::-webkit-color-swatch { border: none; borde
   background: rgba(99,102,241,.05) !important;
 }
 .week-cell.weekend-col {
-  background: rgba(99,102,241,.025) !important;
+  background: rgba(148,163,184,.055) !important;
 }
 .week-cell.past-col {
   background: rgba(0,0,0,.02) !important;
@@ -2868,7 +2856,7 @@ input[type="color"].unit-color-input::-webkit-color-swatch { border: none; borde
 }
 .cal-day-header.today .dh-num { font-weight: 800 !important; }
 
-.cal-day-header.weekend { background: rgba(99,102,241,.05) !important; color: var(--color-primary) !important; }
+.cal-day-header.weekend { background: rgba(148,163,184,.09) !important; color: var(--color-text-2) !important; }
 
 /* Número del día en header */
 .dh-num { font-size: .875rem; font-weight: 700; display: block; line-height: 1; }
@@ -3066,12 +3054,12 @@ input[type="color"].unit-color-input::-webkit-color-swatch { border: none; borde
 
 /* ── FINES DE SEMANA ──────────────────────────────── */
 .cal-day-header.weekend {
-  background: rgba(99,102,241,.06) !important;
-  color: var(--color-primary) !important;
+  background: rgba(148,163,184,.09) !important;
+  color: var(--color-text-2) !important;
 }
-.cal-day-header.weekend .day-name { color: rgba(99,102,241,.7); }
-.weekend-col { background: rgba(99,102,241,.02) !important; }
-.weekend-col:hover { background: rgba(99,102,241,.06) !important; }
+.cal-day-header.weekend .day-name { color: var(--color-text-3); }
+.weekend-col { background: rgba(148,163,184,.055) !important; }
+.weekend-col:hover { background: rgba(99,102,241,.07) !important; }
 
 /* ── FERIADOS ─────────────────────────────────────── */
 .cal-day-header.holiday { background: rgba(239,68,68,.07) !important; }
@@ -3108,13 +3096,13 @@ input[type="color"].unit-color-input::-webkit-color-swatch { border: none; borde
   box-shadow: inset 0 2px 0 rgba(99,102,241,.4);
 }
 .week-cell.past-col { background: rgba(0,0,0,.045) !important; }
-.week-cell.weekend-col { background: rgba(99,102,241,.025) !important; }
+.week-cell.weekend-col { background: rgba(148,163,184,.055) !important; }
 
 /* ── DARK MODE: calendario ────────────────────────── */
 [data-theme="dark"] .cal-day-header.today    { background: rgba(99,102,241,.2) !important; }
 [data-theme="dark"] .cal-cell:not(.week-cell).today-col { background: rgba(99,102,241,.1) !important; }
-[data-theme="dark"] .cal-day-header.weekend   { background: rgba(99,102,241,.15) !important; }
-[data-theme="dark"] .weekend-col              { background: rgba(99,102,241,.05) !important; }
+[data-theme="dark"] .cal-day-header.weekend   { background: rgba(148,163,184,.09) !important; }
+[data-theme="dark"] .weekend-col              { background: rgba(148,163,184,.055) !important; }
 [data-theme="dark"] .holiday-col              { background: rgba(239,68,68,.08) !important; }
 [data-theme="dark"] .cal-day-header.holiday   { background: rgba(239,68,68,.1) !important; }
 
@@ -4310,16 +4298,6 @@ input[type="color"].unit-color-input::-webkit-color-swatch { border: none; borde
 }
 #btn-new-booking:hover .btn-new-booking-icon {
   transform: rotate(-8deg) scale(1.15);
-}
-
-/* ── Dark mode zebra fix ─────────────────────────── */
-[data-theme="dark"] .cal-unit-label[data-row-parity="odd"],
-[data-theme="dark"] .cal-cell[data-row-parity="odd"] {
-  background-color: rgba(255,255,255,.035) !important;
-}
-[data-theme="dark"] .cal-unit-label[data-row-parity="even"],
-[data-theme="dark"] .cal-cell[data-row-parity="even"] {
-  background-color: #1e293b !important;
 }
 
 /* ── Calendar: better bar labels ─────────────────── */
