@@ -362,16 +362,43 @@ export class OperationsModule {
     header.querySelector('#btn-add-maint')?.addEventListener('click', () => this._openMaintenanceModal());
 
     try {
-      const { data, error: listErr } = await this.db
-        .from('maintenance_issues')
-        .select('*')   // sin units() join
-        .eq('hotel_id', this.ctx.hotelId)
-        .order('created_at', { ascending: false })
-        .limit(100);
+      // Cargar maintenance_issues y bloqueos huérfanos en paralelo
+      const [issuesRes, blocksRes] = await Promise.all([
+        this.db
+          .from('maintenance_issues')
+          .select('*')
+          .eq('hotel_id', this.ctx.hotelId)
+          .order('created_at', { ascending: false })
+          .limit(100),
+        this.db
+          .from('bookings')
+          .select('id, check_in, check_out, block_reason, is_blocked, status, booking_units(unit_id)')
+          .eq('hotel_id', this.ctx.hotelId)
+          .eq('is_blocked', true)
+          .neq('status', 'cancelled')
+          .order('check_in', { ascending: false })
+          .limit(100),
+      ]);
 
-      if (listErr) throw listErr;
+      if (issuesRes.error) throw issuesRes.error;
 
-      if (!data?.length) {
+      const issues = issuesRes.data ?? [];
+
+      // IDs de bookings que ya tienen maintenance_issue
+      const linkedBookingIds = new Set(
+        issues.map(i => i.booking_id).filter(Boolean)
+      );
+
+      // Bloqueos huérfanos: no tienen maintenance_issue asociado
+      const orphanBlocks = (blocksRes.data ?? []).filter(
+        b => !linkedBookingIds.has(b.id)
+      );
+
+      const open   = issues.filter(i => i.status !== 'resolved').length + orphanBlocks.length;
+      const urgent = issues.filter(i => i.priority === 'urgent' && i.status !== 'resolved').length;
+
+      const hasContent = issues.length > 0 || orphanBlocks.length > 0;
+      if (!hasContent) {
         panel.innerHTML = `
           <div class="empty-state">
             <span class="empty-state-icon">🔧</span>
@@ -379,9 +406,6 @@ export class OperationsModule {
           </div>`;
         return;
       }
-
-      const open    = data.filter(i => i.status !== 'resolved').length;
-      const urgent  = data.filter(i => i.priority === 'urgent' && i.status !== 'resolved').length;
 
       panel.innerHTML = `
         <div class="kpi-grid" style="margin-bottom:20px">
@@ -393,7 +417,14 @@ export class OperationsModule {
           </div>
         </div>
         <div class="ops-list">
-          ${data.map(issue => this._maintenanceRowHTML(issue)).join('')}
+          ${issues.map(issue => this._maintenanceRowHTML(issue)).join('')}
+          ${orphanBlocks.length ? `
+            <div style="margin:16px 0 8px;font-size:.72rem;font-weight:700;text-transform:uppercase;
+                        letter-spacing:.06em;color:var(--color-text-3);padding:0 4px;">
+              🔒 Bloqueos del calendario sin incidencia
+            </div>
+            ${orphanBlocks.map(b => this._blockOrphanRowHTML(b)).join('')}
+          ` : ''}
         </div>`;
 
       // ── Event delegation — data-bound guard ─────────────────────
@@ -415,7 +446,7 @@ export class OperationsModule {
               return;
             }
             showToast('✅ Incidencia resuelta', 'success');
-            panel.dataset.maintBound = ''; // reset so listener re-attaches on reload
+            panel.dataset.maintBound = '';
             await this._loadMaintenance(panel, header);
             if (typeof updateOperationsBadge === 'function') updateOperationsBadge();
           }
@@ -430,12 +461,57 @@ export class OperationsModule {
             await this._loadMaintenance(panel, header);
             if (typeof updateOperationsBadge === 'function') updateOperationsBadge();
           }
+
+          // Eliminar bloqueo huérfano desde mantenimiento
+          if (btn.classList.contains('maint-block-delete-btn')) {
+            if (!confirm('¿Eliminar este bloqueo del calendario?')) return;
+            btn.disabled = true;
+            const bookingId = btn.dataset.bookingId;
+            const { error } = await this.db.from('bookings').delete().eq('id', bookingId);
+            if (error) { showToast('Error: ' + error.message, 'error'); btn.disabled = false; return; }
+            showToast('Bloqueo eliminado ✓', 'success');
+            panel.dataset.maintBound = '';
+            await this._loadMaintenance(panel, header);
+            if (typeof updateOperationsBadge === 'function') updateOperationsBadge();
+          }
         });
       }
 
     } catch (err) {
+      console.error('[Operations] _loadMaintenance error:', err);
       panel.innerHTML = this._errorHTML('maintenance_issues');
     }
+  }
+
+  // ── Fila HTML para bloqueo huérfano (sin maintenance_issue) ──
+  _blockOrphanRowHTML(block) {
+    const unitId   = block.booking_units?.[0]?.unit_id ?? null;
+    const unitObj  = this.ctx.units?.find(u => String(u.id) === String(unitId));
+    const unitName = unitObj ? `#${unitObj.sort_order} · ${unitObj.name}` : 'Sin unidad';
+    const reason   = block.block_reason ?? 'Bloqueo';
+    const ci       = block.check_in  ?? '';
+    const co       = block.check_out ?? '';
+
+    return `
+      <div class="ops-row" data-booking-id="${block.id}" style="border-left:3px solid #fca5a5;">
+        <div class="ops-row-left">
+          <span class="ops-priority-dot" style="background:#ef4444" title="Bloqueo"></span>
+          <div class="ops-row-info">
+            <div class="ops-row-title">
+              <span class="ops-unit-badge" style="margin-right:6px">${unitName}</span>
+              🔒 ${reason}
+            </div>
+            <div class="ops-row-meta">
+              <span class="ops-badge" style="background:#fef2f2;color:#dc2626;">Bloqueo calendario</span>
+              ${ci} → ${co}
+            </div>
+          </div>
+        </div>
+        <div class="ops-row-right">
+          <button class="btn btn-ghost btn-xs maint-block-delete-btn"
+                  data-booking-id="${block.id}" title="Eliminar bloqueo">🗑️</button>
+        </div>
+      </div>`;
   }
 
   _maintenanceRowHTML(issue) {

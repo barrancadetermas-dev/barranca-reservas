@@ -564,6 +564,9 @@ export class Calendar {
         .insert({ booking_id: bk.id, unit_id: unitId });
       if (buErr) throw buErr;
 
+      // Crear maintenance_issue sincronizado
+      await this._createMaintenanceForBlock(bk.id, unitId, checkIn, checkOut, reason);
+
       showToast(`🔒 ${unitName} bloqueado — ${checkIn} → ${checkOut}`, 'success');
       cache.invalidate('bookings');
       await this.load();
@@ -634,7 +637,20 @@ export class Calendar {
   async _openDetailById(bookingId) {
     if (!bookingId) return;
     try {
-      // Abrir directamente el formulario de edición (no el panel de solo lectura)
+      // Verificar si es un bloqueo para abrir el modal específico
+      const found = this._lastRenderedBookings?.find(b => b.id === bookingId);
+      if (found && (found.status === 'blocked' || found.is_blocked)) {
+        await this._openBlockModal(bookingId, found);
+        return;
+      }
+      // Si no está en la caché rendereada, consultamos en DB
+      const { data: bk } = await this.db.from('bookings')
+        .select('id, status, is_blocked, block_reason, check_in, check_out, booking_units(unit_id)')
+        .eq('id', bookingId).single();
+      if (bk && (bk.status === 'blocked' || bk.is_blocked)) {
+        await this._openBlockModal(bookingId, bk);
+        return;
+      }
       await this.bookingForm.openEdit(bookingId);
     } catch (err) {
       console.error('[Calendar] Error al abrir reserva:', err);
@@ -642,19 +658,183 @@ export class Calendar {
     }
   }
 
+  // ── Modal exclusivo para bloqueos ─────────────────
+  async _openBlockModal(bookingId, bookingData) {
+    const existing = document.getElementById('overlay-block-modal');
+    if (existing) existing.remove();
+
+    // Determinar unidad
+    const unitId   = bookingData.booking_units?.[0]?.unit_id ?? null;
+    const unitObj  = this.ctx.units?.find(u => u.id === unitId);
+    const unitName = unitObj ? `#${unitObj.sort_order} · ${unitObj.name}` : 'Sin unidad';
+
+    const modal = document.createElement('div');
+    modal.className = 'modal-overlay';
+    modal.id = 'overlay-block-modal';
+    modal.innerHTML = `
+      <div class="modal modal-sm">
+        <div class="modal-header" style="background:#fef2f2;border-bottom:1px solid #fecaca;">
+          <h3 class="modal-title" style="color:#dc2626;">🔒 Bloqueo de Calendario</h3>
+          <button class="modal-close" id="block-modal-close">✕</button>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label style="font-size:.75rem;color:var(--color-text-3);text-transform:uppercase;letter-spacing:.05em;">Unidad</label>
+            <div style="font-weight:600;color:var(--color-text-1);padding:8px 0;">${unitName}</div>
+          </div>
+          <div class="form-grid-2">
+            <div class="form-group">
+              <label>Fecha inicio</label>
+              <input type="date" id="block-checkin" value="${bookingData.check_in ?? ''}">
+            </div>
+            <div class="form-group">
+              <label>Fecha fin</label>
+              <input type="date" id="block-checkout" value="${bookingData.check_out ?? ''}">
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Motivo / Nota</label>
+            <input type="text" id="block-reason" value="${bookingData.block_reason ?? ''}" placeholder="Mantenimiento, uso propio, reparación...">
+          </div>
+        </div>
+        <div class="modal-footer" style="justify-content:space-between;">
+          <button class="btn btn-outline" id="block-delete-btn" style="color:#dc2626;border-color:#fecaca;">🗑️ Eliminar bloqueo</button>
+          <div style="display:flex;gap:8px;">
+            <button class="btn btn-outline" id="block-cancel-btn">Cancelar</button>
+            <button class="btn btn-primary" id="block-save-btn">Guardar cambios</button>
+          </div>
+        </div>
+      </div>`;
+
+    document.body.appendChild(modal);
+    modal.style.zIndex = '210';
+
+    const close = () => {
+      modal.remove();
+      if (escHandler) document.removeEventListener('keydown', escHandler);
+    };
+    const escHandler = (e) => { if (e.key === 'Escape') close(); };
+    document.addEventListener('keydown', escHandler);
+    modal.querySelector('#block-modal-close').onclick = close;
+    modal.querySelector('#block-cancel-btn').onclick  = close;
+    modal.addEventListener('click', e => { if (e.target === modal) close(); });
+    setTimeout(() => modal.querySelector('#block-reason')?.focus(), 80);
+
+    // ── Guardar cambios ───────────────────────────
+    modal.querySelector('#block-save-btn').addEventListener('click', async () => {
+      const newCI     = modal.querySelector('#block-checkin').value;
+      const newCO     = modal.querySelector('#block-checkout').value;
+      const newReason = modal.querySelector('#block-reason').value.trim() || 'Bloqueo';
+
+      if (!newCI || !newCO || newCI >= newCO) {
+        showToast('Las fechas son inválidas', 'warning'); return;
+      }
+
+      const saveBtn = modal.querySelector('#block-save-btn');
+      saveBtn.disabled = true; saveBtn.textContent = 'Guardando...';
+
+      try {
+        const { error } = await this.db.from('bookings')
+          .update({ check_in: newCI, check_out: newCO, block_reason: newReason })
+          .eq('id', bookingId);
+        if (error) throw error;
+
+        // Sincronizar maintenance_issue asociado (si existe)
+        const { data: mi } = await this.db.from('maintenance_issues')
+          .select('id')
+          .eq('booking_id', bookingId)
+          .maybeSingle();
+        if (mi?.id) {
+          await this.db.from('maintenance_issues')
+            .update({ title: newReason, description: `Bloqueo: ${newCI} → ${newCO}` })
+            .eq('id', mi.id);
+        }
+
+        showToast('Bloqueo actualizado ✓', 'success');
+        cache.invalidate('bookings');
+        close();
+        await this.load();
+      } catch (err) {
+        console.error('[Calendar] Error al actualizar bloqueo:', err);
+        showToast('Error al guardar: ' + (err?.message ?? String(err)), 'error');
+        saveBtn.disabled = false; saveBtn.textContent = 'Guardar cambios';
+      }
+    });
+
+    // ── Eliminar bloqueo ──────────────────────────
+    modal.querySelector('#block-delete-btn').addEventListener('click', async () => {
+      if (!confirm('¿Eliminar este bloqueo del calendario?')) return;
+
+      const delBtn = modal.querySelector('#block-delete-btn');
+      delBtn.disabled = true; delBtn.textContent = '⏳ Eliminando...';
+
+      try {
+        // Eliminar maintenance_issue asociado (si existe)
+        await this.db.from('maintenance_issues')
+          .delete()
+          .eq('booking_id', bookingId);
+
+        const { error } = await this.db.from('bookings').delete().eq('id', bookingId);
+        if (error) throw error;
+
+        showToast('Bloqueo eliminado ✓', 'success');
+        cache.invalidate('bookings');
+        close();
+        await this.load();
+      } catch (err) {
+        console.error('[Calendar] Error al eliminar bloqueo:', err);
+        showToast('Error al eliminar: ' + (err?.message ?? String(err)), 'error');
+        delBtn.disabled = false; delBtn.textContent = '🗑️ Eliminar bloqueo';
+      }
+    });
+  }
+
   // ── Bloquear día ──────────────────────────────────
   async _blockDay(unitId, dateISO) {
     const reason = prompt('Motivo del bloqueo (mantenimiento, reparación, uso propio, etc.):');
     if (!reason) return;
     const next = new Date(dateISO+'T12:00:00'); next.setDate(next.getDate()+1);
-    const { data: bk, error } = await this.db.from('bookings').insert({
-      hotel_id: this.ctx.hotelId, check_in: dateISO, check_out: toISODate(next),
-      status: 'blocked', is_blocked: true, block_reason: reason, price_per_night: 0,
-    }).select('id').single();
-    if (error) { showToast('Error al bloquear', 'error'); return; }
-    if (bk) await this.db.from('booking_units').insert({ booking_id: bk.id, unit_id: unitId });
-    showToast('Día bloqueado ✓', 'success');
-    this.load();
+    const checkOut = toISODate(next);
+
+    try {
+      const { data: bk, error } = await this.db.from('bookings').insert({
+        hotel_id: this.ctx.hotelId, check_in: dateISO, check_out: checkOut,
+        status: 'blocked', is_blocked: true, block_reason: reason, price_per_night: 0,
+      }).select('id').single();
+      if (error) throw error;
+
+      if (bk?.id) {
+        await this.db.from('booking_units').insert({ booking_id: bk.id, unit_id: unitId });
+        // Crear maintenance_issue sincronizado
+        await this._createMaintenanceForBlock(bk.id, unitId, dateISO, checkOut, reason);
+      }
+
+      showToast('Día bloqueado ✓', 'success');
+      cache.invalidate('bookings');
+      this.load();
+    } catch (err) {
+      console.error('[Calendar] _blockDay error:', err);
+      showToast('Error al bloquear: ' + (err?.message ?? String(err)), 'error');
+    }
+  }
+
+  // ── Helper: crear maintenance_issue para un bloqueo ──
+  async _createMaintenanceForBlock(bookingId, unitId, checkIn, checkOut, reason) {
+    try {
+      await this.db.from('maintenance_issues').insert({
+        hotel_id:    this.ctx.hotelId,
+        unit_id:     unitId,
+        booking_id:  bookingId,
+        title:       reason || 'Bloqueo',
+        description: `Bloqueo: ${checkIn} → ${checkOut}`,
+        category:    'Bloqueo calendario',
+        priority:    'medium',
+        status:      'pending',
+      });
+    } catch (err) {
+      // No es crítico: el bloqueo fue creado, solo loguear
+      console.warn('[Calendar] No se pudo crear maintenance_issue para bloqueo:', err?.message ?? err);
+    }
   }
 
   // ── Ghost ─────────────────────────────────────────
