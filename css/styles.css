@@ -236,8 +236,10 @@ svg { flex-shrink: 0; }
 }
 .sidebar-logo {
   display: flex; align-items: center; gap: var(--sp-12);
-  padding: var(--sp-16) var(--sp-16) var(--sp-14);
+  padding: 0 var(--sp-16);
+  height: 64px;
   border-bottom: 1px solid rgba(255,255,255,.06);
+  flex-shrink: 0;
 }
 .sidebar-logo-mark {
   width: 48px; height: 48px; border-radius: var(--r-md);
@@ -245,8 +247,16 @@ svg { flex-shrink: 0; }
   display: flex; align-items: center; justify-content: center; color: white; flex-shrink: 0;
   overflow: hidden;
 }
-.sidebar-name { display: block; font-size: .9rem; font-weight: 700; color: #F8FAFC; line-height: 1.25; }
-.sidebar-sub  { display: block; font-size: .72rem; color: var(--sidebar-text); line-height: 1.25; }
+.sidebar-name {
+  display: block; font-size: .9rem; font-weight: 700; color: #F8FAFC;
+  white-space: nowrap; line-height: 1;
+}
+.sidebar-sub-inline {
+  font-size: .7rem; font-weight: 400; color: var(--sidebar-text);
+  display: inline; margin-left: 2px;
+}
+/* keep .sidebar-sub for backward compat but hide it */
+.sidebar-sub { display: none; }
 
 .sidebar-nav { display: flex; flex-direction: column; padding: var(--sp-12) var(--sp-8); gap: var(--sp-2); flex: 1; }
 .nav-item {

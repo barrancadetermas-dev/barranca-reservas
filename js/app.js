@@ -1617,22 +1617,12 @@ function setupSoundButton() {
 // TEMAS DE COLOR
 // ══════════════════════════════════════════════════
 const THEMES = {
-  // ── Fríos (cool) ────────────────────────────────
-  violet:  { primary:'#8b5cf6', primaryH:'#7c3aed', primaryL:'#f5f3ff', primaryT:'rgba(139,92,246,.12)',  sidebarBg:'#2e1065', sidebarActive:'#3b0764', sidebarAccent:'#a78bfa' },
-  indigo:  { primary:'#6366F1', primaryH:'#4F46E5', primaryL:'#EEF2FF', primaryT:'rgba(99,102,241,.12)',  sidebarBg:'#0F172A', sidebarActive:'#1E293B', sidebarAccent:'#818CF8' },
-  blue:    { primary:'#2563eb', primaryH:'#1d4ed8', primaryL:'#eff6ff', primaryT:'rgba(37,99,235,.12)',   sidebarBg:'#1e3a8a', sidebarActive:'#1e40af', sidebarAccent:'#60a5fa' },
-  ocean:   { primary:'#0891b2', primaryH:'#0e7490', primaryL:'#cffafe', primaryT:'rgba(8,145,178,.12)',   sidebarBg:'#0c4a6e', sidebarActive:'#075985', sidebarAccent:'#38bdf8' },
-  cyan:    { primary:'#06b6d4', primaryH:'#0891b2', primaryL:'#ecfeff', primaryT:'rgba(6,182,212,.12)',   sidebarBg:'#083344', sidebarActive:'#0e4f6a', sidebarAccent:'#22d3ee' },
-  teal:    { primary:'#0d9488', primaryH:'#0f766e', primaryL:'#f0fdfa', primaryT:'rgba(13,148,136,.12)',  sidebarBg:'#042f2e', sidebarActive:'#134e4a', sidebarAccent:'#2dd4bf' },
-  emerald: { primary:'#10b981', primaryH:'#059669', primaryL:'#d1fae5', primaryT:'rgba(16,185,129,.12)',  sidebarBg:'#064e3b', sidebarActive:'#065f46', sidebarAccent:'#34d399' },
-  // ── Cálidos (warm) ──────────────────────────────
-  lime:    { primary:'#65a30d', primaryH:'#4d7c0f', primaryL:'#f7fee7', primaryT:'rgba(101,163,13,.12)',  sidebarBg:'#1a2e05', sidebarActive:'#365314', sidebarAccent:'#a3e635' },
-  amber:   { primary:'#d97706', primaryH:'#b45309', primaryL:'#fffbeb', primaryT:'rgba(217,119,6,.12)',   sidebarBg:'#451a03', sidebarActive:'#78350f', sidebarAccent:'#fbbf24' },
-  sunset:  { primary:'#f97316', primaryH:'#ea580c', primaryL:'#fff7ed', primaryT:'rgba(249,115,22,.12)',  sidebarBg:'#431407', sidebarActive:'#7c2d12', sidebarAccent:'#fb923c' },
-  cherry:  { primary:'#e11d48', primaryH:'#be123c', primaryL:'#fff1f2', primaryT:'rgba(225,29,72,.12)',   sidebarBg:'#4c0519', sidebarActive:'#881337', sidebarAccent:'#fb7185' },
-  rose:    { primary:'#f43f5e', primaryH:'#e11d48', primaryL:'#fff1f2', primaryT:'rgba(244,63,94,.12)',   sidebarBg:'#3d0618', sidebarActive:'#6d0324', sidebarAccent:'#fb7185' },
-  fuchsia: { primary:'#c026d3', primaryH:'#a21caf', primaryL:'#fdf4ff', primaryT:'rgba(192,38,211,.12)', sidebarBg:'#4a044e', sidebarActive:'#701a75', sidebarAccent:'#e879f9' },
-  slate:   { primary:'#475569', primaryH:'#334155', primaryL:'#f8fafc', primaryT:'rgba(71,85,105,.12)',   sidebarBg:'#020617', sidebarActive:'#0f172a', sidebarAccent:'#94a3b8' },
+  // ── Paleta MILA ─────────────────────────────────
+  navy:   { primary:'#1A3A90', primaryH:'#0D2A6E', primaryL:'#DDEAFF', primaryT:'rgba(26,58,144,.12)',   sidebarBg:'#050F24', sidebarActive:'#0D1F42', sidebarAccent:'#60A5FA' },
+  blue:   { primary:'#1E4DB7', primaryH:'#1A3A90', primaryL:'#DDEAFF', primaryT:'rgba(30,77,183,.12)',   sidebarBg:'#0D1F42', sidebarActive:'#1A3472', sidebarAccent:'#60A5FA' },
+  royal:  { primary:'#2563EB', primaryH:'#1D4ED8', primaryL:'#DBEAFE', primaryT:'rgba(37,99,235,.12)',   sidebarBg:'#1E3A8A', sidebarActive:'#1E40AF', sidebarAccent:'#93C5FD' },
+  ocean:  { primary:'#0284C7', primaryH:'#0369A1', primaryL:'#E0F2FE', primaryT:'rgba(2,132,199,.12)',   sidebarBg:'#0C4A6E', sidebarActive:'#075985', sidebarAccent:'#38BDF8' },
+  slate:  { primary:'#475569', primaryH:'#334155', primaryL:'#F1F5F9', primaryT:'rgba(71,85,105,.12)',   sidebarBg:'#020617', sidebarActive:'#0F172A', sidebarAccent:'#94A3B8' },
 };
 
 function setupThemeSystem() {
@@ -1646,7 +1636,7 @@ function setupThemeSystem() {
   }
 
   // Apply saved theme immediately
-  const saved = localStorage.getItem('mila_theme') ?? 'indigo';
+  const saved = localStorage.getItem('mila_theme') ?? 'blue';
   applyTheme(saved);
   markActiveSwatch(saved);
 
@@ -1696,7 +1686,7 @@ function setupThemeSystem() {
 }
 
 function applyTheme(name) {
-  const t = THEMES[name] ?? THEMES.indigo;
+  const t = THEMES[name] ?? THEMES.blue;
   const r = document.documentElement.style;
   r.setProperty('--color-primary',   t.primary);
   r.setProperty('--color-primary-h', t.primaryH);
