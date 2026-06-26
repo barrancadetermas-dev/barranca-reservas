@@ -378,7 +378,7 @@ export class Calendar {
         overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0">
         ${guestFull}
       </span>`;
-    bar.title = `${guestFull} | ${booking.check_in} → ${booking.check_out}`;
+    bar.title = '';
 
     bar.addEventListener('mouseenter', (e) => {
       if (!this._barDrag.active) {
@@ -421,7 +421,7 @@ export class Calendar {
     left.style.background = coColor;
     if (coIsPast) left.style.filter = 'grayscale(52%) opacity(.62)';
     left.dataset.bookingId = coBooking.id;
-    left.title = `Sale: ${coBooking.guests?.first_name ?? ''} ${coBooking.guests?.last_name ?? ''}`;
+    left.title = '';
     left.addEventListener('mouseenter', (e) => this._showTooltip(coBooking, e));
     left.addEventListener('mousemove',  (e) => this._moveTooltip(e));
     left.addEventListener('mouseleave', ()  => this._hideTooltip());
@@ -432,7 +432,7 @@ export class Calendar {
     right.style.background = ciColor;
     if (ciIsPast) right.style.filter = 'grayscale(52%) opacity(.62)';
     right.dataset.bookingId = ciBooking.id;
-    right.title = `Entra: ${ciBooking.guests?.first_name ?? ''} ${ciBooking.guests?.last_name ?? ''}`;
+    right.title = '';
     right.addEventListener('mouseenter', (e) => this._showTooltip(ciBooking, e));
     right.addEventListener('mousemove',  (e) => this._moveTooltip(e));
     right.addEventListener('mouseleave', ()  => this._hideTooltip());
