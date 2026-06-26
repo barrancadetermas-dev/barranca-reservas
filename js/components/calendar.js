@@ -236,12 +236,14 @@ export class Calendar {
       grid.appendChild(dh);
     }
 
-    this.ctx.units.forEach(unit => {
+    this.ctx.units.forEach((unit, rowIdx) => {
       const unitColor = getUnitColor(unit);
       const unitLabel = getUnitLabel(unit);
+      const rowParity = rowIdx % 2 === 0 ? 'even' : 'odd';
 
       const label = document.createElement('div');
       label.className = 'cal-unit-label';
+      label.dataset.rowParity = rowParity;
       label.style.setProperty('--unit-color', unitColor);
       label.style.borderLeftColor = unitColor;
       const hasNotes = !!unit.internal_notes;
@@ -277,6 +279,7 @@ export class Calendar {
         cell.dataset.day    = d;
         cell.dataset.unitId = unit.id;
         cell.dataset.date   = dateISO;
+        cell.dataset.rowParity = rowParity;
         if (cellHoliday) cell.title = cellHoliday.label;
 
         if (bookings.length === 0) {
@@ -1121,11 +1124,13 @@ export class Calendar {
       grid.appendChild(dh);
     });
 
-    this.ctx.units.forEach(unit => {
+    this.ctx.units.forEach((unit, rowIdx) => {
       const unitColor = getUnitColor(unit);
       const unitLabel = getUnitLabel(unit);
+      const rowParity = rowIdx % 2 === 0 ? 'even' : 'odd';
       const label = document.createElement('div');
       label.className = 'cal-unit-label';
+      label.dataset.rowParity = rowParity;
       label.style.setProperty('--unit-color', unitColor);
       label.style.borderLeftColor = unitColor;
       label.innerHTML = `
@@ -1151,8 +1156,9 @@ export class Calendar {
         if (wcIsWknd)  wcCls += ' weekend-col';
         if (wcIsPast)  wcCls += ' past-col';
         cell.className = wcCls;
-        cell.dataset.date   = iso;
-        cell.dataset.unitId = unit.id;
+        cell.dataset.date      = iso;
+        cell.dataset.unitId    = unit.id;
+        cell.dataset.rowParity = rowParity;
 
         if (dayBookings.length === 0) {
           this._bindEmptyCell(cell, unit.id, d.getDate(), iso);
