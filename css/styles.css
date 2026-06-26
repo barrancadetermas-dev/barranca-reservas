@@ -248,11 +248,11 @@ svg { flex-shrink: 0; }
   overflow: hidden;
 }
 .sidebar-name {
-  display: block; font-size: .9rem; font-weight: 700; color: #F8FAFC;
+  display: block; font-size: .82rem; font-weight: 700; color: #F8FAFC;
   white-space: nowrap; line-height: 1;
 }
 .sidebar-sub-inline {
-  font-size: .7rem; font-weight: 400; color: var(--sidebar-text);
+  font-size: .67rem; font-weight: 400; color: var(--sidebar-text);
   display: inline; margin-left: 2px;
 }
 /* keep .sidebar-sub for backward compat but hide it */
