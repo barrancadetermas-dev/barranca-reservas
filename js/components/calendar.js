@@ -307,16 +307,21 @@ export class Calendar {
       label.dataset.rowParity = rowParity;
       label.style.setProperty('--unit-color', unitColor);
       label.style.borderLeftColor = unitColor;
-      label.innerHTML = `
-        <div style="display:flex;align-items:center;gap:6px">
-          <span class="cal-unit-dot" style="background-color:${unitColor}"></span>
-          <span style="font-size:.82rem;font-weight:700;color:var(--color-text)">${unitLabel}</span>
-          ${hasNotes ? `<span title="${unit.internal_notes}" style="cursor:help;font-size:.85rem"
-          ${hasNotes ? `<span title="${unit.internal_notes}" style="cursor:help;font-size:.85rem"
-            onclick="window._calInstance._showUnitNote(event,'${(unit.internal_notes ?? '').replace(/[']/g, '&#39;')}')">📝</span>` : ''}
-          ${can('manageUnitNotes') ? `<button class="btn btn-ghost btn-xs" style="padding:1px 4px;font-size:.65rem;opacity:.5"
-            onclick="window._calInstance.editUnitNotes('${unit.id}','${(unit.internal_notes ?? '').replace(/[']/g, '&#39;')}')">✏️</button>` : ''}
-        <span class="unit-floor" style="padding-left:16px">Hasta ${unit.max_guests} pers.</span>`;
+      const _notes    = unit.internal_notes ?? '';
+      const _notesSafe = _notes.replace(/[']/g, '&#39;');
+      const _notesSpan = hasNotes
+        ? '<span title="' + _notes.replace(/"/g, '&quot;') + '" style="cursor:help;font-size:.85rem" onclick="window._calInstance._showUnitNote(event,\'' + _notesSafe + '\')">\u{1F4DD}</span>'
+        : '';
+      const _editBtn = can('manageUnitNotes')
+        ? '<button class="btn btn-ghost btn-xs" style="padding:1px 4px;font-size:.65rem;opacity:.5" onclick="window._calInstance.editUnitNotes(\'' + unit.id + '\',\'' + _notesSafe + '\')">\u270f\ufe0f</button>'
+        : '';
+      label.innerHTML =
+        '<div style="display:flex;align-items:center;gap:6px">' +
+          '<span class="cal-unit-dot" style="background-color:' + unitColor + '"></span>' +
+          '<span style="font-size:.82rem;font-weight:700;color:var(--color-text)">' + unitLabel + '</span>' +
+          _notesSpan + _editBtn +
+        '</div>' +
+        '<span class="unit-floor" style="padding-left:16px">Hasta ' + unit.max_guests + ' pers.</span>';
       grid.appendChild(label);
 
       // Celdas
@@ -1139,6 +1144,7 @@ export class Calendar {
       document.addEventListener('touchmove', onTouchMove, { passive: false, signal: sig });
       document.addEventListener('touchend', onTouchCancel, { signal: sig });
     }, { passive: false, signal: sig });
+  } // end _setupBarDragAndResize
 
   // ── Limpiar highlights de drop ──────────────────
   _clearDropHighlights(grid) {
