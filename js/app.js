@@ -105,8 +105,11 @@ function initDarkMode() {
 function applyDarkMode(theme) {
   document.documentElement.setAttribute('data-theme', theme);
   localStorage.setItem('pms-theme', theme);
-  document.getElementById('dark-icon-sun')?.classList.toggle('hidden',  theme === 'dark');
-  document.getElementById('dark-icon-moon')?.classList.toggle('hidden', theme !== 'dark');
+  // Actualizar botones del panel de tema si están en el DOM
+  const lightBtn = document.getElementById('theme-mode-light');
+  const darkBtn  = document.getElementById('theme-mode-dark');
+  if (lightBtn) lightBtn.style.fontWeight = theme === 'light' ? '800' : '600';
+  if (darkBtn)  darkBtn.style.fontWeight  = theme === 'dark'  ? '800' : '600';
 }
 
 // ══════════════════════════════════════════════════
