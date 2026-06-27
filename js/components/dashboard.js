@@ -425,35 +425,62 @@ export class Dashboard {
     const el = document.getElementById('dashboard-upcoming');
     if (!el) return;
     const _upDays = parseInt(localStorage.getItem('mila_upcoming_days') ?? '7');
-    const sBar = `<div style="display:flex;gap:5px;margin-bottom:10px;align-items:center">
-      <span style="font-size:.7rem;color:var(--color-text-3)">Próximas:</span>
-      ${[7,14,28].map(d => `<button onclick="localStorage.setItem('mila_upcoming_days','${d}');window._dashboardInstance?.load?.()"
-        style="font-size:.68rem;padding:2px 9px;border-radius:999px;cursor:pointer;
-        border:1px solid var(--color-border);
-        background:${d===_upDays?'var(--color-primary)':'transparent'};
-        color:${d===_upDays?'white':'var(--color-text-3)'}">${d}d</button>`).join('')}
-    </div>`;
+    const today   = localToday();
+
+    // Badge dinámico basado en próxima llegada real
+    let nextBadge = _upDays + 'd';
+    if (bookings.length) {
+      const dAway0 = Math.round((new Date(bookings[0].check_in+'T12:00:00') - new Date(today+'T12:00:00')) / 86400000);
+      nextBadge = dAway0 === 0 ? 'hoy' : dAway0 === 1 ? 'mañana' : 'en ' + dAway0 + 'd';
+    }
+
+    const sBar = '<div style="display:flex;gap:5px;margin-bottom:12px;align-items:center">' +
+      '<span style="font-size:.7rem;color:var(--color-text-3);margin-right:2px">Ver:</span>' +
+      [7,14,28].map(d =>
+        '<button onclick="localStorage.setItem(\'mila_upcoming_days\',\'' + d + '\');window._dashboardInstance?.load?.()" ' +
+        'style="font-size:.68rem;padding:2px 10px;border-radius:999px;cursor:pointer;border:1px solid var(--color-border);' +
+        'background:' + (d===_upDays ? 'var(--color-primary)' : 'transparent') + ';' +
+        'color:' + (d===_upDays ? 'white' : 'var(--color-text-3)') + '">' + d + 'd</button>'
+      ).join('') + '</div>';
+
     if (!bookings.length) {
       el.innerHTML = sBar + '<p class="empty-state-sm">Sin llegadas en los próximos ' + _upDays + ' días</p>';
+      const hb = document.querySelector('.widget-upcoming .badge-today');
+      if (hb) hb.textContent = _upDays + 'd';
       return;
     }
+
     const fmt = iso => new Date(iso+'T12:00:00').toLocaleDateString('es-AR',{weekday:'short',day:'numeric',month:'short'});
-    el.innerHTML = sBar + bookings.map(b => {
-      const guest = b.guests ? `${b.guests.first_name} ${b.guests.last_name}` : 'Sin nombre';
-      const unit  = b.booking_units?.[0]?.units;
-      const color = unit?.color ?? '#6366f1';
+
+    const rows = bookings.map(b => {
+      const guest  = b.guests ? (b.guests.first_name + ' ' + b.guests.last_name) : 'Sin nombre';
+      const unit   = b.booking_units?.[0]?.units;
+      const color  = unit?.color ?? '#6366f1';
       const nights = Math.round((new Date(b.check_out+'T12:00:00') - new Date(b.check_in+'T12:00:00')) / 86400000);
-      return `
-        <div class="upcoming-item">
-          <div class="upcoming-dot" style="background:${color}"></div>
-          <div class="upcoming-body">
-            <div class="upcoming-date">${fmt(b.check_in)}</div>
-            <div class="upcoming-guest">${guest}</div>
-            <div class="upcoming-unit">${unit?.name ?? '—'} · ${nights} noche${nights!==1?'s':''}</div>
-          </div>
-        </div>`;
+      const dAway  = Math.round((new Date(b.check_in+'T12:00:00') - new Date(today+'T12:00:00')) / 86400000);
+      const dayLabel = dAway === 0
+        ? '<span style="font-size:.65rem;padding:1px 6px;border-radius:3px;background:#dcfce7;color:#16a34a;font-weight:700">HOY</span>'
+        : dAway === 1
+        ? '<span style="font-size:.65rem;padding:1px 6px;border-radius:3px;background:#fef9c3;color:#854d0e;font-weight:700">MAÑANA</span>'
+        : '<span style="font-size:.65rem;color:var(--color-text-3)">en ' + dAway + 'd</span>';
+      return '<div style="display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-bottom:1px solid var(--color-border)">' +
+        '<div style="width:3px;min-height:44px;border-radius:2px;background:' + color + ';flex-shrink:0;margin-top:2px"></div>' +
+        '<div style="flex:1;min-width:0">' +
+          '<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">' +
+            '<span style="font-size:.78rem;font-weight:700;color:var(--color-text)">' + fmt(b.check_in) + '</span>' +
+            dayLabel +
+          '</div>' +
+          '<div style="font-size:.82rem;font-weight:600;color:var(--color-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + guest + '</div>' +
+          '<div style="font-size:.72rem;color:var(--color-text-3);margin-top:2px">' + (unit?.name ?? '—') + ' · ' + nights + ' noche' + (nights!==1?'s':'') + '</div>' +
+        '</div></div>';
     }).join('');
+
+    const headerBadge = document.querySelector('.widget-upcoming .badge-today');
+    if (headerBadge) headerBadge.textContent = nextBadge;
+
+    el.innerHTML = sBar + '<div style="max-height:260px;overflow-y:auto">' + rows + '</div>';
   }
+
 
   _renderPendingOps(count) {
     const el = document.getElementById('dashboard-ops-badge');

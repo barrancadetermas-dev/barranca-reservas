@@ -475,6 +475,8 @@ export async function navigateTo(section) {
     showErrorBoundary(`section-${section}`, err.message, () => navigateTo(section));
   }
 }
+// Exponer globalmente para onclick inline en templates HTML
+if (typeof window !== 'undefined') window.milaNav = navigateTo;
 
 function updateHeaderDate() {
   const dateStr = new Date().toLocaleDateString('es-AR', { weekday:'long', year:'numeric', month:'long', day:'numeric' });

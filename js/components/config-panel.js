@@ -392,8 +392,12 @@ export class ConfigPanel {
           try {
             const { error } = await this.db.from('user_profiles')
               .upsert({ id: user.id, nombre: nuevoNombre || null }, { onConflict: 'id' });
-            if (error) throw error;
-            // Actualizar header inmediatamente
+            if (error) {
+              // Fallback: intentar UPDATE directo (puede fallar upsert por RLS)
+              const { error: updErr } = await this.db.from('user_profiles')
+                .update({ nombre: nuevoNombre || null }).eq('id', user.id);
+              if (updErr) throw updErr;
+            }
             const headerName = document.getElementById('user-name');
             if (headerName) headerName.textContent = nuevoNombre || (user.email?.split('@')[0] ?? 'Admin');
             showToast('Nombre guardado ✓', 'success');
