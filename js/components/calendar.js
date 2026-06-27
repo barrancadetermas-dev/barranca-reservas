@@ -430,15 +430,15 @@ export class Calendar {
     bar.addEventListener('dragstart', e => e.preventDefault());
 
     const source  = booking.source ?? 'direct';
-    const srcCfg  = SOURCE_CONFIG[source] ?? {};
-    // Canal: solo mostrar si no es directo y hay etiqueta corta
+    const srcCfg  = SOURCE_CONFIG[source] ?? {}; // eslint-disable-line no-unused-vars
     const CANAL_ABBR = { airbnb:'AB', booking:'BK', despegar:'DS', expedia:'EX', walkin:'WI', company:'CO', family:'FM', referral:'RF' };
     const canalAbbr  = CANAL_ABBR[source];
+    // Usar concatenación en vez de template literal anidado (Rollup/Vite lo rechaza)
     const canalChip  = (!isBlock && canalAbbr)
-      ? `<span style="display:inline-flex;align-items:center;justify-content:center;
-           padding:0 4px;border-radius:3px;font-size:.6rem;font-weight:800;line-height:1.5;
-           flex-shrink:0;margin-right:4px;letter-spacing:.02em;
-           background:rgba(255,255,255,.25);color:${textColor}">${canalAbbr}</span>`
+      ? '<span style="display:inline-flex;align-items:center;justify-content:center;' +
+        'padding:0 4px;border-radius:3px;font-size:.6rem;font-weight:800;line-height:1.5;' +
+        'flex-shrink:0;margin-right:4px;letter-spacing:.02em;' +
+        'background:rgba(255,255,255,.25);color:' + textColor + '">' + canalAbbr + '</span>'
       : '';
 
     const avatar = !isBlock ? Calendar._guestAvatar(booking.guests, 16) : '';
