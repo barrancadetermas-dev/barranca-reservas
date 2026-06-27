@@ -395,7 +395,7 @@ export class ConfigPanel {
             if (error) throw error;
             // Actualizar header inmediatamente
             const headerName = document.getElementById('user-name');
-            if (headerName) headerName.textContent = nuevoNombre || user.email?.split('@')[0] ?? 'Admin';
+            if (headerName) headerName.textContent = nuevoNombre || (user.email?.split('@')[0] ?? 'Admin');
             showToast('Nombre guardado ✓', 'success');
           } catch (err) {
             showToast('Error al guardar: ' + (err?.message ?? err), 'error');

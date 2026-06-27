@@ -819,7 +819,7 @@ export class Dashboard {
         </span>
       </div>
       <div style="max-height:200px;overflow-y:auto">${tasks.map(row).join('')}</div>
-      ${pending.length ? '<a href="#" onclick="window.milaNav?.('operations');return false;" style="display:block;text-align:center;margin-top:10px;font-size:.78rem;color:var(--color-primary);font-weight:600;text-decoration:none">Ver en Operaciones →</a>' : ''}
+      ${pending.length ? '<a href="#" onclick="window.milaNav&amp;&amp;window.milaNav(\"operations\");return false;" style="display:block;text-align:center;margin-top:10px;font-size:.78rem;color:var(--color-primary);font-weight:600;text-decoration:none">Ver en Operaciones →</a>' : ''}
     </div>`;
   }
 
