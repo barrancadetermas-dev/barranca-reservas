@@ -1714,6 +1714,8 @@ function markActiveSwatch(name) {
 // NOTIFICACIONES REALES
 // ══════════════════════════════════════════════════
 async function setupRealNotifications(notifSvc) {
+  let _firstLoad = true;
+  let _prevHighIds = new Set();
   const refresh = async () => {
     const notifs = await notifSvc.refresh();
     const count  = notifs.length;
@@ -1753,8 +1755,16 @@ async function setupRealNotifications(notifSvc) {
         });
       });
     }
-    // Alerta sonora si hay urgentes nuevas
-    if (notifs.some(n => n.priority === 'high')) Sound?.alert();
+    // Alerta sonora solo si aparecen notificaciones urgentes NUEVAS (no en el load inicial)
+    if (!_firstLoad) {
+      const highIds = new Set(notifs.filter(n => n.priority === 'high').map(n => n.bookingId ?? n.title));
+      const hasNew  = [...highIds].some(id => !_prevHighIds.has(id));
+      if (hasNew) Sound?.alert();
+      _prevHighIds = highIds;
+    } else {
+      _prevHighIds = new Set(notifs.filter(n => n.priority === 'high').map(n => n.bookingId ?? n.title));
+      _firstLoad = false;
+    }
   };
 
   await refresh();
