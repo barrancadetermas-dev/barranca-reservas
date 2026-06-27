@@ -15,8 +15,7 @@ export default defineConfig({
     sourcemap: false,
     rollupOptions: {
       input: {
-        main:  'index.html',
-        setup: 'setup.html',
+        main: 'index.html',
       },
     },
   },
