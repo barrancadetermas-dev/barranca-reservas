@@ -426,10 +426,24 @@ export class Calendar {
       ${isPast ? 'filter:grayscale(52%) opacity(.62);' : ''}
     `;
     bar.dataset.bookingId = booking.id;
+    bar.draggable = false;
+
+    const source  = booking.source ?? 'direct';
+    const srcCfg  = SOURCE_CONFIG[source] ?? {};
+    // Canal: solo mostrar si no es directo y hay etiqueta corta
+    const CANAL_ABBR = { airbnb:'AB', booking:'BK', despegar:'DS', expedia:'EX', walkin:'WI', company:'CO', family:'FM', referral:'RF' };
+    const canalAbbr  = CANAL_ABBR[source];
+    const canalChip  = (!isBlock && canalAbbr)
+      ? `<span style="display:inline-flex;align-items:center;justify-content:center;
+           padding:0 4px;border-radius:3px;font-size:.6rem;font-weight:800;line-height:1.5;
+           flex-shrink:0;margin-right:4px;letter-spacing:.02em;
+           background:rgba(255,255,255,.25);color:${textColor}">${canalAbbr}</span>`
+      : '';
 
     const avatar = !isBlock ? Calendar._guestAvatar(booking.guests, 16) : '';
     bar.innerHTML = `
       ${avatar}
+      ${canalChip}
       <span style="color:${textColor};font-size:.68rem;font-weight:700;
         overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0">
         ${guestFull}
@@ -829,6 +843,9 @@ export class Calendar {
       _dragState.moved = true;
       this._barDrag.moved = true;
 
+      // Crear ghost solo al primer movimiento real (evita fantasma en header)
+      if (typeof _initGhost === 'function') _initGhost(e.clientX, e.clientY);
+
       const cellWidth = getCellWidth();
       const daysDiff  = Math.round((e.clientX - _dragState.startX) / cellWidth);
       _dragState.daysDiff = daysDiff;
@@ -1002,22 +1019,27 @@ export class Calendar {
           .then(({ data }) => { if (data && _dragState) _dragState.booking = data; });
       }
 
-      // Crear ghost (clon de la barra)
-      _barGhost = bar.cloneNode(true);
-      _barGhost.style.cssText = `
-        position:fixed;
-        left:${barRect.left}px;top:${barRect.top}px;
-        width:${barRect.width}px;height:${barRect.height}px;
-        z-index:9999;pointer-events:none;
-        opacity:.88;transform:scale(1.04) translateZ(0);
-        box-shadow:0 12px 40px rgba(0,0,0,.30),0 4px 12px rgba(0,0,0,.18);
-        border-radius:6px;cursor:grabbing;
-        transition:none;
-      `;
-      document.body.appendChild(_barGhost);
-
-      // Atenuar barra original
-      bar.style.opacity = '0.3';
+      // Crear ghost diferido — solo aparece al mover ≥5px (evita fantasma al hacer click)
+      let _ghostReady = false;
+      const _initGhost = (clientX, clientY) => {
+        if (_ghostReady) return;
+        _ghostReady = true;
+        _barGhost = bar.cloneNode(true);
+        // Quitar evento dragstart del clon
+        _barGhost.querySelectorAll('[draggable]').forEach(el => el.removeAttribute('draggable'));
+        _barGhost.style.cssText = `
+          position:fixed;
+          left:${barRect.left}px;top:${barRect.top}px;
+          width:${barRect.width}px;height:${barRect.height}px;
+          z-index:9999;pointer-events:none;
+          opacity:.88;transform:scale(1.04) translateZ(0);
+          box-shadow:0 12px 40px rgba(0,0,0,.30),0 4px 12px rgba(0,0,0,.18);
+          border-radius:6px;cursor:grabbing;
+          transition:none;
+        `;
+        document.body.appendChild(_barGhost);
+        bar.style.opacity = '0.3';
+      };
 
       // Auto-scroll
       _autoScroll = this._makeAutoScroll();
@@ -1072,7 +1094,40 @@ export class Calendar {
       document.addEventListener('touchmove', onTM, { passive: false, signal: sig });
       document.addEventListener('touchend', onTE, { signal: sig });
     }, { passive: false, signal: sig });
-  }
+
+    // ── Touch resize — longpress en handle ──────────
+    grid.addEventListener('touchstart', (e) => {
+      const handle = e.target.closest('.bar-resize-handle');
+      if (!handle) return;
+      e.preventDefault();
+      e.stopPropagation();
+
+      const bar       = handle.closest('.bar[data-booking-id]');
+      if (!bar) return;
+      const bookingId = bar.dataset.bookingId;
+      const booking   = (this._lastRenderedBookings ?? []).find(b => b.id === bookingId);
+      if (!booking) return;
+
+      const t = e.touches[0];
+
+      // Feedback visual inmediato
+      handle.style.background = 'rgba(99,102,241,.6)';
+
+      const onTouchMove = (te) => {
+        te.preventDefault();
+        this._startResize(te.touches[0], booking, bar, grid, sig);
+        document.removeEventListener('touchmove', onTouchMove);
+        document.removeEventListener('touchend', onTouchCancel);
+      };
+      const onTouchCancel = () => {
+        handle.style.background = '';
+        document.removeEventListener('touchmove', onTouchMove);
+        document.removeEventListener('touchend', onTouchCancel);
+      };
+
+      document.addEventListener('touchmove', onTouchMove, { passive: false, signal: sig });
+      document.addEventListener('touchend', onTouchCancel, { signal: sig });
+    }, { passive: false, signal: sig });
 
   // ── Limpiar highlights de drop ──────────────────
   _clearDropHighlights(grid) {
@@ -1219,6 +1274,12 @@ export class Calendar {
 
     document.addEventListener('mousemove', onMove);
     document.addEventListener('mouseup', onUp, { once: true });
+
+    // Soporte touch (cuando se llama desde touchstart del handle)
+    const onTM2 = (te) => { te.preventDefault(); onMove({ clientX: te.touches[0].clientX, clientY: te.touches[0].clientY }); };
+    const onTE2 = ()   => { document.removeEventListener('touchmove', onTM2); onUp(); };
+    document.addEventListener('touchmove', onTM2, { passive: false });
+    document.addEventListener('touchend',  onTE2, { once: true });
   }
 
   // ══════════════════════════════════════════════════
@@ -1438,8 +1499,21 @@ export class Calendar {
 
     const _clearRangeHighlight = () => {
       document.getElementById('calendar-grid')
-        ?.querySelectorAll('.cal-cell.avail-range')
-        .forEach(c => c.classList.remove('avail-range','avail-range-start','avail-range-end'));
+        ?.querySelectorAll('.cal-cell.avail-range,.cal-cell.avail-conflict')
+        .forEach(c => c.classList.remove('avail-range','avail-range-start','avail-range-end','avail-conflict'));
+    };
+
+    const _markConflictCells = (occupiedUnitIds, ci, co) => {
+      const grid = document.getElementById('calendar-grid');
+      if (!grid) return;
+      let d = ci;
+      while (d < co) {
+        occupiedUnitIds.forEach(uid => {
+          const cell = grid.querySelector(`.cal-cell[data-unit-id="${uid}"][data-date="${d}"]`);
+          if (cell) cell.classList.add('avail-conflict');
+        });
+        d = this._addDays(d, 1);
+      }
     };
 
     const _searchAvailability = () => {
@@ -1461,6 +1535,8 @@ export class Calendar {
           (b.booking_units ?? []).forEach(bu => occupiedIds.add(bu.unit_id));
         }
       });
+      // Marcar celdas de unidades ocupadas en rojo dentro del rango buscado
+      _markConflictCells(occupiedIds, ci, co);
       const available = this.ctx.units.filter(u => !occupiedIds.has(u.id) && (u.max_guests ?? 0) >= guests);
       const occupied  = this.ctx.units.filter(u => occupiedIds.has(u.id));
       const tooSmall  = this.ctx.units.filter(u => !occupiedIds.has(u.id) && (u.max_guests ?? 0) < guests);

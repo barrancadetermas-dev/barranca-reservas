@@ -8,7 +8,7 @@ import { showToast, AppContext } from '../supabase-config.js';
 import { can } from '../auth/permissions.js';
 import { logAction } from '../services/audit-service.js';
 import { AdminUsers } from '../services/admin-users.js';
-import { AVATARS } from './AvatarPicker.js';
+
 
 // Definición completa de la configuración
 const CONFIG_SCHEMA = [
@@ -189,9 +189,9 @@ export class ConfigPanel {
           <div style="display:flex;align-items:center;gap:16px;margin-bottom:18px">
             <div id="cfg-user-avatar"
               style="width:52px;height:52px;border-radius:50%;
-                     background:linear-gradient(135deg,var(--color-primary),var(--color-primary-hover));
+                     background:var(--color-primary);
                      color:white;display:flex;align-items:center;justify-content:center;
-                     font-size:22px;font-weight:700;flex-shrink:0;box-shadow:0 2px 8px rgba(0,0,0,.18)">?</div>
+                     font-size:20px;font-weight:700;flex-shrink:0;box-shadow:0 2px 8px rgba(0,0,0,.18)">?</div>
             <div style="min-width:0;flex:1">
               <div id="cfg-user-email"
                 style="font-weight:700;font-size:1rem;color:var(--color-text);
@@ -204,7 +204,17 @@ export class ConfigPanel {
               </div>
             </div>
           </div>
-          <div style="display:flex;gap:10px;flex-wrap:wrap">
+          <div style="margin-bottom:4px">
+            <label style="font-size:.72rem;font-weight:600;color:var(--color-text-3);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:5px">Nombre para mostrar</label>
+            <div style="display:flex;gap:8px;align-items:center">
+              <input type="text" id="cfg-user-nombre" placeholder="Tu nombre…"
+                style="flex:1;border:1px solid var(--color-border);border-radius:var(--r-md);
+                       padding:7px 10px;font-size:.85rem;background:var(--color-surface);
+                       color:var(--color-text);outline:none">
+              <button id="cfg-nombre-save" class="btn btn-primary btn-sm">Guardar</button>
+            </div>
+          </div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px">
             <button class="btn btn-danger btn-sm" id="cfg-logout-btn" style="display:flex;align-items:center;gap:6px">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
                 <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/>
@@ -359,31 +369,41 @@ export class ConfigPanel {
           roleEl.textContent = roleMap[hu?.role ?? 'staff'] ?? hu?.role ?? '—';
         }
 
-        // Avatar desde user_profiles
+        // Avatar de iniciales
         const { data: profile } = await this.db
           .from('user_profiles')
-          .select('avatar_id, avatar_color, nombre')
+          .select('nombre')
           .eq('id', user.id)
           .single();
 
-        this._currentUserId      = user.id;
-        this._currentAvatarId    = profile?.avatar_id    ?? 1;
-        this._currentAvatarColor = profile?.avatar_color ?? '#6366f1';
-
         const avatarEl = container.querySelector('#cfg-user-avatar');
         if (avatarEl) {
-          avatarEl.innerHTML = this._renderAvatarEl(
-            this._currentAvatarId,
-            this._currentAvatarColor
-          );
-          // Lápiz de edición
-          avatarEl.style.position = 'relative';
-          avatarEl.style.cursor   = 'pointer';
-          avatarEl.title          = 'Cambiar avatar';
-          avatarEl.addEventListener('click', () => {
-            this._openAvatarSelector(container, user.id);
-          });
+          const initials = ((user.email ?? 'A')[0]).toUpperCase();
+          avatarEl.textContent = initials;
         }
+
+        // Nombre para mostrar
+        const nombreInput = container.querySelector('#cfg-user-nombre');
+        if (nombreInput && profile?.nombre) nombreInput.value = profile.nombre;
+        container.querySelector('#cfg-nombre-save')?.addEventListener('click', async () => {
+          const nuevoNombre = nombreInput?.value?.trim() ?? '';
+          const saveBtn = container.querySelector('#cfg-nombre-save');
+          saveBtn.disabled = true; saveBtn.textContent = '⏳';
+          try {
+            const { error } = await this.db.from('user_profiles')
+              .upsert({ id: user.id, nombre: nuevoNombre || null }, { onConflict: 'id' });
+            if (error) throw error;
+            // Actualizar header inmediatamente
+            const headerName = document.getElementById('user-name');
+            if (headerName) headerName.textContent = nuevoNombre || user.email?.split('@')[0] ?? 'Admin';
+            showToast('Nombre guardado ✓', 'success');
+          } catch (err) {
+            showToast('Error al guardar: ' + (err?.message ?? err), 'error');
+          } finally {
+            saveBtn.disabled = false; saveBtn.textContent = 'Guardar';
+          }
+        });
+
       } catch (err) {
         console.warn('[ConfigPanel] control tab load:', err?.message);
       }
@@ -576,201 +596,6 @@ export class ConfigPanel {
     }
   }
 
-  // ── Avatar helpers ────────────────────────────────
-
-  // Los 8 avatares: emoji + etiqueta
-  static AVATARS = AVATARS;
-
-  _renderAvatarEl(avatarId, avatarColor) {
-    const av     = ConfigPanel.AVATARS.find(a => a.id === avatarId) ?? ConfigPanel.AVATARS[0];
-    const pencil = `
-      <div style="
-        position:absolute;bottom:0;right:0;
-        width:20px;height:20px;border-radius:50%;
-        background:#3b82f6;border:2px solid var(--color-bg,#0f172a);
-        display:flex;align-items:center;justify-content:center;font-size:9px;
-      ">✏️</div>`;
-    return `
-      <div style="
-        width:52px;height:52px;border-radius:50%;
-        background:${avatarColor};
-        display:flex;align-items:center;justify-content:center;
-        font-size:26px;position:relative;user-select:none;
-      ">
-        ${av.emoji}
-        ${pencil}
-      </div>`;
-  }
-
-  _openAvatarSelector(container, userId) {
-    const existing = document.getElementById('overlay-avatar-selector');
-    if (existing) existing.remove();
-
-    const COLORS = [
-      '#6366f1','#3b82f6','#22c55e','#f59e0b',
-      '#ef4444','#a855f7','#14b8a6','#f97316',
-    ];
-
-    const modal = document.createElement('div');
-    modal.className = 'modal-overlay';
-    modal.id = 'overlay-avatar-selector';
-    modal.style.zIndex = '300';
-    modal.innerHTML = `
-      <div class="modal" style="max-width:360px">
-        <div class="modal-header">
-          <h3 class="modal-title">Elegir avatar</h3>
-          <button class="modal-close" id="av-close">✕</button>
-        </div>
-        <div class="modal-body">
-          <p style="font-size:.78rem;color:var(--color-text-3);margin-bottom:14px">
-            Seleccioná un ícono y un color.
-          </p>
-
-          <!-- Ícono -->
-          <div style="font-size:.72rem;font-weight:700;text-transform:uppercase;
-                      letter-spacing:.06em;color:var(--color-text-3);margin-bottom:8px">Ícono</div>
-          <div id="av-icon-grid" style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:18px">
-            ${ConfigPanel.AVATARS.map(a => `
-              <button class="av-icon-btn" data-id="${a.id}" type="button"
-                style="padding:10px;border-radius:var(--r-lg);border:2px solid
-                       ${a.id === this._currentAvatarId ? 'var(--color-primary)' : 'var(--color-border)'};
-                       background:${a.id === this._currentAvatarId ? 'var(--color-primary-light)' : 'var(--color-surface-2)'};
-                       font-size:22px;cursor:pointer;transition:border-color .15s,background .15s"
-                title="${a.label}">
-                ${a.emoji}
-              </button>`).join('')}
-          </div>
-
-          <!-- Color -->
-          <div style="font-size:.72rem;font-weight:700;text-transform:uppercase;
-                      letter-spacing:.06em;color:var(--color-text-3);margin-bottom:8px">Color de fondo</div>
-          <div id="av-color-grid" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:4px">
-            ${COLORS.map(c => `
-              <button class="av-color-btn" data-color="${c}" type="button"
-                style="width:32px;height:32px;border-radius:50%;background:${c};cursor:pointer;
-                       border:3px solid ${c === this._currentAvatarColor ? '#fff' : 'transparent'};
-                       outline:${c === this._currentAvatarColor ? '2px solid var(--color-primary)' : 'none'};
-                       transition:outline .15s,border .15s">
-              </button>`).join('')}
-          </div>
-
-          <!-- Preview -->
-          <div id="av-preview" style="margin-top:18px;display:flex;align-items:center;gap:12px">
-            <div id="av-preview-icon" style="
-              width:52px;height:52px;border-radius:50%;
-              background:${this._currentAvatarColor};
-              display:flex;align-items:center;justify-content:center;font-size:26px;
-            ">${ConfigPanel.AVATARS.find(a => a.id === this._currentAvatarId)?.emoji ?? '😊'}</div>
-            <span style="font-size:.82rem;color:var(--color-text-2)">Vista previa</span>
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button class="btn btn-outline" id="av-cancel">Cancelar</button>
-          <button class="btn btn-primary" id="av-save">Guardar avatar</button>
-        </div>
-      </div>`;
-
-    document.body.appendChild(modal);
-
-    let selectedId    = this._currentAvatarId;
-    let selectedColor = this._currentAvatarColor;
-
-    const previewIcon = modal.querySelector('#av-preview-icon');
-    const updatePreview = () => {
-      const av = ConfigPanel.AVATARS.find(a => a.id === selectedId) ?? ConfigPanel.AVATARS[0];
-      previewIcon.style.background = selectedColor;
-      previewIcon.textContent      = av.emoji;
-    };
-
-    // Icon selection
-    modal.querySelectorAll('.av-icon-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        selectedId = parseInt(btn.dataset.id);
-        modal.querySelectorAll('.av-icon-btn').forEach(b => {
-          b.style.borderColor = 'var(--color-border)';
-          b.style.background  = 'var(--color-surface-2)';
-        });
-        btn.style.borderColor = 'var(--color-primary)';
-        btn.style.background  = 'var(--color-primary-light)';
-        updatePreview();
-      });
-    });
-
-    // Color selection
-    modal.querySelectorAll('.av-color-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        selectedColor = btn.dataset.color;
-        modal.querySelectorAll('.av-color-btn').forEach(b => {
-          b.style.border  = '3px solid transparent';
-          b.style.outline = 'none';
-        });
-        btn.style.border  = '3px solid #fff';
-        btn.style.outline = '2px solid var(--color-primary)';
-        updatePreview();
-      });
-    });
-
-    const close = () => modal.remove();
-    modal.querySelector('#av-close').onclick  = close;
-    modal.querySelector('#av-cancel').onclick = close;
-    modal.addEventListener('click', e => { if (e.target === modal) close(); });
-
-    modal.querySelector('#av-save').addEventListener('click', async () => {
-      const saveBtn = modal.querySelector('#av-save');
-      saveBtn.disabled = true; saveBtn.textContent = 'Guardando...';
-      try {
-        const { error } = await this.db
-          .from('user_profiles')
-          .upsert({
-            id:             userId,
-            avatar_id:      selectedId,
-            avatar_color:   selectedColor,
-          }, { onConflict: 'id' });
-        if (error) {
-          const { error: updateError } = await this.db
-            .from('user_profiles')
-            .update({ avatar_id: selectedId, avatar_color: selectedColor })
-            .eq('id', userId);
-          if (updateError) throw updateError;
-        }
-
-        // Actualizar estado local
-        this._currentAvatarId    = selectedId;
-        this._currentAvatarColor = selectedColor;
-
-        // Actualizar el avatar en el panel de control sin recargar
-        const avatarEl = container.querySelector('#cfg-user-avatar');
-        if (avatarEl) {
-          avatarEl.innerHTML = this._renderAvatarEl(selectedId, selectedColor);
-        }
-
-        // Actualizar avatar en el header/nav si existe
-        document.querySelectorAll('.user-avatar-display').forEach(el => {
-          el.innerHTML = this._renderAvatarEl(selectedId, selectedColor);
-        });
-        const sidebarAvatar = document.getElementById('user-avatar');
-        if (sidebarAvatar) {
-          const av = ConfigPanel.AVATARS.find(a => a.id === selectedId) ?? ConfigPanel.AVATARS[0];
-          sidebarAvatar.textContent = av.emoji;
-          sidebarAvatar.style.background = selectedColor;
-          sidebarAvatar.style.fontSize = '1.05rem';
-          sidebarAvatar.title = 'Cambiar avatar';
-        }
-
-        showToast('Avatar actualizado ✓', 'success');
-        close();
-      } catch (err) {
-        console.error('[ConfigPanel] avatar save:', err);
-        showToast('Error: ' + (err?.message ?? err), 'error');
-        saveBtn.disabled = false; saveBtn.textContent = 'Guardar avatar';
-      }
-    });
-  }
-
-  // ── Helpers estáticos ─────────────────────────────
-  static get(key, defaultVal = null) {
-    return AppContext.config?.[key] ?? defaultVal;
-  }
 
   static getNumber(key, defaultVal = 0) {
     return parseFloat(AppContext.config?.[key] ?? defaultVal) || defaultVal;
