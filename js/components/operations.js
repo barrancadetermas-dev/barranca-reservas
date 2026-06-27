@@ -5,7 +5,7 @@
 // • Stock e Insumos (alertas de stock bajo)
 // ══════════════════════════════════════════════════
 
-import { showToast, toISODate, formatDate, formatARS, getUnitColor, getUnitChipHTML } from '../supabase-config.js';
+import { showToast, toISODate, formatDate, formatARS, getUnitColor, getUnitChipHTML, localToday } from '../supabase-config.js';
 import { can } from '../auth/permissions.js';
 import { logAction } from '../services/audit-service.js';
 
@@ -54,13 +54,14 @@ export class OperationsModule {
 
     container.innerHTML = this._renderShell();
     this._bindTabs(container);
-    await this._loadTab('cleaning', container);
+    await this._loadTab('reminders', container);
   }
 
   _renderShell() {
     return `
       <div class="tabs-bar ops-tabs">
-        <button class="tab active" data-ops-tab="cleaning">🧹 Limpieza</button>
+        <button class="tab active" data-ops-tab="reminders">🔔 Recordatorios</button>
+        <button class="tab" data-ops-tab="cleaning">🧹 Limpieza</button>
         <button class="tab" data-ops-tab="maintenance">🔧 Mantenimiento</button>
         <button class="tab" data-ops-tab="expenses">💰 Gastos</button>
         <div class="ops-tab-actions" id="ops-header-actions"></div>
@@ -86,10 +87,143 @@ export class OperationsModule {
     if (!panel) return;
     panel.innerHTML = '<div class="loading-state">Cargando...</div>';
 
+    if (tab === 'reminders')    await this._loadReminders(panel, header);
     if (tab === 'cleaning')     await this._loadCleaning(panel, header);
     if (tab === 'maintenance')  await this._loadMaintenance(panel, header);
     if (tab === 'stock')        await this._loadStock(panel, header);
     if (tab === 'expenses')     await this._loadExpenses(panel, header);
+  }
+
+  // ══════════════════════════════════════════════════
+  // RECORDATORIOS
+  // ══════════════════════════════════════════════════
+  async _loadReminders(panel, header) {
+    header.innerHTML = `<button class="btn btn-primary btn-sm" id="btn-add-reminder-ops">+ Nuevo Recordatorio</button>`;
+    panel.innerHTML  = '<div class="loading-state">Cargando...</div>';
+
+    document.getElementById('btn-add-reminder-ops')?.addEventListener('click', () => {
+      const overlay = document.getElementById('overlay-reminder');
+      const titleEl = overlay?.querySelector('.modal-title');
+      if (titleEl) titleEl.textContent = 'Nuevo Recordatorio';
+      const r_title = document.getElementById('r-title');
+      const r_date  = document.getElementById('r-date');
+      const r_desc  = document.getElementById('r-desc');
+      if (r_title) r_title.value = '';
+      if (r_date)  r_date.value  = localToday();
+      if (r_desc)  r_desc.value  = '';
+      if (typeof populateReminderUnitSelect === 'function') populateReminderUnitSelect();
+      overlay?.classList.remove('hidden');
+    });
+
+    const { data: reminders, error } = await this.db
+      .from('reminders')
+      .select('*, units(name)')
+      .eq('hotel_id', this.ctx.hotelId)
+      .order('scheduled_date');
+
+    if (error) {
+      panel.innerHTML = `<div class="error-state" style="padding:32px;text-align:center">
+        <p style="font-weight:700">Error al cargar recordatorios</p>
+        <p style="font-size:.82rem;color:var(--color-text-3)">${error.message}</p></div>`;
+      return;
+    }
+
+    if (!reminders?.length) {
+      panel.innerHTML = `<div class="empty-state">
+        <span class="empty-state-icon">🔔</span>
+        <p>Sin recordatorios.</p>
+        <p style="font-size:.78rem;color:var(--color-text-3)">Usá el botón "+ Nuevo Recordatorio" para crear uno.</p>
+      </div>`;
+      return;
+    }
+
+    const today = localToday();
+    panel.innerHTML = `<div class="ops-list" id="reminders-ops-list">${reminders.map(r => {
+      const isToday  = r.scheduled_date === today;
+      const isPast   = r.scheduled_date < today && !r.completed;
+      const dotColor = r.completed ? '#94a3b8' : isToday ? '#f59e0b' : isPast ? '#ef4444' : 'var(--color-primary)';
+      const fmtD = d => d ? new Date(d+'T12:00:00').toLocaleDateString('es-AR',{weekday:'short',day:'numeric',month:'short'}) : '—';
+      return `<div class="reminder-card ${r.completed?'reminder-done':''} ${isPast?'reminder-overdue':''}" data-id="${r.id}">
+        <div class="reminder-dot" style="background:${dotColor}"></div>
+        <div class="reminder-body">
+          <div class="reminder-title ${r.completed?'line-through':''}">${r.title}</div>
+          <div class="reminder-meta">
+            📅 ${fmtD(r.scheduled_date)}
+            ${r.units?.name ? ` · 🏠 ${r.units.name}` : ' · General'}
+            ${r.description ? ` · ${r.description}` : ''}
+          </div>
+        </div>
+        <div class="reminder-actions">
+          <label class="reminder-check" title="${r.completed?'Marcar pendiente':'Marcar completado'}">
+            <input type="checkbox" ${r.completed?'checked':''} onchange="window.toggleReminder('${r.id}',this.checked)">
+            <span class="reminder-check-icon">${r.completed?'✅':'⬜'}</span>
+          </label>
+          <button class="btn btn-ghost btn-xs reminder-edit-btn"
+            data-id="${r.id}" data-title="${r.title.replace(/"/g,'&quot;')}"
+            data-date="${r.scheduled_date}" data-desc="${(r.description??'').replace(/"/g,'&quot;')}"
+            data-unit="${r.unit_id??''}" title="Editar">✏️</button>
+          <button class="btn btn-ghost btn-xs reminder-del-ops-btn" data-id="${r.id}" title="Eliminar">🗑️</button>
+        </div>
+      </div>`;
+    }).join('')}</div>`;
+
+    // Event delegation
+    if (!panel.dataset.reminderOpsBound) {
+      panel.dataset.reminderOpsBound = '1';
+      panel.addEventListener('click', async (e) => {
+        const editBtn = e.target.closest('.reminder-edit-btn');
+        const delBtn  = e.target.closest('.reminder-del-ops-btn');
+
+        if (editBtn) {
+          const titleEl = document.getElementById('r-title');
+          const dateEl  = document.getElementById('r-date');
+          const descEl  = document.getElementById('r-desc');
+          const unitEl  = document.getElementById('r-unit');
+          if (titleEl) titleEl.value = editBtn.dataset.title;
+          if (dateEl)  dateEl.value  = editBtn.dataset.date;
+          if (descEl)  descEl.value  = editBtn.dataset.desc;
+          if (typeof populateReminderUnitSelect === 'function') populateReminderUnitSelect();
+          setTimeout(() => { if (unitEl) unitEl.value = editBtn.dataset.unit; }, 60);
+          const overlay    = document.getElementById('overlay-reminder');
+          const saveBtn    = document.getElementById('reminder-save');
+          const modalTitle = overlay?.querySelector('.modal-title');
+          if (modalTitle) modalTitle.textContent = 'Editar Recordatorio';
+          overlay?.classList.remove('hidden');
+          const handleSave = async () => {
+            const title = titleEl?.value.trim();
+            const date  = dateEl?.value;
+            if (!title || !date) { showToast('Título y fecha obligatorios','warning'); return; }
+            const { error } = await this.db.from('reminders')
+              .update({ title, description: descEl?.value.trim()||null, scheduled_date: date, unit_id: unitEl?.value||null })
+              .eq('id', editBtn.dataset.id);
+            if (error) { showToast('Error: '+error.message,'error'); return; }
+            showToast('Recordatorio actualizado ✓','success');
+            overlay?.classList.add('hidden');
+            if (modalTitle) modalTitle.textContent = 'Nuevo Recordatorio';
+            saveBtn?.removeEventListener('click', handleSave);
+            panel.dataset.reminderOpsBound = '';
+            await this._loadReminders(panel, header);
+          };
+          saveBtn?.removeEventListener('click', window._reminderSaveHandler);
+          saveBtn?.addEventListener('click', handleSave);
+          window._reminderSaveHandler = handleSave;
+        }
+
+        if (delBtn && !delBtn.disabled) {
+          if (!confirm('¿Eliminar este recordatorio?')) return;
+          delBtn.disabled = true;
+          const { error } = await this.db.from('reminders').delete().eq('id', delBtn.dataset.id);
+          if (error) { showToast('Error: '+error.message,'error'); delBtn.disabled=false; return; }
+          showToast('Eliminado','success');
+          panel.dataset.reminderOpsBound = '';
+          await this._loadReminders(panel, header);
+        }
+      });
+    }
+
+    // Update badge
+    const pending = reminders.filter(r => !r.completed && r.scheduled_date <= today).length;
+    document.dispatchEvent(new CustomEvent('reminders:badge', { detail: { count: pending } }));
   }
 
   // ══════════════════════════════════════════════════

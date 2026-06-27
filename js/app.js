@@ -1027,7 +1027,7 @@ function handleOperationsChange(payload) {
 function handleReminderChange(payload) {
   cache.invalidate('reminders');
   document.dispatchEvent(new CustomEvent('reminder:changed', { detail: payload }));
-  if (currentSection === 'reminders') loadRemindersSection();
+  if (currentSection === 'reminders' || currentSection === 'operations') loadSection('operations');
   if (currentSection === 'dashboard') dashboard?.load?.();
 }
 
@@ -1421,9 +1421,9 @@ window.toggleReminder = async (id, completed) => {
     const icon = card.querySelector('.reminder-check-icon');
     if (icon) icon.textContent = completed ? '✅' : '⬜';
   }
-  const today = toISODate(new Date());
   const remaining = document.querySelectorAll('.reminder-card:not(.reminder-done)').length;
   updateReminderBadge(remaining);
+  document.dispatchEvent(new CustomEvent('reminders:badge', { detail: { count: remaining } }));
 };
 
 // ══════════════════════════════════════════════════
