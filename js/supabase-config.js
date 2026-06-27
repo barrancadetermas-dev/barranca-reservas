@@ -197,6 +197,16 @@ export function toISODate(d) {
   return `${y}-${m}-${day}`;
 }
 
+// Fecha local de hoy en formato YYYY-MM-DD (evita bug UTC a las 21hs AR)
+export function localToday() {
+  return toISODate(new Date());
+}
+
+// Convierte cualquier Date a YYYY-MM-DD usando hora local
+export function localDateISO(d) {
+  return toISODate(d instanceof Date ? d : new Date(d));
+}
+
 // ══════════════════════════════════════════════════
 // TOAST GLOBAL (deduplicado)
 // ══════════════════════════════════════════════════

@@ -1,6 +1,8 @@
 // ═══════════════════════════════════════════════════
 // mock-data.js — Generador de datos para modo Demo
 // Produce datos realistas argentinos para el mes actual
+const localToday = () => { const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
+const localDateISO = (d) => { return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
 // Nunca toca Supabase. Se activa cuando role = 'demo'
 // ═══════════════════════════════════════════════════
 
@@ -18,7 +20,7 @@ function toISO(y, m, d) {
 function addDays(iso, n) {
   const d = new Date(iso + 'T12:00:00');
   d.setDate(d.getDate() + n);
-  return d.toISOString().split('T')[0];
+  return localDateISO(d);
 }
 
 // Precios base por unidad (ARS, razonables para 2026)
@@ -194,7 +196,7 @@ export function generateMockExpenses() {
 // RECORDATORIOS (para dashboard demo)
 // ══════════════════════════════════════════════════
 export function generateMockReminders(units) {
-  const today = new Date().toISOString().split('T')[0];
+  const today = localToday();
   const nextWeek = addDays(today, 5);
   return [
     { id:'mr1', title:'Cortar el pasto', description:'Zona de ingreso + jardín trasero',
@@ -212,7 +214,7 @@ export function generateMockReminders(units) {
 // KPIs DE HOY (para dashboard demo)
 // ══════════════════════════════════════════════════
 export function generateMockDashboard(units, bookings) {
-  const today      = new Date().toISOString().split('T')[0];
+  const today      = localToday();
   const checkins   = bookings.filter(b => b.check_in  === today && b.status !== 'cancelled');
   const checkouts  = bookings.filter(b => b.check_out === today && b.status !== 'cancelled');
   const active     = bookings.filter(b => b.check_in <= today && b.check_out > today && b.status !== 'cancelled' && !b.is_blocked);

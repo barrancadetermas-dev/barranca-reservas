@@ -4,7 +4,7 @@
 // sugiere precio con justificación detallada.
 // ══════════════════════════════════════════════════
 
-import { formatARS } from '../supabase-config.js';
+import { formatARS, localToday, localDateISO } from '../supabase-config.js';
 
 const MONTH_NAMES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio',
                      'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
@@ -109,7 +109,7 @@ export class PriceSuggester {
 
   async _fetchCurrentMonthADR(unitIds, month, year) {
     const firstDay = `${year}-${String(month+1).padStart(2,'0')}-01`;
-    const today    = new Date().toISOString().split('T')[0];
+    const today    = localToday();
     const { data } = await this.db.from('bookings')
       .select('price_per_night,booking_units(unit_id)')
       .eq('hotel_id', this.ctx.hotelId)

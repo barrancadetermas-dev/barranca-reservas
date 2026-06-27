@@ -1,5 +1,5 @@
 import { isDemo, can } from '../auth/permissions.js';
-import { formatARS, showToast, getUnitLabel, getUnitColor, getUnitChipHTML, AppContext } from '../supabase-config.js';
+import { formatARS, showToast, getUnitLabel, getUnitColor, getUnitChipHTML, AppContext, localToday, localDateISO } from '../supabase-config.js';
 import { RevenuePanel } from './revenue-panel.js';
 
 // ══════════════════════════════════════════════════
@@ -403,7 +403,7 @@ export class Statistics {
     const lastDay    = new Date(year, month + 1, 0);
     const lastDayStr = `${year}-${String(month+1).padStart(2,'0')}-${String(lastDay.getDate()).padStart(2,'0')}`;
     const daysInMonth = lastDay.getDate();
-    const today = new Date().toISOString().split('T')[0];
+    const today = localToday();
 
     try {
       let bookings = [];

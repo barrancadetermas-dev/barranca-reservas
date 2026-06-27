@@ -1,6 +1,8 @@
 // ═══════════════════════════════════════════════════
 // date-range-picker.js v2.0 — FIX
 // • Hover via CSS class — sin re-render en mouseenter
+const localToday = () => { const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
+const localDateISO = (d) => { return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
 // • Re-render solo cuando cambian start/end dates
 // • Soporte touch para mobile
 // ═══════════════════════════════════════════════════
@@ -132,7 +134,7 @@ export class DateRangePicker {
     const daysInMonth = new Date(year, month + 1, 0).getDate();
     const firstDow    = new Date(year, month, 1).getDay();
     const startOffset = (firstDow + 6) % 7; // lunes = 0
-    const today       = new Date().toISOString().split('T')[0];
+    const today       = localToday();
 
     let cells = Array.from({ length: startOffset }, () =>
       '<div class="drp-day drp-day-empty"></div>').join('');

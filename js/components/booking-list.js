@@ -6,7 +6,7 @@ import { can, isDemo } from "../auth/permissions.js";
 // + Exportar PDF y Excel desde la lista
 // ═══════════════════════════════════════════════════
 
-import { formatARS, formatDate, showToast, getUnitChipHTML, getSourceBadgeHTML, getBookingBarColor, getUnitLabel, getUnitColor, SOURCE_CONFIG } from '../supabase-config.js';
+import { formatARS, formatDate, showToast, getUnitChipHTML, getSourceBadgeHTML, getBookingBarColor, getUnitLabel, getUnitColor, SOURCE_CONFIG, localToday, localDateISO } from '../supabase-config.js';
 import { logAction } from '../services/audit-service.js';
 
 const STATUS_LABELS = {
@@ -106,7 +106,7 @@ export class BookingList {
         const { generateMockBookings } = await import('../services/mock-data.js');
         const now = new Date();
         this._allBookings = generateMockBookings(this.ctx.units, now.getFullYear(), now.getMonth());
-        this._render(now.toISOString().split('T')[0]);
+        this._render(localDateISO(now));
         return;
       }
 
@@ -127,7 +127,7 @@ export class BookingList {
 
       if (error) throw error;
       this._allBookings = data ?? [];
-      this._render(new Date().toISOString().split('T')[0]);
+      this._render(localToday());
       this._updateNavBadge(data);
 
     } catch (err) {
@@ -146,7 +146,7 @@ export class BookingList {
         this._page   = 1;
         // Default sort per tab: active → próximas primero; archive → más recientes primero
         this._sortBy = this._tab === 'archive' ? 'check_in_desc' : 'check_in_asc';
-        this._render(new Date().toISOString().split('T')[0]);
+        this._render(localToday());
       });
     });
   }
@@ -158,7 +158,7 @@ export class BookingList {
         btn.classList.add('active');
         this._source = btn.dataset.source;
         this._page   = 1;
-        this._render(new Date().toISOString().split('T')[0]);
+        this._render(localToday());
       });
     });
     document.querySelector('.source-filter-btn[data-source=""]')?.classList.add('active');
@@ -170,7 +170,7 @@ export class BookingList {
     document.getElementById('booking-search')?.addEventListener('input', deb((e) => {
       this._search = e.target.value.trim().toLowerCase();
       this._page   = 1;
-      this._render(new Date().toISOString().split('T')[0]);
+      this._render(localToday());
     }, 250));
 
     ['filter-status', 'filter-unit', 'filter-date-from', 'filter-date-to'].forEach(id => {
@@ -179,7 +179,7 @@ export class BookingList {
         this[key] = e.target.value;
         this._page = 1;
         this._updateDateClearBtn();
-        this._render(new Date().toISOString().split('T')[0]);
+        this._render(localToday());
       });
     });
 
@@ -192,7 +192,7 @@ export class BookingList {
       this._updateDateClearBtn();
       this._clearActivePreset();
       this._page = 1;
-      this._render(new Date().toISOString().split('T')[0]);
+      this._render(localToday());
     });
 
     // Presets de fecha rápidos
@@ -205,14 +205,14 @@ export class BookingList {
 
         switch (btn.dataset.preset) {
           case 'today':
-            from = to = now.toISOString().split('T')[0];
+            from = to = localDateISO(now);
             break;
           case 'week': {
             const day  = now.getDay() || 7;
             const mon  = new Date(now); mon.setDate(now.getDate() - day + 1);
             const sun  = new Date(mon); sun.setDate(mon.getDate() + 6);
-            from = mon.toISOString().split('T')[0];
-            to   = sun.toISOString().split('T')[0];
+            from = localDateISO(mon);
+            to   = localDateISO(sun);
             break;
           }
           case 'month':
@@ -243,7 +243,7 @@ export class BookingList {
           document.querySelectorAll('.date-preset-btn').forEach(b => b.classList.remove('active'));
           btn.classList.add('active');
           this._page = 1;
-          this._render(new Date().toISOString().split('T')[0]);
+          this._render(localToday());
         }
       });
     });
@@ -251,7 +251,7 @@ export class BookingList {
     // Load more
     document.getElementById('btn-load-more')?.addEventListener('click', () => {
       this._page++;
-      this._render(new Date().toISOString().split('T')[0]);
+      this._render(localToday());
     });
   }
 
@@ -421,7 +421,7 @@ export class BookingList {
 
   // ── Rebuild sin recargar de Supabase (para filtros/sort locales) ──
   _rebuildList() {
-    this._render(new Date().toISOString().split('T')[0]);
+    this._render(localToday());
   }
 
   // ── Render principal ──────────────────────────────
@@ -826,7 +826,7 @@ export class BookingList {
 
   // ── Badge de nav ──────────────────────────────────
   _updateNavBadge(bookings) {
-    const today   = new Date().toISOString().split('T')[0];
+    const today   = localToday();
     const pending = (bookings ?? []).filter(b => b.check_out >= today && b.status === 'pending').length;
     const badge   = document.getElementById('nav-badge-bookings');
     if (badge) {

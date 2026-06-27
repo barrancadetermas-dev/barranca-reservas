@@ -4,7 +4,7 @@
 // Sugerencia automática de precio por unidad / 30 días
 // ═══════════════════════════════════════════════════
 
-import { formatARS, showToast, getUnitColor, getUnitLabel, AppContext } from '../supabase-config.js';
+import { formatARS, showToast, getUnitColor, getUnitLabel, AppContext, localToday, localDateISO } from '../supabase-config.js';
 
 const MONTH_NAMES = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
 
@@ -40,7 +40,7 @@ export class RevenuePanel {
 
       // Próximos 30 días para sugerencias
       const nextBookings = bookings.filter(b =>
-        b.check_in >= now.toISOString().split('T')[0]
+        b.check_in >= localDateISO(now)
       );
 
       // ADR y ocupación por mes (24 meses)

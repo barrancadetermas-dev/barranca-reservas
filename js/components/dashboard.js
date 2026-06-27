@@ -4,7 +4,7 @@ import { isDemo } from "../auth/permissions.js";
 // KPIs, Ocupación, Dólar, Llegadas, Recordatorios
 // ═══════════════════════════════════════════════════
 
-import { formatARS, formatDate, toISODate, showToast } from '../supabase-config.js';
+import { formatARS, formatDate, toISODate, showToast, localToday, localDateISO } from '../supabase-config.js';
 import { fetchDollarRates } from '../services/dollar-api.js';
 // ↑ Sin import de app.js — evita dependencia circular.
 // El badge se actualiza via CustomEvent que app.js escucha.
@@ -72,7 +72,7 @@ export class Dashboard {
         const mockBookings  = generateMockBookings(this.ctx.units, now.getFullYear(), now.getMonth());
         const mockKPIs      = generateMockDashboard(this.ctx.units, mockBookings);
         const mockReminders = generateMockReminders(this.ctx.units);
-        this._renderKPIs(mockKPIs, new Date().toISOString().split('T')[0]);
+        this._renderKPIs(mockKPIs, localToday());
         this._renderOccupancyRing(mockKPIs.occupiedUnits, this.ctx.units.length);
         this._renderDollar(null); // cotización real igual
         this._renderArrivals(mockKPIs.arrivals);

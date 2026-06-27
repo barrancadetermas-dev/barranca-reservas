@@ -10,7 +10,7 @@
 import {
   toISODate, getBookingBarColor, getUnitLabel, getUnitColor,
   getUnitChipHTML, getSourceBadgeHTML, SOURCE_CONFIG, UNIT_CATALOG,
-  showToast, formatARS, formatDate, AppContext
+  showToast, formatARS, formatDate, AppContext, localToday, localDateISO
 } from '../supabase-config.js';
 import { can } from '../auth/permissions.js';
 import { getHolidaysForYear, isWeekend } from '../services/arg-holidays.js';
@@ -185,7 +185,7 @@ export class Calendar {
     const todayDay    = today.getDate();
     const todayMonth  = today.getMonth();
     const todayYear   = today.getFullYear();
-    const todayISO    = today.toISOString().split('T')[0];
+    const todayISO    = localToday();
     const holidays    = getHolidaysForYear(this.year);
 
     // ── FIX MOBILE: ancho fijo por celda + scroll horizontal ──
@@ -413,7 +413,7 @@ export class Calendar {
 
   // ── Celda dividida (RECAMBIO) ─────────────────────
   _renderSplitCell(cell, coBooking, ciBooking, todayISO) {
-    const todayStr  = todayISO ?? new Date().toISOString().split('T')[0];
+    const todayStr  = todayISO ?? localToday();
     const coColor   = getBookingBarColor(coBooking).color;
     const ciColor   = getBookingBarColor(ciBooking).color;
     const coIsPast  = coBooking.check_out <= todayStr;
@@ -924,7 +924,7 @@ export class Calendar {
   // ── Vista Lista ───────────────────────────────────
   _renderListView(bookings) {
     const grid      = document.getElementById('calendar-grid');
-    const today     = new Date().toISOString().split('T')[0];
+    const today     = localToday();
     const container = document.getElementById('cal-legend-container');
     if (container) container.innerHTML = '';
 
@@ -1020,8 +1020,8 @@ export class Calendar {
     // ── Crear panel de filtro de disponibilidad ──
     const filterPanel = document.createElement('div');
     filterPanel.id = 'avail-filter-panel';
-    const todayStr = new Date().toISOString().split('T')[0];
-    const tomorrowStr = (() => { const d = new Date(); d.setDate(d.getDate()+1); return d.toISOString().split('T')[0]; })();
+    const todayStr = localToday();
+    const tomorrowStr = (() => { const d = new Date(); d.setDate(d.getDate()+1); return localDateISO(d); })();
     filterPanel.style.cssText = `
       display:none;flex-direction:column;
       background:var(--color-surface-2,#f8f9fa);border:1px solid var(--color-border,#e5e7eb);
@@ -1263,7 +1263,7 @@ export class Calendar {
       return d;
     });
 
-    const today = new Date().toISOString().split('T')[0];
+    const today = localToday();
     grid.style.gridTemplateColumns = `160px repeat(7, 1fr)`;
     grid.style.minWidth = '600px';
     grid.style.width    = 'max-content';
@@ -1280,7 +1280,7 @@ export class Calendar {
     const weekHolidays = getHolidaysForYear(days[0].getFullYear());
 
     days.forEach(d => {
-      const iso      = d.toISOString().split('T')[0];
+      const iso      = localDateISO(d);
       const isToday  = iso === today;
       const dow      = d.getDay();
       const isWknd   = dow === 0 || dow === 6;
@@ -1320,7 +1320,7 @@ export class Calendar {
       grid.appendChild(label);
 
       days.forEach(d => {
-        const iso = d.toISOString().split('T')[0];
+        const iso = localDateISO(d);
         const isToday = iso === today;
         const dayBookings = bookings.filter(b =>
           b.check_in <= iso && b.check_out > iso &&
@@ -1441,7 +1441,7 @@ export class Calendar {
       const newCI        = this._addDays(booking.check_in,  daysDiff);
       const newCO        = this._addDays(booking.check_out, daysDiff);
       const targetUnitId = state.targetUnitId ?? sourceUnitId;
-      const today        = new Date().toISOString().split('T')[0];
+      const today        = localToday();
       const unitChanged  = targetUnitId !== sourceUnitId;
 
       // Modal de confirmación personalizado (evita cambios accidentales por drag)
@@ -1662,6 +1662,6 @@ export class Calendar {
     _addDays(isoDate, n) {
     const d = new Date(isoDate + 'T12:00:00');
     d.setDate(d.getDate() + n);
-    return d.toISOString().split('T')[0];
+    return localDateISO(d);
   }
 }

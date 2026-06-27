@@ -11,7 +11,7 @@ import { NotificationService } from './services/notification-service.js';
 // + Panel de Configuración + Indicador de Conexión
 // ═══════════════════════════════════════════════════
 
-import { supabase, loadHotelContext, AppContext, showToast, toISODate, formatARS } from './supabase-config.js';
+import { supabase, loadHotelContext, AppContext, showToast, toISODate, formatARS, localToday, localDateISO } from './supabase-config.js';
 import { can, isDemo, getRoleLabel, ROLE_PERMISSIONS } from './auth/permissions.js';
 import { logAction } from './services/audit-service.js';
 import { Dashboard }    from './components/dashboard.js';
@@ -1216,7 +1216,7 @@ async function updateOperationsBadge() {
   const opsBadge = document.getElementById('nav-badge-operations');
   if (!opsBadge || !AppContext.hotelId) return;
   try {
-    const today = new Date().toISOString().split('T')[0];
+    const today = toISODate(new Date());
 
     // cleaning_tasks — siempre existe
     let cleanCount = 0;
@@ -1437,7 +1437,7 @@ function setupReminderModal() {
     const descEl  = document.getElementById('r-desc');
     if (titleEl) titleEl.value = '';
     if (descEl)  descEl.value  = '';
-    if (dateEl)  dateEl.value  = new Date().toISOString().split('T')[0];
+    if (dateEl)  dateEl.value  = localToday();
     populateReminderUnitSelect();
     document.getElementById('overlay-reminder').classList.remove('hidden');
     // Focus the title field for better UX
@@ -1975,8 +1975,8 @@ function setupCalculator() {
     const today = new Date();
     const co    = new Date(today);
     co.setDate(co.getDate() + nights);
-    const checkIn  = today.toISOString().split('T')[0];
-    const checkOut = co.toISOString().split('T')[0];
+    const checkIn  = toISODate(today);
+    const checkOut = toISODate(co);
 
     bookingForm.open({
       price,

@@ -16,9 +16,10 @@ export class NotificationService {
 
   async refresh() {
     if (!AppContext.hotelId) return [];
-    const today    = new Date().toISOString().split('T')[0];
-    const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0];
-    const in3Days  = new Date(Date.now() + 3*86400000).toISOString().split('T')[0];
+    const _d = (d) => { const y=d.getFullYear(), m=String(d.getMonth()+1).padStart(2,'0'), day=String(d.getDate()).padStart(2,'0'); return `${y}-${m}-${day}`; };
+    const today    = _d(new Date());
+    const tomorrow = _d(new Date(new Date().setDate(new Date().getDate()+1)));
+    const in3Days  = _d(new Date(new Date().setDate(new Date().getDate()+3)));
     const now      = new Date();
 
     this._list = [];
