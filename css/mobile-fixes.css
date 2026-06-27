@@ -423,3 +423,41 @@
     white-space: nowrap;
   }
 }
+
+/* =======================================================================
+   DASHBOARD — Accent border izquierdo en todos los cards
+   ======================================================================= */
+
+/* Todos los .card en el dashboard tienen la línea azul */
+#section-dashboard .card {
+  border-left: 3px solid var(--color-primary) !important;
+  border-radius: var(--r-xl) !important;
+}
+
+/* KPI cards del tope: color por tipo */
+.kpi-card.kpi-blue  { border-left-color: #3B82F6 !important; }
+.kpi-card.kpi-amber { border-left-color: #F59E0B !important; }
+.kpi-card.kpi-rose  { border-left-color: #0EA5E9 !important; }
+.kpi-card.kpi-green { border-left-color: #22C55E !important; }
+
+/* Ocupación — neutral azul oscuro */
+.widget-occupancy   { border-left-color: var(--color-primary) !important; }
+
+/* USD — verde */
+.widget-dollar      { border-left-color: #22C55E !important; }
+
+/* Llegadas / Salidas / Próximas — primario */
+.widget-arrivals,
+.widget-departures,
+.widget-upcoming    { border-left-color: var(--color-primary) !important; }
+
+/* Tareas del día — ámbar */
+.widget-reminders   { border-left-color: #F59E0B !important; }
+
+/* Proyección — primary */
+.forecast-widget    { border-left: 3px solid var(--color-primary) !important; border-radius: var(--r-xl) !important; }
+
+/* Dark mode: líneas un poco más brillantes */
+[data-theme="dark"] #section-dashboard .card {
+  border-left-color: var(--color-primary) !important;
+}
