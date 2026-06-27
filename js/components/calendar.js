@@ -1,10 +1,9 @@
 // ═══════════════════════════════════════════════════
-// calendar.js v4.1 — MILA Sistema Inteligente
-// • Fix mobile: grid columns fijos + scroll horizontal
-// • Fix click en barras (independiente del drag)
-// • Fix colores desaturados en vista mes (reservas pasadas)
-// • Drag & Drop de reservas (fechas + unidad)
-// • Leyendas como Accordion con estado persistente
+// calendar.js v5.0 — MILA Sistema Inteligente
+// • Vista continua: 6 días anteriores + HOY + futuros
+// • Drag & Drop profesional con ghost completo
+// • Resize de reservas desde el borde derecho
+// • Animaciones fluidas · Auto-scroll · Caché inteligente
 // ═══════════════════════════════════════════════════
 
 import {
@@ -21,91 +20,127 @@ import { Bus, EVENTS } from '../services/event-bus.js';
 const DAY_NAMES   = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
 const MONTH_NAMES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio',
                      'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+const MONTH_SHORT = ['Ene','Feb','Mar','Abr','May','Jun',
+                     'Jul','Ago','Sep','Oct','Nov','Dic'];
 
-const STATUS_LABELS = {
-  pending:   'Sin seña',
-  partial:   'Con seña',
-  paid:      'Pagado',
-  blocked:   'Bloqueo',
-  cancelled: 'Cancelado',
-};
+// ── Días previos a HOY que siempre se muestran ──
+const PAST_OFFSET = 6;
+// ── Ancho mínimo de columna (px) ──
+const CELL_W_DESK = 38;
+const CELL_W_MOB  = 32;
+// ── Ancho de la columna de etiquetas de unidad ──
+const LABEL_W = 160;
 
 export class Calendar {
   constructor(supabase, ctx, bookingForm) {
     this.db          = supabase;
     this.ctx         = ctx;
     this.bookingForm = bookingForm;
-    const now        = new Date();
-    this.year        = now.getFullYear();
-    this.month       = now.getMonth();
-    this._drag       = { active: false, startDay: null, unitId: null, moved: false };
-    this._tooltip    = null;
-    this._ghost      = this._createGhost();
-    this._view       = 'month';
-    this._weekStart  = this._getWeekStart(new Date());
-    this._barDrag    = { active: false, booking: null, unitId: null, startX: 0, moved: false };
 
-    this._dragAbort  = null;
-    this._dragBound  = false;
+    // ── Vista continua ──────────────────────────
+    this._windowStart  = this._addDays(localToday(), -PAST_OFFSET);
+    this._visibleDays  = 30; // se recalcula en load()
+    this._dateRange    = []; // array de ISO strings visibles
+
+    // ── Estado interno ───────────────────────────
+    this._drag         = { active: false, moved: false };
+    this._barDrag      = { active: false };
+    this._resizeActive = false;
+    this._tooltip      = null;
+    this._textGhost    = this._createTextGhost();
+    this._floatInfo    = this._createFloatInfo();
+    this._pendingPulse = new Set();
+    this._isLoading    = false;
+
+    // ── AbortControllers para event listeners ────
+    this._selectionAbort = null;
+    this._barDragAbort   = null;
 
     window._calInstance = this;
     this._setupControls();
     this._setupContextMenu();
     this._setupDocumentEvents();
 
-    this._pendingPulse = new Set();
-
-    Bus.on(EVENTS.CAL_PULSE_BAR, ({ bookingId }) => {
-      this._pendingPulse.add(bookingId);
-    });
-
-    Bus.on(EVENTS.CAL_RELOAD, () => this.load());
+    Bus.on(EVENTS.CAL_PULSE_BAR, ({ bookingId }) => this._pendingPulse.add(bookingId));
+    Bus.on(EVENTS.CAL_RELOAD,    () => this.load());
   }
 
-  // ── Carga del calendario ──────────────────────────
+  // ══════════════════════════════════════════════════
+  // CARGA PRINCIPAL
+  // ══════════════════════════════════════════════════
   async load() {
     if (this._isLoading) return;
     this._isLoading = true;
-
-    document.getElementById('cal-month-title').textContent =
-      `${MONTH_NAMES[this.month]} ${this.year}`;
     try {
+      this._visibleDays = this._computeVisibleDays();
+      const lastISO     = this._addDays(this._windowStart, this._visibleDays - 1);
+      this._dateRange   = this._buildDateRange(this._windowStart, this._visibleDays);
+      this._updateTitle();
+
       const [bookings, reminders] = await Promise.all([
-        this._fetchBookings(),
-        this._fetchReminders().catch(err => {
-          console.warn('[Calendar] reminders fetch failed (ignorado):', err?.message ?? err);
+        this._fetchBookings(this._windowStart, lastISO),
+        this._fetchReminders(this._windowStart, lastISO).catch(err => {
+          console.warn('[Calendar] reminders fetch failed:', err?.message ?? err);
           return [];
         }),
       ]);
-      this._lastRenderedBookings = bookings;
 
+      this._lastRenderedBookings = bookings;
       const cellMap     = this._buildCellMap(bookings);
       const reminderMap = this._buildReminderMap(reminders);
       this._render(cellMap, reminderMap);
-      if (!this._dragBound) {
+
+      // Bindear eventos de drag/resize una vez por sesión de grid
+      // (el grid div persiste; solo su contenido cambia)
+      if (!this._barDragAbort) {
         const grid = document.getElementById('calendar-grid');
         if (grid) {
           this._setupDragSelection(grid);
-          this._setupBarDrag(grid);
-          this._dragBound = true;
+          this._setupBarDragAndResize(grid);
         }
       }
     } catch (err) {
-      console.error('Calendar load error:', err);
-      if (!err?.message?.includes('call stack')) {
-        showToast('Error al cargar el calendario', 'error');
-      }
+      console.error('[Calendar] load error:', err);
+      showToast('Error al cargar el calendario', 'error');
     } finally {
       this._isLoading = false;
     }
   }
 
-  // ── Fetch reservas ───────────────────────────────
-  async _fetchBookings() {
-    const firstDay = `${this.year}-${String(this.month+1).padStart(2,'0')}-01`;
-    const lastDay  = toISODate(new Date(this.year, this.month+1, 0));
-    const params   = { hotelId: this.ctx.hotelId, firstDay, lastDay };
+  // ── Número de columnas visibles ──────────────────
+  _computeVisibleDays() {
+    const wrapper = document.querySelector('.cal-wrapper');
+    const w       = wrapper ? wrapper.clientWidth : Math.max(window.innerWidth - 280, 400);
+    const isMob   = window.innerWidth <= 768;
+    const cellW   = isMob ? CELL_W_MOB : CELL_W_DESK;
+    return Math.max(14, Math.min(120, Math.floor((w - LABEL_W) / cellW)));
+  }
 
+  // ── Actualizar título ────────────────────────────
+  _updateTitle() {
+    const first = this._dateRange[0];
+    const last  = this._dateRange[this._dateRange.length - 1] ?? first;
+    const fmt = (iso) => {
+      const d = new Date(iso + 'T12:00:00');
+      return `${d.getDate()} ${MONTH_SHORT[d.getMonth()]}`;
+    };
+    const el = document.getElementById('cal-month-title');
+    if (el) el.textContent = `${fmt(first)} – ${fmt(last)}`;
+
+    // Mostrar / ocultar botón "Hoy"
+    const todayBtn = document.getElementById('cal-today');
+    if (todayBtn) {
+      const today   = localToday();
+      const visible = first <= today && today <= last;
+      todayBtn.style.display = visible ? 'none' : '';
+    }
+  }
+
+  // ══════════════════════════════════════════════════
+  // DATA FETCHING
+  // ══════════════════════════════════════════════════
+  async _fetchBookings(firstDay, lastDay) {
+    const params = { hotelId: this.ctx.hotelId, firstDay, lastDay };
     return cachedQuery(this.db, 'bookings', params, () =>
       this.db.from('bookings').select(`
         id, check_in, check_out, status, source, is_blocked, block_reason,
@@ -121,10 +156,7 @@ export class Calendar {
     );
   }
 
-  // ── Fetch recordatorios ───────────────────────────
-  async _fetchReminders() {
-    const firstDay = `${this.year}-${String(this.month+1).padStart(2,'0')}-01`;
-    const lastDay  = toISODate(new Date(this.year, this.month+1, 0));
+  async _fetchReminders(firstDay, lastDay) {
     const { data, error } = await this.db
       .from('reminders')
       .select('*, units(name, sort_order)')
@@ -136,35 +168,48 @@ export class Calendar {
     return data ?? [];
   }
 
-  // ── Mapa de celdas ────────────────────────────────
+  // ══════════════════════════════════════════════════
+  // PROCESAMIENTO DE DATOS
+  // ══════════════════════════════════════════════════
+  _buildDateRange(start, count) {
+    return Array.from({ length: count }, (_, i) => this._addDays(start, i));
+  }
+
   _buildCellMap(bookings) {
-    const daysInMonth = new Date(this.year, this.month+1, 0).getDate();
     const map = {};
     this.ctx.units.forEach(u => {
       map[u.id] = {};
-      for (let d = 1; d <= daysInMonth; d++) map[u.id][d] = [];
+      this._dateRange.forEach(iso => { map[u.id][iso] = []; });
     });
+
     bookings.forEach(b => {
-      const ci = new Date(b.check_in  + 'T12:00:00');
-      const co = new Date(b.check_out + 'T12:00:00');
+      const ci = b.check_in;
+      const co = b.check_out;
       (b.booking_units ?? []).forEach(({ unit_id }) => {
         if (!map[unit_id]) return;
-        for (let d = 1; d <= daysInMonth; d++) {
-          const cell = new Date(this.year, this.month, d, 12, 0, 0);
-          if (cell >= ci && cell < co) {
-            map[unit_id][d].push({ ...b, _cellType: this._getCellType(ci, co, cell) });
+        this._dateRange.forEach(iso => {
+          if (iso >= ci && iso < co) {
+            map[unit_id][iso].push({
+              ...b,
+              _cellType: this._getCellType(ci, co, iso),
+            });
           }
-        }
+        });
       });
     });
     return map;
   }
 
-  _getCellType(ci, co, cell) {
-    const sd = (a,b) => a.getFullYear()===b.getFullYear()&&a.getMonth()===b.getMonth()&&a.getDate()===b.getDate();
-    const endDay = new Date(co); endDay.setDate(endDay.getDate()-1);
-    if (sd(cell, ci))     return 'start';
-    if (sd(cell, endDay)) return 'end';
+  _getCellType(ci, co, iso) {
+    const windowStart   = this._windowStart;
+    const lastOccupied  = this._addDays(co, -1);
+    // "start" si es el día de check-in O si el check-in es antes de la ventana
+    // y este es el primer día visible de esta reserva
+    const isVisualStart = (iso === ci) || (ci < windowStart && iso === windowStart);
+    const isVisualEnd   = iso === lastOccupied;
+    if (isVisualStart && isVisualEnd) return 'solo';
+    if (isVisualStart) return 'start';
+    if (isVisualEnd)   return 'end';
     return 'middle';
   }
 
@@ -177,120 +222,137 @@ export class Calendar {
     return map;
   }
 
-  // ── Renderizado del grid ──────────────────────────
+  // ══════════════════════════════════════════════════
+  // RENDERIZADO PRINCIPAL
+  // ══════════════════════════════════════════════════
   _render(cellMap, reminderMap) {
-    const grid        = document.getElementById('calendar-grid');
-    const daysInMonth = new Date(this.year, this.month+1, 0).getDate();
-    const today       = new Date();
-    const todayDay    = today.getDate();
-    const todayMonth  = today.getMonth();
-    const todayYear   = today.getFullYear();
-    const todayISO    = localToday();
-    const holidays    = getHolidaysForYear(this.year);
+    const grid    = document.getElementById('calendar-grid');
+    const today   = localToday();
+    const isMob   = window.innerWidth <= 768;
+    const cellW   = isMob ? CELL_W_MOB : CELL_W_DESK;
+    const N       = this._visibleDays;
 
-    // ── FIX MOBILE: ancho fijo por celda + scroll horizontal ──
-    const cellW = window.innerWidth <= 768 ? 32 : 38;
-    grid.style.gridTemplateColumns = `160px repeat(${daysInMonth}, minmax(${cellW}px, 1fr))`;
-    grid.style.minWidth = `${160 + daysInMonth * cellW}px`;
+    grid.style.gridTemplateColumns = `${LABEL_W}px repeat(${N}, minmax(${cellW}px, 1fr))`;
+    grid.style.minWidth = `${LABEL_W + N * cellW}px`;
     grid.style.width    = '100%';
-
-    // Forzar scroll en el contenedor padre
-    const gridParent = grid.parentElement;
-    if (gridParent) {
-      gridParent.style.overflowX          = 'auto';
-      gridParent.style.webkitOverflowScrolling = 'touch';
-      gridParent.style.width              = '100%';
-    }
-
     grid.classList.add('month-grid');
     grid.classList.remove('week-grid');
     grid.innerHTML = '';
 
+    // ── Wrapper scroll ────────────────────────────
+    const parent = grid.parentElement;
+    if (parent) {
+      parent.style.overflowX = 'auto';
+      parent.style.webkitOverflowScrolling = 'touch';
+      parent.style.width = '100%';
+    }
+
+    // ── Encabezado: esquina ───────────────────────
     const corner = document.createElement('div');
     corner.className = 'cal-unit-label-header';
     corner.textContent = 'Departamento';
     grid.appendChild(corner);
 
-    for (let d = 1; d <= daysInMonth; d++) {
-      const date      = new Date(this.year, this.month, d);
-      const isToday   = d===todayDay && this.month===todayMonth && this.year===todayYear;
-      const dateISO   = `${this.year}-${String(this.month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-      const hasRem    = !!reminderMap[dateISO];
-      const dayOfWeek = date.getDay();
-      const isWknd    = dayOfWeek === 0 || dayOfWeek === 6;
-      const isPastDay = dateISO < todayISO;
-      const holiday   = holidays?.get ? holidays.get(dateISO) : null;
+    // ── Encabezado: columnas de días ──────────────
+    const holidays = getHolidaysForYear(new Date().getFullYear());
+    // También cargar el año siguiente si el rango lo cruza
+    const lastDate   = new Date(this._dateRange[N-1] + 'T12:00:00');
+    const nextYHols  = lastDate.getFullYear() !== new Date().getFullYear()
+      ? getHolidaysForYear(lastDate.getFullYear()) : null;
+
+    this._dateRange.forEach((iso, colIdx) => {
+      const date      = new Date(iso + 'T12:00:00');
+      const dayOfMon  = date.getDate();
+      const dow       = date.getDay();
+      const isToday   = iso === today;
+      const isPast    = iso < today;
+      const isWknd    = dow === 0 || dow === 6;
+      const hasRem    = !!reminderMap[iso];
+      const holMap    = nextYHols && date.getFullYear() === lastDate.getFullYear() ? nextYHols : holidays;
+      const holiday   = holMap?.get ? holMap.get(iso) : null;
       const isHoliday = !!holiday && holiday.type !== 'vacation';
+      // Mostrar etiqueta de mes cuando es el primero del mes o el primer día visible
+      const showMonth = dayOfMon === 1 || colIdx === 0;
 
       const dh = document.createElement('div');
-      let dhCls = 'cal-day-header';
-      if (isToday)              dhCls += ' today';
-      if (isWknd)               dhCls += ' weekend';
-      if (isPastDay && !isToday) dhCls += ' past-header';
-      if (isHoliday)            dhCls += ` holiday holiday-${holiday.type}`;
-      dh.className = dhCls;
+      let cls = 'cal-day-header';
+      if (isToday)              cls += ' today';
+      if (isWknd)               cls += ' weekend';
+      if (isPast && !isToday)   cls += ' past-header';
+      if (isHoliday)            cls += ` holiday holiday-${holiday.type}`;
+      dh.className = cls;
+      dh.dataset.date = iso;
       dh.title = holiday?.label ?? '';
-      dh.innerHTML = `${d}<span class="day-name">${DAY_NAMES[date.getDay()]}</span>
-        ${hasRem ? `<div style="width:4px;height:4px;border-radius:50%;background:var(--color-warning);margin:2px auto 0"></div>` : ''}
-        ${isToday ? `<div style="width:4px;height:4px;border-radius:50%;background:var(--color-primary);margin:1px auto 0"></div>` : ''}`;
+
+      dh.innerHTML = `
+        ${showMonth ? `<span class="dh-month${dayOfMon === 1 && colIdx !== 0 ? ' dh-month-new' : ''}">${MONTH_SHORT[date.getMonth()]}</span>` : ''}
+        <span class="dh-num">${dayOfMon}</span>
+        <span class="day-name">${DAY_NAMES[dow]}</span>
+        ${hasRem  ? '<div class="dh-rem-dot"></div>' : ''}
+        ${isToday ? '<div class="dh-today-dot"></div>' : ''}
+      `;
       grid.appendChild(dh);
-    }
+    });
 
+    // ── Filas de unidades ─────────────────────────
     this.ctx.units.forEach((unit, rowIdx) => {
-      const unitColor = getUnitColor(unit);
-      const unitLabel = getUnitLabel(unit);
-      const rowParity = rowIdx % 2 === 0 ? 'even' : 'odd';
+      const unitColor  = getUnitColor(unit);
+      const unitLabel  = getUnitLabel(unit);
+      const rowParity  = rowIdx % 2 === 0 ? 'even' : 'odd';
+      const hasNotes   = !!unit.internal_notes;
 
+      // Label
       const label = document.createElement('div');
       label.className = 'cal-unit-label';
       label.dataset.rowParity = rowParity;
       label.style.setProperty('--unit-color', unitColor);
       label.style.borderLeftColor = unitColor;
-      const hasNotes = !!unit.internal_notes;
       label.innerHTML = `
         <div style="display:flex;align-items:center;gap:6px">
           <span class="cal-unit-dot" style="background-color:${unitColor}"></span>
           <span style="font-size:.82rem;font-weight:700;color:var(--color-text)">${unitLabel}</span>
-          ${hasNotes ? `<span title="${unit.internal_notes}" style="cursor:help;font-size:.85rem" onclick="window._calInstance._showUnitNote(event,'${unit.internal_notes?.replace(/'/g,"\\'") ?? ''}')">📝</span>` : ''}
-          ${can('manageUnitNotes') ? `<button class="btn btn-ghost btn-xs" style="padding:1px 4px;font-size:.65rem;opacity:.5" onclick="window._calInstance.editUnitNotes('${unit.id}','${(unit.internal_notes??'').replace(/'/g,"\\'")}')">✏️</button>` : ''}
+          ${hasNotes ? `<span title="${unit.internal_notes}" style="cursor:help;font-size:.85rem"
+            onclick="window._calInstance._showUnitNote(event,'${unit.internal_notes?.replace(/'/g,"\\'") ?? ''}')">📝</span>` : ''}
+          ${can('manageUnitNotes') ? `<button class="btn btn-ghost btn-xs" style="padding:1px 4px;font-size:.65rem;opacity:.5"
+            onclick="window._calInstance.editUnitNotes('${unit.id}','${(unit.internal_notes??'').replace(/'/g,"\\'")}')">✏️</button>` : ''}
         </div>
         <span class="unit-floor" style="padding-left:16px">Hasta ${unit.max_guests} pers.</span>`;
       grid.appendChild(label);
 
-      for (let d = 1; d <= daysInMonth; d++) {
-        const dateISO  = `${this.year}-${String(this.month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-        const isToday  = d===todayDay && this.month===todayMonth && this.year===todayYear;
-        const bookings = cellMap[unit.id]?.[d] ?? [];
-        const rems     = reminderMap[dateISO] ?? [];
-
-        const cellHoliday = holidays.get(dateISO);
-        const cellIsWknd  = new Date(dateISO + 'T12:00:00').getDay() % 6 === 0;
-        const cellIsPast  = dateISO < todayISO;
+      // Celdas
+      this._dateRange.forEach((iso) => {
+        const isToday  = iso === today;
+        const isPast   = iso < today;
+        const date     = new Date(iso + 'T12:00:00');
+        const isWknd   = date.getDay() === 0 || date.getDay() === 6;
+        const holMap   = nextYHols && date.getFullYear() === lastDate.getFullYear() ? nextYHols : holidays;
+        const cellHol  = holMap?.get ? holMap.get(iso) : null;
+        const bookings = cellMap[unit.id]?.[iso] ?? [];
+        const rems     = reminderMap[iso] ?? [];
 
         const cell = document.createElement('div');
         let cellCls = 'cal-cell';
-        if (isToday)           cellCls += ' today-col';
-        if (cellIsWknd)        cellCls += ' weekend-col';
-        if (cellIsPast)        cellCls += ' past-col';
-        if (cellHoliday?.type === 'fixed' || cellHoliday?.type === 'movable') cellCls += ' holiday-col';
-        if (cellHoliday?.type === 'vacation') cellCls += ' vacation-col';
-        if (cellHoliday?.type === 'bridge')   cellCls += ' bridge-col';
+        if (isToday)  cellCls += ' today-col';
+        if (isWknd)   cellCls += ' weekend-col';
+        if (isPast)   cellCls += ' past-col';
+        if (cellHol?.type === 'fixed' || cellHol?.type === 'movable') cellCls += ' holiday-col';
+        if (cellHol?.type === 'vacation') cellCls += ' vacation-col';
+        if (cellHol?.type === 'bridge')   cellCls += ' bridge-col';
         cell.className      = cellCls;
-        cell.dataset.day    = d;
+        cell.dataset.date   = iso;
         cell.dataset.unitId = unit.id;
-        cell.dataset.date   = dateISO;
         cell.dataset.rowParity = rowParity;
-        if (cellHoliday) cell.title = cellHoliday.label;
+        if (cellHol) cell.title = cellHol.label;
 
         if (bookings.length === 0) {
-          this._bindEmptyCell(cell, unit.id, d, dateISO);
+          this._bindEmptyCell(cell, unit.id, iso);
         } else if (bookings.length === 1) {
-          this._renderSingleBar(cell, bookings[0], todayISO);
+          this._renderBar(cell, bookings[0], today);
         } else {
           const co = bookings.find(b => b._cellType === 'end');
-          const ci = bookings.find(b => b._cellType === 'start');
-          if (co && ci) this._renderSplitCell(cell, co, ci, todayISO);
-          else this._renderSingleBar(cell, bookings[0], todayISO);
+          const ci = bookings.find(b => b._cellType === 'start' || b._cellType === 'solo');
+          if (co && ci) this._renderSplitCell(cell, co, ci, today);
+          else this._renderBar(cell, bookings[0], today);
         }
 
         rems.forEach(r => {
@@ -302,55 +364,44 @@ export class Calendar {
         });
 
         grid.appendChild(cell);
-      }
+      });
     });
   }
 
-  // ── Helper: avatar de iniciales ───────────────────
-  static _guestAvatar(guest, size = 18) {
-    if (!guest) return '';
-    const fn = guest.first_name ?? '';
-    const ln = guest.last_name  ?? '';
-    if (!fn && !ln) return '';
-    const initials = ((fn[0] ?? '') + (ln[0] ?? '')).toUpperCase();
-    const str   = (fn + ln).toLowerCase();
-    let hash    = 0;
-    for (let i = 0; i < str.length; i++) hash = str.charCodeAt(i) + ((hash << 5) - hash);
-    const hue   = Math.abs(hash) % 360;
-    return `<span class="bar-avatar" style="
-      display:inline-flex;align-items:center;justify-content:center;
-      width:${size}px;height:${size}px;min-width:${size}px;border-radius:50%;
-      background:hsl(${hue},55%,88%);color:hsl(${hue},55%,28%);
-      font-size:${Math.max(8, Math.round(size*0.44))}px;font-weight:800;
-      flex-shrink:0;line-height:1;margin-right:5px;
-    ">${initials}</span>`;
-  }
-
-  // ── Barra única con avatar ────────────────────────
-  _renderSingleBar(cell, booking, todayISO) {
+  // ══════════════════════════════════════════════════
+  // RENDERIZADO DE BARRAS
+  // ══════════════════════════════════════════════════
+  _renderBar(cell, booking, todayISO) {
     if (booking._cellType !== 'start' && booking._cellType !== 'solo') return;
 
     const { color, textColor } = getBookingBarColor(booking);
+    const ci        = booking.check_in;
+    const co        = booking.check_out;
+    const winStart  = this._windowStart;
+    const winEndExcl= this._addDays(winStart, this._visibleDays);
+
+    // Fecha de inicio visual (puede ser windowStart si el check-in es anterior)
+    const visStart  = ci < winStart ? winStart : ci;
+    // Fecha de fin visual (puede ser windowEnd si el check-out supera la vista)
+    const visEnd    = co > winEndExcl ? winEndExcl : co;
+    const span      = Math.max(1, this._dayDiff(visStart, visEnd));
+
+    const truncLeft  = ci < winStart;        // empezó antes de la vista
+    const truncRight = co > winEndExcl;      // termina después de la vista
+    const isPast     = co <= todayISO;
+
+    const left  = truncLeft  ? 0 : 4;
+    const rightM= truncRight ? 0 : 4;
+    const width = `calc(${span} * 100% - ${left + rightM}px)`;
+    const borderR = truncRight ? 0 : 6;
+    const borderL = truncLeft  ? 0 : 6;
+
     const firstName = booking.guests?.first_name ?? '';
     const lastName  = booking.guests?.last_name  ?? '';
-    const blockText = booking.block_reason ?? 'Bloqueo';
-    const guestFull = booking.guests ? `${lastName} ${firstName}`.trim() : blockText;
     const isBlock   = booking.status === 'blocked' || booking.is_blocked;
-
-    // ── FIX COLORES PASADOS: versión desaturada para checkout anterior a hoy ──
-    const isPast = booking.check_out <= todayISO;
-
-    const ci = new Date(booking.check_in  + 'T12:00:00');
-    const co = new Date(booking.check_out + 'T12:00:00');
-    const daysInMonth = new Date(this.year, this.month + 1, 0).getDate();
-
-    const startDay = Math.max(ci.getDate(), 1);
-    const endDay   = Math.min(co.getDate() - 1, daysInMonth);
-    const coMonth  = co.getMonth();
-    const coYear   = co.getFullYear();
-    const isCoNextMonth = (coYear > this.year) || (coYear === this.year && coMonth > this.month);
-    const lastDay  = isCoNextMonth ? daysInMonth : endDay;
-    const nights   = Math.max(1, lastDay - startDay + 1);
+    const guestFull = isBlock
+      ? (booking.block_reason ?? 'Bloqueo')
+      : `${lastName} ${firstName}`.trim();
 
     const bar = document.createElement('div');
     bar.className = 'bar bar-span';
@@ -362,46 +413,56 @@ export class Calendar {
     }
 
     bar.style.cssText = `
-      background: ${color};
-      position: absolute; top: 6px; bottom: 6px; left: 4px;
-      width: calc(${nights} * 100% - 8px);
-      z-index: 3; border-radius: 6px;
-      display: flex; align-items: center; padding: 0 8px;
-      overflow: hidden; white-space: nowrap;
-      cursor: grab; transition: filter .15s, transform .15s, box-shadow .15s;
-      ${isPast ? 'filter: grayscale(52%) opacity(.62);' : ''}
+      background:${color};
+      position:absolute;top:6px;bottom:6px;
+      left:${left}px;
+      width:${width};
+      z-index:3;
+      border-radius:${borderL}px ${borderR}px ${borderR}px ${borderL}px;
+      display:flex;align-items:center;padding:0 8px;
+      overflow:hidden;white-space:nowrap;
+      cursor:grab;
+      transition:filter .15s,transform .15s,box-shadow .15s;
+      ${isPast ? 'filter:grayscale(52%) opacity(.62);' : ''}
     `;
     bar.dataset.bookingId = booking.id;
 
     const avatar = !isBlock ? Calendar._guestAvatar(booking.guests, 16) : '';
-
     bar.innerHTML = `
       ${avatar}
       <span style="color:${textColor};font-size:.68rem;font-weight:700;
         overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0">
         ${guestFull}
       </span>`;
-    bar.title = '';
 
+    // ── Resize handle (solo si la barra no está truncada a la derecha) ──
+    if (!truncRight) {
+      const handle = document.createElement('div');
+      handle.className = 'bar-resize-handle';
+      handle.title = 'Arrastrar para cambiar fecha de salida';
+      bar.appendChild(handle);
+    }
+
+    // ── Hover effects ──
     bar.addEventListener('mouseenter', (e) => {
-      if (!this._barDrag.active) {
+      if (!this._barDrag.active && !this._resizeActive) {
         if (!isPast) {
           bar.style.filter    = 'brightness(1.12)';
-          bar.style.transform = 'scaleY(1.05)';
+          bar.style.transform = 'scaleY(1.06)';
         }
-        bar.style.boxShadow = '0 2px 8px rgba(0,0,0,.25)';
+        bar.style.boxShadow = '0 2px 10px rgba(0,0,0,.28)';
+        this._showTooltip(booking, e);
       }
-      this._showTooltip(booking, e);
     });
-    bar.addEventListener('mousemove',  (e) => this._moveTooltip(e));
+    bar.addEventListener('mousemove', (e) => {
+      if (!this._barDrag.active) this._moveTooltip(e);
+    });
     bar.addEventListener('mouseleave', () => {
       bar.style.filter    = isPast ? 'grayscale(52%) opacity(.62)' : '';
       bar.style.transform = '';
       bar.style.boxShadow = '';
       this._hideTooltip();
     });
-
-    // ── FIX CLICK: handler explícito independiente del drag ──
     bar.addEventListener('click', (e) => {
       if (this._barDrag.moved) return;
       e.stopPropagation();
@@ -411,20 +472,18 @@ export class Calendar {
     cell.appendChild(bar);
   }
 
-  // ── Celda dividida (RECAMBIO) ─────────────────────
+  // ── Celda dividida (check-out + check-in el mismo día) ──
   _renderSplitCell(cell, coBooking, ciBooking, todayISO) {
-    const todayStr  = todayISO ?? localToday();
-    const coColor   = getBookingBarColor(coBooking).color;
-    const ciColor   = getBookingBarColor(ciBooking).color;
-    const coIsPast  = coBooking.check_out <= todayStr;
-    const ciIsPast  = ciBooking.check_out <= todayStr;
+    const coColor  = getBookingBarColor(coBooking).color;
+    const ciColor  = getBookingBarColor(ciBooking).color;
+    const coIsPast = coBooking.check_out <= todayISO;
+    const ciIsPast = ciBooking.check_out <= todayISO;
 
     const left = document.createElement('div');
     left.className = 'bar bar-split-left';
     left.style.background = coColor;
     if (coIsPast) left.style.filter = 'grayscale(52%) opacity(.62)';
     left.dataset.bookingId = coBooking.id;
-    left.title = '';
     left.addEventListener('mouseenter', (e) => this._showTooltip(coBooking, e));
     left.addEventListener('mousemove',  (e) => this._moveTooltip(e));
     left.addEventListener('mouseleave', ()  => this._hideTooltip());
@@ -435,7 +494,6 @@ export class Calendar {
     right.style.background = ciColor;
     if (ciIsPast) right.style.filter = 'grayscale(52%) opacity(.62)';
     right.dataset.bookingId = ciBooking.id;
-    right.title = '';
     right.addEventListener('mouseenter', (e) => this._showTooltip(ciBooking, e));
     right.addEventListener('mousemove',  (e) => this._moveTooltip(e));
     right.addEventListener('mouseleave', ()  => this._hideTooltip());
@@ -446,165 +504,141 @@ export class Calendar {
     cell.style.background = 'rgba(251,113,133,.04)';
   }
 
-  // ── Celda vacía ───────────────────────────────────
-  _bindEmptyCell(cell, unitId, day, dateISO) {
+  // ── Celda vacía (click abre formulario) ──────────
+  _bindEmptyCell(cell, unitId, dateISO) {
     cell.addEventListener('click', (e) => {
       if (this._drag.moved) return;
       this.bookingForm.open({ unitId, checkIn: dateISO });
     });
     cell.addEventListener('contextmenu', (e) => {
       e.preventDefault();
-      this._ctxTarget = { unitId, day, dateISO };
+      this._ctxTarget = { unitId, dateISO };
       this._showContextMenu(e.clientX, e.clientY);
     });
   }
 
-  // ── Drag selection (crear reserva o bloqueo) ────────
-  _setupDragSelection(grid) {
-    let startUnit = null, startDate = null, endDate = null;
-    let isBlocking = false;
-
-    const onMouseDown = (e) => {
-      if (e.target.closest('.bar')) return;
-      const cell = e.target.closest('.cal-cell');
-      if (!cell) return;
-      isBlocking = e.shiftKey;
-      startUnit  = cell.dataset.unitId;
-      startDate  = cell.dataset.date;
-      this._drag = { active: true, unitId: startUnit, startDay: parseInt(cell.dataset.day), moved: false, blocking: isBlocking };
-      cell.classList.add(isBlocking ? 'blocking' : 'selecting');
-      e.preventDefault();
-    };
-
-    const onMouseMove = (e) => {
-      if (!this._drag.active) return;
-      const cell = document.elementFromPoint(e.clientX, e.clientY)?.closest?.('.cal-cell');
-      if (!cell || cell.dataset.unitId !== startUnit) return;
-      this._drag.moved = true;
-      endDate = cell.dataset.date;
-
-      if (startDate && endDate) {
-        // Parsear con mediodía fijo (T12:00:00) para evitar que el navegador
-        // interprete la fecha en UTC y la muestre un día antes en horario
-        // de Argentina (UTC-3). Sin esto, "26-jun" se mostraba como "25-jun".
-        const d1 = new Date(Math.min(new Date(startDate + 'T12:00:00'), new Date(endDate + 'T12:00:00')));
-        const d2 = new Date(Math.max(new Date(startDate + 'T12:00:00'), new Date(endDate + 'T12:00:00')));
-        const nights = Math.round((d2-d1)/86400000)+1;
-        const modeLabel = isBlocking ? '🔒 Bloquear:' : '';
-        this._ghost.textContent = `${modeLabel} ${d1.toLocaleDateString('es-AR',{day:'2-digit',month:'short'})} → ${d2.toLocaleDateString('es-AR',{day:'2-digit',month:'short'})} · ${nights} día${nights!==1?'s':''}`;
-        this._ghost.style.left  = `${e.clientX}px`;
-        this._ghost.style.top   = `${e.clientY}px`;
-        this._ghost.style.borderLeft = isBlocking ? '3px solid #ef4444' : '3px solid var(--color-primary)';
-        this._ghost.classList.remove('hidden');
-      }
-
-      grid.querySelectorAll('.cal-cell.selecting, .cal-cell.blocking').forEach(c => c.classList.remove('selecting','blocking'));
-      const sd = this._drag.startDay, ed = parseInt(cell.dataset.day);
-      const [mn, mx] = [Math.min(sd,ed), Math.max(sd,ed)];
-      grid.querySelectorAll(`.cal-cell[data-unit-id="${startUnit}"]`).forEach(c => {
-        if (parseInt(c.dataset.day) >= mn && parseInt(c.dataset.day) <= mx) c.classList.add(isBlocking ? 'blocking' : 'selecting');
-      });
-    };
-
-    const onMouseUp = async () => {
-      if (!this._drag.active) return;
-      const hadDrag  = this._drag.moved;
-      const wasBlock = this._drag.blocking;
-      grid.querySelectorAll('.cal-cell.selecting, .cal-cell.blocking').forEach(c => c.classList.remove('selecting','blocking'));
-      this._drag.active = false;
-      this._ghost.classList.add('hidden');
-      this._ghost.style.borderLeft = '';
-
-      if (hadDrag && startDate && endDate) {
-        const dates = [startDate, endDate].sort();
-        const last  = new Date(dates[1]+'T12:00:00');
-        last.setDate(last.getDate()+1);
-
-        if (wasBlock) {
-          const reason = prompt('Motivo del bloqueo (mantenimiento, uso propio, reparación...):', 'Mantenimiento');
-          if (reason !== null) {
-            await this._blockRange(startUnit, dates[0], toISODate(last), reason.trim() || 'Bloqueo');
-          }
-        } else {
-          this.bookingForm.open({ unitId: startUnit, checkIn: dates[0], checkOut: toISODate(last) });
-        }
-      }
-      startUnit = null; startDate = null; endDate = null; isBlocking = false;
-    };
-
-    if (this._selectionAbort) this._selectionAbort.abort();
-    this._selectionAbort = new AbortController();
-    const sig = this._selectionAbort.signal;
-
-    grid.addEventListener('mousedown', onMouseDown, { signal: sig });
-    document.addEventListener('mousemove', onMouseMove, { signal: sig });
-    document.addEventListener('mouseup', onMouseUp, { signal: sig });
+  // ── Avatar de iniciales ──────────────────────────
+  static _guestAvatar(guest, size = 18) {
+    if (!guest) return '';
+    const fn = guest.first_name ?? '';
+    const ln = guest.last_name  ?? '';
+    if (!fn && !ln) return '';
+    const initials = ((fn[0] ?? '') + (ln[0] ?? '')).toUpperCase();
+    const str  = (fn + ln).toLowerCase();
+    let hash   = 0;
+    for (let i = 0; i < str.length; i++) hash = str.charCodeAt(i) + ((hash << 5) - hash);
+    const hue  = Math.abs(hash) % 360;
+    return `<span class="bar-avatar" style="
+      display:inline-flex;align-items:center;justify-content:center;
+      width:${size}px;height:${size}px;min-width:${size}px;border-radius:50%;
+      background:hsl(${hue},55%,88%);color:hsl(${hue},55%,28%);
+      font-size:${Math.max(8, Math.round(size*.44))}px;font-weight:800;
+      flex-shrink:0;line-height:1;margin-right:5px;
+    ">${initials}</span>`;
   }
 
-  // ── Bloquear rango de fechas ──────────────────────
-  async _blockRange(unitId, checkIn, checkOut, reason) {
-    const unit     = this.ctx.units.find(u => u.id === unitId);
-    const unitName = unit?.name ?? 'unidad';
-    try {
-      const { data: bk, error } = await this.db.from('bookings').insert({
-        hotel_id:        this.ctx.hotelId,
-        check_in:        checkIn,
-        check_out:       checkOut,
-        status:          'blocked',
-        is_blocked:      true,
-        block_reason:    reason,
-        price_per_night: 0,
-      }).select('id').single();
+  // ══════════════════════════════════════════════════
+  // TOOLTIP
+  // ══════════════════════════════════════════════════
+  _showTooltip(booking, e) {
+    this._hideTooltip();
+    const guest   = booking.guests
+      ? `${booking.guests.first_name} ${booking.guests.last_name}`
+      : (booking.block_reason ?? 'Bloqueo');
+    const { label } = getBookingBarColor(booking);
+    const source    = booking.source ?? 'direct';
+    const srcCfg    = SOURCE_CONFIG[source] ?? {};
+    const units     = (booking.booking_units ?? []).map(bu => {
+      const u = bu.units ?? {};
+      return `#${u.sort_order ?? '?'} · ${u.name ?? '?'}`;
+    }).join(', ');
+    const hasBadExp     = booking.guests?.bad_experience;
+    const totalAmount   = booking.total_amount ?? 0;
+    const totalPaid     = booking.total_paid   ?? 0;
+    const balance       = booking.balance      ?? (totalAmount - totalPaid);
+    const saldado       = balance <= 0;
 
-      if (error) throw error;
-      if (!bk?.id) throw new Error('No se obtuvo ID del bloqueo');
+    const payRow = totalAmount > 0 ? `
+      <div style="border-top:1px solid rgba(255,255,255,.1);padding-top:9px;margin-top:9px">
+        <div style="display:flex;justify-content:space-between;gap:10px;margin-bottom:5px">
+          <div>
+            <div style="font-size:.65rem;color:#64748B;text-transform:uppercase;letter-spacing:.04em">Total</div>
+            <div style="font-weight:700;color:#F8FAFC;font-size:.88rem">${formatARS(totalAmount)}</div>
+          </div>
+          ${totalPaid > 0 ? `<div>
+            <div style="font-size:.65rem;color:#64748B;text-transform:uppercase;letter-spacing:.04em">Señas</div>
+            <div style="font-weight:600;color:#A78BFA;font-size:.85rem">${formatARS(totalPaid)}</div>
+          </div>` : ''}
+          <div style="text-align:right">
+            <div style="font-size:.65rem;color:#64748B;text-transform:uppercase;letter-spacing:.04em">Saldo</div>
+            <div style="font-weight:700;font-size:.88rem;color:${saldado ? '#34D399' : '#EAB308'}">
+              ${saldado ? '✓ Saldado' : formatARS(balance)}
+            </div>
+          </div>
+        </div>
+      </div>` : '';
 
-      const { error: buErr } = await this.db
-        .from('booking_units')
-        .insert({ booking_id: bk.id, unit_id: unitId });
-      if (buErr) throw buErr;
-
-      // Crear maintenance_issue sincronizado
-      await this._createMaintenanceForBlock(bk.id, unitId, checkIn, checkOut, reason);
-
-      showToast(`🔒 ${unitName} bloqueado — ${checkIn} → ${checkOut}`, 'success');
-      cache.invalidate('bookings');
-      await this.load();
-    } catch (err) {
-      console.error('[Calendar] blockRange error:', err);
-      showToast('Error al crear el bloqueo: ' + (err?.message ?? String(err)), 'error');
-    }
+    const tip = document.createElement('div');
+    tip.className = 'cal-tooltip';
+    tip.innerHTML = `
+      <div class="ct-guest">${guest}${hasBadExp ? ' <span style="color:#EF4444">⚠️</span>' : ''}</div>
+      <div class="ct-unit">🛏️ ${units || '—'}</div>
+      <div class="ct-dates" style="margin-top:6px">📅 ${booking.check_in} → ${booking.check_out}</div>
+      <div class="ct-nights">🌙 ${booking.nights ?? '?'} noches${booking.pax ? ` · 👥 ${booking.adults ?? booking.pax} adultos${booking.children ? ` + ${booking.children} menores` : ''}` : ''}</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">
+        <span style="padding:2px 8px;border-radius:99px;font-size:.7rem;font-weight:700;
+          background:${getBookingBarColor(booking).color}22;color:${getBookingBarColor(booking).color};
+          border:1px solid ${getBookingBarColor(booking).color}40">${label}</span>
+        ${source !== 'direct' && source !== 'blocked' ? `<span style="padding:2px 8px;border-radius:99px;font-size:.7rem;font-weight:700;
+          background:${srcCfg.color??''}22;color:${srcCfg.color??'#64748B'};border:1px solid ${srcCfg.color??''}40">
+          ${srcCfg.emoji??''} ${srcCfg.label??''}</span>` : ''}
+      </div>
+      ${payRow}
+      ${booking.notes ? `<div style="margin-top:8px;font-size:.7rem;color:#94A3B8;font-style:italic;
+        border-top:1px solid rgba(255,255,255,.07);padding-top:7px">📝 ${booking.notes.slice(0,80)}${booking.notes.length>80?'…':''}</div>` : ''}
+    `;
+    document.body.appendChild(tip);
+    this._tooltip = tip;
+    this._moveTooltip(e);
   }
 
-  // ── Controles de navegación ───────────────────────
+  _moveTooltip(e) {
+    if (!this._tooltip) return;
+    const tw = this._tooltip.offsetWidth  || 220;
+    const th = this._tooltip.offsetHeight || 140;
+    const x  = e.clientX + 18;
+    const y  = e.clientY - 10;
+    this._tooltip.style.left = `${x + tw > window.innerWidth  ? x - tw - 36 : x}px`;
+    this._tooltip.style.top  = `${y + th > window.innerHeight ? y - th       : y}px`;
+  }
+
+  _hideTooltip() { this._tooltip?.remove(); this._tooltip = null; }
+
+  // ══════════════════════════════════════════════════
+  // NAVEGACIÓN CONTINUA
+  // ══════════════════════════════════════════════════
   _setupControls() {
     document.getElementById('cal-prev')?.addEventListener('click', () => {
-      if (this._view === 'week') {
-        this._weekStart.setDate(this._weekStart.getDate() - 7);
-      } else {
-        this.month--; if (this.month<0) { this.month=11; this.year--; }
-      }
+      this._windowStart = this._addDays(this._windowStart, -this._visibleDays);
+      cache.invalidate('bookings');
       this.load();
     });
     document.getElementById('cal-next')?.addEventListener('click', () => {
-      if (this._view === 'week') {
-        this._weekStart.setDate(this._weekStart.getDate() + 7);
-      } else {
-        this.month++; if (this.month>11) { this.month=0; this.year++; }
-      }
+      this._windowStart = this._addDays(this._windowStart, +this._visibleDays);
+      cache.invalidate('bookings');
       this.load();
     });
     document.getElementById('cal-today')?.addEventListener('click', () => {
-      const n = new Date();
-      this.month = n.getMonth(); this.year = n.getFullYear();
-      this._weekStart = this._getWeekStart(n);
+      this._windowStart = this._addDays(localToday(), -PAST_OFFSET);
+      cache.invalidate('bookings');
       this.load();
     });
-
     this.setupViewToggle();
   }
 
-  // ── Context Menu ──────────────────────────────────
+  // ══════════════════════════════════════════════════
+  // CONTEXT MENU
+  // ══════════════════════════════════════════════════
   _ctxTarget = {};
 
   _setupContextMenu() {
@@ -622,28 +656,940 @@ export class Calendar {
     const m = document.getElementById('ctx-menu');
     if (!m) return;
     m.classList.remove('hidden');
-    m.style.left = `${x}px`; m.style.top = `${y}px`;
+    m.style.left = `${x}px`;
+    m.style.top  = `${y}px`;
   }
   _hideContextMenu() { document.getElementById('ctx-menu')?.classList.add('hidden'); }
 
   _setupDocumentEvents() {
     document.addEventListener('click', () => this._hideContextMenu());
     document.addEventListener('booking:changed', () => {
-      if (document.getElementById('section-calendar').classList.contains('active')) this.load();
+      if (document.getElementById('section-calendar')?.classList.contains('active')) {
+        cache.invalidate('bookings');
+        this.load();
+      }
     });
   }
 
-  // ── Abrir detalle ─────────────────────────────────
+  // ══════════════════════════════════════════════════
+  // DRAG SELECTION (crear reserva / bloqueo)
+  // ══════════════════════════════════════════════════
+  _setupDragSelection(grid) {
+    if (this._selectionAbort) this._selectionAbort.abort();
+    this._selectionAbort = new AbortController();
+    const sig = this._selectionAbort.signal;
+
+    let startUnit = null, startDate = null, endDate = null, isBlocking = false;
+
+    const onMouseDown = (e) => {
+      if (e.target.closest('.bar')) return;
+      const cell = e.target.closest('.cal-cell');
+      if (!cell) return;
+      isBlocking = e.shiftKey;
+      startUnit  = cell.dataset.unitId;
+      startDate  = cell.dataset.date;
+      this._drag = { active: true, unitId: startUnit, moved: false, blocking: isBlocking };
+      cell.classList.add(isBlocking ? 'blocking' : 'selecting');
+      e.preventDefault();
+    };
+
+    const onMouseMove = (e) => {
+      if (!this._drag.active) return;
+      const cell = document.elementFromPoint(e.clientX, e.clientY)?.closest?.('.cal-cell');
+      if (!cell || cell.dataset.unitId !== startUnit) return;
+      this._drag.moved = true;
+      endDate = cell.dataset.date;
+
+      if (startDate && endDate) {
+        const d1 = new Date(Math.min(+new Date(startDate+'T12:00:00'), +new Date(endDate+'T12:00:00')));
+        const d2 = new Date(Math.max(+new Date(startDate+'T12:00:00'), +new Date(endDate+'T12:00:00')));
+        const nights = Math.round((d2 - d1) / 86400000) + 1;
+        const label  = isBlocking ? '🔒 Bloquear: ' : '';
+        this._textGhost.textContent = `${label}${d1.toLocaleDateString('es-AR',{day:'2-digit',month:'short'})} → ${d2.toLocaleDateString('es-AR',{day:'2-digit',month:'short'})} · ${nights} noche${nights!==1?'s':''}`;
+        this._textGhost.style.left        = `${e.clientX}px`;
+        this._textGhost.style.top         = `${e.clientY}px`;
+        this._textGhost.style.borderLeft  = isBlocking ? '3px solid #ef4444' : '3px solid var(--color-primary)';
+        this._textGhost.classList.remove('hidden');
+      }
+
+      grid.querySelectorAll('.cal-cell.selecting,.cal-cell.blocking')
+        .forEach(c => c.classList.remove('selecting','blocking'));
+      const startD = startDate, endD = cell.dataset.date;
+      const [mn, mx] = [startD, endD].sort();
+      grid.querySelectorAll(`.cal-cell[data-unit-id="${startUnit}"]`).forEach(c => {
+        if (c.dataset.date >= mn && c.dataset.date <= mx) c.classList.add(isBlocking ? 'blocking' : 'selecting');
+      });
+    };
+
+    const onMouseUp = async () => {
+      if (!this._drag.active) return;
+      const hadDrag  = this._drag.moved;
+      const wasBlock = this._drag.blocking;
+      grid.querySelectorAll('.cal-cell.selecting,.cal-cell.blocking').forEach(c => c.classList.remove('selecting','blocking'));
+      this._drag = { active: false, moved: false };
+      this._textGhost.classList.add('hidden');
+
+      if (hadDrag && startDate && endDate) {
+        const [d1, d2] = [startDate, endDate].sort();
+        const last = new Date(d2 + 'T12:00:00');
+        last.setDate(last.getDate() + 1);
+
+        if (wasBlock) {
+          const reason = prompt('Motivo del bloqueo (mantenimiento, uso propio, reparación...):', 'Mantenimiento');
+          if (reason !== null) await this._blockRange(startUnit, d1, toISODate(last), reason.trim() || 'Bloqueo');
+        } else {
+          this.bookingForm.open({ unitId: startUnit, checkIn: d1, checkOut: toISODate(last) });
+        }
+      }
+      startUnit = null; startDate = null; endDate = null; isBlocking = false;
+    };
+
+    grid.addEventListener('mousedown', onMouseDown, { signal: sig });
+    document.addEventListener('mousemove', onMouseMove, { signal: sig });
+    document.addEventListener('mouseup', onMouseUp, { signal: sig });
+  }
+
+  // ── Bloquear rango ──────────────────────────────
+  async _blockRange(unitId, checkIn, checkOut, reason) {
+    const unit = this.ctx.units.find(u => u.id === unitId);
+    const name = unit?.name ?? 'unidad';
+    try {
+      const { data: bk, error } = await this.db.from('bookings').insert({
+        hotel_id: this.ctx.hotelId, check_in: checkIn, check_out: checkOut,
+        status: 'blocked', is_blocked: true, block_reason: reason, price_per_night: 0,
+      }).select('id').single();
+      if (error) throw error;
+      if (!bk?.id) throw new Error('No ID');
+      const { error: buErr } = await this.db.from('booking_units').insert({ booking_id: bk.id, unit_id: unitId });
+      if (buErr) throw buErr;
+      await this._createMaintenanceForBlock(bk.id, unitId, checkIn, checkOut, reason);
+      showToast(`🔒 ${name} bloqueado — ${checkIn} → ${checkOut}`, 'success');
+      cache.invalidate('bookings');
+      await this.load();
+    } catch (err) {
+      console.error('[Calendar] blockRange:', err);
+      showToast('Error al crear el bloqueo: ' + (err?.message ?? String(err)), 'error');
+    }
+  }
+
+  // ══════════════════════════════════════════════════
+  // DRAG & DROP DE BARRAS + RESIZE (event delegation)
+  // ══════════════════════════════════════════════════
+  _setupBarDragAndResize(grid) {
+    if (this._barDragAbort) this._barDragAbort.abort();
+    this._barDragAbort = new AbortController();
+    const sig = this._barDragAbort.signal;
+
+    // ────────────────────────────────────────────────
+    // RESIZE
+    // ────────────────────────────────────────────────
+    grid.addEventListener('mousedown', (e) => {
+      const handle = e.target.closest('.bar-resize-handle');
+      if (!handle) return;
+      e.preventDefault();
+      e.stopPropagation();
+
+      const bar       = handle.closest('.bar[data-booking-id]');
+      if (!bar) return;
+      const bookingId = bar.dataset.bookingId;
+      const booking   = (this._lastRenderedBookings ?? []).find(b => b.id === bookingId);
+      if (!booking) return;
+
+      this._resizeActive = true;
+      this._hideTooltip();
+      this._startResize(e, booking, bar, grid, sig);
+    }, { signal: sig });
+
+    // ────────────────────────────────────────────────
+    // DRAG & DROP
+    // ────────────────────────────────────────────────
+    let _dragState = null;
+    let _barGhost  = null;
+    let _autoScroll= null;
+
+    const getCellWidth = () => {
+      const firstCell = grid.querySelector('.cal-cell[data-date]');
+      return firstCell ? firstCell.getBoundingClientRect().width : CELL_W_DESK;
+    };
+
+    const resetDrag = () => {
+      if (_barGhost) { _barGhost.remove(); _barGhost = null; }
+      if (_autoScroll) { _autoScroll.stop(); _autoScroll = null; }
+      this._floatInfo.classList.add('hidden');
+      this._clearDropHighlights(grid);
+      _dragState = null;
+      this._barDrag = { active: false, moved: false };
+    };
+
+    const onMouseMove = (e) => {
+      if (!_dragState || !this._barDrag.active) return;
+      const dx = Math.abs(e.clientX - _dragState.startX);
+      const dy = Math.abs(e.clientY - _dragState.startY);
+      if (dx < 6 && dy < 6) return;
+      _dragState.moved = true;
+      this._barDrag.moved = true;
+
+      const cellWidth = getCellWidth();
+      const daysDiff  = Math.round((e.clientX - _dragState.startX) / cellWidth);
+      _dragState.daysDiff = daysDiff;
+
+      const b     = _dragState.booking;
+      if (!b) return;
+
+      const newCI = this._addDays(b.check_in,  daysDiff);
+      const newCO = this._addDays(b.check_out, daysDiff);
+
+      // Move ghost
+      if (_barGhost) {
+        _barGhost.style.left = `${_dragState.ghostOrigLeft + (e.clientX - _dragState.startX)}px`;
+        _barGhost.style.top  = `${e.clientY - _dragState.ghostH / 2}px`;
+      }
+
+      // Detectar unidad destino
+      const underCell    = document.elementFromPoint(e.clientX, e.clientY)?.closest?.('.cal-cell');
+      const targetUnitId = underCell?.dataset.unitId ?? _dragState.sourceUnitId;
+      _dragState.targetUnitId = targetUnitId;
+
+      // Validación local contra reservas cargadas
+      const hasConflict = (this._lastRenderedBookings ?? []).some(other => {
+        if (other.id === b.id || other.status === 'cancelled') return false;
+        if (!(other.booking_units ?? []).some(bu => bu.unit_id === targetUnitId)) return false;
+        return other.check_in < newCO && other.check_out > newCI;
+      });
+
+      // Highlights
+      this._clearDropHighlights(grid);
+      const cls = hasConflict ? 'drop-conflict' : 'drop-target';
+      grid.querySelectorAll(`.cal-cell[data-unit-id="${targetUnitId}"][data-date]`).forEach(c => {
+        if (c.dataset.date >= newCI && c.dataset.date < newCO) c.classList.add(cls);
+      });
+
+      // Float info
+      const unitName = this.ctx.units.find(u => u.id === targetUnitId)?.name ?? '';
+      const gName = b.guests ? `${b.guests.first_name ?? ''} ${b.guests.last_name ?? ''}`.trim() : (b.block_reason ?? 'Bloqueo');
+      this._floatInfo.innerHTML = `
+        <div class="fi-guest">${gName}</div>
+        <div class="fi-unit">🛏️ ${unitName}</div>
+        <div class="fi-dates">📅 ${this._fmtShort(newCI)} → ${this._fmtShort(newCO)}</div>
+        <div class="fi-nights">🌙 ${b.nights ?? Math.round(this._dayDiff(b.check_in, b.check_out))} noches</div>
+        ${hasConflict ? '<div class="fi-conflict">⚠️ Conflicto detectado</div>' : ''}
+      `;
+      this._floatInfo.className = `cal-drag-float-info${hasConflict ? ' conflict' : ''}`;
+      this._floatInfo.style.left = `${e.clientX + 20}px`;
+      this._floatInfo.style.top  = `${e.clientY - 60}px`;
+
+      if (_autoScroll) _autoScroll.update(e.clientX, e.clientY);
+    };
+
+    const onMouseUp = async (e) => {
+      if (!this._barDrag.active) return;
+      const state  = _dragState ? { ..._dragState } : null;
+      const moved  = this._barDrag.moved;
+
+      // Restaurar opacidad de la barra original
+      const origBar = state?.bookingId
+        ? grid.querySelector(`.bar[data-booking-id="${state.bookingId}"]`)
+        : null;
+      if (origBar) origBar.style.opacity = '';
+
+      resetDrag();
+      if (!state) return;
+
+      if (!moved) {
+        if (state.booking) await this._openDetailById(state.booking.id);
+        return;
+      }
+
+      const { booking, sourceUnitId, daysDiff } = state;
+      if (!booking || daysDiff === 0 && state.targetUnitId === sourceUnitId) {
+        this.load(); return;
+      }
+
+      const newCI        = this._addDays(booking.check_in,  daysDiff);
+      const newCO        = this._addDays(booking.check_out, daysDiff);
+      const targetUnitId = state.targetUnitId ?? sourceUnitId;
+      const unitChanged  = targetUnitId !== sourceUnitId;
+      const today        = localToday();
+
+      const srcUnit = this.ctx.units.find(u => u.id === sourceUnitId);
+      const tgtUnit = this.ctx.units.find(u => u.id === targetUnitId);
+
+      const confirmed = await this._confirmDragChange({
+        guestName:   booking.guests ? `${booking.guests.first_name ?? ''} ${booking.guests.last_name ?? ''}`.trim() : (booking.block_reason ?? 'Reserva'),
+        srcUnitName: srcUnit?.name ?? '',
+        tgtUnitName: tgtUnit?.name ?? '',
+        oldCI:       booking.check_in,
+        oldCO:       booking.check_out,
+        newCI,
+        newCO,
+        nights:      booking.nights ?? this._dayDiff(booking.check_in, booking.check_out),
+        unitChanged,
+        isPast:      newCI < today,
+      });
+      if (!confirmed) { this.load(); return; }
+
+      // Validación final en Supabase
+      const { data: conflicts } = await this.db
+        .from('booking_units')
+        .select('unit_id, bookings!inner(id, check_in, check_out, status)')
+        .eq('unit_id', targetUnitId)
+        .neq('bookings.status', 'cancelled')
+        .neq('bookings.id', booking.id)
+        .lt('bookings.check_in', newCO)
+        .gt('bookings.check_out', newCI);
+
+      if (conflicts?.length) {
+        showToast('⚠️ Conflicto: hay otra reserva en esas fechas', 'error');
+        this.load(); return;
+      }
+
+      const { error } = await this.db.from('bookings')
+        .update({ check_in: newCI, check_out: newCO }).eq('id', booking.id);
+      if (error) { showToast('Error al mover la reserva', 'error'); return; }
+
+      if (unitChanged) {
+        await this.db.from('booking_units')
+          .update({ unit_id: targetUnitId })
+          .eq('booking_id', booking.id)
+          .eq('unit_id', sourceUnitId);
+      }
+
+      await logAction('UPDATE', 'booking', booking.id,
+        `Drag: ${booking.check_in}→${newCI}, unidad: ${sourceUnitId}→${targetUnitId}`);
+
+      this._pendingPulse.add(booking.id);
+      cache.invalidate('bookings');
+      Bus.emit(EVENTS.BOOKING_DRAG_DONE, { bookingId: booking.id, oldCI: booking.check_in, newCI });
+      showToast(`✓ Reserva movida a ${this._fmtShort(newCI)} → ${this._fmtShort(newCO)}`, 'success');
+      this.load();
+    };
+
+    // ── Mousedown en barra (no en handle de resize) ──
+    grid.addEventListener('mousedown', (e) => {
+      if (e.target.closest('.bar-resize-handle')) return;
+      const bar = e.target.closest('.bar[data-booking-id]');
+      if (!bar) return;
+      e.preventDefault();
+      e.stopPropagation();
+
+      const bookingId    = bar.dataset.bookingId;
+      const cell         = bar.closest('.cal-cell');
+      const sourceUnitId = cell?.dataset.unitId ?? null;
+      const booking      = (this._lastRenderedBookings ?? []).find(b => b.id === bookingId) ?? null;
+
+      // Medir la barra para el ghost
+      const barRect = bar.getBoundingClientRect();
+
+      _dragState = {
+        booking,
+        bookingId,
+        sourceUnitId,
+        targetUnitId: sourceUnitId,
+        startX: e.clientX,
+        startY: e.clientY,
+        daysDiff: 0,
+        moved: false,
+        ghostOrigLeft: barRect.left,
+        ghostH: barRect.height,
+      };
+      this._barDrag = { active: true, moved: false };
+
+      // Si no tenemos los datos aún, buscar
+      if (!booking) {
+        this.db.from('bookings')
+          .select('id,check_in,check_out,nights,guests(first_name,last_name),booking_units(unit_id)')
+          .eq('id', bookingId).single()
+          .then(({ data }) => { if (data && _dragState) _dragState.booking = data; });
+      }
+
+      // Crear ghost (clon de la barra)
+      _barGhost = bar.cloneNode(true);
+      _barGhost.style.cssText = `
+        position:fixed;
+        left:${barRect.left}px;top:${barRect.top}px;
+        width:${barRect.width}px;height:${barRect.height}px;
+        z-index:9999;pointer-events:none;
+        opacity:.88;transform:scale(1.04) translateZ(0);
+        box-shadow:0 12px 40px rgba(0,0,0,.30),0 4px 12px rgba(0,0,0,.18);
+        border-radius:6px;cursor:grabbing;
+        transition:none;
+      `;
+      document.body.appendChild(_barGhost);
+
+      // Atenuar barra original
+      bar.style.opacity = '0.3';
+
+      // Auto-scroll
+      _autoScroll = this._makeAutoScroll();
+
+      document.addEventListener('mousemove', onMouseMove, { signal: sig });
+      document.addEventListener('mouseup', onMouseUp, { once: true });
+    }, { signal: sig });
+
+    // ── Touch support ──
+    grid.addEventListener('touchstart', (e) => {
+      if (e.target.closest('.bar-resize-handle')) return;
+      const bar = e.target.closest('.bar[data-booking-id]');
+      if (!bar) return;
+      const t         = e.touches[0];
+      const bookingId = bar.dataset.bookingId;
+      const cell      = bar.closest('.cal-cell');
+      const booking   = (this._lastRenderedBookings ?? []).find(b => b.id === bookingId) ?? null;
+      const barRect   = bar.getBoundingClientRect();
+
+      _dragState = {
+        booking, bookingId,
+        sourceUnitId: cell?.dataset.unitId ?? null,
+        targetUnitId: cell?.dataset.unitId ?? null,
+        startX: t.clientX, startY: t.clientY,
+        daysDiff: 0, moved: false,
+        ghostOrigLeft: barRect.left,
+        ghostH: barRect.height,
+      };
+      this._barDrag = { active: true, moved: false };
+      bar.style.opacity = '0.3';
+
+      _barGhost = bar.cloneNode(true);
+      _barGhost.style.cssText = `
+        position:fixed;left:${barRect.left}px;top:${barRect.top}px;
+        width:${barRect.width}px;height:${barRect.height}px;
+        z-index:9999;pointer-events:none;opacity:.88;
+        transform:scale(1.04);border-radius:6px;
+        box-shadow:0 12px 40px rgba(0,0,0,.3);transition:none;
+      `;
+      document.body.appendChild(_barGhost);
+      _autoScroll = this._makeAutoScroll();
+
+      const onTM = (te) => {
+        const touch = te.touches[0];
+        onMouseMove({ clientX: touch.clientX, clientY: touch.clientY });
+      };
+      const onTE = (te) => {
+        document.removeEventListener('touchmove', onTM);
+        document.removeEventListener('touchend', onTE);
+        onMouseUp({ clientX: te.changedTouches[0].clientX });
+      };
+      document.addEventListener('touchmove', onTM, { passive: false, signal: sig });
+      document.addEventListener('touchend', onTE, { signal: sig });
+    }, { passive: false, signal: sig });
+  }
+
+  // ── Limpiar highlights de drop ──────────────────
+  _clearDropHighlights(grid) {
+    grid.querySelectorAll('.drop-target,.drop-conflict').forEach(c =>
+      c.classList.remove('drop-target', 'drop-conflict')
+    );
+  }
+
+  // ── Auto scroll horizontal ───────────────────────
+  _makeAutoScroll() {
+    const wrapper = document.querySelector('.cal-wrapper');
+    if (!wrapper) return { update: ()=>{}, stop: ()=>{} };
+    let px = 0, py = 0, rafId;
+    const tick = () => {
+      const rect  = wrapper.getBoundingClientRect();
+      const edge  = 80;
+      const speed = 8;
+      if (px < rect.left + edge)   wrapper.scrollLeft -= speed;
+      else if (px > rect.right - edge) wrapper.scrollLeft += speed;
+      rafId = requestAnimationFrame(tick);
+    };
+    rafId = requestAnimationFrame(tick);
+    return {
+      update: (x, y) => { px = x; py = y; },
+      stop: () => cancelAnimationFrame(rafId),
+    };
+  }
+
+  // ══════════════════════════════════════════════════
+  // RESIZE DE RESERVAS
+  // ══════════════════════════════════════════════════
+  _startResize(e, booking, bar, grid, sig) {
+    const origCO     = booking.check_out;
+    const origWidth  = bar.getBoundingClientRect().width;
+    const origWidthStyle = bar.style.width;
+    const startX     = e.clientX;
+    let currentCO    = origCO;
+    let lastDaysDiff = 0;
+
+    const getCellWidth = () => {
+      const firstCell = grid.querySelector('.cal-cell[data-date]');
+      return firstCell ? firstCell.getBoundingClientRect().width : CELL_W_DESK;
+    };
+
+    const onMove = (ev) => {
+      const cellWidth = getCellWidth();
+      const deltaX    = ev.clientX - startX;
+      const daysDiff  = Math.round(deltaX / cellWidth);
+      if (daysDiff === lastDaysDiff) return;
+      lastDaysDiff = daysDiff;
+
+      const nights     = this._dayDiff(booking.check_in, origCO);
+      const newNights  = Math.max(1, nights + daysDiff);
+      currentCO = this._addDays(booking.check_in, newNights);
+
+      // Actualizar ancho visual de la barra
+      const newWidth = Math.max(origWidth + daysDiff * cellWidth, cellWidth - 4);
+      bar.style.width = `${newWidth}px`;
+
+      // Validar localmente
+      const hasConflict = (this._lastRenderedBookings ?? []).some(other => {
+        if (other.id === booking.id || other.status === 'cancelled') return false;
+        const srcUnitId = (booking.booking_units ?? [])[0]?.unit_id;
+        if (!(other.booking_units ?? []).some(bu => bu.unit_id === srcUnitId)) return false;
+        return other.check_in < currentCO && other.check_out > booking.check_in;
+      });
+
+      bar.classList.toggle('resize-conflict', hasConflict);
+      bar.classList.toggle('resize-valid',    !hasConflict);
+
+      // Mostrar float info
+      this._floatInfo.innerHTML = `
+        <div class="fi-guest" style="font-size:.72rem;font-weight:600">Redimensionar reserva</div>
+        <div class="fi-dates">📅 ${this._fmtShort(booking.check_in)} → ${this._fmtShort(currentCO)}</div>
+        <div class="fi-nights">🌙 ${newNights} noche${newNights!==1?'s':''}</div>
+        ${hasConflict ? '<div class="fi-conflict">⚠️ Conflicto</div>' : ''}
+      `;
+      this._floatInfo.className = `cal-drag-float-info${hasConflict ? ' conflict' : ''}`;
+      this._floatInfo.style.left = `${ev.clientX + 16}px`;
+      this._floatInfo.style.top  = `${ev.clientY - 60}px`;
+    };
+
+    const onUp = async () => {
+      document.removeEventListener('mousemove', onMove);
+      this._resizeActive = false;
+      bar.classList.remove('resize-conflict', 'resize-valid');
+      this._floatInfo.classList.add('hidden');
+
+      if (currentCO === origCO) {
+        bar.style.width = origWidthStyle;
+        return;
+      }
+
+      const confirmed = await this._confirmResizeChange({
+        guestName: booking.guests ? `${booking.guests.first_name ?? ''} ${booking.guests.last_name ?? ''}`.trim() : (booking.block_reason ?? 'Reserva'),
+        oldCI: booking.check_in, oldCO: origCO,
+        newCI: booking.check_in, newCO: currentCO,
+        oldNights: this._dayDiff(booking.check_in, origCO),
+        newNights: this._dayDiff(booking.check_in, currentCO),
+      });
+
+      if (!confirmed) {
+        // Animar regreso al tamaño original
+        bar.style.transition = 'width .3s cubic-bezier(.4,0,.2,1)';
+        bar.style.width = origWidthStyle;
+        setTimeout(() => { bar.style.transition = ''; }, 350);
+        return;
+      }
+
+      // Validación final
+      const srcUnitId = (booking.booking_units ?? [])[0]?.unit_id;
+      const { data: conflicts } = await this.db
+        .from('booking_units')
+        .select('unit_id, bookings!inner(id, check_in, check_out, status)')
+        .eq('unit_id', srcUnitId)
+        .neq('bookings.status', 'cancelled')
+        .neq('bookings.id', booking.id)
+        .lt('bookings.check_in', currentCO)
+        .gt('bookings.check_out', booking.check_in);
+
+      if (conflicts?.length) {
+        showToast('⚠️ Conflicto: hay otra reserva en esas fechas', 'error');
+        bar.style.width = origWidthStyle;
+        this.load(); return;
+      }
+
+      const newNights = this._dayDiff(booking.check_in, currentCO);
+      const { error } = await this.db.from('bookings')
+        .update({ check_out: currentCO, nights: newNights }).eq('id', booking.id);
+      if (error) {
+        showToast('Error al cambiar la fecha de salida', 'error');
+        bar.style.width = origWidthStyle;
+        return;
+      }
+
+      await logAction('UPDATE', 'booking', booking.id,
+        `Resize: check_out ${origCO}→${currentCO}`);
+
+      this._pendingPulse.add(booking.id);
+      cache.invalidate('bookings');
+      showToast(`✓ Fecha de salida actualizada: ${this._fmtShort(currentCO)}`, 'success');
+      this.load();
+    };
+
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp, { once: true });
+  }
+
+  // ══════════════════════════════════════════════════
+  // MODALES DE CONFIRMACIÓN
+  // ══════════════════════════════════════════════════
+  _confirmDragChange({ guestName, srcUnitName, tgtUnitName, oldCI, oldCO, newCI, newCO, nights, unitChanged, isPast }) {
+    return new Promise(resolve => {
+      document.getElementById('drag-confirm-overlay')?.remove();
+
+      const fmt = iso => {
+        const [y,m,d] = iso.split('-');
+        return `${d}/${m}/${y}`;
+      };
+
+      const overlay = document.createElement('div');
+      overlay.id = 'drag-confirm-overlay';
+      overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;padding:16px;animation:overlayIn .15s ease;';
+
+      overlay.innerHTML = `
+        <div style="background:var(--color-background-primary,#fff);border-radius:16px;
+          box-shadow:0 20px 60px rgba(0,0,0,.28);padding:24px;max-width:400px;width:100%;
+          animation:modalIn .18s cubic-bezier(.4,0,.2,1)">
+          <div style="font-size:1rem;font-weight:700;color:var(--color-text,#111);margin-bottom:4px">
+            ✏️ Confirmar movimiento
+          </div>
+          <div style="font-size:.82rem;color:var(--color-text-secondary,#666);margin-bottom:16px">${guestName}</div>
+          ${isPast ? `<div style="background:#fef3c7;border:1px solid #f59e0b;border-radius:8px;padding:8px 12px;font-size:.8rem;color:#92400e;margin-bottom:12px">
+            ⚠️ La nueva fecha de ingreso es en el pasado.
+          </div>` : ''}
+          ${unitChanged ? `<div style="background:#ede9fe;border:1px solid #c4b5fd;border-radius:8px;padding:8px 12px;font-size:.8rem;color:#5b21b6;margin-bottom:12px;font-weight:600">
+            🔄 Cambio de departamento: <strong>${srcUnitName}</strong> → <strong>${tgtUnitName}</strong>
+          </div>` : ''}
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+            <div style="background:var(--color-background-secondary,#f8f9fa);border-radius:10px;padding:10px 12px">
+              <div style="font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--color-text-tertiary,#999);margin-bottom:4px">Antes</div>
+              <div style="font-size:.82rem;font-weight:600;color:var(--color-text,#111)">📅 ${fmt(oldCI)} → ${fmt(oldCO)}</div>
+              <div style="font-size:.72rem;color:var(--color-text-3,#999);margin-top:3px">🌙 ${nights} noches</div>
+            </div>
+            <div style="background:#ede9fe;border-radius:10px;padding:10px 12px">
+              <div style="font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#7c3aed;margin-bottom:4px">Nuevo</div>
+              <div style="font-size:.82rem;font-weight:600;color:#5b21b6">📅 ${fmt(newCI)} → ${fmt(newCO)}</div>
+              <div style="font-size:.72rem;color:#7c3aed;margin-top:3px">🌙 ${nights} noches</div>
+            </div>
+          </div>
+          <div style="display:flex;gap:10px">
+            <button id="dc-cancel" style="flex:1;padding:10px;border-radius:10px;border:1.5px solid var(--color-border-secondary,#e2e8f0);background:transparent;cursor:pointer;font-size:.85rem;font-weight:600;color:var(--color-text,#111)">Cancelar</button>
+            <button id="dc-confirm" style="flex:1;padding:10px;border-radius:10px;border:none;background:#6366f1;color:#fff;cursor:pointer;font-size:.85rem;font-weight:700">Confirmar movimiento</button>
+          </div>
+        </div>`;
+
+      document.body.appendChild(overlay);
+
+      const cleanup = (result) => { overlay.remove(); resolve(result); };
+      document.getElementById('dc-confirm').addEventListener('click', () => cleanup(true));
+      document.getElementById('dc-cancel').addEventListener('click',  () => cleanup(false));
+      overlay.addEventListener('click', e => { if (e.target === overlay) cleanup(false); });
+      const onEsc = (e) => { if (e.key === 'Escape') { cleanup(false); document.removeEventListener('keydown', onEsc); } };
+      document.addEventListener('keydown', onEsc);
+      setTimeout(() => document.getElementById('dc-confirm')?.focus(), 50);
+    });
+  }
+
+  _confirmResizeChange({ guestName, oldCI, oldCO, newCI, newCO, oldNights, newNights }) {
+    return new Promise(resolve => {
+      document.getElementById('resize-confirm-overlay')?.remove();
+
+      const fmt = iso => {
+        const [y,m,d] = iso.split('-');
+        return `${d}/${m}/${y}`;
+      };
+      const bigger = newNights > oldNights;
+
+      const overlay = document.createElement('div');
+      overlay.id = 'resize-confirm-overlay';
+      overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;padding:16px;animation:overlayIn .15s ease;';
+
+      overlay.innerHTML = `
+        <div style="background:var(--color-background-primary,#fff);border-radius:16px;
+          box-shadow:0 20px 60px rgba(0,0,0,.28);padding:24px;max-width:380px;width:100%;
+          animation:modalIn .18s cubic-bezier(.4,0,.2,1)">
+          <div style="font-size:1rem;font-weight:700;color:var(--color-text,#111);margin-bottom:4px">
+            ↔️ Confirmar cambio de duración
+          </div>
+          <div style="font-size:.82rem;color:var(--color-text-secondary,#666);margin-bottom:16px">${guestName}</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+            <div style="background:var(--color-background-secondary,#f8f9fa);border-radius:10px;padding:10px 12px">
+              <div style="font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--color-text-tertiary,#999);margin-bottom:4px">Antes</div>
+              <div style="font-size:.82rem;font-weight:600;color:var(--color-text,#111)">📅 ${fmt(oldCI)} → ${fmt(oldCO)}</div>
+              <div style="font-size:.72rem;color:var(--color-text-3,#999);margin-top:3px">🌙 ${oldNights} noches</div>
+            </div>
+            <div style="background:${bigger ? '#dcfce7' : '#fef9c3'};border-radius:10px;padding:10px 12px">
+              <div style="font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:${bigger ? '#15803d' : '#a16207'};margin-bottom:4px">Nuevo</div>
+              <div style="font-size:.82rem;font-weight:600;color:${bigger ? '#166534' : '#854d0e'}">📅 ${fmt(newCI)} → ${fmt(newCO)}</div>
+              <div style="font-size:.72rem;color:${bigger ? '#16a34a' : '#ca8a04'};margin-top:3px">🌙 ${newNights} noches ${bigger ? '▲' : '▼'}</div>
+            </div>
+          </div>
+          <div style="display:flex;gap:10px">
+            <button id="rc-cancel"  style="flex:1;padding:10px;border-radius:10px;border:1.5px solid var(--color-border-secondary,#e2e8f0);background:transparent;cursor:pointer;font-size:.85rem;font-weight:600;color:var(--color-text,#111)">Cancelar</button>
+            <button id="rc-confirm" style="flex:1;padding:10px;border-radius:10px;border:none;background:#6366f1;color:#fff;cursor:pointer;font-size:.85rem;font-weight:700">Confirmar</button>
+          </div>
+        </div>`;
+
+      document.body.appendChild(overlay);
+
+      const cleanup = (result) => { overlay.remove(); resolve(result); };
+      document.getElementById('rc-confirm').addEventListener('click', () => cleanup(true));
+      document.getElementById('rc-cancel').addEventListener('click',  () => cleanup(false));
+      overlay.addEventListener('click', e => { if (e.target === overlay) cleanup(false); });
+      const onEsc = (e) => { if (e.key === 'Escape') { cleanup(false); document.removeEventListener('keydown', onEsc); } };
+      document.addEventListener('keydown', onEsc);
+      setTimeout(() => document.getElementById('rc-confirm')?.focus(), 50);
+    });
+  }
+
+  // ══════════════════════════════════════════════════
+  // DISPONIBILIDAD
+  // ══════════════════════════════════════════════════
+  setupViewToggle() {
+    let _availMode = false;
+    const availBtn = document.getElementById('cal-avail-toggle');
+    if (!availBtn) return;
+
+    const filterPanel = document.createElement('div');
+    filterPanel.id = 'avail-filter-panel';
+    const todayStr    = localToday();
+    const tomorrowStr = this._addDays(todayStr, 1);
+    filterPanel.style.cssText = 'display:none;flex-direction:column;background:var(--color-surface-2,#f8f9fa);border:1px solid var(--color-border,#e5e7eb);border-radius:10px;overflow:hidden;margin-top:8px;font-size:.78rem;color:var(--color-text);';
+    filterPanel.innerHTML = `
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:nowrap;overflow-x:auto;padding:8px 14px">
+        <span style="font-weight:600;font-size:.72rem;color:var(--color-text-3);text-transform:uppercase;letter-spacing:.05em;white-space:nowrap">🔍 Disponibilidad</span>
+        <span style="font-size:.72rem;color:var(--color-text-3);white-space:nowrap">Check-in</span>
+        <input type="date" id="avail-checkin" value="${todayStr}"
+          style="border:1px solid var(--color-border,#e5e7eb);border-radius:6px;padding:3px 6px;font-size:.75rem;background:var(--color-surface);color:var(--color-text);min-width:0">
+        <span style="font-size:.72rem;color:var(--color-text-3);white-space:nowrap">Check-out</span>
+        <input type="date" id="avail-checkout" value="${tomorrowStr}"
+          style="border:1px solid var(--color-border,#e5e7eb);border-radius:6px;padding:3px 6px;font-size:.75rem;background:var(--color-surface);color:var(--color-text);min-width:0">
+        <span style="font-size:.72rem;color:var(--color-text-3);white-space:nowrap">Pers.</span>
+        <input type="number" id="avail-guests" min="1" max="20" value="2"
+          style="width:48px;border:1px solid var(--color-border,#e5e7eb);border-radius:6px;padding:3px 6px;font-size:.75rem;background:var(--color-surface);color:var(--color-text)">
+        <button id="avail-search-btn"
+          style="padding:4px 11px;border-radius:6px;border:none;background:var(--color-primary,#6366f1);color:#fff;font-size:.75rem;font-weight:600;cursor:pointer;white-space:nowrap;flex-shrink:0">
+          Ver disponibles
+        </button>
+      </div>
+      <div id="avail-results" style="display:none;width:100%;padding:6px 14px 8px;border-top:1px solid var(--color-border,#e5e7eb);margin-top:0"></div>
+    `;
+
+    const calWrapper = document.querySelector('.cal-wrapper') ?? availBtn.closest('.cal-toolbar')?.nextElementSibling;
+    if (calWrapper) calWrapper.insertAdjacentElement('beforebegin', filterPanel);
+    else availBtn.parentNode.appendChild(filterPanel);
+
+    // ── Badges de disponibilidad % ──
+    const _applyPercentBadges = () => {
+      const grid = document.getElementById('calendar-grid');
+      if (!grid) return;
+      const totalUnits = this.ctx.units.length || 1;
+      const bookings   = this._lastRenderedBookings ?? [];
+      const dateRange  = this._dateRange ?? [];
+
+      const occupancyMap = new Map();
+      dateRange.forEach(iso => occupancyMap.set(iso, new Set()));
+      bookings.forEach(b => {
+        if (b.status === 'cancelled') return;
+        dateRange.forEach(iso => {
+          if (b.check_in <= iso && b.check_out > iso) {
+            (b.booking_units ?? []).forEach(bu => occupancyMap.get(iso)?.add(bu.unit_id));
+          }
+        });
+      });
+
+      // Aplicar clases a celdas
+      grid.querySelectorAll('.cal-cell[data-date]').forEach(c => {
+        const occ = occupancyMap.get(c.dataset.date) ?? new Set();
+        if (occ.has(c.dataset.unitId)) c.classList.add('avail-occupied');
+        else c.classList.add('avail-free');
+      });
+
+      // Badges en headers
+      grid.querySelectorAll('.cal-day-header[data-date]').forEach(hdr => {
+        const iso  = hdr.dataset.date;
+        const occ  = occupancyMap.get(iso) ?? new Set();
+        const free = totalUnits - occ.size;
+        const pct  = Math.round((free / totalUnits) * 100);
+        if (!hdr.querySelector('.avail-pct')) {
+          const badge = document.createElement('div');
+          badge.className = 'avail-pct';
+          badge.textContent = `${pct}%`;
+          badge.style.cssText = `font-size:.55rem;font-weight:700;line-height:1;color:${pct > 60 ? '#16a34a' : pct > 30 ? '#f59e0b' : '#ef4444'}`;
+          hdr.appendChild(badge);
+        }
+      });
+    };
+
+    const _clearPercentBadges = () => {
+      const grid = document.getElementById('calendar-grid');
+      if (!grid) return;
+      grid.querySelectorAll('.avail-free,.avail-occupied').forEach(c => c.classList.remove('avail-free','avail-occupied'));
+      grid.querySelectorAll('.avail-pct').forEach(el => el.remove());
+    };
+
+    const _highlightRange = (ci, co) => {
+      const grid = document.getElementById('calendar-grid');
+      if (!grid) return;
+      grid.querySelectorAll('.cal-cell.avail-range').forEach(c => c.classList.remove('avail-range','avail-range-start','avail-range-end'));
+      if (!ci || !co) return;
+      grid.querySelectorAll('.cal-cell[data-date]').forEach(c => {
+        const d = c.dataset.date;
+        if (d >= ci && d < co) {
+          c.classList.add('avail-range');
+          if (d === ci) c.classList.add('avail-range-start');
+          const next = new Date(d + 'T12:00:00');
+          next.setDate(next.getDate() + 1);
+          if (toISODate(next) === co) c.classList.add('avail-range-end');
+        }
+      });
+    };
+
+    const _clearRangeHighlight = () => {
+      document.getElementById('calendar-grid')
+        ?.querySelectorAll('.cal-cell.avail-range')
+        .forEach(c => c.classList.remove('avail-range','avail-range-start','avail-range-end'));
+    };
+
+    const _searchAvailability = () => {
+      const ci     = document.getElementById('avail-checkin')?.value;
+      const co     = document.getElementById('avail-checkout')?.value;
+      const guests = parseInt(document.getElementById('avail-guests')?.value ?? '2', 10);
+      const results= document.getElementById('avail-results');
+      if (!ci || !co || !results) return;
+      if (ci >= co) {
+        results.innerHTML = `<span style="color:#ef4444;font-size:.76rem">⚠️ El check-out debe ser posterior al check-in.</span>`;
+        _clearRangeHighlight(); return;
+      }
+      _highlightRange(ci, co);
+      const bookings    = this._lastRenderedBookings ?? [];
+      const occupiedIds = new Set();
+      bookings.forEach(b => {
+        if (b.status === 'cancelled') return;
+        if (b.check_in < co && b.check_out > ci) {
+          (b.booking_units ?? []).forEach(bu => occupiedIds.add(bu.unit_id));
+        }
+      });
+      const available = this.ctx.units.filter(u => !occupiedIds.has(u.id) && (u.max_guests ?? 0) >= guests);
+      const occupied  = this.ctx.units.filter(u => occupiedIds.has(u.id));
+      const tooSmall  = this.ctx.units.filter(u => !occupiedIds.has(u.id) && (u.max_guests ?? 0) < guests);
+      const fmt = s => s.split('-').reverse().join('/');
+      const chip = u => {
+        const color = u.color ?? 'var(--color-primary)';
+        return `<span title="#${u.sort_order} · ${u.name} (hasta ${u.max_guests} pers.)"
+          style="display:inline-flex;align-items:center;gap:4px;padding:2px 7px;border-radius:4px;
+          background:${color}20;border:1px solid ${color}55;font-size:.74rem;font-weight:700;color:var(--color-text);cursor:default">
+          <span style="width:7px;height:7px;border-radius:50%;background:${color};flex-shrink:0"></span>#${u.sort_order}
+        </span>`;
+      };
+
+      if (!available.length) {
+        results.style.display = 'block';
+        results.innerHTML = `<span style="color:#ef4444;font-size:.76rem">😔 Sin unidades disponibles para ${guests} personas en esas fechas.</span>`;
+        return;
+      }
+      results.style.display = 'block';
+      results.innerHTML = `
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+          <span style="font-size:.72rem;font-weight:600;color:#16a34a;white-space:nowrap">
+            ✅ ${available.length} disponible${available.length > 1 ? 's' : ''} · ${fmt(ci)} → ${fmt(co)} · ${guests} pers.
+          </span>
+          ${available.map(chip).join('')}
+          ${tooSmall.map(u => `<span title="#${u.sort_order} · ${u.name} — capacidad insuficiente (max. ${u.max_guests})"
+            style="display:inline-flex;align-items:center;gap:4px;padding:2px 7px;border-radius:4px;
+            background:#f3f4f6;border:1px solid #d1d5db;font-size:.74rem;font-weight:700;color:#9ca3af;cursor:default;text-decoration:line-through">
+            <span style="width:7px;height:7px;border-radius:50%;background:#d1d5db;flex-shrink:0"></span>#${u.sort_order}
+          </span>`).join('')}
+          ${occupied.map(u => `<span title="#${u.sort_order} · ${u.name} — ocupada"
+            style="display:inline-flex;align-items:center;gap:4px;padding:2px 7px;border-radius:4px;
+            background:#fee2e255;border:1px solid #fca5a5;font-size:.74rem;font-weight:700;color:#ef4444;cursor:default">
+            <span style="width:7px;height:7px;border-radius:50%;background:#ef4444;flex-shrink:0"></span>#${u.sort_order}
+          </span>`).join('')}
+        </div>`;
+    };
+
+    availBtn.addEventListener('click', () => {
+      _availMode = !_availMode;
+      availBtn.textContent = _availMode ? '✕ Ocultar disponibilidad' : '👁 Disponibilidad';
+      availBtn.classList.toggle('active', _availMode);
+      filterPanel.style.display = _availMode ? 'flex' : 'none';
+      if (_availMode) _applyPercentBadges();
+      else {
+        _clearPercentBadges();
+        _clearRangeHighlight();
+        const results = document.getElementById('avail-results');
+        if (results) { results.innerHTML = ''; results.style.display = 'none'; }
+      }
+    });
+
+    filterPanel.querySelector('#avail-search-btn')?.addEventListener('click', _searchAvailability);
+    filterPanel.querySelectorAll('input').forEach(inp =>
+      inp.addEventListener('keydown', e => { if (e.key === 'Enter') _searchAvailability(); })
+    );
+  }
+
+  // ══════════════════════════════════════════════════
+  // VISTA LISTA
+  // ══════════════════════════════════════════════════
+  _renderListView() {
+    const grid    = document.getElementById('calendar-grid');
+    const today   = localToday();
+    const seen    = new Set();
+    const unique  = (this._lastRenderedBookings ?? []).filter(b => {
+      if (seen.has(b.id)) return false;
+      seen.add(b.id); return true;
+    }).sort((a, b) => a.check_in.localeCompare(b.check_in));
+
+    grid.style.gridTemplateColumns = '1fr';
+    grid.style.minWidth = 'auto';
+    grid.style.width    = 'auto';
+
+    if (!unique.length) {
+      grid.innerHTML = `<div class="empty-state" style="padding:40px">
+        <span class="empty-state-icon">📅</span>
+        <p>Sin reservas en el rango visible.</p>
+      </div>`;
+      return;
+    }
+
+    grid.innerHTML = unique.map(b => {
+      const { color, label } = getBookingBarColor(b);
+      const guest   = b.guests ? `${b.guests.first_name} ${b.guests.last_name}` : (b.block_reason ?? 'Bloqueo');
+      const units   = (b.booking_units ?? []).map(bu => getUnitLabel(bu.units ?? {})).join(', ');
+      const isNow   = b.check_in <= today && b.check_out > today;
+      const balance = b.balance ?? 0;
+      return `
+        <div class="list-booking-row" data-id="${b.id}" style="display:flex;align-items:stretch;border:1px solid var(--color-border);
+          border-radius:var(--r-lg);background:var(--color-surface);box-shadow:var(--sh-xs);margin-bottom:8px;overflow:hidden;cursor:pointer;
+          ${isNow ? 'border-color:var(--color-primary);box-shadow:0 0 0 2px var(--color-primary-t)' : ''}">
+          <div style="width:5px;background:${color};flex-shrink:0"></div>
+          <div style="flex:1;padding:12px 14px;min-width:0">
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px">
+              <span style="font-weight:700;font-size:.92rem;color:var(--color-text)">${guest}</span>
+              <span style="padding:2px 8px;border-radius:99px;font-size:.68rem;font-weight:700;background:${color}18;color:${color};border:1px solid ${color}35">${label}</span>
+              ${isNow ? `<span style="padding:2px 8px;border-radius:99px;font-size:.68rem;font-weight:700;background:var(--color-primary-l);color:var(--color-primary)">HOY</span>` : ''}
+            </div>
+            <div style="font-size:.78rem;color:var(--color-text-2)">📅 ${formatDate(b.check_in)} → ${formatDate(b.check_out)} · 🌙 ${b.nights ?? '?'} noches</div>
+            <div style="margin-top:5px;font-size:.75rem;color:var(--color-text-3)">${units}</div>
+          </div>
+          <div style="padding:12px 14px;text-align:right;flex-shrink:0;display:flex;flex-direction:column;justify-content:center">
+            <div style="font-weight:700;font-size:.9rem">${formatARS(b.total_amount)}</div>
+            <div style="font-size:.72rem;margin-top:3px;color:${balance>0?'var(--color-warning)':'var(--color-success)'};font-weight:600">
+              ${balance > 0 ? `Saldo: ${formatARS(balance)}` : '✓ Saldado'}
+            </div>
+          </div>
+        </div>`;
+    }).join('');
+
+    grid.querySelectorAll('.list-booking-row[data-id]').forEach(row =>
+      row.addEventListener('click', () => this._openDetailById(row.dataset.id))
+    );
+  }
+
+  // ══════════════════════════════════════════════════
+  // ACCIONES SOBRE RESERVAS
+  // ══════════════════════════════════════════════════
   async _openDetailById(bookingId) {
     if (!bookingId) return;
     try {
-      // Verificar si es un bloqueo para abrir el modal específico
+      // Primero chequear en caché renderizada (evita round-trip a DB)
       const found = this._lastRenderedBookings?.find(b => b.id === bookingId);
       if (found && (found.status === 'blocked' || found.is_blocked)) {
         await this._openBlockModal(bookingId, found);
         return;
       }
-      // Si no está en la caché rendereada, consultamos en DB
+      // Si no está en caché, consultar DB
       const { data: bk } = await this.db.from('bookings')
         .select('id, status, is_blocked, block_reason, check_in, check_out, booking_units(unit_id)')
         .eq('id', bookingId).single();
@@ -653,17 +1599,16 @@ export class Calendar {
       }
       await this.bookingForm.openEdit(bookingId);
     } catch (err) {
-      console.error('[Calendar] Error al abrir reserva:', err);
+      console.error('[Calendar] _openDetailById:', err);
       showToast('Error al cargar la reserva', 'error');
     }
   }
 
-  // ── Modal exclusivo para bloqueos ─────────────────
+  // ── Modal exclusivo para editar/eliminar bloqueos ──
   async _openBlockModal(bookingId, bookingData) {
     const existing = document.getElementById('overlay-block-modal');
     if (existing) existing.remove();
 
-    // Determinar unidad
     const unitId   = bookingData.booking_units?.[0]?.unit_id ?? null;
     const unitObj  = this.ctx.units?.find(u => u.id === unitId);
     const unitName = unitObj ? `#${unitObj.sort_order} · ${unitObj.name}` : 'Sin unidad';
@@ -719,36 +1664,29 @@ export class Calendar {
     modal.addEventListener('click', e => { if (e.target === modal) close(); });
     setTimeout(() => modal.querySelector('#block-reason')?.focus(), 80);
 
-    // ── Guardar cambios ───────────────────────────
+    // ── Guardar cambios ──
     modal.querySelector('#block-save-btn').addEventListener('click', async () => {
       const newCI     = modal.querySelector('#block-checkin').value;
       const newCO     = modal.querySelector('#block-checkout').value;
       const newReason = modal.querySelector('#block-reason').value.trim() || 'Bloqueo';
-
       if (!newCI || !newCO || newCI >= newCO) {
         showToast('Las fechas son inválidas', 'warning'); return;
       }
-
       const saveBtn = modal.querySelector('#block-save-btn');
       saveBtn.disabled = true; saveBtn.textContent = 'Guardando...';
-
       try {
         const { error } = await this.db.from('bookings')
           .update({ check_in: newCI, check_out: newCO, block_reason: newReason })
           .eq('id', bookingId);
         if (error) throw error;
-
-        // Sincronizar maintenance_issue asociado (si existe)
+        // Sincronizar maintenance_issue asociado
         const { data: mi } = await this.db.from('maintenance_issues')
-          .select('id')
-          .eq('booking_id', bookingId)
-          .maybeSingle();
+          .select('id').eq('booking_id', bookingId).maybeSingle();
         if (mi?.id) {
           await this.db.from('maintenance_issues')
             .update({ title: newReason, description: `Bloqueo: ${newCI} → ${newCO}` })
             .eq('id', mi.id);
         }
-
         showToast('Bloqueo actualizado ✓', 'success');
         cache.invalidate('bookings');
         close();
@@ -760,22 +1698,15 @@ export class Calendar {
       }
     });
 
-    // ── Eliminar bloqueo ──────────────────────────
+    // ── Eliminar bloqueo ──
     modal.querySelector('#block-delete-btn').addEventListener('click', async () => {
       if (!confirm('¿Eliminar este bloqueo del calendario?')) return;
-
       const delBtn = modal.querySelector('#block-delete-btn');
       delBtn.disabled = true; delBtn.textContent = '⏳ Eliminando...';
-
       try {
-        // Eliminar maintenance_issue asociado (si existe)
-        await this.db.from('maintenance_issues')
-          .delete()
-          .eq('booking_id', bookingId);
-
+        await this.db.from('maintenance_issues').delete().eq('booking_id', bookingId);
         const { error } = await this.db.from('bookings').delete().eq('id', bookingId);
         if (error) throw error;
-
         showToast('Bloqueo eliminado ✓', 'success');
         cache.invalidate('bookings');
         close();
@@ -783,31 +1714,28 @@ export class Calendar {
       } catch (err) {
         console.error('[Calendar] Error al eliminar bloqueo:', err);
         showToast('Error al eliminar: ' + (err?.message ?? String(err)), 'error');
-        delBtn.disabled = false; delBtn.textContent = '🗑️ Eliminar bloqueo';
+        delBtn.disabled = false; delBtn.textContent = '🗑️ Eliminar';
       }
     });
   }
 
-  // ── Bloquear día ──────────────────────────────────
+  // ── Bloquear día individual ──
   async _blockDay(unitId, dateISO) {
     const reason = prompt('Motivo del bloqueo (mantenimiento, reparación, uso propio, etc.):');
     if (!reason) return;
-    const next = new Date(dateISO+'T12:00:00'); next.setDate(next.getDate()+1);
+    const next = new Date(dateISO + 'T12:00:00');
+    next.setDate(next.getDate() + 1);
     const checkOut = toISODate(next);
-
     try {
       const { data: bk, error } = await this.db.from('bookings').insert({
         hotel_id: this.ctx.hotelId, check_in: dateISO, check_out: checkOut,
         status: 'blocked', is_blocked: true, block_reason: reason, price_per_night: 0,
       }).select('id').single();
       if (error) throw error;
-
       if (bk?.id) {
         await this.db.from('booking_units').insert({ booking_id: bk.id, unit_id: unitId });
-        // Crear maintenance_issue sincronizado
         await this._createMaintenanceForBlock(bk.id, unitId, dateISO, checkOut, reason);
       }
-
       showToast('Día bloqueado ✓', 'success');
       cache.invalidate('bookings');
       this.load();
@@ -817,7 +1745,7 @@ export class Calendar {
     }
   }
 
-  // ── Helper: crear maintenance_issue para un bloqueo ──
+  // ── Crear maintenance_issue sincronizado con bloqueo ──
   async _createMaintenanceForBlock(bookingId, unitId, checkIn, checkOut, reason) {
     try {
       await this.db.from('maintenance_issues').insert({
@@ -831,161 +1759,14 @@ export class Calendar {
         status:      'pending',
       });
     } catch (err) {
-      // No es crítico: el bloqueo fue creado, solo loguear
-      console.warn('[Calendar] No se pudo crear maintenance_issue para bloqueo:', err?.message ?? err);
+      // No crítico: el bloqueo fue creado, solo loguear
+      console.warn('[Calendar] No se pudo crear maintenance_issue:', err?.message ?? err);
     }
   }
 
-  // ── Ghost ─────────────────────────────────────────
-  _createGhost() {
-    let g = document.getElementById('cal-drag-ghost');
-    if (!g) {
-      g = document.createElement('div');
-      g.className = 'drag-ghost hidden';
-      g.id = 'cal-drag-ghost';
-      document.body.appendChild(g);
-    }
-    return g;
-  }
-
-  // ── Tooltip enriquecido ───────────────────────────
-  _showTooltip(booking, e) {
-    this._hideTooltip();
-    const guest     = booking.guests ? `${booking.guests.first_name} ${booking.guests.last_name}` : (booking.block_reason ?? 'Bloqueo');
-    const { label } = getBookingBarColor(booking);
-    const source    = booking.source ?? 'direct';
-    const srcCfg    = SOURCE_CONFIG[source] ?? {};
-    const units     = (booking.booking_units ?? []).map(bu => {
-      const u = bu.units ?? {};
-      return `#${u.sort_order ?? '?'} · ${u.name ?? '?'}`;
-    }).join(', ');
-    const hasBadExp = booking.guests?.bad_experience;
-
-    const tip = document.createElement('div');
-    tip.className = 'cal-tooltip';
-
-    const totalAmount = booking.total_amount ?? 0;
-    const totalPaid   = booking.total_paid   ?? 0;
-    const balance     = booking.balance      ?? (totalAmount - totalPaid);
-    const saldado     = balance <= 0;
-
-    // Fila de pago: señas/depósito vs saldo al ingreso
-    const payRow = totalAmount > 0 ? `
-      <div style="border-top:1px solid rgba(255,255,255,.1);padding-top:9px;margin-top:9px">
-        <div style="display:flex;justify-content:space-between;gap:10px;margin-bottom:5px">
-          <div>
-            <div style="font-size:.65rem;color:#64748B;text-transform:uppercase;letter-spacing:.04em">Total</div>
-            <div style="font-weight:700;color:#F8FAFC;font-size:.88rem">${formatARS(totalAmount)}</div>
-          </div>
-          ${totalPaid > 0 ? `<div>
-            <div style="font-size:.65rem;color:#64748B;text-transform:uppercase;letter-spacing:.04em">Señas / depósitos</div>
-            <div style="font-weight:600;color:#A78BFA;font-size:.85rem">${formatARS(totalPaid)}</div>
-          </div>` : ''}
-          <div style="text-align:right">
-            <div style="font-size:.65rem;color:#64748B;text-transform:uppercase;letter-spacing:.04em">Saldo al ingreso</div>
-            <div style="font-weight:700;font-size:.88rem;color:${saldado ? '#34D399' : '#EAB308'}">${saldado ? '✓ Saldado' : formatARS(balance)}</div>
-          </div>
-        </div>
-      </div>` : '';
-
-    tip.innerHTML = `
-      <div class="ct-guest">${guest}${hasBadExp ? ' <span style="color:#EF4444">⚠️</span>' : ''}</div>
-      <div class="ct-unit">🛏️ ${units || '—'}</div>
-      <div class="ct-dates" style="margin-top:6px">📅 ${booking.check_in} → ${booking.check_out}</div>
-      <div class="ct-nights">🌙 ${booking.nights ?? '?'} noches${booking.pax ? ` · 👥 ${booking.adults ?? booking.pax} adultos${booking.children ? ` + ${booking.children} menores` : ''}` : ''}</div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">
-        <span style="padding:2px 8px;border-radius:99px;font-size:.7rem;font-weight:700;
-          background:${getBookingBarColor(booking).color}22;color:${getBookingBarColor(booking).color};
-          border:1px solid ${getBookingBarColor(booking).color}40">${label}</span>
-        ${source !== 'direct' && source !== 'blocked' ? `<span style="padding:2px 8px;border-radius:99px;font-size:.7rem;font-weight:700;
-          background:${srcCfg.color??''}22;color:${srcCfg.color??'#64748B'};border:1px solid ${srcCfg.color??''}40">
-          ${srcCfg.emoji??''} ${srcCfg.label??''}</span>` : ''}
-      </div>
-      ${payRow}
-      ${booking.notes ? `<div style="margin-top:8px;font-size:.7rem;color:#94A3B8;font-style:italic;border-top:1px solid rgba(255,255,255,.07);padding-top:7px">📝 ${booking.notes.length > 80 ? booking.notes.slice(0,80)+'…' : booking.notes}</div>` : ''}
-    `;
-    document.body.appendChild(tip);
-    this._tooltip = tip;
-    this._moveTooltip(e);
-  }
-
-  _moveTooltip(e) {
-    if (!this._tooltip) return;
-    const tw = this._tooltip.offsetWidth  || 220;
-    const th = this._tooltip.offsetHeight || 140;
-    const x  = e.clientX + 18;
-    const y  = e.clientY - 10;
-    this._tooltip.style.left = `${x+tw>window.innerWidth ? x-tw-36 : x}px`;
-    this._tooltip.style.top  = `${y+th>window.innerHeight ? y-th : y}px`;
-  }
-
-  _hideTooltip() { this._tooltip?.remove(); this._tooltip = null; }
-
-  // ── Vista Lista ───────────────────────────────────
-  _renderListView(bookings) {
-    const grid      = document.getElementById('calendar-grid');
-    const today     = localToday();
-    const container = document.getElementById('cal-legend-container');
-    if (container) container.innerHTML = '';
-
-    grid.style.gridTemplateColumns = '1fr';
-    grid.style.minWidth = 'auto';
-    grid.style.width    = 'auto';
-
-    const seen = new Set();
-    const unique = bookings.filter(b => {
-      if (seen.has(b.id)) return false;
-      seen.add(b.id); return true;
-    }).sort((a, b) => a.check_in.localeCompare(b.check_in));
-
-    if (!unique.length) {
-      grid.innerHTML = `<div class="empty-state" style="padding:40px">
-        <span class="empty-state-icon">📅</span>
-        <p>Sin reservas en ${MONTH_NAMES[this.month]} ${this.year}.</p>
-      </div>`;
-      return;
-    }
-
-    grid.innerHTML = unique.map(b => {
-      const { color, label } = getBookingBarColor(b);
-      const guest   = b.guests ? `${b.guests.first_name} ${b.guests.last_name}` : (b.block_reason ?? 'Bloqueo');
-      const units   = (b.booking_units ?? []).map(bu => getUnitLabel(bu.units ?? {})).join(', ');
-      const isToday = b.check_in === today || (b.check_in < today && b.check_out > today);
-      const balance = b.balance ?? 0;
-
-      return `
-        <div class="list-booking-row" data-id="${b.id}" style="display:flex;align-items:stretch;border:1px solid var(--color-border);
-          border-radius:var(--r-lg);background:var(--color-surface);
-          box-shadow:var(--sh-xs);margin-bottom:8px;overflow:hidden;cursor:pointer;
-          ${isToday ? 'border-color:var(--color-primary);box-shadow:0 0 0 2px var(--color-primary-t)' : ''}">
-          <div style="width:5px;background:${color};flex-shrink:0"></div>
-          <div style="flex:1;padding:12px 14px;min-width:0">
-            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px">
-              <span style="font-weight:700;font-size:.92rem;color:var(--color-text)">${guest}</span>
-              <span style="padding:2px 8px;border-radius:99px;font-size:.68rem;font-weight:700;
-                background:${color}18;color:${color};border:1px solid ${color}35">${label}</span>
-              ${isToday ? `<span style="padding:2px 8px;border-radius:99px;font-size:.68rem;font-weight:700;background:var(--color-primary-l);color:var(--color-primary)">HOY</span>` : ''}
-            </div>
-            <div style="font-size:.78rem;color:var(--color-text-2)">
-              📅 ${formatDate(b.check_in)} → ${formatDate(b.check_out)} · 🌙 ${b.nights ?? '?'} noches
-            </div>
-            <div style="margin-top:5px;font-size:.75rem;color:var(--color-text-3)">${units}</div>
-          </div>
-          <div style="padding:12px 14px;text-align:right;flex-shrink:0;display:flex;flex-direction:column;justify-content:center">
-            <div style="font-weight:700;font-size:.9rem">${formatARS(b.total_amount)}</div>
-            <div style="font-size:.72rem;margin-top:3px;color:${balance > 0 ? 'var(--color-warning)' : 'var(--color-success)'};font-weight:600">
-              ${balance > 0 ? `Saldo: ${formatARS(balance)}` : '✓ Saldado'}
-            </div>
-          </div>
-        </div>`;
-    }).join('');
-
-    grid.querySelectorAll('.list-booking-row[data-id]').forEach(row => {
-      row.addEventListener('click', () => this._openDetailById(row.dataset.id));
-    });
-  }
-
-  // ── Notas de unidad ───────────────────────────────
+  // ══════════════════════════════════════════════════
+  // NOTAS DE UNIDAD
+  // ══════════════════════════════════════════════════
   _showUnitNote(e, note) {
     e.stopPropagation();
     const tip = document.createElement('div');
@@ -1011,657 +1792,47 @@ export class Calendar {
       });
   }
 
-  // ── Setup toggle Disponibilidad ─────────────────
-  setupViewToggle() {
-    let _availMode = false;
-    const availBtn = document.getElementById('cal-avail-toggle');
-    if (!availBtn) return;
-
-    // ── Crear panel de filtro de disponibilidad ──
-    const filterPanel = document.createElement('div');
-    filterPanel.id = 'avail-filter-panel';
-    const todayStr = localToday();
-    const tomorrowStr = (() => { const d = new Date(); d.setDate(d.getDate()+1); return localDateISO(d); })();
-    filterPanel.style.cssText = `
-      display:none;flex-direction:column;
-      background:var(--color-surface-2,#f8f9fa);border:1px solid var(--color-border,#e5e7eb);
-      border-radius:10px;overflow:hidden;margin-top:8px;
-      font-size:.78rem;color:var(--color-text);
-    `;
-    filterPanel.innerHTML = `
-      <div style="display:flex;align-items:center;gap:8px;flex-wrap:nowrap;overflow-x:auto;padding:8px 14px">
-        <span style="font-weight:600;font-size:.72rem;color:var(--color-text-3);text-transform:uppercase;letter-spacing:.05em;white-space:nowrap">🔍 Disponibilidad</span>
-        <span style="font-size:.72rem;color:var(--color-text-3);white-space:nowrap">Check-in</span>
-        <input type="date" id="avail-checkin" value="${todayStr}"
-          style="border:1px solid var(--color-border,#e5e7eb);border-radius:6px;padding:3px 6px;font-size:.75rem;background:var(--color-surface);color:var(--color-text);min-width:0">
-        <span style="font-size:.72rem;color:var(--color-text-3);white-space:nowrap">Check-out</span>
-        <input type="date" id="avail-checkout" value="${tomorrowStr}"
-          style="border:1px solid var(--color-border,#e5e7eb);border-radius:6px;padding:3px 6px;font-size:.75rem;background:var(--color-surface);color:var(--color-text);min-width:0">
-        <span style="font-size:.72rem;color:var(--color-text-3);white-space:nowrap">Pers.</span>
-        <input type="number" id="avail-guests" min="1" max="20" value="2"
-          style="width:48px;border:1px solid var(--color-border,#e5e7eb);border-radius:6px;padding:3px 6px;font-size:.75rem;background:var(--color-surface);color:var(--color-text)">
-        <button id="avail-search-btn"
-          style="padding:4px 11px;border-radius:6px;border:none;background:var(--color-primary,#6366f1);color:#fff;font-size:.75rem;font-weight:600;cursor:pointer;white-space:nowrap;flex-shrink:0">
-          Ver disponibles
-        </button>
-      </div>
-      <div id="avail-results" style="display:none;width:100%;padding:6px 14px 8px;border-top:1px solid var(--color-border,#e5e7eb);margin-top:0"></div>
-    `;
-
-    // Insertar panel entre toolbar y cal-wrapper
-    const calWrapper = document.querySelector('.cal-wrapper') ?? availBtn.closest('.cal-toolbar')?.nextElementSibling;
-    if (calWrapper) calWrapper.insertAdjacentElement('beforebegin', filterPanel);
-    else availBtn.parentNode.appendChild(filterPanel);
-
-    // ── Aplicar marcas de % al calendario ──
-    const _applyPercentBadges = () => {
-      const grid = document.getElementById('calendar-grid');
-      if (!grid) return;
-
-      const totalUnits = this.ctx.units.length || 1;
-      const bookings   = this._lastRenderedBookings ?? [];
-
-      // ── 1. Pre-calcular ocupación por fecha (todo en JS, sin DOM) ──
-      const year  = this.year;
-      const month = this.month;
-      const daysInMonth = new Date(year, month + 1, 0).getDate();
-      const prefix = `${year}-${String(month + 1).padStart(2, '0')}-`;
-
-      // mapa dateStr → Set de unit_ids ocupados
-      const occupancyMap = new Map();
-      for (let d = 1; d <= daysInMonth; d++) {
-        occupancyMap.set(prefix + String(d).padStart(2, '0'), new Set());
-      }
-      bookings.forEach(b => {
-        if (b.status === 'cancelled') return;
-        const units = b.booking_units ?? [];
-        if (!units.length) return;
-        for (let d = 1; d <= daysInMonth; d++) {
-          const ds = prefix + String(d).padStart(2, '0');
-          if (b.check_in <= ds && b.check_out > ds) {
-            const set = occupancyMap.get(ds);
-            units.forEach(bu => set.add(bu.unit_id));
-          }
-        }
-      });
-
-      // ── 2. Un único querySelectorAll para celdas, agrupar por fecha en Map ──
-      const cellsByDate = new Map();
-      grid.querySelectorAll('.cal-cell[data-date]').forEach(c => {
-        const d = c.dataset.date;
-        if (!cellsByDate.has(d)) cellsByDate.set(d, []);
-        cellsByDate.get(d).push(c);
-      });
-
-      // ── 3. Headers: un único querySelectorAll ──
-      const hdrs = grid.querySelectorAll('.cal-day-header');
-
-      // ── 4. Aplicar clases y badges en un solo recorrido ──
-      // Usar un DocumentFragment para los badges no ayuda (van a nodos ya en DOM),
-      // pero agrupar classList evita reflows repetidos
-      const fragment = document.createDocumentFragment(); // dummy, no usado
-      for (let d = 1; d <= daysInMonth; d++) {
-        const ds          = prefix + String(d).padStart(2, '0');
-        const occupied    = occupancyMap.get(ds) ?? new Set();
-        const cells       = cellsByDate.get(ds) ?? [];
-
-        cells.forEach(c => {
-          if (occupied.has(c.dataset.unitId)) c.classList.add('avail-occupied');
-          else                                c.classList.add('avail-free');
-        });
-
-        const free = totalUnits - occupied.size;
-        const pct  = Math.round((free / totalUnits) * 100);
-        const hdr  = hdrs[d - 1];
-        if (hdr && !hdr.querySelector('.avail-pct')) {
-          const badge = document.createElement('div');
-          badge.className = 'avail-pct';
-          badge.textContent = `${pct}%`;
-          badge.style.cssText = `font-size:.55rem;font-weight:700;line-height:1;color:${pct > 60 ? '#16a34a' : pct > 30 ? '#f59e0b' : '#ef4444'}`;
-          hdr.appendChild(badge);
-        }
-      }
-    };
-
-    const _clearPercentBadges = () => {
-      const grid = document.getElementById('calendar-grid');
-      if (!grid) return;
-      // Un solo recorrido para limpiar clases de celdas
-      grid.querySelectorAll('.avail-free, .avail-occupied').forEach(c =>
-        c.classList.remove('avail-free', 'avail-occupied'));
-      grid.querySelectorAll('.avail-pct').forEach(el => el.remove());
-    };
-
-    // ── Buscar unidades disponibles para rango + personas ──
-    // ── Resaltar rango en el calendario ──
-    const _highlightRange = (ci, co) => {
-      const grid = document.getElementById('calendar-grid');
-      if (!grid) return;
-      grid.querySelectorAll('.cal-cell.avail-range').forEach(c => c.classList.remove('avail-range','avail-range-start','avail-range-end'));
-      if (!ci || !co) return;
-      grid.querySelectorAll('.cal-cell[data-date]').forEach(c => {
-        const d = c.dataset.date;
-        if (d >= ci && d < co) {
-          c.classList.add('avail-range');
-          if (d === ci)  c.classList.add('avail-range-start');
-          // last day before co — usar mediodía fijo para evitar corrimiento UTC/local
-          const next = new Date(d + 'T12:00:00'); next.setDate(next.getDate()+1);
-          const nextStr = toISODate(next);
-          if (nextStr === co) c.classList.add('avail-range-end');
-        }
-      });
-    };
-
-    const _clearRangeHighlight = () => {
-      const grid = document.getElementById('calendar-grid');
-      if (!grid) return;
-      grid.querySelectorAll('.cal-cell.avail-range').forEach(c => c.classList.remove('avail-range','avail-range-start','avail-range-end'));
-    };
-
-    const _searchAvailability = () => {
-      const ci      = document.getElementById('avail-checkin')?.value;
-      const co      = document.getElementById('avail-checkout')?.value;
-      const guests  = parseInt(document.getElementById('avail-guests')?.value ?? '2', 10);
-      const results = document.getElementById('avail-results');
-      if (!ci || !co || !results) return;
-      if (ci >= co) {
-        results.innerHTML = `<span style="color:#ef4444;font-size:.76rem">⚠️ El check-out debe ser posterior al check-in.</span>`;
-        _clearRangeHighlight();
-        return;
-      }
-      _highlightRange(ci, co);
-      const bookings = this._lastRenderedBookings ?? [];
-      // Unidades ocupadas en CUALQUIER día del rango ci..co (excluyendo co, ya que ese día es salida)
-      const occupiedIds = new Set();
-      bookings.forEach(b => {
-        if (b.status === 'cancelled') return;
-        // Solapa si check_in < co y check_out > ci
-        if (b.check_in < co && b.check_out > ci) {
-          (b.booking_units ?? []).forEach(bu => occupiedIds.add(bu.unit_id));
-        }
-      });
-      const available = this.ctx.units.filter(u => !occupiedIds.has(u.id) && (u.max_guests ?? 0) >= guests);
-      const occupied  = this.ctx.units.filter(u => occupiedIds.has(u.id));
-      const tooSmall  = this.ctx.units.filter(u => !occupiedIds.has(u.id) && (u.max_guests ?? 0) < guests);
-
-      if (!available.length) {
-        results.style.display = 'block';
-        results.innerHTML = `<span style="color:#ef4444;font-size:.76rem">😔 Sin unidades disponibles para ${guests} personas en esas fechas.</span>`;
-        return;
-      }
-      const chip = u => {
-        const color = u.color ?? 'var(--color-primary)';
-        return `<span title="#${u.sort_order} · ${u.name} (hasta ${u.max_guests} pers.)"
-          style="display:inline-flex;align-items:center;gap:4px;padding:2px 7px;border-radius:4px;
-          background:${color}20;border:1px solid ${color}55;font-size:.74rem;font-weight:700;color:var(--color-text);cursor:default">
-          <span style="width:7px;height:7px;border-radius:50%;background:${color};flex-shrink:0"></span>#${u.sort_order}
-        </span>`;
-      };
-      const fmt = s => s.split('-').reverse().join('/');
-      results.style.display = 'block';
-      results.innerHTML = `
-        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-          <span style="font-size:.72rem;font-weight:600;color:#16a34a;white-space:nowrap">
-            ✅ ${available.length} disponible${available.length > 1 ? 's' : ''} · ${fmt(ci)} → ${fmt(co)} · ${guests} pers.
-          </span>
-          ${available.map(chip).join('')}
-          ${tooSmall.length ? tooSmall.map(u => `<span title="#${u.sort_order} · ${u.name} — capacidad insuficiente (max. ${u.max_guests})"
-            style="display:inline-flex;align-items:center;gap:4px;padding:2px 7px;border-radius:4px;
-            background:#f3f4f6;border:1px solid #d1d5db;font-size:.74rem;font-weight:700;color:#9ca3af;cursor:default;text-decoration:line-through">
-            <span style="width:7px;height:7px;border-radius:50%;background:#d1d5db;flex-shrink:0"></span>#${u.sort_order}
-          </span>`).join('') : ''}
-          ${occupied.length ? occupied.map(u => `<span title="#${u.sort_order} · ${u.name} — ocupada"
-            style="display:inline-flex;align-items:center;gap:4px;padding:2px 7px;border-radius:4px;
-            background:#fee2e255;border:1px solid #fca5a5;font-size:.74rem;font-weight:700;color:#ef4444;cursor:default">
-            <span style="width:7px;height:7px;border-radius:50%;background:#ef4444;flex-shrink:0"></span>#${u.sort_order}
-          </span>`).join('') : ''}
-        </div>`;
-    };
-
-    // ── Toggle principal ──
-    availBtn.addEventListener('click', () => {
-      _availMode = !_availMode;
-      availBtn.textContent = _availMode ? '✕ Ocultar disponibilidad' : '👁 Disponibilidad';
-      availBtn.classList.toggle('active', _availMode);
-      filterPanel.style.display = _availMode ? 'flex' : 'none';
-      if (_availMode) {
-        _applyPercentBadges();
-      } else {
-        _clearPercentBadges();
-        _clearRangeHighlight();
-        const results = document.getElementById('avail-results');
-        if (results) { results.innerHTML = ''; results.style.display = 'none'; }
-      }
-    });
-
-    // ── Botón buscar ──
-    filterPanel.querySelector('#avail-search-btn')?.addEventListener('click', _searchAvailability);
-
-    // Buscar también al pulsar Enter en los inputs de fecha/personas
-    filterPanel.querySelectorAll('input').forEach(inp =>
-      inp.addEventListener('keydown', e => { if (e.key === 'Enter') _searchAvailability(); })
-    );
+  // ══════════════════════════════════════════════════
+  // ELEMENTOS DE UI PERSISTENTES
+  // ══════════════════════════════════════════════════
+  _createTextGhost() {
+    let g = document.getElementById('cal-drag-ghost');
+    if (!g) {
+      g = document.createElement('div');
+      g.className = 'drag-ghost hidden';
+      g.id = 'cal-drag-ghost';
+      document.body.appendChild(g);
+    }
+    return g;
   }
 
-  // ── Vista Semanal ─────────────────────────────────
-  _getWeekStart(date) {
-    const d = new Date(date);
-    const day = d.getDay();
-    const diff = (day === 0) ? -6 : 1 - day;
-    d.setDate(d.getDate() + diff);
-    d.setHours(0,0,0,0);
-    return d;
-  }
-
-  _renderWeekView(bookings) {
-    const grid = document.getElementById('calendar-grid');
-    if (!this._weekStart) this._weekStart = this._getWeekStart(new Date());
-
-    const days = Array.from({ length: 7 }, (_, i) => {
-      const d = new Date(this._weekStart);
-      d.setDate(d.getDate() + i);
-      return d;
-    });
-
-    const today = localToday();
-    grid.style.gridTemplateColumns = `160px repeat(7, 1fr)`;
-    grid.style.minWidth = '600px';
-    grid.style.width    = 'max-content';
-    grid.classList.add('week-grid');
-    grid.classList.remove('month-grid');
-    grid.innerHTML = '';
-
-    const corner = document.createElement('div');
-    corner.className = 'cal-unit-label-header';
-    const weekStr = `${days[0].toLocaleDateString('es-AR',{day:'2-digit',month:'short'})} — ${days[6].toLocaleDateString('es-AR',{day:'2-digit',month:'short',year:'numeric'})}`;
-    corner.innerHTML = `<span style="font-size:.72rem;color:var(--color-text-3)">${weekStr}</span>`;
-    grid.appendChild(corner);
-
-    const weekHolidays = getHolidaysForYear(days[0].getFullYear());
-
-    days.forEach(d => {
-      const iso      = localDateISO(d);
-      const isToday  = iso === today;
-      const dow      = d.getDay();
-      const isWknd   = dow === 0 || dow === 6;
-      const isPast   = iso < today && !isToday;
-      const holiday  = weekHolidays.get(iso);
-      const isHoliday = !!holiday && holiday.type !== 'vacation';
-
-      const dh = document.createElement('div');
-      let dhCls = 'cal-day-header';
-      if (isToday)   dhCls += ' today';
-      if (isWknd)    dhCls += ' weekend';
-      if (isPast)    dhCls += ' past-header';
-      if (isHoliday) dhCls += ` holiday holiday-${holiday.type}`;
-      dh.className = dhCls;
-      dh.title = holiday?.label ?? '';
-      dh.innerHTML = `
-        <span class="dh-num ${isToday ? 'today-num' : ''}">${d.getDate()}</span>
-        <span class="day-name">${['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'][d.getDay()]}</span>
-        ${holiday ? '<span class="dh-dot"></span>' : ''}`;
-      grid.appendChild(dh);
-    });
-
-    this.ctx.units.forEach((unit, rowIdx) => {
-      const unitColor = getUnitColor(unit);
-      const unitLabel = getUnitLabel(unit);
-      const rowParity = rowIdx % 2 === 0 ? 'even' : 'odd';
-      const label = document.createElement('div');
-      label.className = 'cal-unit-label';
-      label.dataset.rowParity = rowParity;
-      label.style.setProperty('--unit-color', unitColor);
-      label.style.borderLeftColor = unitColor;
-      label.innerHTML = `
-        <div style="display:flex;align-items:center;gap:6px">
-          <span class="cal-unit-dot" style="background-color:${unitColor}"></span>
-          <span style="font-size:.82rem;font-weight:700">${unitLabel}</span>
-        </div>`;
-      grid.appendChild(label);
-
-      days.forEach(d => {
-        const iso = localDateISO(d);
-        const isToday = iso === today;
-        const dayBookings = bookings.filter(b =>
-          b.check_in <= iso && b.check_out > iso &&
-          (b.booking_units ?? []).some(bu => bu.unit_id === unit.id)
-        );
-        const cell = document.createElement('div');
-        const wcDow    = d.getDay();
-        const wcIsWknd = wcDow === 0 || wcDow === 6;
-        const wcIsPast = iso < today && !isToday;
-        let wcCls = 'cal-cell week-cell';
-        if (isToday)   wcCls += ' today-col week-today';
-        if (wcIsWknd)  wcCls += ' weekend-col';
-        if (wcIsPast)  wcCls += ' past-col';
-        cell.className = wcCls;
-        cell.dataset.date      = iso;
-        cell.dataset.unitId    = unit.id;
-        cell.dataset.rowParity = rowParity;
-
-        if (dayBookings.length === 0) {
-          this._bindEmptyCell(cell, unit.id, d.getDate(), iso);
-        } else {
-          const b = dayBookings[0];
-          const { color, textColor } = getBookingBarColor(b);
-          const guest   = b.guests ? `${b.guests.first_name} ${b.guests.last_name}` : (b.block_reason ?? 'Bloqueo');
-          const isStart = b.check_in === iso;
-          const barStyle = wcIsPast
-            ? `background:${color};filter:grayscale(52%) opacity(.62);`
-            : `background:${color};`;
-          cell.innerHTML = `
-            <div class="week-bar" style="${barStyle}border-radius:${isStart?'6px 0 0 6px':'0'}" data-id="${b.id}">
-              ${isStart ? `<span style="color:${textColor};font-size:.68rem;font-weight:700;
-                overflow:hidden;text-overflow:ellipsis;white-space:nowrap;opacity:${wcIsPast?'.75':'1'}">${guest}</span>` : ''}
-            </div>`;
-          cell.addEventListener('mouseenter', (e) => this._showTooltip(b, e));
-          cell.addEventListener('mousemove',  (e) => this._moveTooltip(e));
-          cell.addEventListener('mouseleave', ()  => this._hideTooltip());
-          cell.addEventListener('click', (e) => {
-            e.stopPropagation();
-            this._openDetailById(b.id);
-          });
-        }
-        grid.appendChild(cell);
-      });
-    });
-
-    document.getElementById('cal-month-title').textContent = weekStr;
+  _createFloatInfo() {
+    let el = document.getElementById('cal-drag-float-info');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'cal-drag-float-info';
+      el.className = 'cal-drag-float-info hidden';
+      document.body.appendChild(el);
+    }
+    return el;
   }
 
   // ══════════════════════════════════════════════════
-  // DRAG & DROP DE RESERVAS
+  // UTILIDADES DE FECHA
   // ══════════════════════════════════════════════════
-  _setupBarDrag(grid) {
-    if (this._barDragAbort) this._barDragAbort.abort();
-    this._barDragAbort = new AbortController();
-    const sig = this._barDragAbort.signal;
-
-    let _ghost     = this._ghost;
-    let _dragState = null;
-
-    const resetDrag = () => {
-      _ghost.classList.add('hidden');
-      _dragState = null;
-      document.querySelectorAll('.cal-cell.drop-target, .cal-cell.drop-conflict').forEach(c => {
-        c.classList.remove('drop-target', 'drop-conflict');
-      });
-      this._barDrag = { active: false, booking: null, unitId: null, startX: 0, moved: false };
-    };
-
-    const onMouseMove = (e) => {
-      if (!_dragState || !this._barDrag.active) return;
-      const dx = Math.abs(e.clientX - _dragState.startX);
-      const dy = Math.abs(e.clientY - _dragState.startY);
-      if (dx > 8 || dy > 8) _dragState.moved = true;
-      if (!_dragState.moved) return;
-
-      const daysInMonth  = new Date(this.year, this.month+1, 0).getDate();
-      const gridContent  = grid.getBoundingClientRect();
-      const labelWidth   = 160;
-      const cellWidth    = (gridContent.width - labelWidth) / daysInMonth;
-      const daysDiff     = Math.round((e.clientX - _dragState.startX) / cellWidth);
-
-      const b     = _dragState.booking;
-      const newCI = this._addDays(b.check_in,  daysDiff);
-      const newCO = this._addDays(b.check_out, daysDiff);
-
-      const underCell    = document.elementFromPoint(e.clientX, e.clientY)?.closest?.('.cal-cell');
-      const targetUnitId = underCell?.dataset.unitId ?? _dragState.sourceUnitId;
-      _dragState.targetUnitId = targetUnitId;
-      _dragState.daysDiff     = daysDiff;
-
-      _ghost.textContent = `${newCI} → ${newCO}${targetUnitId !== _dragState.sourceUnitId ? ' · cambio de depto.' : ''}`;
-      _ghost.style.left  = `${e.clientX + 16}px`;
-      _ghost.style.top   = `${e.clientY - 24}px`;
-      _ghost.classList.remove('hidden');
-
-      document.querySelectorAll('.cal-cell.drop-target,.cal-cell.drop-conflict').forEach(c => {
-        c.classList.remove('drop-target','drop-conflict');
-      });
-      if (underCell && daysDiff !== 0) underCell.classList.add('drop-target');
-    };
-
-    const onMouseUp = async (e) => {
-      if (!this._barDrag.active) return;
-      const state = { ..._dragState };
-      resetDrag();
-      this._barDrag.active = false;
-
-      if (!state) return;
-
-      if (!state.moved) {
-        if (state.booking) await this._openDetailById(state.booking.id);
-        return;
-      }
-
-      const { booking, sourceUnitId, daysDiff } = state;
-      if (!booking || daysDiff === 0) return;
-
-      const newCI        = this._addDays(booking.check_in,  daysDiff);
-      const newCO        = this._addDays(booking.check_out, daysDiff);
-      const targetUnitId = state.targetUnitId ?? sourceUnitId;
-      const today        = localToday();
-      const unitChanged  = targetUnitId !== sourceUnitId;
-
-      // Modal de confirmación personalizado (evita cambios accidentales por drag)
-      const confirmed = await this._confirmDragChange({
-        guestName:  booking.guest_name ?? (booking.guests ? `${booking.guests.first_name ?? ''} ${booking.guests.last_name ?? ''}`.trim() : 'Reserva'),
-        oldCI:      booking.check_in,
-        oldCO:      booking.check_out,
-        newCI,
-        newCO,
-        unitChanged,
-        isPast:     newCI < today,
-      });
-      if (!confirmed) { this.load(); return; }
-
-      const { data: conflicts } = await this.db
-        .from('booking_units')
-        .select('unit_id, bookings!inner(id, check_in, check_out, status)')
-        .eq('unit_id', targetUnitId)
-        .neq('bookings.status', 'cancelled')
-        .neq('bookings.id', booking.id)
-        .lt('bookings.check_in', newCO)
-        .gt('bookings.check_out', newCI);
-
-      if (conflicts?.length) {
-        showToast('⚠️ Conflicto: hay otra reserva en esas fechas', 'error');
-        this.load();
-        return;
-      }
-
-      const { error } = await this.db.from('bookings')
-        .update({ check_in: newCI, check_out: newCO }).eq('id', booking.id);
-      if (error) { showToast('Error al mover la reserva', 'error'); return; }
-
-      if (targetUnitId !== sourceUnitId) {
-        await this.db.from('booking_units')
-          .update({ unit_id: targetUnitId })
-          .eq('booking_id', booking.id)
-          .eq('unit_id', sourceUnitId);
-      }
-
-      await logAction('UPDATE', 'booking', booking.id,
-        `Drag: ${booking.check_in}→${newCI}, unidad: ${sourceUnitId}→${targetUnitId}`);
-
-      this._animateDragBar(booking.id, newCI);
-      cache.invalidate('bookings');
-      Bus.emit(EVENTS.BOOKING_DRAG_DONE, { bookingId: booking.id, oldCI: booking.check_in, newCI });
-      showToast(`✓ Reserva movida a ${newCI} → ${newCO}`, 'success');
-      // NO dispatch booking:changed aquí — evita el loop Bus↔DOM del bridge bidireccional.
-      // this.load() recarga el calendario directamente.
-      this.load();
-    };
-
-    grid.addEventListener('mousedown', (e) => {
-      const bar = e.target.closest('.bar[data-booking-id]');
-      if (!bar) return;
-      e.preventDefault();
-      e.stopPropagation();
-
-      const bookingId = bar.dataset.bookingId;
-      const cell      = bar.closest('.cal-cell');
-      const unitId    = cell?.dataset.unitId ?? null;
-
-      _dragState = {
-        booking:      null,
-        sourceUnitId: unitId,
-        targetUnitId: unitId,
-        startX:       e.clientX,
-        startY:       e.clientY,
-        daysDiff:     0,
-        moved:        false,
-      };
-      this._barDrag = { active: true, booking: null, unitId, startX: e.clientX, moved: false };
-
-      const found = (this._lastRenderedBookings ?? []).find(b => b.id === bookingId);
-      if (found) {
-        _dragState.booking    = found;
-        this._barDrag.booking = found;
-      } else {
-        this.db.from('bookings')
-          .select('id,check_in,check_out,nights,guests(first_name,last_name),booking_units(unit_id)')
-          .eq('id', bookingId).single()
-          .then(({ data }) => {
-            if (data && _dragState) {
-              _dragState.booking    = data;
-              this._barDrag.booking = data;
-            }
-          });
-      }
-
-      document.addEventListener('mousemove', onMouseMove, { signal: sig });
-      document.addEventListener('mouseup', onMouseUp, { once: true });
-    }, { signal: sig });
-
-    // Touch support
-    grid.addEventListener('touchstart', (e) => {
-      const bar = e.target.closest('.bar[data-booking-id]');
-      if (!bar) return;
-      const t         = e.touches[0];
-      const bookingId = bar.dataset.bookingId;
-      const cell      = bar.closest('.cal-cell');
-
-      _dragState = {
-        booking: (this._lastRenderedBookings ?? []).find(b => b.id === bookingId) ?? null,
-        sourceUnitId: cell?.dataset.unitId ?? null,
-        startX: t.clientX, startY: t.clientY, daysDiff: 0, moved: false,
-      };
-      this._barDrag = { active: true, booking: _dragState.booking, unitId: cell?.dataset.unitId, startX: t.clientX, moved: false };
-
-      const onTouchMove = (te) => {
-        const touch = te.touches[0];
-        onMouseMove({ clientX: touch.clientX, clientY: touch.clientY });
-      };
-      const onTouchEnd = (te) => {
-        document.removeEventListener('touchmove', onTouchMove);
-        document.removeEventListener('touchend', onTouchEnd);
-        onMouseUp({ clientX: te.changedTouches[0].clientX });
-      };
-      document.addEventListener('touchmove', onTouchMove, { passive: false, signal: sig });
-      document.addEventListener('touchend', onTouchEnd, { signal: sig });
-    }, { passive: false, signal: sig });
-  }
-
-  _animateDragBar(bookingId, newCI) {
-    const bar = document.querySelector(`.bar[data-booking-id="${bookingId}"]`);
-    if (!bar) return;
-    bar.style.transition = 'opacity .25s, transform .25s';
-    bar.style.opacity    = '0';
-    bar.style.transform  = 'scaleX(0.8)';
-    this._pendingPulse.add(bookingId);
-  }
-
-  // ── Modal de confirmación para drag ─────────────────────────────
-  _confirmDragChange({ guestName, oldCI, oldCO, newCI, newCO, unitChanged, isPast }) {
-    return new Promise(resolve => {
-      // Eliminar cualquier modal previo
-      document.getElementById('drag-confirm-overlay')?.remove();
-
-      const fmt = iso => {
-        const [y,m,d] = iso.split('-');
-        return `${d}/${m}/${y}`;
-      };
-
-      const overlay = document.createElement('div');
-      overlay.id = 'drag-confirm-overlay';
-      overlay.style.cssText = `
-        position:fixed;inset:0;z-index:9999;
-        background:rgba(0,0,0,.45);
-        display:flex;align-items:center;justify-content:center;
-        padding:16px;
-      `;
-
-      const pastHtml = isPast
-        ? `<div style="background:#fef3c7;border:1px solid #f59e0b;border-radius:8px;padding:8px 12px;font-size:.8rem;color:#92400e;margin-bottom:12px;">
-             ⚠️ La nueva fecha de ingreso es en el pasado.
-           </div>`
-        : '';
-
-      const unitHtml = unitChanged
-        ? `<div style="font-size:.8rem;color:#6366f1;margin-top:6px;font-weight:600;">📦 Cambia de departamento</div>`
-        : '';
-
-      overlay.innerHTML = `
-        <div style="
-          background:var(--color-background-primary,#fff);
-          border-radius:16px;
-          box-shadow:0 20px 60px rgba(0,0,0,.25);
-          padding:24px;
-          max-width:380px;
-          width:100%;
-        ">
-          <div style="font-size:1rem;font-weight:700;color:var(--color-text,#111);margin-bottom:4px;">
-            ✏️ Confirmar cambio de fechas
-          </div>
-          <div style="font-size:.8rem;color:var(--color-text-secondary,#666);margin-bottom:16px;">
-            ${guestName}
-          </div>
-          ${pastHtml}
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
-            <div style="background:var(--color-background-secondary,#f8f9fa);border-radius:10px;padding:10px 12px;">
-              <div style="font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--color-text-tertiary,#999);margin-bottom:4px;">Antes</div>
-              <div style="font-size:.82rem;font-weight:600;color:var(--color-text,#111);">📅 ${fmt(oldCI)} → ${fmt(oldCO)}</div>
-            </div>
-            <div style="background:#ede9fe;border-radius:10px;padding:10px 12px;">
-              <div style="font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#7c3aed;margin-bottom:4px;">Nuevo</div>
-              <div style="font-size:.82rem;font-weight:600;color:#5b21b6;">📅 ${fmt(newCI)} → ${fmt(newCO)}</div>
-            </div>
-          </div>
-          ${unitHtml}
-          <div style="display:flex;gap:10px;margin-top:18px;">
-            <button id="drag-cancel-btn" style="
-              flex:1;padding:10px;border-radius:10px;
-              border:1.5px solid var(--color-border-secondary,#e2e8f0);
-              background:transparent;cursor:pointer;
-              font-size:.85rem;font-weight:600;color:var(--color-text,#111);
-            ">Cancelar</button>
-            <button id="drag-confirm-btn" style="
-              flex:1;padding:10px;border-radius:10px;
-              border:none;background:#6366f1;color:#fff;cursor:pointer;
-              font-size:.85rem;font-weight:700;
-            ">Confirmar cambio</button>
-          </div>
-        </div>
-      `;
-
-      document.body.appendChild(overlay);
-
-      const cleanup = (result) => {
-        overlay.remove();
-        resolve(result);
-      };
-
-      document.getElementById('drag-confirm-btn').addEventListener('click', () => cleanup(true));
-      document.getElementById('drag-cancel-btn').addEventListener('click', () => cleanup(false));
-      overlay.addEventListener('click', e => { if (e.target === overlay) cleanup(false); });
-    });
-  }
-
-    _addDays(isoDate, n) {
+  _addDays(isoDate, n) {
     const d = new Date(isoDate + 'T12:00:00');
     d.setDate(d.getDate() + n);
     return localDateISO(d);
+  }
+
+  _dayDiff(isoA, isoB) {
+    return Math.round((+new Date(isoB + 'T12:00:00') - +new Date(isoA + 'T12:00:00')) / 86400000);
+  }
+
+  _fmtShort(iso) {
+    if (!iso) return '';
+    const [,m,d] = iso.split('-');
+    return `${parseInt(d)} ${MONTH_SHORT[parseInt(m)-1]}`;
   }
 }

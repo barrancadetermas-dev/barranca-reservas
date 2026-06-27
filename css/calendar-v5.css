@@ -1,0 +1,328 @@
+/* ══════════════════════════════════════════════════
+   calendar-v5.css — MILA Sistema Inteligente
+   Vista continua · Ghost drag · Resize · Animaciones
+   ══════════════════════════════════════════════════ */
+
+/* ── Modal animations ─────────────────────────────── */
+@keyframes overlayIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes modalIn {
+  from { opacity: 0; transform: scale(.94) translateY(12px); }
+  to   { opacity: 1; transform: scale(1)   translateY(0); }
+}
+@keyframes barBounceIn {
+  0%   { opacity: 0; transform: scaleX(0.7) scaleY(0.8); }
+  60%  { transform: scaleX(1.04) scaleY(1.06); }
+  100% { opacity: 1; transform: scaleX(1) scaleY(1); }
+}
+@keyframes shakeX {
+  0%,100% { transform: translateX(0); }
+  20%     { transform: translateX(-6px); }
+  40%     { transform: translateX(6px); }
+  60%     { transform: translateX(-4px); }
+  80%     { transform: translateX(4px); }
+}
+
+/* ── Bounce animation for newly placed bars ───────── */
+.bar-new-bounce {
+  animation: barBounceIn .5s cubic-bezier(.34,1.56,.64,1) both;
+}
+
+/* ── Bar pulse on realtime update ─────────────────── */
+@keyframes barPulse {
+  0%,100% { filter: brightness(1); }
+  40%     { filter: brightness(1.45); }
+}
+.bar-realtime-pulse { animation: barPulse .5s ease 3; }
+
+/* ── Shake animation for conflict ─────────────────── */
+.bar-shake { animation: shakeX .35s ease both; }
+
+/* ══════════════════════════════════════════════════
+   ENCABEZADO DE DÍA — MES + NÚMERO + NOMBRE
+   ══════════════════════════════════════════════════ */
+.cal-day-header .dh-month {
+  display: block;
+  font-size: 0.52rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--color-text-3, #9ca3af);
+  line-height: 1;
+  margin-bottom: 1px;
+}
+.cal-day-header .dh-month.dh-month-new {
+  color: var(--color-primary, #6366f1);
+}
+.cal-day-header .dh-num {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 700;
+  line-height: 1.1;
+}
+.cal-day-header .dh-rem-dot {
+  width: 4px; height: 4px;
+  border-radius: 50%;
+  background: var(--color-warning, #f59e0b);
+  margin: 2px auto 0;
+}
+.cal-day-header .dh-today-dot {
+  width: 4px; height: 4px;
+  border-radius: 50%;
+  background: var(--color-primary, #6366f1);
+  margin: 1px auto 0;
+}
+
+/* ── HOY: línea vertical izquierda prominente ──────── */
+.cal-day-header.today {
+  position: relative;
+  color: var(--color-primary, #6366f1) !important;
+  background: rgba(99,102,241,.07) !important;
+  font-weight: 700 !important;
+}
+.cal-day-header.today::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 2px;
+  background: var(--color-primary, #6366f1);
+  border-radius: 0 1px 1px 0;
+}
+.cal-cell.today-col {
+  position: relative;
+  background: rgba(99,102,241,.045) !important;
+}
+.cal-cell.today-col::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 2px;
+  background: var(--color-primary, #6366f1);
+  opacity: .55;
+  z-index: 2;
+  pointer-events: none;
+}
+[data-theme="dark"] .cal-day-header.today {
+  background: rgba(99,102,241,.18) !important;
+}
+[data-theme="dark"] .cal-cell.today-col {
+  background: rgba(99,102,241,.10) !important;
+}
+
+/* ══════════════════════════════════════════════════
+   BARRA DE RESERVA
+   ══════════════════════════════════════════════════ */
+.bar-span {
+  border-radius: 5px !important;
+}
+.bar {
+  cursor: grab !important;
+  transition: filter .14s, transform .14s, box-shadow .14s, opacity .14s !important;
+}
+.bar:active { cursor: grabbing !important; }
+.bar.dragging { opacity: .35 !important; pointer-events: none; }
+
+/* ── Resize handle ──────────────────────────────── */
+.bar-resize-handle {
+  position: absolute;
+  right: 0; top: 0; bottom: 0;
+  width: 10px;
+  cursor: col-resize;
+  z-index: 5;
+  border-radius: 0 5px 5px 0;
+  opacity: 0;
+  transition: opacity .15s, background .15s;
+  background: rgba(255,255,255,.25);
+}
+.bar:hover .bar-resize-handle {
+  opacity: 1;
+}
+.bar-resize-handle::after {
+  content: '';
+  position: absolute;
+  right: 3px; top: 50%;
+  transform: translateY(-50%);
+  width: 2px; height: 12px;
+  border-radius: 1px;
+  background: rgba(255,255,255,.7);
+}
+
+/* ── Resize states ──────────────────────────────── */
+.bar.resize-conflict {
+  box-shadow: 0 0 0 2px #ef4444 !important;
+  filter: brightness(1.05) !important;
+}
+.bar.resize-valid {
+  box-shadow: 0 0 0 2px #22c55e !important;
+}
+
+/* ══════════════════════════════════════════════════
+   DRAG GHOST (texto — para selección de rango)
+   ══════════════════════════════════════════════════ */
+.drag-ghost {
+  position: fixed;
+  z-index: 9999;
+  pointer-events: none;
+  background: rgba(99,102,241,.92);
+  color: #fff;
+  font-size: .78rem;
+  font-weight: 700;
+  padding: 5px 13px;
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0,0,0,.25);
+  white-space: nowrap;
+  transform: translate(0, -130%);
+  animation: ghostIn .1s ease;
+}
+@keyframes ghostIn {
+  from { opacity:0; transform: translate(0,-120%) scale(.9); }
+  to   { opacity:1; transform: translate(0,-130%) scale(1); }
+}
+.drag-ghost.hidden { display: none; }
+
+/* ══════════════════════════════════════════════════
+   FLOAT INFO PANEL (durante drag & resize)
+   ══════════════════════════════════════════════════ */
+.cal-drag-float-info {
+  position: fixed;
+  z-index: 9999;
+  pointer-events: none;
+  background: #1e293b;
+  color: #f1f5f9;
+  border-radius: 10px;
+  padding: 8px 13px;
+  font-size: .75rem;
+  line-height: 1.55;
+  box-shadow: 0 8px 30px rgba(0,0,0,.35);
+  min-width: 160px;
+  max-width: 240px;
+  animation: ghostIn .1s ease;
+  border: 1px solid rgba(255,255,255,.08);
+}
+.cal-drag-float-info.hidden { display: none; }
+.cal-drag-float-info.conflict { border-color: rgba(239,68,68,.5); }
+.cal-drag-float-info .fi-guest  { font-weight: 700; font-size: .8rem; margin-bottom: 3px; }
+.cal-drag-float-info .fi-unit   { color: #94a3b8; font-size: .72rem; }
+.cal-drag-float-info .fi-dates  { color: #e2e8f0; margin-top: 4px; }
+.cal-drag-float-info .fi-nights { color: #94a3b8; font-size: .72rem; }
+.cal-drag-float-info .fi-conflict {
+  margin-top: 5px;
+  color: #f87171;
+  font-weight: 600;
+  font-size: .72rem;
+}
+
+/* ══════════════════════════════════════════════════
+   DROP TARGET HIGHLIGHTS
+   ══════════════════════════════════════════════════ */
+.cal-cell.drop-target {
+  background: rgba(34,197,94,.14) !important;
+  outline: 1.5px solid rgba(34,197,94,.5);
+  outline-offset: -1px;
+}
+.cal-cell.drop-conflict {
+  background: rgba(239,68,68,.12) !important;
+  outline: 1.5px solid rgba(239,68,68,.5);
+  outline-offset: -1px;
+}
+
+/* ══════════════════════════════════════════════════
+   SELECCIÓN / BLOQUEO DE CELDAS
+   ══════════════════════════════════════════════════ */
+.cal-cell.selecting {
+  background: rgba(99,102,241,.15) !important;
+  outline: 1.5px solid rgba(99,102,241,.45);
+  outline-offset: -1px;
+}
+.cal-cell.blocking {
+  background: rgba(239,68,68,.12) !important;
+  outline: 2px solid rgba(239,68,68,.5) !important;
+  outline-offset: -1px;
+}
+
+/* ══════════════════════════════════════════════════
+   DISPONIBILIDAD
+   ══════════════════════════════════════════════════ */
+.cal-cell.avail-free {
+  background: rgba(16,185,129,.08) !important;
+  border-top: 2px solid rgba(16,185,129,.3);
+}
+.cal-cell.avail-occupied {
+  background: rgba(239,68,68,.06) !important;
+}
+.cal-cell.avail-occupied::before {
+  content: '';
+  position: absolute; inset: 0;
+  background: repeating-linear-gradient(
+    -45deg,
+    transparent,
+    transparent 4px,
+    rgba(239,68,68,.07) 4px,
+    rgba(239,68,68,.07) 6px
+  );
+  pointer-events: none;
+}
+.cal-cell.avail-range {
+  background: rgba(99,102,241,.13) !important;
+  border-top: 2px solid rgba(99,102,241,.5) !important;
+}
+.cal-cell.avail-range-start {
+  border-left: 2px solid rgba(99,102,241,.7) !important;
+  border-radius: 4px 0 0 4px;
+}
+.cal-cell.avail-range-end {
+  border-right: 2px solid rgba(99,102,241,.7) !important;
+  border-radius: 0 4px 4px 0;
+}
+
+/* ══════════════════════════════════════════════════
+   DARK MODE ADDITIONS
+   ══════════════════════════════════════════════════ */
+[data-theme="dark"] .cal-drag-float-info {
+  background: #0f172a;
+  border-color: rgba(255,255,255,.1);
+}
+[data-theme="dark"] .cal-cell.drop-target   { background: rgba(34,197,94,.12) !important; }
+[data-theme="dark"] .cal-cell.drop-conflict { background: rgba(239,68,68,.10) !important; }
+[data-theme="dark"] .cal-cell.avail-free    { background: rgba(16,185,129,.07) !important; }
+
+/* ══════════════════════════════════════════════════
+   AVATAR EN BARRA
+   ══════════════════════════════════════════════════ */
+.bar-avatar {
+  flex-shrink: 0;
+  line-height: 1;
+  margin-right: 5px;
+}
+
+/* ══════════════════════════════════════════════════
+   CELDAS DE CALENDARIO — alturas y transiciones
+   ══════════════════════════════════════════════════ */
+.cal-cell {
+  height: 52px !important;
+  transition: background .12s, opacity .12s;
+}
+.bar {
+  top: 7px !important;
+  bottom: 7px !important;
+}
+
+/* ══════════════════════════════════════════════════
+   MOBILE
+   ══════════════════════════════════════════════════ */
+@media (max-width: 768px) {
+  .cal-cell  { height: 44px !important; }
+  .bar       { top: 5px !important; bottom: 5px !important; font-size: .62rem !important; }
+  .bar-resize-handle { width: 14px; } /* más fácil de tocar en mobile */
+  .cal-drag-float-info { font-size: .7rem; padding: 6px 10px; }
+}
+
+/* ══════════════════════════════════════════════════
+   PRINT
+   ══════════════════════════════════════════════════ */
+@media print {
+  .bar-resize-handle { display: none !important; }
+  .cal-drag-float-info, .drag-ghost { display: none !important; }
+}
