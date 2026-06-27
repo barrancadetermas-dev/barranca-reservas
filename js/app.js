@@ -102,6 +102,20 @@ function initDarkMode() {
   const saved = localStorage.getItem('pms-theme') ?? 'light';
   applyDarkMode(saved);
 }
+// ══════════════════════════════════════════════════
+// HELPER: Aplicar nombre y avatar de forma unificada
+// Llámalo cada vez que cambie el nombre del usuario
+// ══════════════════════════════════════════════════
+export function _applyUserDisplay({ nombre, email } = {}) {
+  const displayName = nombre?.trim() || email?.split('@')[0] || 'Admin';
+  const initial     = displayName[0].toUpperCase();
+  document.querySelectorAll('#user-avatar').forEach(el => { el.textContent = initial; });
+  document.querySelectorAll('#user-name').forEach(el => { el.textContent = displayName; });
+  window._currentUserDisplay = { displayName, initial, nombre: nombre ?? null, email: email ?? null };
+}
+// Exponer globalmente para config-panel y otros módulos
+if (typeof window !== 'undefined') window._applyUserDisplay = _applyUserDisplay;
+
 function applyDarkMode(theme) {
   document.documentElement.setAttribute('data-theme', theme);
   localStorage.setItem('pms-theme', theme);
@@ -215,19 +229,17 @@ async function initApp(user) {
     hideLogin();
     updateHeaderDate();
 
-    // ── UI usuario ──
-    const initials = (user.email ?? 'A')[0].toUpperCase();
-    document.getElementById('user-avatar').textContent  = initials;
-    document.getElementById('user-name').textContent    =
-      user.user_metadata?.name ?? user.email?.split('@')[0] ?? 'Admin';
+    // ── UI usuario — carga inicial con email, luego reemplaza con perfil ──
+    const emailFallback = user.email?.split('@')[0] ?? 'Admin';
+    const metaName      = user.user_metadata?.name ?? emailFallback;
+    _applyUserDisplay({ nombre: metaName, email: user.email });
+
     document.getElementById('user-role-badge').textContent = getRoleLabel(AppContext.role);
 
-    // Cargar nombre desde user_profiles si existe
+    // Cargar perfil desde user_profiles (nombre guardado tiene prioridad máxima)
     supabase.from('user_profiles').select('nombre').eq('id', user.id).single()
       .then(({ data }) => {
-        if (data?.nombre) {
-          document.getElementById('user-name').textContent = data.nombre;
-        }
+        _applyUserDisplay({ nombre: data?.nombre || metaName, email: user.email });
       }).catch(() => {});
 
     // ── Demo banner ──

@@ -184,132 +184,124 @@ export class ConfigPanel {
       <!-- Panel de Control tab -->
       <div id="cfg-pane-control" style="display:none">
 
-        <!-- User card -->
-        <div style="background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--r-xl);padding:20px 24px;margin-bottom:16px">
-          <div style="display:flex;align-items:center;gap:16px;margin-bottom:18px">
-            <div id="cfg-user-avatar"
-              style="width:52px;height:52px;border-radius:50%;
-                     background:var(--color-primary);
-                     color:white;display:flex;align-items:center;justify-content:center;
-                     font-size:20px;font-weight:700;flex-shrink:0;box-shadow:0 2px 8px rgba(0,0,0,.18)">?</div>
-            <div style="min-width:0;flex:1">
-              <div id="cfg-user-email"
-                style="font-weight:700;font-size:1rem;color:var(--color-text);
-                       white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Cargando...</div>
-              <div id="cfg-user-role"
-                style="font-size:.73rem;margin-top:4px;display:inline-flex;align-items:center;gap:4px;
-                       background:var(--color-primary-light);color:var(--color-primary);
-                       padding:2px 10px;border-radius:var(--r-full);font-weight:600">
-                👑 Administrador
+        <!-- ── Perfil del usuario ──────────────────────── -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+
+          <!-- Tarjeta de perfil -->
+          <div style="background:linear-gradient(135deg,var(--color-primary) 0%,var(--color-primary-h,#1d4ed8) 100%);
+                      border-radius:var(--r-xl);padding:24px;color:white;position:relative;overflow:hidden">
+            <div style="position:absolute;top:-20px;right:-20px;width:100px;height:100px;border-radius:50%;
+                         background:rgba(255,255,255,.08)"></div>
+            <div style="position:absolute;bottom:-30px;left:30px;width:70px;height:70px;border-radius:50%;
+                         background:rgba(255,255,255,.06)"></div>
+            <div style="display:flex;align-items:center;gap:14px;margin-bottom:16px;position:relative">
+              <div id="cfg-user-avatar" style="width:56px;height:56px;border-radius:50%;background:rgba(255,255,255,.25);
+                color:white;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:800;
+                flex-shrink:0;box-shadow:0 4px 12px rgba(0,0,0,.2);border:2px solid rgba(255,255,255,.4)">?</div>
+              <div>
+                <div id="cfg-user-email" style="font-weight:700;font-size:.95rem;opacity:.95">Cargando...</div>
+                <div id="cfg-user-role" style="font-size:.72rem;margin-top:4px;background:rgba(255,255,255,.2);
+                  padding:2px 10px;border-radius:var(--r-full);display:inline-block;opacity:.9">👑 Admin</div>
+              </div>
+            </div>
+            <div style="position:relative">
+              <label style="font-size:.68rem;text-transform:uppercase;letter-spacing:.06em;opacity:.8;display:block;margin-bottom:6px;font-weight:600">Nombre para mostrar</label>
+              <div style="display:flex;gap:6px">
+                <input type="text" id="cfg-user-nombre" placeholder="Tu nombre…"
+                  style="flex:1;border:1px solid rgba(255,255,255,.3);border-radius:var(--r-md);
+                         padding:6px 10px;font-size:.84rem;background:rgba(255,255,255,.15);
+                         color:white;outline:none"
+                  onkeydown="if(event.key===\'Enter\')this.nextElementSibling.click()">
+                <button id="cfg-nombre-save" class="btn btn-sm"
+                  style="background:white;color:var(--color-primary);font-weight:700;border:none;white-space:nowrap">
+                  Guardar
+                </button>
               </div>
             </div>
           </div>
-          <div style="margin-bottom:4px">
-            <label style="font-size:.72rem;font-weight:600;color:var(--color-text-3);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:5px">Nombre para mostrar</label>
-            <div style="display:flex;gap:8px;align-items:center">
-              <input type="text" id="cfg-user-nombre" placeholder="Tu nombre…"
-                style="flex:1;border:1px solid var(--color-border);border-radius:var(--r-md);
-                       padding:7px 10px;font-size:.85rem;background:var(--color-surface);
-                       color:var(--color-text);outline:none">
-              <button id="cfg-nombre-save" class="btn btn-primary btn-sm">Guardar</button>
+
+          <!-- Acciones rápidas -->
+          <div style="background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--r-xl);padding:20px">
+            <div style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;
+                        color:var(--color-text-3);margin-bottom:14px">Acciones de sesión</div>
+            <div style="display:flex;flex-direction:column;gap:8px">
+              <button class="btn btn-outline btn-sm" id="cfg-logout-btn"
+                style="justify-content:flex-start;gap:8px;color:var(--color-text-2)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15">
+                  <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/>
+                  <polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
+                </svg>
+                Cerrar sesión
+              </button>
+              <button class="btn btn-outline btn-sm" id="cfg-notify-schema"
+                style="justify-content:flex-start;gap:8px;color:var(--color-text-2)">
+                🔄 Refrescar schema Supabase
+              </button>
+            </div>
+
+            <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--color-border)">
+              <div style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;
+                          color:var(--color-text-3);margin-bottom:10px">Links externos</div>
+              <div style="display:flex;flex-direction:column;gap:6px">
+                <a href="https://supabase.com/dashboard/project/tuneeinpudlsezzmvaro/editor" target="_blank"
+                   style="font-size:.78rem;color:var(--color-primary);text-decoration:none;
+                          display:flex;align-items:center;gap:5px">
+                  🗄️ SQL Editor
+                </a>
+                <a href="https://vercel.com/dashboard" target="_blank"
+                   style="font-size:.78rem;color:var(--color-primary);text-decoration:none;
+                          display:flex;align-items:center;gap:5px">
+                  🚀 Vercel Dashboard
+                </a>
+              </div>
             </div>
           </div>
-          <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px">
-            <button class="btn btn-danger btn-sm" id="cfg-logout-btn" style="display:flex;align-items:center;gap:6px">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
-                <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/>
-                <polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
-              </svg>
-              Cerrar Sesión
-            </button>
-          </div>
         </div>
 
-        <!-- System stats -->
-        <div style="background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--r-xl);padding:16px 20px;margin-bottom:16px">
-          <div style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--color-text-3);margin-bottom:14px">📊 Estadísticas del Sistema</div>
-          <div id="cfg-sys-stats" style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">
-            <div class="cfg-stat-card"><div class="cfg-stat-val" id="sys-stat-bookings">—</div><div class="cfg-stat-lbl">Reservas totales</div></div>
+        <!-- ── KPIs del sistema ─────────────────────────── -->
+        <div style="background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--r-xl);padding:20px;margin-bottom:16px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+            <div style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--color-text-3)">📊 Sistema</div>
+            <button class="btn btn-ghost btn-sm" id="cfg-load-stats" style="font-size:.72rem">Cargar →</button>
+          </div>
+          <div id="cfg-sys-stats" style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">
+            <div class="cfg-stat-card"><div class="cfg-stat-val" id="sys-stat-bookings">—</div><div class="cfg-stat-lbl">Reservas</div></div>
             <div class="cfg-stat-card"><div class="cfg-stat-val" id="sys-stat-guests">—</div><div class="cfg-stat-lbl">Huéspedes</div></div>
             <div class="cfg-stat-card"><div class="cfg-stat-val" id="sys-stat-revenue">—</div><div class="cfg-stat-lbl">Ingresos totales</div></div>
-            <div class="cfg-stat-card"><div class="cfg-stat-val" id="sys-stat-cleaning">—</div><div class="cfg-stat-lbl">Tareas limpieza</div></div>
-            <div class="cfg-stat-card"><div class="cfg-stat-val" id="sys-stat-maint">—</div><div class="cfg-stat-lbl">Incidencias mant.</div></div>
+            <div class="cfg-stat-card"><div class="cfg-stat-val" id="sys-stat-cleaning">—</div><div class="cfg-stat-lbl">Limpiezas</div></div>
+            <div class="cfg-stat-card"><div class="cfg-stat-val" id="sys-stat-maint">—</div><div class="cfg-stat-lbl">Mantenimiento</div></div>
             <div class="cfg-stat-card"><div class="cfg-stat-val" id="sys-stat-reminders">—</div><div class="cfg-stat-lbl">Recordatorios</div></div>
           </div>
-          <button class="btn btn-outline btn-sm" id="cfg-load-stats" style="margin-top:12px;font-size:.78rem">
-            🔄 Cargar estadísticas
-          </button>
         </div>
 
-        <!-- Quick export -->
-        <div style="background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--r-xl);padding:16px 20px;margin-bottom:16px">
-          <div style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--color-text-3);margin-bottom:10px">📤 Exportar Datos</div>
-          <p style="font-size:.8rem;color:var(--color-text-2);margin-bottom:12px">Exportá reservas y huéspedes como CSV para backup o análisis externo.</p>
+        <!-- ── Exports ──────────────────────────────────── -->
+        <div style="background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--r-xl);padding:20px;margin-bottom:16px">
+          <div style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--color-text-3);margin-bottom:10px">📤 Exportar datos</div>
           <div style="display:flex;gap:8px;flex-wrap:wrap">
-            <button class="btn btn-outline btn-sm" id="cfg-export-bookings">📋 Exportar Reservas (CSV)</button>
-            <button class="btn btn-outline btn-sm" id="cfg-export-guests">👤 Exportar Huéspedes (CSV)</button>
+            <button class="btn btn-outline btn-sm" id="cfg-export-bookings">📋 Reservas CSV</button>
+            <button class="btn btn-outline btn-sm" id="cfg-export-guests">👤 Huéspedes CSV</button>
           </div>
         </div>
 
-        <!-- Quick links -->
-        <div style="background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--r-xl);padding:16px 20px;margin-bottom:16px">
-          <div style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--color-text-3);margin-bottom:10px">🔗 Accesos Rápidos</div>
-          <div style="display:flex;flex-direction:column;gap:8px">
-            <a href="https://supabase.com/dashboard/project/tuneeinpudlsezzmvaro/editor" target="_blank"
-               class="btn btn-outline btn-sm" style="justify-content:flex-start;gap:8px;text-decoration:none">
-              🗄️ SQL Editor — Supabase
-            </a>
-            <a href="https://supabase.com/dashboard/project/tuneeinpudlsezzmvaro/auth/users" target="_blank"
-               class="btn btn-outline btn-sm" style="justify-content:flex-start;gap:8px;text-decoration:none">
-              👥 Gestión de Usuarios — Supabase
-            </a>
-            <a href="https://vercel.com/dashboard" target="_blank"
-               class="btn btn-outline btn-sm" style="justify-content:flex-start;gap:8px;text-decoration:none">
-              🚀 Vercel Dashboard
-            </a>
-          </div>
-        </div>
-
-        <!-- Danger zone -->
-        <div style="background:var(--color-surface);border:1px solid #fde68a;border-radius:var(--r-xl);padding:16px 20px;margin-bottom:16px">
-          <div style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#b45309;margin-bottom:8px">⚠️ Zona de peligro</div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap">
-            <button class="btn btn-outline btn-sm" id="cfg-notify-schema"
-              style="color:#b45309;border-color:#fbbf24;font-size:.78rem">
-              🔄 Refrescar schema Supabase
-            </button>
-          </div>
-        </div>
-
-        <!-- Changelog -->
-        <div style="background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--r-xl);padding:16px 20px;margin-bottom:16px">
-          <div style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--color-text-3);margin-bottom:12px">📋 Changelog — MILA PMS v8</div>
+        <!-- ── Changelog ────────────────────────────────── -->
+        <div style="background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--r-xl);padding:20px">
+          <div style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--color-text-3);margin-bottom:12px">📋 Changelog MILA PMS</div>
           <div style="font-size:.78rem;color:var(--color-text-2);line-height:1.6">
             ${[
-              ['v8.4','Jun 2026','Panel de Control con stats + exports + links rápidos'],
-              ['v8.3','Jun 2026','Indicador cliente nuevo/frecuente · USD en pagos · Stats desde 2026'],
-              ['v8.2','Jun 2026','10 temas de color · Recordatorios CRUD · Auto-limpieza en checkout'],
-              ['v8.1','Jun 2026','Paso 5 Voucher · PDF profesional · WhatsApp encargada'],
-              ['v8.0','Jun 2026','Operaciones (Limpieza + Mantenimiento) · Event delegation · Flags mejorados'],
-              ['v7.x','May 2026','Calendario drag-drop · Bloqueos · Estadísticas SVG · Export Excel'],
-              ['v6.x','May 2026','Dashboard KPIs · Dólar widget · Notificaciones realtime · Auditoría'],
-            ].map(([v,d,txt]) => `
-              <div style="display:flex;gap:10px;padding:6px 0;border-bottom:1px solid var(--color-border)">
-                <span style="background:var(--color-primary-light);color:var(--color-primary);
-                             padding:1px 8px;border-radius:var(--r-full);font-size:.68rem;
-                             font-weight:700;flex-shrink:0;height:fit-content">${v}</span>
-                <div><span style="color:var(--color-text-3);font-size:.7rem">${d} ·</span> ${txt}</div>
-              </div>`).join('')}
-          </div>
-        </div>
-
-        <!-- System info -->
-        <div style="background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--r-xl);padding:16px 20px">
-          <div style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--color-text-3);margin-bottom:12px">ℹ️ Información del sistema</div>
-          <div style="font-size:.82rem;color:var(--color-text-2);line-height:1.9">
-            <div>📦 <span style="color:var(--color-text-3)">Versión:</span> <strong>MILA PMS v8.4</strong></div>
-            <div>🗄️ <span style="color:var(--color-text-3)">Supabase:</span> <code style="font-size:.72rem;background:var(--color-surface-2);padding:1px 6px;border-radius:4px">tuneeinpudlsezzmvaro</code></div>
-            <div>🌐 <span style="color:var(--color-text-3)">App:</span> <a href="https://barranca-reservas.vercel.app" target="_blank" style="color:var(--color-primary);text-decoration:none">barranca-reservas.vercel.app ↗</a></div>
+              ['v5.0','Jun 2026','Calendar v5: vista continua, ghost profesional, resize táctil'],
+              ['v4.8','Jun 2026','Dashboard rediseñado · Destacados · Sorting de huéspedes'],
+              ['v4.5','Jun 2026','Panel de Control profesional · Nombre unificado · Cards unificados'],
+              ['v4.0','Jun 2026','Etiquetas corregidas · P&L accesible · Mobile mejorado'],
+              ['v3.x','May 2026','Bloqueos · Estadísticas · USD widget · Auditoría'],
+              ['v2.x','May 2026','Drag-drop · Reservas · Huéspedes CRM'],
+            ].map(([v,d,txt]) =>
+              '<div style="display:flex;gap:10px;padding:6px 0;border-bottom:1px solid var(--color-border)">' +
+                '<span style="background:var(--color-primary-light);color:var(--color-primary);' +
+                             'padding:1px 8px;border-radius:var(--r-full);font-size:.68rem;' +
+                             'font-weight:700;flex-shrink:0;height:fit-content">' + v + '</span>' +
+                '<div><span style="color:var(--color-text-3);font-size:.7rem">' + d + ' ·</span> ' + txt + '</div>' +
+              '</div>'
+            ).join('')}
           </div>
         </div>
       </div>
@@ -378,13 +370,13 @@ export class ConfigPanel {
 
         const avatarEl = container.querySelector('#cfg-user-avatar');
         if (avatarEl) {
-          const initials = ((user.email ?? 'A')[0]).toUpperCase();
-          avatarEl.textContent = initials;
+          const displaySrc = profile?.nombre?.trim() || user.email || 'A';
+          avatarEl.textContent = displaySrc[0].toUpperCase();
         }
 
-        // Nombre para mostrar
+        // Pre-llenar nombre guardado
         const nombreInput = container.querySelector('#cfg-user-nombre');
-        if (nombreInput && profile?.nombre) nombreInput.value = profile.nombre;
+        if (nombreInput) nombreInput.value = profile?.nombre ?? '';
         container.querySelector('#cfg-nombre-save')?.addEventListener('click', async () => {
           const nuevoNombre = nombreInput?.value?.trim() ?? '';
           const saveBtn = container.querySelector('#cfg-nombre-save');
@@ -398,8 +390,13 @@ export class ConfigPanel {
                 .update({ nombre: nuevoNombre || null }).eq('id', user.id);
               if (updErr) throw updErr;
             }
-            const headerName = document.getElementById('user-name');
-            if (headerName) headerName.textContent = nuevoNombre || (user.email?.split('@')[0] ?? 'Admin');
+            // Actualizar TODA la app de forma unificada
+            if (window._applyUserDisplay) {
+              window._applyUserDisplay({ nombre: nuevoNombre || null, email: user.email });
+            } else {
+              const headerName = document.getElementById('user-name');
+              if (headerName) headerName.textContent = nuevoNombre || (user.email?.split('@')[0] ?? 'Admin');
+            }
             showToast('Nombre guardado ✓', 'success');
           } catch (err) {
             showToast('Error al guardar: ' + (err?.message ?? err), 'error');

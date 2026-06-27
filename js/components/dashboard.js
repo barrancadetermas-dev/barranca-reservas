@@ -624,61 +624,70 @@ export class Dashboard {
   }
 
   // ── Render Arrivals con acciones directas ─────────
+  // ══════════════════════════════════════════════════
+  // COMPONENTE UNIFICADO: tarjeta de reserva
+  // Usado en Llegadas, Salidas y Próximas
+  // ══════════════════════════════════════════════════
+  _bookingCard({ booking, mode }) {
+    // mode: 'arrival' | 'departure' | 'upcoming'
+    const b        = booking;
+    const guest    = b.guests ? (b.guests.first_name + ' ' + b.guests.last_name) : 'Sin nombre';
+    const unit     = b.booking_units?.[0]?.units;
+    const color    = unit?.color ?? 'var(--color-primary)';
+    const unitName = (b.booking_units ?? []).map(bu => bu.units?.name ?? '').filter(Boolean).join(', ') || '—';
+    const nights   = Math.round((new Date(b.check_out+'T12:00:00') - new Date(b.check_in+'T12:00:00')) / 86400000);
+
+    let statusChip = '';
+    let actionBtn  = '';
+
+    if (mode === 'arrival') {
+      const done = !!b.checked_in_at;
+      statusChip = done
+        ? '<span style="font-size:.65rem;padding:1px 7px;border-radius:3px;background:#dcfce7;color:#16a34a;font-weight:700">✓ Check-in</span>'
+        : '<span style="font-size:.65rem;padding:1px 7px;border-radius:3px;background:#fef3c7;color:#92400e;font-weight:700">Pendiente</span>';
+      actionBtn = !done
+        ? '<button class="btn btn-primary btn-sm" style="flex-shrink:0;font-size:.72rem;padding:5px 10px" ' +
+          'onclick="window._dashCheckIn(\'' + b.id + '\',\'arr-' + b.id + '\',\'' + guest.replace(/'/g,'&#39;') + '\')">✅ Check-in</button>'
+        : '';
+    } else if (mode === 'departure') {
+      const done = !!b.checked_out_at;
+      statusChip = done
+        ? '<span style="font-size:.65rem;padding:1px 7px;border-radius:3px;background:#e0e7ff;color:#3730a3;font-weight:700">✓ Check-out</span>'
+        : '<span style="font-size:.65rem;padding:1px 7px;border-radius:3px;background:#fef3c7;color:#92400e;font-weight:700">Pendiente</span>';
+      actionBtn = !done
+        ? '<button class="btn btn-outline btn-sm" style="flex-shrink:0;font-size:.72rem;padding:5px 10px" ' +
+          'onclick="window._dashCheckOut(\'' + b.id + '\',\'dep-' + b.id + '\',\'' + guest.replace(/'/g,'&#39;') + '\')">👋 Check-out</button>'
+        : '';
+    }
+
+    const idAttr = mode === 'arrival' ? ('arr-' + b.id) : mode === 'departure' ? ('dep-' + b.id) : '';
+
+    return '<div id="' + idAttr + '" style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--color-border)">' +
+      '<div style="width:3px;min-height:44px;border-radius:2px;background:' + color + ';flex-shrink:0;align-self:stretch"></div>' +
+      '<div style="flex:1;min-width:0">' +
+        '<div style="display:flex;align-items:center;gap:6px;margin-bottom:2px">' +
+          '<span style="font-size:.72rem;font-weight:700;color:var(--color-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + unitName + '</span>' +
+          statusChip +
+        '</div>' +
+        '<div style="font-size:.82rem;font-weight:600;color:var(--color-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + guest + '</div>' +
+        '<div style="font-size:.72rem;color:var(--color-text-3);margin-top:1px">' + nights + ' noche' + (nights !== 1 ? 's' : '') + '</div>' +
+      '</div>' +
+      actionBtn +
+    '</div>';
+  }
+
   _renderArrivals(arrivals) {
     const container = document.getElementById('arrivals-list');
     if (!container) return;
-
-    if (!arrivals.length) {
-      container.innerHTML = `<p class="empty-state-sm">Sin llegadas hoy</p>`;
-      return;
-    }
-
-    container.innerHTML = arrivals.map(b => {
-      const guest    = b.guests ? `${b.guests.first_name} ${b.guests.last_name}` : 'Sin nombre';
-      const unitNames= (b.booking_units ?? []).map(bu => bu.units?.name ?? '').join(', ');
-      const isDone   = !!b.checked_in_at;
-      return `
-        <div class="dash-action-card ${isDone ? 'done' : ''}" id="arr-${b.id}">
-          <div class="dac-left">
-            <div class="dac-unit">${unitNames}</div>
-            <div class="dac-guest">${guest}</div>
-            ${isDone ? `<span class="dac-done-label">✓ Check-in registrado</span>` : ''}
-          </div>
-          ${!isDone ? `<button class="btn btn-primary btn-sm dac-btn"
-              onclick="window._dashCheckIn('${b.id}', 'arr-${b.id}', '${guest}')">
-              ✅ Check-in
-          </button>` : `<span class="dac-done-badge">✓</span>`}
-        </div>`;
-    }).join('');
+    if (!arrivals.length) { container.innerHTML = '<p class="empty-state-sm">Sin llegadas hoy</p>'; return; }
+    container.innerHTML = arrivals.map(b => this._bookingCard({ booking: b, mode: 'arrival' })).join('');
   }
 
-  // ── Render Departures con acciones directas ────────
   _renderDepartures(departures) {
     const container = document.getElementById('departures-list');
     if (!container) return;
-
-    if (!departures.length) {
-      container.innerHTML = `<p class="empty-state-sm">Sin salidas hoy</p>`;
-      return;
-    }
-
-    container.innerHTML = departures.map(b => {
-      const guest    = b.guests ? `${b.guests.first_name} ${b.guests.last_name}` : 'Sin nombre';
-      const unitNames= (b.booking_units ?? []).map(bu => bu.units?.name ?? '').join(', ');
-      const isDone   = !!b.checked_out_at;
-      return `
-        <div class="dash-action-card ${isDone ? 'done' : ''}" id="dep-${b.id}">
-          <div class="dac-left">
-            <div class="dac-unit">${unitNames}</div>
-            <div class="dac-guest">${guest}</div>
-            ${isDone ? `<span class="dac-done-label">✓ Check-out registrado</span>` : ''}
-          </div>
-          ${!isDone ? `<button class="btn btn-outline btn-sm dac-btn"
-              onclick="window._dashCheckOut('${b.id}', 'dep-${b.id}', '${guest}')">
-              👋 Check-out
-          </button>` : `<span class="dac-done-badge" style="background:var(--color-surface-2)">✓</span>`}
-        </div>`;
-    }).join('');
+    if (!departures.length) { container.innerHTML = '<p class="empty-state-sm">Sin salidas hoy</p>'; return; }
+    container.innerHTML = departures.map(b => this._bookingCard({ booking: b, mode: 'departure' })).join('');
   }
 
   // ── Render Reminders ──────────────────────────────

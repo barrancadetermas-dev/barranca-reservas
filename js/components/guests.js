@@ -47,15 +47,29 @@ export class GuestsCRM {
           <h3>Buscador de Huéspedes</h3>
           <span style="font-size:.78rem;color:var(--color-text-3)">Buscá por nombre, teléfono o email</span>
         </div>
-        <div class="search-bar" style="margin-bottom:0" id="guests-search-bar">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-            width="17" height="17" class="search-icon">
-            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-          </svg>
-          <input type="text" id="guests-search-input" class="search-input"
-            placeholder="Nombre, teléfono, email...">
-          <kbd style="padding:2px 8px;background:var(--color-surface-2);border-radius:4px;
-            font-size:.7rem;color:var(--color-text-3);border:1px solid var(--color-border)">⌘K</kbd>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <div class="search-bar" style="margin-bottom:0;flex:1;min-width:200px" id="guests-search-bar">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              width="17" height="17" class="search-icon">
+              <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+            </svg>
+            <input type="text" id="guests-search-input" class="search-input"
+              placeholder="Nombre, teléfono, email...">
+          </div>
+          <select id="guests-sort-select" style="border:1px solid var(--color-border);border-radius:var(--r-md);
+            padding:7px 10px;font-size:.8rem;background:var(--color-surface);color:var(--color-text);
+            cursor:pointer;min-width:180px">
+            <option value="recent">Más recientes</option>
+            <option value="name_az">Nombre A→Z</option>
+            <option value="name_za">Nombre Z→A</option>
+            <option value="last_az">Apellido A→Z</option>
+            <option value="last_za">Apellido Z→A</option>
+            <option value="spent_desc">Mayor gasto</option>
+            <option value="spent_asc">Menor gasto</option>
+            <option value="bookings_desc">Más reservas</option>
+            <option value="next_stay">Próxima estadía</option>
+            <option value="last_stay">Estadía más lejana</option>
+          </select>
         </div>
       </div>
 
@@ -69,6 +83,7 @@ export class GuestsCRM {
       <div id="guests-results-area">
         <div style="padding:16px;text-align:center;color:var(--color-text-3)">⟳ Cargando...</div>
       </div>
+      <div id="guests-destacados-area"></div>
     `;
 
     const input = document.getElementById('guests-search-input');
@@ -80,8 +95,21 @@ export class GuestsCRM {
       this._searchTimer = setTimeout(() => this._search(q), 280);
     });
 
+    // Sort selector
+    const sortSel = document.getElementById('guests-sort-select');
+    if (sortSel) {
+      sortSel.value = localStorage.getItem('mila_guest_sort') ?? 'recent';
+      sortSel.addEventListener('change', () => {
+        localStorage.setItem('mila_guest_sort', sortSel.value);
+        const q = document.getElementById('guests-search-input')?.value.trim();
+        if (q && q.length >= 2) this._search(q);
+        else this._loadAll();
+      });
+    }
+
     this._guestLimit = parseInt(localStorage.getItem('mila_guest_limit') ?? '10');
     this._loadAll();
+    this._loadDestacados();
   }
 
   _updateLimitButtons(n) {
@@ -101,6 +129,31 @@ export class GuestsCRM {
     this._updateLimitButtons(n);
     const q = document.getElementById('guests-search-input')?.value.trim();
     if (q && q.length >= 2) this._search(q); else this._loadAll();
+  }
+
+  // ── Ordenar array de huéspedes según selector ──
+  _sortGuests(guests) {
+    const sort = localStorage.getItem('mila_guest_sort') ?? 'recent';
+    const today = new Date().toISOString().slice(0,10);
+    const copy  = [...guests];
+    const cmp = {
+      recent:       (a,b) => (b.created_at ?? '').localeCompare(a.created_at ?? ''),
+      name_az:      (a,b) => (a.first_name ?? '').localeCompare(b.first_name ?? ''),
+      name_za:      (a,b) => (b.first_name ?? '').localeCompare(a.first_name ?? ''),
+      last_az:      (a,b) => (a.last_name ?? '').localeCompare(b.last_name ?? ''),
+      last_za:      (a,b) => (b.last_name ?? '').localeCompare(a.last_name ?? ''),
+      spent_desc:   (a,b) => (b.total_spent ?? 0) - (a.total_spent ?? 0),
+      spent_asc:    (a,b) => (a.total_spent ?? 0) - (b.total_spent ?? 0),
+      bookings_desc:(a,b) => (b.total_bookings ?? 0) - (a.total_bookings ?? 0),
+      next_stay:    (a,b) => {
+        // próxima estadía futura
+        const fa = (a.bookings ?? []).filter(bk => bk.check_in >= today).sort((x,y) => x.check_in.localeCompare(y.check_in))[0]?.check_in ?? '9999';
+        const fb = (b.bookings ?? []).filter(bk => bk.check_in >= today).sort((x,y) => x.check_in.localeCompare(y.check_in))[0]?.check_in ?? '9999';
+        return fa.localeCompare(fb);
+      },
+      last_stay:    (a,b) => (b.last_checkin ?? '').localeCompare(a.last_checkin ?? ''),
+    };
+    return copy.sort(cmp[sort] ?? cmp.recent);
   }
 
   async _loadAll() {
@@ -134,7 +187,8 @@ export class GuestsCRM {
       const allNotes   = (g.guest_notes ?? []).sort((a,b) => b.created_at.localeCompare(a.created_at));
       g.latest_note    = allNotes[0]?.body ?? null;
     });
-    area.innerHTML = guests.map(g => this._renderGuestCard(g)).join('');
+    const sorted = this._sortGuests(guests);
+    area.innerHTML = sorted.map(g => this._renderGuestCard(g)).join('');
     area.querySelectorAll('.guest-row-item').forEach(card =>
       card.addEventListener('click', () => this._openProfile(card.dataset.guestId)));
     const lbl = document.getElementById('bl-total-label');
@@ -168,11 +222,11 @@ export class GuestsCRM {
       const bks = (g.bookings ?? []).filter(b => b.status !== 'blocked' && b.status !== 'cancelled');
       g.total_bookings = bks.length;
       g.total_spent    = bks.reduce((s, b) => s + (b.total_paid ?? 0), 0);
-      const sorted     = bks.sort((a,b) => b.check_in.localeCompare(a.check_in));
-      g.last_checkin   = sorted[0]?.check_in ?? null;
-      g.last_checkout  = sorted[0]?.check_out ?? null;
-      g.last_unit      = sorted[0]?.booking_units?.[0]?.units ?? null;
-      g.prev_units     = [...new Set(sorted.slice(1,4).map(b => b.booking_units?.[0]?.units?.name).filter(Boolean))];
+      const sorted2    = bks.sort((a,b) => b.check_in.localeCompare(a.check_in));
+      g.last_checkin   = sorted2[0]?.check_in ?? null;
+      g.last_checkout  = sorted2[0]?.check_out ?? null;
+      g.last_unit      = sorted2[0]?.booking_units?.[0]?.units ?? null;
+      g.prev_units     = [...new Set(sorted2.slice(1,4).map(b => b.booking_units?.[0]?.units?.name).filter(Boolean))];
       const allNotes   = (g.guest_notes ?? []).sort((a,b) => b.created_at.localeCompare(a.created_at));
       g.latest_note    = allNotes[0]?.body ?? null;
     });
@@ -188,7 +242,7 @@ export class GuestsCRM {
       return;
     }
 
-    area.innerHTML = guests.map(g => this._renderGuestCard(g)).join('');
+    area.innerHTML = this._sortGuests(guests).map(g => this._renderGuestCard(g)).join('');
 
     area.querySelectorAll('.guest-row-item,.guest-search-result').forEach(card => {
       card.addEventListener('click', () => this._openProfile(card.dataset.guestId));
@@ -952,5 +1006,104 @@ export class GuestsCRM {
           </div>
         </div>
       </div>`;
+  }
+
+  // ══════════════════════════════════════════════════
+  // SECCIÓN DESTACADOS
+  // ══════════════════════════════════════════════════
+  async _loadDestacados() {
+    const area = document.getElementById('guests-destacados-area');
+    if (!area) return;
+    area.innerHTML = '<div style="padding:16px;text-align:center;color:var(--color-text-3)">⟳ Cargando destacados...</div>';
+
+    try {
+      const today = new Date().toISOString().slice(0,10);
+      const thisYear = new Date().getFullYear();
+      const yearStart = `${thisYear}-01-01`;
+
+      const { data: guests } = await this.db
+        .from('guests')
+        .select(`id, first_name, last_name, created_at,
+          bookings!bookings_guest_id_fkey(
+            id, total_paid, check_in, check_out, status, nights,
+            booking_units(units(name, color, sort_order))
+          )`)
+        .eq('hotel_id', this.ctx.hotelId);
+
+      if (!guests?.length) { area.innerHTML = ''; return; }
+
+      // Enriquecer cada huésped
+      const enriched = guests.map(g => {
+        const bks    = (g.bookings ?? []).filter(b => b.status !== 'blocked' && b.status !== 'cancelled');
+        const paid   = bks.reduce((s,b) => s + (b.total_paid ?? 0), 0);
+        const nights = bks.reduce((s,b) => s + (b.nights ?? 0), 0);
+        const sorted = [...bks].sort((a,x) => b.check_in?.localeCompare(x.check_in ?? '') ?? 0);
+        // Unidad más frecuente
+        const unitCount = {};
+        bks.forEach(b => {
+          const u = b.booking_units?.[0]?.units;
+          if (u) unitCount[u.name] = (unitCount[u.name] ?? 0) + 1;
+        });
+        const topUnit = Object.entries(unitCount).sort((a,b) => b[1]-a[1])[0];
+        // Próxima estadía
+        const nextBk = bks.filter(b => b.check_in >= today).sort((a,b) => a.check_in.localeCompare(b.check_in))[0];
+        // Reservas este año
+        const thisYearBks = bks.filter(b => (b.check_in ?? '') >= yearStart);
+        const thisYearPaid = thisYearBks.reduce((s,b) => s + (b.total_paid ?? 0), 0);
+
+        return { ...g, bks, paid, nights, topUnit: topUnit?.[0] ?? null, topUnitColor: bks.find(b=>b.booking_units?.[0]?.units?.name===topUnit?.[0])?.booking_units?.[0]?.units?.color ?? null, nextBk, thisYearPaid };
+      });
+
+      const fmt   = n => '$' + Math.round(n).toLocaleString('es-AR');
+      const fmtDt = iso => iso ? new Date(iso+'T12:00:00').toLocaleDateString('es-AR',{day:'numeric',month:'short'}) : '—';
+      const name  = g => g.first_name + ' ' + g.last_name;
+
+      // Calcular destacados
+      const byPaid     = [...enriched].sort((a,b) => b.paid - a.paid);
+      const byNights   = [...enriched].sort((a,b) => b.nights - a.nights);
+      const byBookings = [...enriched].sort((a,b) => b.bks.length - a.bks.length);
+      const byYear     = [...enriched].sort((a,b) => b.thisYearPaid - a.thisYearPaid);
+      const byRecent   = [...enriched].sort((a,b) => (b.created_at ?? '').localeCompare(a.created_at ?? ''));
+      const withNext   = enriched.filter(g => g.nextBk).sort((a,b) => a.nextBk.check_in.localeCompare(b.nextBk.check_in));
+
+      const card = (emoji, title, g, stat, sub) => {
+        if (!g) return '';
+        return '<div style="padding:14px 16px;border-radius:var(--r-lg);border:1px solid var(--color-border);' +
+          'background:var(--color-surface);display:flex;align-items:center;gap:12px">' +
+          '<span style="font-size:1.5rem;flex-shrink:0">' + emoji + '</span>' +
+          '<div style="flex:1;min-width:0">' +
+            '<div style="font-size:.68rem;text-transform:uppercase;letter-spacing:.05em;color:var(--color-text-3);font-weight:600;margin-bottom:2px">' + title + '</div>' +
+            '<div style="font-size:.9rem;font-weight:700;color:var(--color-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + name(g) + '</div>' +
+            (g.topUnit ? '<div style="font-size:.72rem;color:var(--color-text-3)">Favorito: ' + g.topUnit + '</div>' : '') +
+          '</div>' +
+          '<div style="text-align:right;flex-shrink:0">' +
+            '<div style="font-size:.88rem;font-weight:800;color:var(--color-primary)">' + stat + '</div>' +
+            '<div style="font-size:.68rem;color:var(--color-text-3)">' + sub + '</div>' +
+          '</div>' +
+        '</div>';
+      };
+
+      const avg = g => g.bks.length ? fmt(g.paid / g.bks.length) : '—';
+
+      area.innerHTML =
+        '<div style="margin-top:28px">' +
+          '<h3 style="font-size:.92rem;font-weight:700;color:var(--color-text);margin-bottom:14px;display:flex;align-items:center;gap:6px">' +
+            '🏆 Destacados' +
+            '<span style="font-size:.72rem;font-weight:400;color:var(--color-text-3);margin-left:4px">· basado en historial total</span>' +
+          '</h3>' +
+          '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px">' +
+            card('💰', 'Mayor gasto histórico',    byPaid[0],     fmt(byPaid[0]?.paid ?? 0),    'Ticket prom: ' + avg(byPaid[0] ?? {bks:[],paid:0})) +
+            card('📅', 'Más estadías acumuladas', byNights[0],   (byNights[0]?.nights ?? 0) + ' noches', byNights[0]?.bks.length + ' reservas') +
+            card('🔄', 'Más reservas',            byBookings[0], byBookings[0]?.bks.length + ' reservas', fmt(byBookings[0]?.paid ?? 0) + ' total') +
+            card('⭐', 'Mejor cliente del año',   byYear[0],     fmt(byYear[0]?.thisYearPaid ?? 0), 'En ' + thisYear) +
+            card('🆕', 'Último registrado',        byRecent[0],  fmtDt(byRecent[0]?.created_at), byRecent[0]?.bks.length + ' reservas') +
+            (withNext[0] ? card('✈️', 'Próximo en ingresar', withNext[0], fmtDt(withNext[0]?.nextBk?.check_in), withNext[0]?.nextBk?.booking_units?.[0]?.units?.name ?? '—') : '') +
+          '</div>' +
+        '</div>';
+
+    } catch (err) {
+      console.warn('[GuestsCRM] Destacados error:', err);
+      area.innerHTML = '';
+    }
   }
 }

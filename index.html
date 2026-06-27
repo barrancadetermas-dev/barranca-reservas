@@ -297,6 +297,7 @@
 
       <!-- ── SECTION: DASHBOARD ── -->
       <section id="section-dashboard" class="section active">
+        <!-- ── Fila 1: KPIs numéricos del día ── -->
         <div class="kpi-grid" id="kpi-grid">
           <div class="kpi-card kpi-blue" id="kpi-checkins">
             <div class="kpi-icon-wrap"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22"><path d="M15 3h4a2 2 0 012 2v14a2 2 0 01-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg></div>
@@ -316,12 +317,28 @@
           </div>
         </div>
 
-        <div class="dashboard-widgets">
-          <!-- Occupancy Ring -->
+        <!-- ── Fila 2: Operativa del día (4 col) ── -->
+        <div class="dashboard-widgets" style="grid-template-columns:1fr 1fr 1fr 200px">
+          <!-- Llegadas hoy -->
+          <div class="card widget-arrivals">
+            <div class="card-header"><h3>✅ Llegadas hoy</h3></div>
+            <div class="arrivals-list" id="arrivals-list"><p class="empty-state-sm">Sin llegadas hoy</p></div>
+          </div>
+          <!-- Salidas hoy -->
+          <div class="card widget-arrivals">
+            <div class="card-header"><h3>👋 Salidas hoy</h3></div>
+            <div class="arrivals-list" id="departures-list"><p class="empty-state-sm">Sin salidas hoy</p></div>
+          </div>
+          <!-- Próximas llegadas -->
+          <div class="card widget-upcoming">
+            <div class="card-header"><h3>Próximas llegadas</h3><span class="badge badge-today">7 días</span></div>
+            <div id="dashboard-upcoming"><p class="empty-state-sm">Sin llegadas próximas</p></div>
+          </div>
+          <!-- Ocupación Global -->
           <div class="card widget-occupancy">
-            <div class="card-header"><h3>Ocupación Global</h3><span class="badge badge-today">Hoy</span></div>
+            <div class="card-header"><h3>Ocupación</h3><span class="badge badge-today">Hoy</span></div>
             <div class="ring-wrapper">
-              <svg class="progress-ring" viewBox="0 0 120 120" width="148" height="148">
+              <svg class="progress-ring" viewBox="0 0 120 120" width="120" height="120">
                 <circle cx="60" cy="60" r="50" fill="none" stroke="var(--color-border)" stroke-width="10"/>
                 <circle id="occ-ring" cx="60" cy="60" r="50" fill="none" stroke="var(--color-primary)"
                   stroke-width="10" stroke-dasharray="314" stroke-dashoffset="314"
@@ -333,25 +350,39 @@
               </div>
             </div>
           </div>
+        </div>
 
-          <!-- Dollar Widget -->
+        <!-- ── Fila 3: Tareas + Finanzas (4 col) ── -->
+        <div class="dashboard-widgets">
+          <!-- Tareas del día -->
+          <div class="card widget-reminders">
+            <div class="card-header">
+              <h3>Tareas del día</h3>
+              <button class="btn btn-ghost btn-xs" id="btn-add-reminder">+ Agregar</button>
+            </div>
+            <div class="reminders-list" id="dashboard-reminders"><p class="empty-state-sm">Sin tareas pendientes</p></div>
+          </div>
+
+          <!-- Limpieza diaria (se muestra solo si hay tareas) -->
+          <div id="dashboard-cleaning-widget" style="display:none"></div>
+
+          <!-- Cotización USD -->
           <div class="card widget-dollar">
             <div class="card-header" style="margin-bottom:10px">
               <h3>💵 Cotización USD</h3>
-              <span class="badge badge-live" id="dollar-status-badge"
-                    style="font-size:.68rem">Cargando...</span>
+              <span class="badge badge-live" id="dollar-status-badge" style="font-size:.68rem">Cargando...</span>
             </div>
             <div class="dollar-avg-row">
               <div class="dollar-avg-col">
-              <div class="dollar-avg-label">Promedio oficial</div>
+                <div class="dollar-avg-label">Promedio oficial</div>
                 <div class="dollar-avg-vals">
                   <span>C: <strong id="dol-of-buy">—</strong></span>
                   <span>V: <strong id="dol-of-sell">—</strong></span>
                 </div>
               </div>
               <div class="dollar-avg-col">
-              <div class="dollar-avg-label">Fuentes activas</div>
-              <div class="dollar-avg-vals">
+                <div class="dollar-avg-label">Fuentes activas</div>
+                <div class="dollar-avg-vals">
                   <span>OK: <strong id="dol-source-count">—</strong></span>
                   <span>Estado: <strong id="dol-source-status">—</strong></span>
                 </div>
@@ -363,59 +394,28 @@
               <div class="dollar-source-item"><span class="dollar-source-label">DolarAPI</span><strong id="dol-dolarapi-sell">—</strong></div>
               <div class="dollar-source-item"><span class="dollar-source-label">ArgentinaDatos</span><strong id="dol-bluelytics-sell">—</strong></div>
             </div>
-            <p class="dollar-updated-at" id="dollar-updated-at"
-               style="font-size:.65rem;color:var(--color-text-3);margin-top:8px"></p>
+            <p class="dollar-updated-at" id="dollar-updated-at" style="font-size:.65rem;color:var(--color-text-3);margin-top:8px"></p>
           </div>
 
-          <!-- Today's arrivals -->
-          <div class="card widget-arrivals">
-            <div class="card-header"><h3>✅ Llegadas hoy</h3></div>
-            <div class="arrivals-list" id="arrivals-list"><p class="empty-state-sm">Sin llegadas hoy</p></div>
-          </div>
-          <div class="card widget-arrivals">
-            <div class="card-header"><h3>👋 Salidas hoy</h3></div>
-            <div class="arrivals-list" id="departures-list"><p class="empty-state-sm">Sin salidas hoy</p></div>
-          </div>
-
-          <!-- Revenue this month -->
-          <div class="card" id="dashboard-revenue"></div>
-
-          <!-- Upcoming arrivals (7 days) -->
-          <div class="card widget-upcoming">
-            <div class="card-header"><h3>Próximas llegadas</h3><span class="badge badge-today">7 días</span></div>
-            <div id="dashboard-upcoming"><p class="empty-state-sm">Sin llegadas próximas</p></div>
-          </div>
-
-          <!-- Ops badge (cleaning tasks) -->
-          <div id="dashboard-ops-badge" style="display:none"></div>
-
-          <!-- Widget limpieza diaria -->
-          <div id="dashboard-cleaning-widget" style="display:none"></div>
-
-          <!-- Forecast -->
+          <!-- Proyección del mes -->
           <div id="dashboard-forecast"></div>
 
-          <!-- Acceso rápido P&L -->
+          <!-- Resultado del mes (P&L) -->
           <div class="card">
             <div class="card-header">
               <h3>💰 Resultado del mes</h3>
-              <a href="#" onclick="window.milaNav?.('statistics');setTimeout(()=>document.querySelector('[data-tab=pl]')?.click(),200);return false;"
-                 class="btn btn-outline btn-sm">Ver P&L →</a>
+              <a href="#" onclick="window.milaNav&&window.milaNav(\'statistics\');setTimeout(function(){var t=document.querySelector(\'[data-tab=pl]\');if(t)t.click();},200);return false;"
+                 class="btn btn-outline btn-sm">Ver P&amp;L →</a>
             </div>
             <div id="dashboard-pl-preview" style="font-size:.82rem;color:var(--color-text-3);padding:4px 0">
-              Hacé clic en "Ver P&L" para ver ingresos, comisiones y gastos del mes.
+              Hacé clic en "Ver P&amp;L" para ver ingresos, comisiones y gastos del mes.
             </div>
-          </div>
-
-          <!-- Reminders -->
-          <div class="card widget-reminders">
-            <div class="card-header">
-              <h3>Tareas del día</h3>
-              <button class="btn btn-ghost btn-xs" id="btn-add-reminder">+ Agregar</button>
-            </div>
-            <div class="reminders-list" id="dashboard-reminders"><p class="empty-state-sm">Sin tareas pendientes</p></div>
           </div>
         </div>
+
+        <!-- Hidden elements (no grid) -->
+        <div id="dashboard-ops-badge" style="display:none"></div>
+        <div id="dashboard-revenue" style="display:none"></div>
       </section>
 
       <!-- ── SECTION: CALENDAR ── -->
