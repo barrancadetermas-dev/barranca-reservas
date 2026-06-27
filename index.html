@@ -144,7 +144,7 @@
     <!-- Mini calendario sidebar -->
     <div id="sidebar-cal-container" class="mobile-hidden"></div>
 
-    <div class="sidebar-footer">
+    <div class="sidebar-footer" style="display:none">
       <div class="sidebar-user" id="sidebar-user">
         <div class="user-avatar" id="user-avatar">A</div>
         <div class="user-info">
@@ -265,6 +265,19 @@
           <svg id="dark-icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="17" height="17"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
           <svg id="dark-icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="17" height="17" class="hidden"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>
         </button>
+
+        <!-- Usuario + logout en header -->
+        <div style="display:flex;align-items:center;gap:6px;margin-left:4px;border-left:1px solid var(--color-border);padding-left:10px">
+          <div id="user-avatar" style="width:28px;height:28px;border-radius:50%;background:var(--color-primary);color:#fff;font-size:.7rem;font-weight:700;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0">A</div>
+          <span id="user-name" style="font-size:.75rem;font-weight:500;color:var(--color-text-2);white-space:nowrap;max-width:100px;overflow:hidden;text-overflow:ellipsis"></span>
+          <button id="logout-btn" title="Cerrar sesión" style="background:none;border:none;cursor:pointer;color:var(--color-text-3);padding:4px;border-radius:6px;display:flex;align-items:center;flex-shrink:0" onmouseover="this.style.color='var(--color-text)'" onmouseout="this.style.color='var(--color-text-3)'">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+              <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/>
+              <polyline points="16 17 21 12 16 7"/>
+              <line x1="21" y1="12" x2="9" y2="12"/>
+            </svg>
+          </button>
+        </div>
       </div>
     </header>
 
