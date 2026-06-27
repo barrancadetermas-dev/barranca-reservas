@@ -2,16 +2,7 @@
 // sidebar-calendar.js — Mini calendario del sidebar
 // ═══════════════════════════════════════════════════
 
-import { AppContext, localToday } from '../supabase-config.js';
-
-const DOTS = {
-  family:  { color: '#a855f7', label: 'Familia' },
-  airbnb:  { color: '#f97316', label: 'Airbnb' },
-  booking: { color: '#06b6d4', label: 'Booking' },
-  unpaid:  { color: '#eab308', label: 'Sin depósito' },
-  paid:    { color: '#22c55e', label: 'Pagada' },
-  default: { color: '#ef4444', label: 'Reservada' },
-};
+import { AppContext, localToday, SOURCE_CONFIG, getBookingBarColor } from '../supabase-config.js';
 
 export class SidebarCalendar {
   constructor(supabase) {
@@ -43,7 +34,7 @@ export class SidebarCalendar {
 
     const { data, error } = await this.db
       .from('bookings')
-      .select('check_in, check_out, source, balance, total_amount, notes, status')
+      .select('check_in, check_out, source, balance, total_amount, status')
       .eq('hotel_id', AppContext.hotelId)
       .not('status', 'in', '(cancelled,blocked)')
       .lte('check_in', to)
@@ -55,32 +46,20 @@ export class SidebarCalendar {
     if (!data?.length) return;
 
     for (const b of data) {
+      // Obtener el color usando la misma lógica que el calendario principal
+      const { color } = getBookingBarColor(b);
+
       const start = new Date(b.check_in  + 'T12:00:00');
       const end   = new Date(b.check_out + 'T12:00:00');
-      // Iterar cada día ocupado
+
       const cur = new Date(Math.max(start.getTime(), new Date(from + 'T12:00:00').getTime()));
       const lim = new Date(Math.min(end.getTime(),   new Date(to   + 'T12:00:00').getTime()));
 
-      // Determinar tipo de punto
-      const src = (b.source || '').toLowerCase();
-      const notes = (b.notes || '').toLowerCase();
-      const isFamily  = notes.includes('famil') || src.includes('famil');
-      const isAirbnb  = src.includes('airbnb');
-      const isBooking = src.includes('booking');
-      const isPaid    = b.balance === 0 && b.total_amount > 0;
-      const isUnpaid  = b.balance > 0;
-
-      let dotType = 'default';
-      if (isFamily)       dotType = 'family';
-      else if (isAirbnb)  dotType = 'airbnb';
-      else if (isBooking) dotType = 'booking';
-      else if (isUnpaid)  dotType = 'unpaid';
-      else if (isPaid)    dotType = 'paid';
-
-      while (cur <= lim) {
+      // cur < lim: el día de checkout NO se marca (la unidad queda libre ese día)
+      while (cur < lim) {
         const key = `${cur.getFullYear()}-${String(cur.getMonth()+1).padStart(2,'0')}-${String(cur.getDate()).padStart(2,'0')}`;
         if (!this._data[key]) this._data[key] = new Set();
-        this._data[key].add(dotType);
+        this._data[key].add(color);
         cur.setDate(cur.getDate() + 1);
       }
     }
@@ -113,19 +92,14 @@ export class SidebarCalendar {
           if (!d) return '<span class="smc-day smc-empty"></span>';
           const key = `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
           const isToday = key === todayStr;
-          const dots = this._data[key] ? [...this._data[key]] : [];
+          const colors = this._data[key] ? [...this._data[key]] : [];
           return `<span class="smc-day${isToday?' smc-today':''}">
             <span class="smc-num">${d}</span>
-            ${dots.length ? `<span class="smc-dots">${dots.slice(0,3).map(t =>
-              `<span class="smc-dot" style="background:${DOTS[t]?.color??'#ef4444'}"></span>`
+            ${colors.length ? `<span class="smc-dots">${colors.slice(0,3).map(c =>
+              `<span class="smc-dot" style="background:${c}"></span>`
             ).join('')}</span>` : ''}
           </span>`;
         }).join('')}
-      </div>
-      <div class="smc-legend">
-        ${Object.entries(DOTS).map(([,v]) =>
-          `<span class="smc-leg-item"><span class="smc-dot" style="background:${v.color}"></span><span>${v.label}</span></span>`
-        ).join('')}
       </div>`;
 
     this._el.querySelector('#smc-prev')?.addEventListener('click', () => this._navigate(-1));
