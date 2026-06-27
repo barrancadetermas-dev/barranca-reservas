@@ -12,6 +12,7 @@ import { NotificationService } from './services/notification-service.js';
 // ═══════════════════════════════════════════════════
 
 import { supabase, loadHotelContext, AppContext, showToast, toISODate, formatARS, localToday, localDateISO } from './supabase-config.js';
+import { SidebarCalendar } from './components/sidebar-calendar.js';
 import { can, isDemo, getRoleLabel, ROLE_PERMISSIONS } from './auth/permissions.js';
 import { logAction } from './services/audit-service.js';
 import { Dashboard }    from './components/dashboard.js';
@@ -288,6 +289,13 @@ async function initApp(user) {
     trySetup('theme',         setupThemeSystem);
     notifService = new NotificationService(supabase);
     trySetup('realNotif',     () => setupRealNotifications(notifService));
+
+    // Mini calendario sidebar
+    const sidebarCalContainer = document.getElementById('sidebar-cal-container');
+    if (sidebarCalContainer) {
+      window._sidebarCal = new SidebarCalendar(supabase);
+      window._sidebarCal.init(sidebarCalContainer).catch(console.error);
+    }
     // Emitir sonido de login — defer until first user interaction (iOS Safari requires it)
     let _loginSoundPlayed = false;
     const playLoginSound = () => {
@@ -309,7 +317,10 @@ async function initApp(user) {
     document.addEventListener('show:toast', (e) => showToast(e.detail.msg, e.detail.type));
 
     // ── Recargar la sección activa cuando cambia una reserva (debounced) ──
-    document.addEventListener('booking:changed', () => debouncedCalendarLoad(400));
+    document.addEventListener('booking:changed', () => {
+      debouncedCalendarLoad(400);
+      window._sidebarCal?.refresh().catch(console.error);
+    });
 
     // "Nueva Reserva" → abre calculadora primero como paso 0
     document.getElementById('btn-new-booking').addEventListener('click', () => {
