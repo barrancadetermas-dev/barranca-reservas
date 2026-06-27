@@ -312,10 +312,10 @@ export class Calendar {
           <span class="cal-unit-dot" style="background-color:${unitColor}"></span>
           <span style="font-size:.82rem;font-weight:700;color:var(--color-text)">${unitLabel}</span>
           ${hasNotes ? `<span title="${unit.internal_notes}" style="cursor:help;font-size:.85rem"
-            onclick="window._calInstance._showUnitNote(event,'${unit.internal_notes?.replace(/'/g,"\\'") ?? ''}')">📝</span>` : ''}
+          ${hasNotes ? `<span title="${unit.internal_notes}" style="cursor:help;font-size:.85rem"
+            onclick="window._calInstance._showUnitNote(event,'${(unit.internal_notes ?? '').replace(/[']/g, '&#39;')}')">📝</span>` : ''}
           ${can('manageUnitNotes') ? `<button class="btn btn-ghost btn-xs" style="padding:1px 4px;font-size:.65rem;opacity:.5"
-            onclick="window._calInstance.editUnitNotes('${unit.id}','${(unit.internal_notes??'').replace(/'/g,"\\'")}')">✏️</button>` : ''}
-        </div>
+            onclick="window._calInstance.editUnitNotes('${unit.id}','${(unit.internal_notes ?? '').replace(/[']/g, '&#39;')}')">✏️</button>` : ''}
         <span class="unit-floor" style="padding-left:16px">Hasta ${unit.max_guests} pers.</span>`;
       grid.appendChild(label);
 

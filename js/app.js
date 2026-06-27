@@ -339,7 +339,11 @@ async function initApp(user) {
         // Usar el botón de calculadora para abrir → mantiene calc-active sincronizado
         const calcBtn = document.getElementById('btn-calculator');
         if (calcBtn && !calcBtn.classList.contains('calc-active')) calcBtn.click();
-        else { overlay.style.display = 'flex'; document.getElementById('calc-price')?.focus(); }
+        else {
+          overlay.style.display = 'flex';
+          overlay.classList.remove('hidden');
+          document.getElementById('calc-price')?.focus();
+        }
       } else {
         bookingForm.open();
       }
@@ -1817,11 +1821,13 @@ function setupCalculator() {
   const setOpen = (open) => {
     if (open) {
       overlay.style.display = 'flex';
+      overlay.classList.remove('hidden');   // el handler global de ESC agrega 'hidden' — siempre limpiar
       btn?.classList.add('calc-active');
       _calcUpdate();
       document.getElementById('calc-price')?.focus();
     } else {
       overlay.style.display = 'none';
+      overlay.classList.remove('hidden');   // consistencia: solo usamos style.display
       btn?.classList.remove('calc-active');
     }
   };
