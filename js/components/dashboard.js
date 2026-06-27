@@ -80,11 +80,12 @@ export class Dashboard {
         return;
       }
       const today = toISODate(new Date());
-      const [kpis, dollar, reminders, forecast] = await Promise.all([
+      const [kpis, dollar, reminders, forecast, cleaningTasks] = await Promise.all([
         this._fetchKPIs(today),
         fetchDollarRates(),
         this._fetchTodayReminders(today),
         this._fetchForecast(today),
+        this._fetchTodayCleaningTasks(today),
       ]);
 
       this._renderKPIs(kpis, today);
@@ -95,6 +96,7 @@ export class Dashboard {
       this._renderDepartures(kpis.checkouts ?? []);
       this._renderReminders(reminders);
       this._renderForecast(forecast);
+      this._renderCleaningWidget(cleaningTasks);
 
       // Actualizar badge de recordatorios via evento (sin dependencia circular)
       const pendingReminders = reminders.filter(r => !r.completed).length;
@@ -770,6 +772,55 @@ export class Dashboard {
           ${yoyDelta !== null ? `<span style="margin-left:auto;font-weight:700;color:${yoyColor}">AaA ${yoySign}${yoyDelta}%</span>` : ''}
         </div>
       </div>`;
+  }
+
+
+  // ══════════════════════════════════════════════════
+  // WIDGET LIMPIEZA DIARIA
+  // ══════════════════════════════════════════════════
+  async _fetchTodayCleaningTasks(today) {
+    try {
+      const { data } = await this.db
+        .from('cleaning_tasks')
+        .select('id, title, status, unit_id, notes, scheduled_date, units(name, sort_order, color)')
+        .eq('hotel_id', this.ctx.hotelId)
+        .eq('scheduled_date', today)
+        .order('status', { ascending: true });
+      return data ?? [];
+    } catch { return []; }
+  }
+
+  _renderCleaningWidget(tasks) {
+    const el = document.getElementById('dashboard-cleaning-widget');
+    if (!el) return;
+    if (!tasks.length) { el.style.display = 'none'; return; }
+    const pending   = tasks.filter(t => t.status !== 'completed');
+    el.style.display = 'block';
+    const row = (t) => {
+      const unit  = t.units;
+      const color = unit?.color ?? '#6366f1';
+      const done  = t.status === 'completed';
+      return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--color-border);opacity:${done ? '.5' : '1'}">
+        <span style="width:8px;height:8px;border-radius:50%;background:${color};flex-shrink:0"></span>
+        <span style="font-size:.82rem;font-weight:600;flex:1;${done ? 'text-decoration:line-through;color:var(--color-text-3)' : 'color:var(--color-text)'}">
+          #${unit?.sort_order ?? '?'} · ${unit?.name ?? t.title ?? 'Limpieza'}
+        </span>
+        ${done
+          ? '<span style="font-size:.72rem;color:#16a34a;font-weight:600">✓ Lista</span>'
+          : '<span style="font-size:.72rem;padding:2px 7px;border-radius:4px;background:#fef3c7;color:#92400e;font-weight:600">Pendiente</span>'
+        }
+      </div>`;
+    };
+    el.innerHTML = `<div class="card" style="border-left:3px solid ${pending.length ? '#f59e0b' : '#16a34a'}">
+      <div class="card-header" style="margin-bottom:8px">
+        <h3>🧹 Limpieza de hoy</h3>
+        <span style="font-size:.75rem;font-weight:600;padding:2px 8px;border-radius:4px;background:${pending.length ? '#fef3c7' : '#dcfce7'};color:${pending.length ? '#92400e' : '#166534'}">
+          ${pending.length ? `${pending.length} pendiente${pending.length > 1 ? 's' : ''}` : '✓ Todo listo'}
+        </span>
+      </div>
+      <div style="max-height:200px;overflow-y:auto">${tasks.map(row).join('')}</div>
+      ${pending.length ? '<a href="#" onclick="window.milaNav?.('operations');return false;" style="display:block;text-align:center;margin-top:10px;font-size:.78rem;color:var(--color-primary);font-weight:600;text-decoration:none">Ver en Operaciones →</a>' : ''}
+    </div>`;
   }
 
 }

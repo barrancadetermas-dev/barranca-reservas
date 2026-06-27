@@ -630,7 +630,10 @@ export class GuestsCRM {
   // ══════════════════════════════════════════════════
   _bindProfileActions(guest) {
     document.querySelectorAll('.tag-toggle').forEach(toggle => {
-      toggle.addEventListener('click', () => {
+      toggle.addEventListener('click', (e) => {
+        // Evitar doble disparo: label click → browser clicks hidden input → bubbles back
+        if (e.target.tagName === 'INPUT') return;
+        e.preventDefault();
         toggle.classList.toggle('active');
         const inp = toggle.querySelector('input');
         if (inp) inp.checked = toggle.classList.contains('active');

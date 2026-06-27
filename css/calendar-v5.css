@@ -346,3 +346,29 @@
   );
   pointer-events: none;
 }
+
+/* ── Celda vacía: hint visual de click ────────────── */
+.cal-cell-empty {
+  cursor: pointer;
+  position: relative;
+}
+.cal-cell-empty:hover::after {
+  content: '+';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 1rem;
+  font-weight: 300;
+  color: var(--color-primary);
+  opacity: .5;
+  pointer-events: none;
+  line-height: 1;
+}
+.cal-cell-empty:hover {
+  background: var(--color-primary-l) !important;
+  transition: background .1s;
+}
+/* No mostrar hint en celdas pasadas */
+.cal-cell.past-col.cal-cell-empty:hover::after { display: none; }
+.cal-cell.past-col.cal-cell-empty:hover { background: none !important; cursor: default; }

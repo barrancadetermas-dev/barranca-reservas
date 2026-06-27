@@ -427,6 +427,7 @@ export class Calendar {
     `;
     bar.dataset.bookingId = booking.id;
     bar.draggable = false;
+    bar.addEventListener('dragstart', e => e.preventDefault());
 
     const source  = booking.source ?? 'direct';
     const srcCfg  = SOURCE_CONFIG[source] ?? {};
@@ -520,10 +521,25 @@ export class Calendar {
 
   // ── Celda vacía (click abre formulario) ──────────
   _bindEmptyCell(cell, unitId, dateISO) {
+    // Hint visual: "+" al hover
+    cell.classList.add('cal-cell-empty');
+
     cell.addEventListener('click', (e) => {
-      if (this._drag.moved) return;
-      this.bookingForm.open({ unitId, checkIn: dateISO });
+      // Ignorar si venía de un drag (barra o selección)
+      if (this._drag?.moved || this._barDrag?.moved) return;
+      if (e.target.closest('.bar,.bar-resize-handle,.ctx-menu')) return;
+      // No abrir en celdas pasadas
+      if (dateISO < localToday()) return;
+
+      // Pre-llenar: check-in en la fecha, check-out al día siguiente
+      const checkOut = this._addDays(dateISO, 1);
+
+      // Navegar a sección calendario si no estamos ahí (mobile)
+      if (window.milaNav) window.milaNav('calendar');
+
+      this.bookingForm.open({ unitId, checkIn: dateISO, checkOut });
     });
+
     cell.addEventListener('contextmenu', (e) => {
       e.preventDefault();
       this._ctxTarget = { unitId, dateISO };
@@ -817,9 +833,10 @@ export class Calendar {
     // ────────────────────────────────────────────────
     // DRAG & DROP
     // ────────────────────────────────────────────────
-    let _dragState = null;
-    let _barGhost  = null;
-    let _autoScroll= null;
+    let _dragState  = null;
+    let _barGhost   = null;
+    let _autoScroll = null;
+    let _ghostInitFn= null;  // función de creación diferida del ghost
 
     const getCellWidth = () => {
       const firstCell = grid.querySelector('.cal-cell[data-date]');
@@ -829,6 +846,7 @@ export class Calendar {
     const resetDrag = () => {
       if (_barGhost) { _barGhost.remove(); _barGhost = null; }
       if (_autoScroll) { _autoScroll.stop(); _autoScroll = null; }
+      _ghostInitFn = null;
       this._floatInfo.classList.add('hidden');
       this._clearDropHighlights(grid);
       _dragState = null;
@@ -844,7 +862,7 @@ export class Calendar {
       this._barDrag.moved = true;
 
       // Crear ghost solo al primer movimiento real (evita fantasma en header)
-      if (typeof _initGhost === 'function') _initGhost(e.clientX, e.clientY);
+      if (_ghostInitFn) { _ghostInitFn(); _ghostInitFn = null; }
 
       const cellWidth = getCellWidth();
       const daysDiff  = Math.round((e.clientX - _dragState.startX) / cellWidth);
@@ -1019,13 +1037,10 @@ export class Calendar {
           .then(({ data }) => { if (data && _dragState) _dragState.booking = data; });
       }
 
-      // Crear ghost diferido — solo aparece al mover ≥5px (evita fantasma al hacer click)
-      let _ghostReady = false;
-      const _initGhost = (clientX, clientY) => {
-        if (_ghostReady) return;
-        _ghostReady = true;
+      // Ghost diferido — se crea al primer movimiento real
+      _ghostInitFn = () => {
         _barGhost = bar.cloneNode(true);
-        // Quitar evento dragstart del clon
+        _barGhost.setAttribute('draggable', 'false');
         _barGhost.querySelectorAll('[draggable]').forEach(el => el.removeAttribute('draggable'));
         _barGhost.style.cssText = `
           position:fixed;
@@ -1034,8 +1049,7 @@ export class Calendar {
           z-index:9999;pointer-events:none;
           opacity:.88;transform:scale(1.04) translateZ(0);
           box-shadow:0 12px 40px rgba(0,0,0,.30),0 4px 12px rgba(0,0,0,.18);
-          border-radius:6px;cursor:grabbing;
-          transition:none;
+          border-radius:6px;cursor:grabbing;transition:none;
         `;
         document.body.appendChild(_barGhost);
         bar.style.opacity = '0.3';
@@ -1069,20 +1083,25 @@ export class Calendar {
         ghostH: barRect.height,
       };
       this._barDrag = { active: true, moved: false };
-      bar.style.opacity = '0.3';
 
-      _barGhost = bar.cloneNode(true);
-      _barGhost.style.cssText = `
-        position:fixed;left:${barRect.left}px;top:${barRect.top}px;
-        width:${barRect.width}px;height:${barRect.height}px;
-        z-index:9999;pointer-events:none;opacity:.88;
-        transform:scale(1.04);border-radius:6px;
-        box-shadow:0 12px 40px rgba(0,0,0,.3);transition:none;
-      `;
-      document.body.appendChild(_barGhost);
+      // Ghost diferido para touch también
+      _ghostInitFn = () => {
+        _barGhost = bar.cloneNode(true);
+        _barGhost.setAttribute('draggable', 'false');
+        _barGhost.style.cssText = `
+          position:fixed;left:${barRect.left}px;top:${barRect.top}px;
+          width:${barRect.width}px;height:${barRect.height}px;
+          z-index:9999;pointer-events:none;opacity:.88;
+          transform:scale(1.04);border-radius:6px;
+          box-shadow:0 12px 40px rgba(0,0,0,.3);transition:none;
+        `;
+        document.body.appendChild(_barGhost);
+        bar.style.opacity = '0.3';
+      };
       _autoScroll = this._makeAutoScroll();
 
       const onTM = (te) => {
+        te.preventDefault(); // evita que la página scrollee durante el drag
         const touch = te.touches[0];
         onMouseMove({ clientX: touch.clientX, clientY: touch.clientY });
       };

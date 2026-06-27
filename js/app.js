@@ -266,7 +266,7 @@ async function initApp(user) {
     setupNavigation();
     setupGlobalShortcuts();
     setupCommandPalette();
-    setupDarkModeToggle();
+
     // ── Bottom nav (mobile) ────────────────────────
     document.querySelectorAll('.bnav-item[data-section]').forEach(btn => {
       btn.addEventListener('click', () => navigateTo(btn.dataset.section));
@@ -325,17 +325,18 @@ async function initApp(user) {
     });
 
     // "Nueva Reserva" → abre calculadora primero como paso 0
-    document.getElementById('btn-new-booking').addEventListener('click', () => {
+    document.getElementById('btn-new-booking')?.addEventListener('click', () => {
       if (isDemo()) return showDemoAction(() => bookingForm.open());
       const overlay = document.getElementById('overlay-calculator');
       if (overlay) {
-        // Cambiar título a "Paso 1 — Calculá el precio"
         const title = overlay.querySelector('.calc-title');
         if (title) title.innerHTML = '📊 Paso 1 — Calculá el precio';
         const createBtn = document.getElementById('calc-create-booking');
         if (createBtn) createBtn.textContent = 'Continuar con la reserva →';
-        overlay.style.display = 'flex';
-        document.getElementById('calc-price')?.focus();
+        // Usar el botón de calculadora para abrir → mantiene calc-active sincronizado
+        const calcBtn = document.getElementById('btn-calculator');
+        if (calcBtn && !calcBtn.classList.contains('calc-active')) calcBtn.click();
+        else { overlay.style.display = 'flex'; document.getElementById('calc-price')?.focus(); }
       } else {
         bookingForm.open();
       }
@@ -1206,15 +1207,6 @@ async function renderCommandResults(query) {
 }
 
 // ══════════════════════════════════════════════════
-// DARK MODE TOGGLE
-// ══════════════════════════════════════════════════
-function setupDarkModeToggle() {
-  document.getElementById('dark-mode-toggle')?.addEventListener('click', () => {
-    const cur = document.documentElement.getAttribute('data-theme')?? 'light';
-    applyDarkMode(cur==='dark'?'light':'dark');
-  });
-}
-
 // ══════════════════════════════════════════════════
 // REMINDER BADGE + SECTION
 // ══════════════════════════════════════════════════
@@ -1645,7 +1637,6 @@ function setupThemeSystem() {
   const btn = document.getElementById('btn-theme');
   if (!btn) { console.warn('[Theme] btn-theme not found'); return; }
 
-  // Move panel to body to escape ALL stacking contexts (overflow:hidden, z-index, etc.)
   const panel = document.getElementById('theme-panel');
   if (panel && panel.parentElement !== document.body) {
     document.body.appendChild(panel);
@@ -1656,11 +1647,31 @@ function setupThemeSystem() {
   applyTheme(saved);
   markActiveSwatch(saved);
 
+  // Apply saved dark mode
+  const savedMode = localStorage.getItem('pms-theme') ?? 'light';
+  applyDarkMode(savedMode);
+  _updateModeButtons(savedMode);
+
+  // Expose globally for inline onclick
+  window._setDarkMode = (mode) => {
+    applyDarkMode(mode);
+    _updateModeButtons(mode);
+  };
+
+  function _updateModeButtons(mode) {
+    const lightBtn = document.getElementById('theme-mode-light');
+    const darkBtn  = document.getElementById('theme-mode-dark');
+    if (!lightBtn || !darkBtn) return;
+    const active = 'border-color:var(--color-primary);background:var(--color-primary-l);color:var(--color-primary)';
+    const inactive= 'border-color:var(--color-border);background:var(--color-surface-2);color:var(--color-text-2)';
+    lightBtn.style.cssText = lightBtn.style.cssText.replace(/border-color:[^;]+;background:[^;]+;color:[^;]+/, '') + (mode === 'light' ? active : inactive);
+    darkBtn.style.cssText  = darkBtn.style.cssText.replace(/border-color:[^;]+;background:[^;]+;color:[^;]+/, '')  + (mode === 'dark'  ? active : inactive);
+  }
+
   let open = false;
 
   const show = () => {
     if (!panel) return;
-    // Position relative to btn
     const rect = btn.getBoundingClientRect();
     panel.style.top    = `${rect.bottom + 8}px`;
     panel.style.right  = `${window.innerWidth - rect.right}px`;
@@ -1682,9 +1693,7 @@ function setupThemeSystem() {
   });
 
   document.addEventListener('click', (e) => {
-    if (open && e.target !== btn && !e.target.closest('#theme-panel')) {
-      hide();
-    }
+    if (open && e.target !== btn && !e.target.closest('#theme-panel')) hide();
   });
 
   document.querySelectorAll('.theme-swatch').forEach(sw => {
@@ -1698,6 +1707,16 @@ function setupThemeSystem() {
       hide();
       Sound?.success?.();
     });
+  });
+
+  // Mode buttons (Día / Noche) — stopPropagation so panel doesn't close
+  document.getElementById('theme-mode-light')?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    window._setDarkMode('light');
+  });
+  document.getElementById('theme-mode-dark')?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    window._setDarkMode('dark');
   });
 }
 
