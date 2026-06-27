@@ -1,30 +1,30 @@
 {
   "name": "MILA - Sistema Inteligente",
   "short_name": "MILA",
-  "description": "Sistema Inteligente para Alojamientos — Gestión integral de reservas y operaciones",
+  "description": "Sistema Inteligente para Alojamientos",
   "theme_color": "#0D1F42",
   "background_color": "#0D1F42",
   "display": "standalone",
-  "orientation": "landscape-primary",
+  "orientation": "any",
   "start_url": "/",
   "scope": "/",
   "lang": "es",
   "categories": ["business", "productivity"],
   "icons": [
     {
-      "src": "./icon-192.png",
+      "src": "/icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "./icon-512.png",
+      "src": "/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "./icon-512.png",
+      "src": "/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
@@ -34,16 +34,14 @@
     {
       "name": "Nueva Reserva",
       "short_name": "Reserva",
-      "description": "Crear una nueva reserva",
       "url": "/?action=new-booking",
-      "icons": [{ "src": "./icon-192.png", "sizes": "192x192" }]
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
     },
     {
       "name": "Calendario",
       "short_name": "Calendario",
-      "description": "Ver el calendario de ocupación",
       "url": "/?section=calendar",
-      "icons": [{ "src": "./icon-192.png", "sizes": "192x192" }]
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
     }
   ]
 }
