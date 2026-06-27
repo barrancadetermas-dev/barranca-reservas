@@ -237,7 +237,7 @@ export class Dashboard {
     const _upDays2 = parseInt(localStorage.getItem('mila_upcoming_days') ?? '7');
     const next7 = new Date(today + 'T12:00:00');
     next7.setDate(next7.getDate() + _upDays2);
-    const next7str = next7.toISOString().slice(0,10);
+    const next7str = localDateISO(next7);
     const { data: upcoming } = await this.db
       .from('bookings')
       .select('check_in, check_out, guests!bookings_guest_id_fkey(first_name,last_name), booking_units(units(name,color))')
