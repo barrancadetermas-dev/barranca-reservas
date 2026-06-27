@@ -442,13 +442,8 @@ export class Calendar {
       : '';
 
     const avatar = !isBlock ? Calendar._guestAvatar(booking.guests, 16) : '';
-    bar.innerHTML = `
-      ${avatar}
-      ${canalChip}
-      <span style="color:${textColor};font-size:.68rem;font-weight:700;
-        overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0">
-        ${guestFull}
-      </span>`;
+    const nameStyle = 'color:' + textColor + ';font-size:.68rem;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0';
+    bar.innerHTML = avatar + canalChip + '<span style="' + nameStyle + '">' + guestFull + '</span>';
 
     // ── Resize handle (solo si la barra no está truncada a la derecha) ──
     if (!truncRight) {
@@ -619,13 +614,10 @@ export class Calendar {
         <span style="padding:2px 8px;border-radius:99px;font-size:.7rem;font-weight:700;
           background:${getBookingBarColor(booking).color}22;color:${getBookingBarColor(booking).color};
           border:1px solid ${getBookingBarColor(booking).color}40">${label}</span>
-        ${source !== 'direct' && source !== 'blocked' ? `<span style="padding:2px 8px;border-radius:99px;font-size:.7rem;font-weight:700;
-          background:${srcCfg.color??''}22;color:${srcCfg.color??'#64748B'};border:1px solid ${srcCfg.color??''}40">
-          ${srcCfg.emoji??''} ${srcCfg.label??''}</span>` : ''}
+        ${source !== 'direct' && source !== 'blocked' ? '<span style="padding:2px 8px;border-radius:99px;font-size:.7rem;font-weight:700;background:' + (srcCfg.color??'') + '22;color:' + (srcCfg.color??'#64748B') + ';border:1px solid ' + (srcCfg.color??'') + '40">' + (srcCfg.emoji??'') + ' ' + (srcCfg.label??'') + '</span>' : ''}
       </div>
       ${payRow}
-      ${booking.notes ? `<div style="margin-top:8px;font-size:.7rem;color:#94A3B8;font-style:italic;
-        border-top:1px solid rgba(255,255,255,.07);padding-top:7px">📝 ${booking.notes.slice(0,80)}${booking.notes.length>80?'…':''}</div>` : ''}
+      ${booking.notes ? '<div style="margin-top:8px;font-size:.7rem;color:#94A3B8;font-style:italic;border-top:1px solid rgba(255,255,255,.07);padding-top:7px">📝 ' + booking.notes.slice(0,80) + (booking.notes.length>80?'…':'') + '</div>' : ''}
     `;
     document.body.appendChild(tip);
     this._tooltip = tip;
@@ -1581,16 +1573,8 @@ export class Calendar {
             ✅ ${available.length} disponible${available.length > 1 ? 's' : ''} · ${fmt(ci)} → ${fmt(co)} · ${guests} pers.
           </span>
           ${available.map(chip).join('')}
-          ${tooSmall.map(u => `<span title="#${u.sort_order} · ${u.name} — capacidad insuficiente (max. ${u.max_guests})"
-            style="display:inline-flex;align-items:center;gap:4px;padding:2px 7px;border-radius:4px;
-            background:#f3f4f6;border:1px solid #d1d5db;font-size:.74rem;font-weight:700;color:#9ca3af;cursor:default;text-decoration:line-through">
-            <span style="width:7px;height:7px;border-radius:50%;background:#d1d5db;flex-shrink:0"></span>#${u.sort_order}
-          </span>`).join('')}
-          ${occupied.map(u => `<span title="#${u.sort_order} · ${u.name} — ocupada"
-            style="display:inline-flex;align-items:center;gap:4px;padding:2px 7px;border-radius:4px;
-            background:#fee2e255;border:1px solid #fca5a5;font-size:.74rem;font-weight:700;color:#ef4444;cursor:default">
-            <span style="width:7px;height:7px;border-radius:50%;background:#ef4444;flex-shrink:0"></span>#${u.sort_order}
-          </span>`).join('')}
+          ${tooSmall.map(u => '<span title="#' + u.sort_order + ' · ' + u.name + ' — capacidad insuficiente (max. ' + u.max_guests + ')" style="display:inline-flex;align-items:center;gap:4px;padding:2px 7px;border-radius:4px;background:#f3f4f6;border:1px solid #d1d5db;font-size:.74rem;font-weight:700;color:#9ca3af;cursor:default;text-decoration:line-through"><span style="width:7px;height:7px;border-radius:50%;background:#d1d5db;flex-shrink:0"></span>#' + u.sort_order + '</span>').join('')}
+          ${occupied.map(u => '<span title="#' + u.sort_order + ' · ' + u.name + ' — ocupada" style="display:inline-flex;align-items:center;gap:4px;padding:2px 7px;border-radius:4px;background:#fee2e255;border:1px solid #fca5a5;font-size:.74rem;font-weight:700;color:#ef4444;cursor:default"><span style="width:7px;height:7px;border-radius:50%;background:#ef4444;flex-shrink:0"></span>#' + u.sort_order + '</span>').join('')}
         </div>`;
     };
 
