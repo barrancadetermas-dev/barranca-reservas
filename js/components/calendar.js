@@ -1220,15 +1220,28 @@ export class Calendar {
         _barGhost = bar.cloneNode(true);
         _barGhost.setAttribute('draggable', 'false');
         _barGhost.querySelectorAll('[draggable]').forEach(el => el.removeAttribute('draggable'));
-        _barGhost.style.cssText = `
-          position:fixed;
-          left:${barRect.left}px;top:${barRect.top}px;
-          width:${barRect.width}px;height:${barRect.height}px;
-          z-index:9999;pointer-events:none;
-          opacity:.88;transform:scale(1.04) translateZ(0);
-          box-shadow:0 12px 40px rgba(0,0,0,.30),0 4px 12px rgba(0,0,0,.18);
-          border-radius:6px;cursor:grabbing;transition:none;
-        `;
+        // ── Quitar la clase .bar para que el CSS !important no sobreescriba top/bottom ──
+        _barGhost.className = 'bar-drag-ghost';
+        _barGhost.style.cssText = [
+          'position:fixed',
+          'left:' + barRect.left + 'px',
+          'top:' + barRect.top + 'px',
+          'width:' + barRect.width + 'px',
+          'height:' + barRect.height + 'px',
+          'z-index:9999',
+          'pointer-events:none',
+          'opacity:.88',
+          'transform:scale(1.04) translateZ(0)',
+          'box-shadow:0 12px 40px rgba(0,0,0,.30),0 4px 12px rgba(0,0,0,.18)',
+          'border-radius:6px',
+          'cursor:grabbing',
+          'transition:none',
+          'background:inherit',
+          'display:flex',
+          'align-items:center',
+          'padding:0 8px',
+          'overflow:hidden',
+        ].join(';');
         document.body.appendChild(_barGhost);
         bar.style.opacity = '0.3';
       };
@@ -1266,13 +1279,24 @@ export class Calendar {
       _ghostInitFn = () => {
         _barGhost = bar.cloneNode(true);
         _barGhost.setAttribute('draggable', 'false');
-        _barGhost.style.cssText = `
-          position:fixed;left:${barRect.left}px;top:${barRect.top}px;
-          width:${barRect.width}px;height:${barRect.height}px;
-          z-index:9999;pointer-events:none;opacity:.88;
-          transform:scale(1.04);border-radius:6px;
-          box-shadow:0 12px 40px rgba(0,0,0,.3);transition:none;
-        `;
+        _barGhost.className = 'bar-drag-ghost';
+        _barGhost.style.cssText = [
+          'position:fixed',
+          'left:' + barRect.left + 'px',
+          'top:' + barRect.top + 'px',
+          'width:' + barRect.width + 'px',
+          'height:' + barRect.height + 'px',
+          'z-index:9999',
+          'pointer-events:none',
+          'opacity:.88',
+          'transform:scale(1.04)',
+          'border-radius:6px',
+          'box-shadow:0 12px 40px rgba(0,0,0,.3)',
+          'transition:none',
+          'display:flex',
+          'align-items:center',
+          'padding:0 8px',
+        ].join(';');
         document.body.appendChild(_barGhost);
         bar.style.opacity = '0.3';
       };

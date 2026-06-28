@@ -788,8 +788,10 @@
    ═══════════════════════════════════════════════════════ */
 
 /* ── Ocupación: ancho compacto fijo en el grid ── */
+/* Dashboard: auto-fill evita columnas vacías al ocultar cards */
 #dashboard-custom-grid {
-  grid-template-columns: repeat(4, 1fr) !important;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)) !important;
+  align-items: start !important;
 }
 /* Ocupación card: sin forzar columna entera — ocupa 1 col pero
    con un max-width para que el ring no quede gigante */
@@ -836,4 +838,143 @@
     top: auto !important;
     position: fixed !important;
   }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   MOBILE — EXPERIENCIA SIMPLIFICADA
+   Objetivo: rápido, simple, sin zoom, sin superposición
+   Breakpoints: ≤768px tablet/mobile, ≤480px smartphone
+   ═══════════════════════════════════════════════════════════════ */
+
+@media (max-width: 768px) {
+
+  /* ── HEADER ── */
+  .app-header {
+    padding: 0 12px !important;
+    height: 52px !important;
+    gap: 8px !important;
+  }
+  .header-brand .brand-name { display: none; } /* Ocultar "Sistema Inteligente" */
+  .header-center { flex: 1; min-width: 0; }
+  .dollar-widget-compact { display: none; } /* Dólar va al dashboard, no al header */
+
+  /* ── SIDEBAR: Ocultar en mobile (usa bottom-nav) ── */
+  .sidebar {
+    transform: translateX(-100%) !important;
+    transition: transform .25s !important;
+  }
+  .sidebar.open {
+    transform: translateX(0) !important;
+  }
+  /* Sidebar toggle oculto — navegación por bottom nav */
+  .sidebar-toggle { display: none !important; }
+
+  /* Bottom nav más prominente */
+  .bottom-nav {
+    display: flex !important;
+    height: 60px !important;
+    padding-bottom: env(safe-area-inset-bottom, 0) !important;
+  }
+  .bnav-item {
+    font-size: .62rem !important;
+    padding: 6px 0 8px !important;
+  }
+  .bnav-item span { font-size: .62rem !important; }
+
+  /* ── MAIN CONTENT: ajustar por bottom nav ── */
+  .main-content {
+    padding: 12px 12px 72px !important; /* 72px para bottom nav */
+    min-height: calc(100dvh - 52px) !important;
+  }
+
+  /* ── DASHBOARD MOBILE ── */
+  #kpi-grid {
+    grid-template-columns: 1fr 1fr !important;
+    gap: 8px !important;
+  }
+  .kpi-card { padding: 12px !important; }
+  .kpi-value { font-size: 1.6rem !important; }
+  .kpi-label { font-size: .65rem !important; }
+  .kpi-icon-wrap { width: 32px !important; height: 32px !important; }
+  .kpi-icon-wrap svg { width: 16px !important; height: 16px !important; }
+
+  #dashboard-custom-grid {
+    grid-template-columns: 1fr !important;
+    gap: 10px !important;
+  }
+  /* En mobile mostrar solo los cards más importantes */
+  .dash-card[data-card-id="revpar"],
+  .dash-card[data-card-id="dinero-asegurado"] {
+    display: none !important; /* simplificar vista mobile */
+  }
+  .dash-drag-handle { display: none !important; } /* No drag en mobile */
+
+  /* Cards más compactos en mobile */
+  .dash-card.card { padding: 14px !important; }
+  .card-header h3 { font-size: .82rem !important; }
+
+  /* Ocupación: horizontal en mobile */
+  .dash-card.widget-occupancy { max-width: none !important; }
+  .widget-occupancy .ring-wrapper { flex-direction: row !important; gap: 16px !important; }
+  .widget-occupancy .progress-ring { width: 80px !important; height: 80px !important; }
+  .widget-occupancy .ring-pct { font-size: 1.2rem !important; }
+
+  /* ── CALENDARIO MOBILE ── */
+  .cal-toolbar { flex-wrap: wrap !important; padding: 6px 8px !important; height: auto !important; }
+  .cal-tb-nav { order: 1; flex: 1; }
+  .cal-tb-search { order: 3; width: 100%; }
+  .cal-tb-search-input { width: 100% !important; }
+  .cal-tb-actions { order: 2; gap: 2px; }
+  .cal-tb-hint { display: none !important; }
+
+  #cal-summary-bar { display: none !important; }
+
+  /* ── FORMULARIO DE RESERVA ── */
+  .modal { width: 100vw !important; max-width: 100vw !important; }
+
+  /* ── RESERVAS MOBILE ── */
+  .booking-card { padding: 10px 12px !important; }
+  .filter-row { flex-direction: column !important; }
+  .filter-select, .filter-input { min-width: 0 !important; }
+
+  /* ── HUÉSPEDES MOBILE ── */
+  .guest-list-card { padding: 10px 12px !important; }
+  #guests-destacados-area { display: none !important; } /* Ocultar destacados en mobile */
+
+  /* ── OPERACIONES MOBILE ── */
+  .ops-grid { grid-template-columns: 1fr !important; }
+}
+
+@media (max-width: 480px) {
+
+  /* KPIs aún más compactos */
+  #kpi-grid { grid-template-columns: 1fr 1fr !important; }
+  .kpi-value { font-size: 1.4rem !important; }
+
+  /* App header mínimo */
+  .app-header { padding: 0 8px !important; }
+  #btn-new-booking {
+    width: 36px !important; height: 36px !important;
+    border-radius: 50% !important; padding: 0 !important;
+  }
+  #btn-new-booking .btn-label { display: none !important; }
+  #btn-new-booking::after { content: '+'; font-size: 1.4rem; font-weight: 300; }
+  #btn-new-booking svg { display: none !important; }
+
+  /* Tipografía base más grande para legibilidad */
+  body { font-size: 15px !important; }
+
+  /* Calendario: celdas más altas para tap fácil */
+  :root { --cal-cell-h: 52px !important; }
+  .cal-unit-label { min-height: 52px !important; padding: 6px 8px !important; }
+  .cal-unit-label > div:first-child span[style*="font-weight:700"] { font-size: .75rem !important; }
+  .unit-floor { display: none !important; }
+}
+
+/* ── MODO LANDSCAPE MOBILE ── */
+@media (max-width: 768px) and (orientation: landscape) {
+  .sidebar { height: 52px !important; }
+  .nav-label { display: none !important; }
+  .nav-item { padding: 6px 0 !important; min-height: 52px !important; }
+  .main-content { padding-bottom: 62px !important; }
 }
