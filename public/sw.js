@@ -3,7 +3,7 @@
 // HTML siempre de red, assets cacheados, offline queue
 // ═══════════════════════════════════════════════════
 
-const V  = '8.4.0'; // bumped to force cache clear
+const V  = '8.5.0'; // bumped to force cache clear
 const CA = `mila-app-${V}`;
 
 self.addEventListener('install', e => {

@@ -942,6 +942,8 @@ function _updateDollarUI(rates) {
   if (statusEl) {
     statusEl.textContent = rates.stale ? '⚠ Caché' : '✓ Actualizado';
   }
+  // Actualizar widget del dashboard (nuevo formato)
+  window._dashboardInstance?._renderDollar(rates);
 }
 
 async function loadDollarBadge() {
