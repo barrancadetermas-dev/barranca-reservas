@@ -90,8 +90,13 @@ export class Calendar {
       const reminderMap = this._buildReminderMap(reminders);
       this._render(cellMap, reminderMap);
 
+      // ── 5. Barra de resumen superior ──
+      this._renderSummaryBar(bookings);
+
+      // ── 6. Heatmap por fila (muy sutil) ──
+      this._applyHeatmap(bookings);
+
       // Bindear eventos de drag/resize una vez por sesión de grid
-      // (el grid div persiste; solo su contenido cambia)
       if (!this._barDragAbort) {
         const grid = document.getElementById('calendar-grid');
         if (grid) {
@@ -284,13 +289,11 @@ export class Calendar {
       dh.dataset.date = iso;
       dh.title = holiday?.label ?? '';
 
-      dh.innerHTML = `
-        ${showMonth ? `<span class="dh-month${dayOfMon === 1 && colIdx !== 0 ? ' dh-month-new' : ''}">${MONTH_SHORT[date.getMonth()]}</span>` : ''}
-        <span class="dh-num">${dayOfMon}</span>
-        <span class="day-name">${DAY_NAMES[dow]}</span>
-        ${hasRem  ? '<div class="dh-rem-dot"></div>' : ''}
-        ${isToday ? '<div class="dh-today-dot"></div>' : ''}
-      `;
+      dh.innerHTML = (showMonth ? '<span class="dh-month' + (dayOfMon === 1 && colIdx !== 0 ? ' dh-month-new' : '') + '">' + MONTH_SHORT[date.getMonth()] + '</span>' : '') +
+        '<span class="dh-num">' + dayOfMon + '</span>' +
+        (isToday ? '<span class="dh-hoy">HOY</span>' : '<span class="day-name">' + DAY_NAMES[dow] + '</span>') +
+        (hasRem  ? '<div class="dh-rem-dot"></div>' : '') +
+        (isToday ? '<div class="dh-today-dot"></div>' : '');
       grid.appendChild(dh);
     });
 
@@ -660,7 +663,64 @@ export class Calendar {
       cache.invalidate('bookings');
       this.load();
     });
+
+    // ── 4. Mini-calendario → navega el calendario principal ──
+    this._bindMiniCalSync();
+
     this.setupViewToggle();
+  }
+
+  // Sincroniza clicks en el mini-cal con el calendario principal
+  _bindMiniCalSync() {
+    // Observer: cada vez que el mini-cal se re-renderiza, re-bind los días
+    const container = document.getElementById('sidebar-mini-cal')
+                   ?? document.querySelector('.sidebar-mini-cal');
+    if (!container) {
+      // Si aún no existe, observar el sidebar-cal-container
+      const parent = document.getElementById('sidebar-cal-container');
+      if (parent) {
+        new MutationObserver(() => this._bindMiniCalDays()).observe(parent, { childList: true, subtree: true });
+      }
+    }
+    this._bindMiniCalDays();
+    // Re-bind tras navegación del mini-cal
+    const obs = new MutationObserver(() => this._bindMiniCalDays());
+    const target = document.getElementById('sidebar-cal-container');
+    if (target) obs.observe(target, { childList: true, subtree: true });
+  }
+
+  _bindMiniCalDays() {
+    const days = document.querySelectorAll('#sidebar-mini-cal .smc-day:not(.smc-empty)');
+    days.forEach(cell => {
+      if (cell.dataset.calBound) return;
+      cell.dataset.calBound = '1';
+      cell.addEventListener('click', () => {
+        // Extraer año/mes del título del mini-cal
+        const titleEl = document.querySelector('#sidebar-mini-cal .smc-title');
+        if (!titleEl) return;
+        // Título es "junio 2026" (es-AR locale)
+        const titleText = titleEl.textContent ?? '';
+        const yearMatch = titleText.match(/\d{4}/);
+        if (!yearMatch) return;
+        const year  = parseInt(yearMatch[0]);
+        // Month: find by month name in title
+        const MONTHS_ES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+        const monthIdx = MONTHS_ES.findIndex(m => titleText.toLowerCase().includes(m));
+        if (monthIdx < 0) return;
+
+        const day = parseInt(cell.querySelector('.smc-num')?.textContent ?? '1');
+        const isoDate = year + '-' + String(monthIdx + 1).padStart(2,'0') + '-' + String(day).padStart(2,'0');
+
+        // Resaltar el día seleccionado en el mini-cal
+        document.querySelectorAll('#sidebar-mini-cal .smc-day').forEach(d => d.classList.remove('smc-selected'));
+        cell.classList.add('smc-selected');
+
+        // Navegar el calendario principal a esa fecha (centrada)
+        this._windowStart = this._addDays(isoDate, -PAST_OFFSET);
+        cache.invalidate('bookings');
+        this.load();
+      });
+    });
   }
 
   // ══════════════════════════════════════════════════
@@ -1919,5 +1979,97 @@ export class Calendar {
     if (!iso) return '';
     const [,m,d] = iso.split('-');
     return `${parseInt(d)} ${MONTH_SHORT[parseInt(m)-1]}`;
+  }
+  // ══════════════════════════════════════════════════
+  // 5. BARRA DE RESUMEN SUPERIOR
+  // ══════════════════════════════════════════════════
+  _renderSummaryBar(bookings) {
+    // Buscar o crear el contenedor
+    let bar = document.getElementById('cal-summary-bar');
+    if (!bar) {
+      const toolbar = document.querySelector('.cal-toolbar');
+      if (!toolbar) return;
+      bar = document.createElement('div');
+      bar.id = 'cal-summary-bar';
+      toolbar.after(bar);
+    }
+
+    const today       = localToday();
+    const totalUnits  = this.ctx.units?.length ?? 0;
+    const occupied    = new Set();
+    const checkins    = [];
+    const checkouts   = [];
+    const blocks      = [];
+
+    bookings.forEach(b => {
+      if (b.status === 'blocked' || b.is_blocked) {
+        if (b.check_in <= today && b.check_out > today) blocks.push(b);
+        return;
+      }
+      if (b.check_in <= today && b.check_out > today) {
+        (b.booking_units ?? []).forEach(bu => occupied.add(bu.unit_id));
+      }
+      if (b.check_in === today) checkins.push(b);
+      if (b.check_out === today) checkouts.push(b);
+    });
+
+    const occCount   = occupied.size;
+    const freeCount  = Math.max(0, totalUnits - occCount - blocks.length);
+    const occPct     = totalUnits > 0 ? Math.round(occCount / totalUnits * 100) : 0;
+
+    const kpi = (icon, val, lbl, color) =>
+      '<div class="cal-kpi">' +
+        '<span class="cal-kpi-icon">' + icon + '</span>' +
+        '<span class="cal-kpi-val" style="color:' + (color || 'var(--color-text)') + '">' + val + '</span>' +
+        '<span class="cal-kpi-lbl">' + lbl + '</span>' +
+      '</div>';
+
+    bar.innerHTML =
+      kpi('🏠', occCount, 'ocupadas', occCount > 0 ? '#f59e0b' : 'var(--color-text)') +
+      kpi('✅', freeCount, 'disponibles', freeCount > 0 ? '#16a34a' : '#ef4444') +
+      kpi('→', checkins.length, 'check-ins hoy', checkins.length > 0 ? 'var(--color-primary)' : 'var(--color-text)') +
+      kpi('←', checkouts.length, 'check-outs hoy', checkouts.length > 0 ? '#7c3aed' : 'var(--color-text)') +
+      (blocks.length ? kpi('🔒', blocks.length, 'bloqueados', '#94a3b8') : '') +
+      kpi('📊', occPct + '%', 'ocupación', occPct >= 80 ? '#ef4444' : occPct >= 50 ? '#f59e0b' : '#16a34a');
+  }
+
+  // ══════════════════════════════════════════════════
+  // 6. HEATMAP: fondo muy sutil por nivel de ocupación
+  // ══════════════════════════════════════════════════
+  _applyHeatmap(bookings) {
+    const grid  = document.getElementById('calendar-grid');
+    if (!grid) return;
+
+    const today   = localToday();
+    const future  = this._dateRange.filter(d => d >= today);
+    if (!future.length) return;
+
+    // Para cada unidad, calcular % de ocupación futura y colorear las celdas de esa fila
+    this.ctx.units?.forEach(unit => {
+      const cells = grid.querySelectorAll(`.cal-cell[data-unit-id="${unit.id}"]`);
+      if (!cells.length) return;
+
+      const occupied = future.filter(d =>
+        bookings.some(b =>
+          !b.is_blocked && b.status !== 'blocked' && b.status !== 'cancelled' &&
+          (b.booking_units ?? []).some(bu => bu.unit_id === unit.id) &&
+          b.check_in <= d && b.check_out > d
+        )
+      ).length;
+
+      const pct = future.length > 0 ? occupied / future.length : 0;
+      const heat = pct >= .85 ? 'full' : pct >= .55 ? 'high' : pct >= .30 ? 'medium' : pct > 0 ? 'low' : '';
+
+      // Aplicar solo a celdas futuras vacías (no sobreescribir celdas con reserva)
+      cells.forEach(cell => {
+        const cellDate = cell.dataset.date;
+        if (!cellDate || cellDate < today) return;
+        if (heat && !cell.querySelector('.bar')) {
+          cell.dataset.heat = heat;
+        } else {
+          delete cell.dataset.heat;
+        }
+      });
+    });
   }
 }

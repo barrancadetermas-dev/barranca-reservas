@@ -595,12 +595,18 @@
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: var(--sp-16);
-  align-items: start;
+  /* stretch = todos los cards de la misma fila tienen la misma altura */
+  align-items: stretch;
+  grid-auto-rows: auto;
 }
 
+/* Cards: misma altura mínima, contenido scrolleable si desborda */
 .dash-card {
   position: relative;
   cursor: default;
+  display: flex;
+  flex-direction: column;
+  min-height: 160px;
   transition: box-shadow .2s, opacity .2s, transform .15s;
 }
 .dash-card.drag-source {
