@@ -76,6 +76,10 @@ export class AuditPanel {
           <button class="btn btn-outline btn-sm" id="audit-clear-view" title="Colapsar todo" style="color:var(--color-text-3)">
             Colapsar
           </button>
+          <button class="btn btn-outline btn-sm" id="audit-clear-all" title="Borrar todo el registro (solo admin)"
+            style="color:#ef4444;border-color:#fecaca;margin-left:auto">
+            🗑 Limpiar registro
+          </button>
         </div>
       </div>
       <div id="audit-log-list"></div>
@@ -103,7 +107,49 @@ export class AuditPanel {
       this._displayed += PAGE_SIZE;
       this._renderLogs(container);
     });
-  }
+
+    // ── Limpiar todo el registro (solo admin) con contraseña ──
+    container.querySelector('#audit-clear-all')?.addEventListener('click', async () => {
+      const confirmed = confirm(
+        '⚠️ ¿Borrar TODOS los registros de auditoría?\n\n' +
+        'Esta acción no se puede deshacer.\n\n' +
+        'Se eliminará el historial completo de actividad del sistema.'
+      );
+      if (!confirmed) return;
+
+      const pass = prompt('Ingresá tu contraseña de sesión para confirmar:');
+      if (!pass) return;
+
+      try {
+        // Verificar contraseña re-autenticando con Supabase
+        const { data: { user } } = await this.db.auth.getUser();
+        if (!user?.email) throw new Error('No hay sesión activa');
+
+        const { error: authErr } = await this.db.auth.signInWithPassword({
+          email: user.email,
+          password: pass,
+        });
+        if (authErr) throw new Error('Contraseña incorrecta');
+
+        // Borrar todos los registros del hotel
+        const { error: delErr } = await this.db
+          .from('audit_log')
+          .delete()
+          .eq('hotel_id', this.ctx.hotelId);
+
+        if (delErr) throw delErr;
+
+        document.dispatchEvent(new CustomEvent('show:toast', {
+          detail: { msg: '🗑 Registro de auditoría eliminado', type: 'success' }
+        }));
+        await this._loadLogs(container, true);
+      } catch (err) {
+        document.dispatchEvent(new CustomEvent('show:toast', {
+          detail: { msg: 'Error: ' + (err?.message ?? String(err)), type: 'error' }
+        }));
+      }
+    });
+  } // end _bindEvents
 
   async _loadLogs(container, reset = false) {
     const list = container.querySelector('#audit-log-list');

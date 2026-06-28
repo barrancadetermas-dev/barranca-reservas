@@ -226,23 +226,59 @@ export class Dashboard {
     applyOrder();
     applyVisibility();
 
+    // ── Card resize en modo edición ──────────────────
+    const applySize = (id, size) => {
+      const el = document.querySelector('[data-card-id="' + id + '"]');
+      if (!el) return;
+      el.dataset.size = size;
+    };
+    // Apply saved sizes on load
+    CARDS.forEach(({ id }) => {
+      const size = cfg[id]?.size ?? '1x1';
+      applySize(id, size);
+    });
+
     // ── Toggle checkboxes ──────────────────────────────
     const togglesEl = document.getElementById('dash-card-toggles');
     if (togglesEl) {
       const renderToggles = () => {
+        const SIZES = ['1x1','2x1','1x2','2x2'];
+        const SIZE_LABELS = {'1x1':'S','2x1':'W','1x2':'T','2x2':'L'};
         togglesEl.innerHTML = CARDS.map(({ id, label }) => {
-          const vis = isVisible(id);
-          return '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;' +
+          const vis  = isVisible(id);
+          const size = cfg[id]?.size ?? '1x1';
+          const sizeHTML = SIZES.map(s =>
+            '<button data-card-size="' + id + ':' + s + '" style="' +
+            'font-size:.62rem;width:22px;height:20px;border:1px solid ' + (s === size ? 'var(--color-primary)' : 'var(--color-border)') + ';' +
+            'border-radius:3px;cursor:pointer;background:' + (s === size ? 'var(--color-primary)' : 'var(--color-surface)') + ';' +
+            'color:' + (s === size ? '#fff' : 'var(--color-text-3)') + ';font-weight:700;padding:0">' + SIZE_LABELS[s] + '</button>'
+          ).join('');
+          return '<div style="display:flex;flex-direction:column;gap:3px">' +
+            '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;' +
             'padding:5px 10px;border-radius:8px;' +
             'border:1px solid ' + (vis ? 'var(--color-primary)' : 'var(--color-border)') + ';' +
             'background:' + (vis ? 'var(--color-primary-l)' : 'var(--color-surface-2)') + ';' +
             'font-size:.78rem;font-weight:600;' +
             'color:' + (vis ? 'var(--color-primary)' : 'var(--color-text-3)') + '">' +
             '<input type="checkbox" ' + (vis ? 'checked' : '') + ' data-card-toggle="' + id + '" ' +
-            'style="accent-color:var(--color-primary)"> ' + label + '</label>';
+            'style="accent-color:var(--color-primary)"> ' + label + '</label>' +
+            '<div style="display:flex;gap:3px;padding:0 6px">' + sizeHTML + '</div>' +
+          '</div>';
         }).join('');
       };
       renderToggles();
+
+      togglesEl.addEventListener('click', e => {
+        const sBtn = e.target.dataset?.cardSize;
+        if (sBtn) {
+          const [id, size] = sBtn.split(':');
+          if (!cfg[id]) cfg[id] = {};
+          cfg[id].size = size;
+          saveCfg();
+          applySize(id, size);
+          renderToggles();
+        }
+      });
 
       togglesEl.addEventListener('change', e => {
         const cb = e.target;
@@ -544,49 +580,87 @@ export class Dashboard {
 
   // ── Render KPI cards ──────────────────────────────
   _renderKPIs(kpis, today) {
-    // Check-ins (con contador animado + tooltip on-hover)
+    const gName = b => b.guests ? (b.guests.first_name ?? '') + ' ' + (b.guests.last_name ?? '') : null;
+    const uName = b => b.booking_units?.[0]?.units?.name ?? null;
+    const uColor= b => b.booking_units?.[0]?.units?.color ?? null;
+
+    // Helper: set secondary text under KPI number
+    const setSec = (id, html) => {
+      const el = document.getElementById(id + '-sec');
+      if (el) el.innerHTML = html || '';
+    };
+
+    // ── Check-ins ──
     const ciEl = document.getElementById('kpi-checkins-val');
     this._setKPI('kpi-checkins-val', kpis.checkins.length);
     this._animateCounter(ciEl, kpis.checkins.length);
-    this._bindKpiTooltip('kpi-checkins', {
-      emptyText: 'No hay ingresos programados para hoy.',
-      lines: kpis.checkins.map(b => {
-        const guest = b.guests ? `${b.guests.first_name ?? ''} ${b.guests.last_name ?? ''}`.trim() : '—';
-        const unit  = b.booking_units?.[0]?.units?.name ?? '—';
-        return `Departamento ${unit} — ${guest}`;
-      }),
-    });
+    if (kpis.checkins.length === 1) {
+      const b = kpis.checkins[0];
+      const col = uColor(b) ?? 'var(--color-primary)';
+      setSec('kpi-checkins',
+        '<span style="display:inline-flex;align-items:center;gap:4px">' +
+        '<span style="width:6px;height:6px;border-radius:50%;background:' + col + ';flex-shrink:0"></span>' +
+        '<span style="font-size:.68rem;color:var(--color-text-2);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:120px">' +
+        (gName(b) || '—') + ' · ' + (uName(b) || '—') + '</span></span>');
+    } else if (kpis.checkins.length > 1) {
+      setSec('kpi-checkins', '<span style="font-size:.68rem;color:var(--color-text-3)">' + kpis.checkins.map(b => uName(b) ?? '—').join(' · ') + '</span>');
+    } else {
+      setSec('kpi-checkins', '<span style="font-size:.68rem;color:var(--color-text-3)">Sin llegadas hoy</span>');
+    }
+    this._bindKpiTooltip('kpi-checkins', { emptyText: 'No hay ingresos para hoy.',
+      lines: kpis.checkins.map(b => (uName(b) ?? '—') + ' — ' + (gName(b) || '—')) });
 
+    // ── Check-outs ──
     const coEl = document.getElementById('kpi-checkouts-val');
     this._setKPI('kpi-checkouts-val', kpis.checkouts.length);
     this._animateCounter(coEl, kpis.checkouts.length);
-    this._bindKpiTooltip('kpi-checkouts', {
-      emptyText: 'No hay egresos programados para hoy.',
-      lines: kpis.checkouts.map(b => {
-        const guest = b.guests ? `${b.guests.first_name ?? ''} ${b.guests.last_name ?? ''}`.trim() : '—';
-        const unit  = b.booking_units?.[0]?.units?.name ?? '—';
-        return `Departamento ${unit} — ${guest}`;
-      }),
-    });
+    if (kpis.checkouts.length === 1) {
+      const b = kpis.checkouts[0];
+      const col = uColor(b) ?? '#f59e0b';
+      setSec('kpi-checkouts',
+        '<span style="display:inline-flex;align-items:center;gap:4px">' +
+        '<span style="width:6px;height:6px;border-radius:50%;background:' + col + ';flex-shrink:0"></span>' +
+        '<span style="font-size:.68rem;color:var(--color-text-2);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:120px">' +
+        (gName(b) || '—') + ' · ' + (uName(b) || '—') + '</span></span>');
+    } else if (kpis.checkouts.length > 1) {
+      setSec('kpi-checkouts', '<span style="font-size:.68rem;color:var(--color-text-3)">' + kpis.checkouts.map(b => uName(b) ?? '—').join(' · ') + '</span>');
+    } else {
+      setSec('kpi-checkouts', '<span style="font-size:.68rem;color:var(--color-text-3)">Sin salidas hoy</span>');
+    }
+    this._bindKpiTooltip('kpi-checkouts', { emptyText: 'No hay egresos para hoy.',
+      lines: kpis.checkouts.map(b => (uName(b) ?? '—') + ' — ' + (gName(b) || '—')) });
 
+    // ── Recambios ──
     const rcEl = document.getElementById('kpi-recambios-val');
     this._setKPI('kpi-recambios-val', kpis.recambios.length);
     this._animateCounter(rcEl, kpis.recambios.length);
-    this._bindKpiTooltip('kpi-recambios', {
-      emptyText: 'No hay recambios programados para hoy.',
-      blocks: kpis.recambios.map(r => ({
-        title: `Departamento ${r.unitName}`,
-        rows: [`Sale: ${r.outGuest}`, '↓', `Entra: ${r.inGuest}`],
-      })),
-    });
+    if (kpis.recambios.length >= 1) {
+      const r = kpis.recambios[0];
+      setSec('kpi-recambios',
+        '<span style="font-size:.66rem;color:var(--color-text-2)">' + r.unitName + '</span>' +
+        '<br><span style="font-size:.63rem;color:var(--color-text-3)">' + r.outGuest + ' → ' + r.inGuest + '</span>');
+    } else {
+      setSec('kpi-recambios', '<span style="font-size:.68rem;color:var(--color-text-3)">Sin recambios</span>');
+    }
+    this._bindKpiTooltip('kpi-recambios', { emptyText: 'No hay recambios para hoy.',
+      blocks: kpis.recambios.map(r => ({ title: r.unitName, rows: ['Sale: ' + r.outGuest, '↓', 'Entra: ' + r.inGuest] })) });
 
+    // ── Unidades alojadas ──
     const guEl = document.getElementById('kpi-guests-val');
     this._setKPI('kpi-guests-val', kpis.occupiedUnits);
     this._animateCounter(guEl, kpis.occupiedUnits);
-    this._bindKpiTooltip('kpi-guests', {
-      emptyText: 'No hay unidades ocupadas.',
-      lines: (kpis.occupiedDetail ?? []).map(o => `Departamento ${o.unitName} — ${o.guestName}`),
-    });
+    const occ = kpis.occupiedDetail ?? [];
+    if (occ.length === 1) {
+      setSec('kpi-guests',
+        '<span style="font-size:.68rem;color:var(--color-text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:130px">' +
+        occ[0].unitName + ' · ' + occ[0].guestName + '</span>');
+    } else if (occ.length > 1) {
+      setSec('kpi-guests', '<span style="font-size:.68rem;color:var(--color-text-3)">' + occ.slice(0,3).map(o => o.unitName).join(' · ') + (occ.length > 3 ? '...' : '') + '</span>');
+    } else {
+      setSec('kpi-guests', '<span style="font-size:.68rem;color:var(--color-text-3)">Complejo libre</span>');
+    }
+    this._bindKpiTooltip('kpi-guests', { emptyText: 'No hay unidades ocupadas.',
+      lines: occ.map(o => o.unitName + ' — ' + o.guestName) });
 
     // Nuevos widgets
     this._renderRevenueCard(kpis.revenue ?? {});

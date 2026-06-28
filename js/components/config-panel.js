@@ -101,11 +101,11 @@ export class ConfigPanel {
     // ── Unidades ─────────────────────────────────────
     const unitsHTML = `
       <div class="config-group" id="cfg-acc-units">
-        <button class="config-acc-header open" data-acc="units">
+        <button class="config-acc-header" data-acc="units">
           <span><span class="config-acc-icon">🏠</span> Departamentos / Unidades</span>
-          <svg class="config-acc-chevron" style="transform:rotate(180deg)" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="14" height="14"><polyline points="6 9 12 15 18 9"/></svg>
+          <svg class="config-acc-chevron" style="transform:" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="14" height="14"><polyline points="6 9 12 15 18 9"/></svg>
         </button>
-        <div class="config-acc-body open" id="cfg-body-units">
+        <div class="config-acc-body" id="cfg-body-units">
           <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px">
             ${(this.ctx.units ?? []).map(u => `
               <div style="padding:10px 12px;border:1px solid var(--color-border);
@@ -125,23 +125,26 @@ export class ConfigPanel {
         </div>
       </div>`;
 
-    // ── Grupos con accordion ──────────────────────────
-    const OPEN_DEFAULT = new Set(['Comisiones por canal (%)', 'Operación', 'Reservas']);
+    // ── Grupos con accordion — cerrados por defecto, estado en sessionStorage ──
+    const ACC_KEY = 'mila_cfg_acc';
+    const savedAcc = JSON.parse(sessionStorage.getItem(ACC_KEY) ?? 'null') ?? {};
+    // Default: todo cerrado (sin OPEN_DEFAULT)
+    const isOpen = (group) => savedAcc[group] === true;
 
     const groupsHTML = CONFIG_SCHEMA.map((group, gi) => {
       const accId  = `cfg-acc-${gi}`;
       const bodyId = `cfg-body-${gi}`;
-      const isOpen = OPEN_DEFAULT.has(group.group);
+      const open   = isOpen(group.group);
       return `
         <div class="config-group" id="${accId}">
-          <button class="config-acc-header ${isOpen ? 'open' : ''}" data-acc="${gi}">
+          <button class="config-acc-header ${open ? 'open' : ''}" data-acc="${gi}">
             <span><span class="config-acc-icon">${group.icon}</span> ${group.group}</span>
-            <svg class="config-acc-chevron" style="transform:${isOpen ? 'rotate(180deg)' : ''}"
+            <svg class="config-acc-chevron" style="transform:${open ? 'rotate(180deg)' : ''}"
                  viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="14" height="14">
               <polyline points="6 9 12 15 18 9"/>
             </svg>
           </button>
-          <div class="config-acc-body ${isOpen ? 'open' : ''}" id="${bodyId}">
+          <div class="config-acc-body ${open ? 'open' : ''}" id="${bodyId}">
             <div class="config-fields">
               ${group.fields.map(f => {
                 const val = this._getValue(f.key, f.default);
@@ -285,23 +288,17 @@ export class ConfigPanel {
 
         <!-- ── Changelog ────────────────────────────────── -->
         <div style="background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--r-xl);padding:20px">
-          <div style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--color-text-3);margin-bottom:12px">📋 Changelog MILA PMS</div>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+            <div style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--color-text-3)">📋 MILA PMS</div>
+            <span style="background:var(--color-primary);color:#fff;padding:2px 10px;border-radius:var(--r-full);font-size:.72rem;font-weight:800">V.01</span>
+          </div>
           <div style="font-size:.78rem;color:var(--color-text-2);line-height:1.6">
-            ${[
-              ['v5.0','Jun 2026','Calendar v5: vista continua, ghost profesional, resize táctil'],
-              ['v4.8','Jun 2026','Dashboard rediseñado · Destacados · Sorting de huéspedes'],
-              ['v4.5','Jun 2026','Panel de Control profesional · Nombre unificado · Cards unificados'],
-              ['v4.0','Jun 2026','Etiquetas corregidas · P&L accesible · Mobile mejorado'],
-              ['v3.x','May 2026','Bloqueos · Estadísticas · USD widget · Auditoría'],
-              ['v2.x','May 2026','Drag-drop · Reservas · Huéspedes CRM'],
-            ].map(([v,d,txt]) =>
-              '<div style="display:flex;gap:10px;padding:6px 0;border-bottom:1px solid var(--color-border)">' +
-                '<span style="background:var(--color-primary-light);color:var(--color-primary);' +
-                             'padding:1px 8px;border-radius:var(--r-full);font-size:.68rem;' +
-                             'font-weight:700;flex-shrink:0;height:fit-content">' + v + '</span>' +
-                '<div><span style="color:var(--color-text-3);font-size:.7rem">' + d + ' ·</span> ' + txt + '</div>' +
-              '</div>'
-            ).join('')}
+            <div style="padding:8px 0;border-bottom:1px solid var(--color-border);color:var(--color-text-3)">
+              Sistema de gestión en etapa de desarrollo activo. Las funciones se incorporan de forma incremental.
+            </div>
+            <div style="padding:8px 0;font-size:.75rem;color:var(--color-text-3)">
+              Las actualizaciones se documentan internamente. Versión actual: <strong style="color:var(--color-primary)">V.01</strong>
+            </div>
           </div>
         </div>
       </div>
@@ -534,14 +531,22 @@ export class ConfigPanel {
     });
 
     // Accordion toggle
+    const ACC_SESSION_KEY = 'mila_cfg_acc';
     container.querySelectorAll('.config-acc-header').forEach(btn => {
       btn.addEventListener('click', () => {
         const body    = btn.nextElementSibling;
         const chevron = btn.querySelector('.config-acc-chevron');
-        const isOpen  = body.classList.contains('open');
-        body.classList.toggle('open', !isOpen);
-        btn.classList.toggle('open', !isOpen);
-        if (chevron) chevron.style.transform = isOpen ? '' : 'rotate(180deg)';
+        const wasOpen = body.classList.contains('open');
+        body.classList.toggle('open', !wasOpen);
+        btn.classList.toggle('open', !wasOpen);
+        if (chevron) chevron.style.transform = wasOpen ? '' : 'rotate(180deg)';
+        // Persistir estado en sessionStorage para esta sesión
+        const groupName = btn.querySelector('span > span:last-child, span')?.textContent?.replace(/^\S+\s/, '').trim();
+        if (groupName) {
+          const saved = JSON.parse(sessionStorage.getItem(ACC_SESSION_KEY) ?? '{}');
+          saved[groupName] = !wasOpen;
+          sessionStorage.setItem(ACC_SESSION_KEY, JSON.stringify(saved));
+        }
       });
     });
 
