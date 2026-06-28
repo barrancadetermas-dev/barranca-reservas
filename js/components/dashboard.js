@@ -64,6 +64,7 @@ export class Dashboard {
   async load() {
     window._dashboardInstance = this;
     this._renderSkeleton();
+    this._initCustomize(); // setup card visibility before rendering
     try {
       // ── Demo mode ──
       if (this.ctx.IS_DEMO) {
@@ -108,6 +109,73 @@ export class Dashboard {
   }
 
   // ── Skeleton loader — no reemplaza el HTML, solo aplica clase CSS ──
+  // ══════════════════════════════════════════════════
+  // PERSONALIZACIÓN: toggle de cards
+  // ══════════════════════════════════════════════════
+  _initCustomize() {
+    const CARDS = [
+      { id: 'llegadas',  label: '✅ Llegadas hoy' },
+      { id: 'salidas',   label: '👋 Salidas hoy' },
+      { id: 'proximas',  label: '📅 Próximas llegadas' },
+      { id: 'ocupacion', label: '🔵 Ocupación' },
+      { id: 'tareas',    label: '📋 Tareas del día' },
+      { id: 'dolar',     label: '💵 Cotización USD' },
+      { id: 'proyeccion',label: '📈 Proyección' },
+      { id: 'pnl',       label: '💰 Resultado del mes' },
+    ];
+
+    const saved = JSON.parse(localStorage.getItem('mila_dash_cards') ?? 'null') ?? {};
+    const isVisible = id => saved[id] !== false; // default visible
+
+    // Apply visibility immediately
+    CARDS.forEach(({ id }) => {
+      const el = document.querySelector(`[data-card-id="${id}"]`);
+      if (el) el.style.display = isVisible(id) ? '' : 'none';
+    });
+
+    // Setup toggle panel
+    const togglesEl = document.getElementById('dash-card-toggles');
+    if (togglesEl) {
+      togglesEl.innerHTML = CARDS.map(({ id, label }) => {
+        const vis = isVisible(id);
+        return '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;' +
+          'padding:5px 10px;border-radius:8px;border:1px solid var(--color-border);' +
+          'background:' + (vis ? 'var(--color-primary-l)' : 'var(--color-surface-2)') + ';' +
+          'font-size:.78rem;font-weight:600;color:' + (vis ? 'var(--color-primary)' : 'var(--color-text-3)') + '">' +
+          '<input type="checkbox" ' + (vis ? 'checked' : '') + ' data-card-toggle="' + id + '" ' +
+          'style="accent-color:var(--color-primary)"> ' + label +
+          '</label>';
+      }).join('');
+
+      togglesEl.addEventListener('change', e => {
+        const cb = e.target;
+        if (!cb.dataset.cardToggle) return;
+        const id = cb.dataset.cardToggle;
+        const config = JSON.parse(localStorage.getItem('mila_dash_cards') ?? '{}');
+        config[id] = cb.checked;
+        localStorage.setItem('mila_dash_cards', JSON.stringify(config));
+        // Update card visibility
+        const cardEl = document.querySelector(`[data-card-id="${id}"]`);
+        if (cardEl) cardEl.style.display = cb.checked ? '' : 'none';
+        // Update label style
+        const lbl = cb.closest('label');
+        if (lbl) {
+          lbl.style.background    = cb.checked ? 'var(--color-primary-l)' : 'var(--color-surface-2)';
+          lbl.style.color         = cb.checked ? 'var(--color-primary)'   : 'var(--color-text-3)';
+          lbl.style.borderColor   = cb.checked ? 'var(--color-primary)'   : 'var(--color-border)';
+        }
+      });
+    }
+
+    // Customize button toggle
+    const btn = document.getElementById('btn-customize-dash');
+    const panel = document.getElementById('dash-customize-panel');
+    btn?.addEventListener('click', () => {
+      if (!panel) return;
+      panel.style.display = panel.style.display === 'none' ? '' : 'none';
+    });
+  }
+
   _renderSkeleton() {
     const grid = document.getElementById('kpi-grid');
     if (!grid) return;

@@ -317,25 +317,49 @@
           </div>
         </div>
 
+        <!-- ── Personalización del dashboard ── -->
+        <div style="display:flex;align-items:center;justify-content:flex-end;margin-bottom:8px">
+          <button id="btn-customize-dash"
+            style="background:none;border:none;cursor:pointer;font-size:.72rem;color:var(--color-text-3);
+                   display:flex;align-items:center;gap:4px;padding:4px 8px;border-radius:6px"
+            onmouseover="this.style.background='var(--color-surface-2)'" onmouseout="this.style.background='none'">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13">
+              <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/>
+            </svg>
+            Personalizar
+          </button>
+        </div>
+
+        <!-- Panel de personalización -->
+        <div id="dash-customize-panel" style="display:none;background:var(--color-surface);border:1px solid var(--color-border);
+          border-radius:var(--r-xl);padding:16px 20px;margin-bottom:12px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+            <span style="font-size:.82rem;font-weight:700;color:var(--color-text)">🎛️ Cards visibles</span>
+            <button onclick="document.getElementById('dash-customize-panel').style.display='none'"
+              style="background:none;border:none;cursor:pointer;font-size:1rem;color:var(--color-text-3)">✕</button>
+          </div>
+          <div style="display:flex;flex-wrap:wrap;gap:8px" id="dash-card-toggles"></div>
+        </div>
+
         <!-- ── Fila 2: Operativa del día (4 col) ── -->
         <div class="dashboard-widgets" style="grid-template-columns:1fr 1fr 1fr 200px">
           <!-- Llegadas hoy -->
-          <div class="card widget-arrivals">
+          <div class="card widget-arrivals" data-card-id="llegadas">
             <div class="card-header"><h3>✅ Llegadas hoy</h3></div>
             <div class="arrivals-list" id="arrivals-list"><p class="empty-state-sm">Sin llegadas hoy</p></div>
           </div>
           <!-- Salidas hoy -->
-          <div class="card widget-arrivals">
+          <div class="card widget-arrivals" data-card-id="salidas">
             <div class="card-header"><h3>👋 Salidas hoy</h3></div>
             <div class="arrivals-list" id="departures-list"><p class="empty-state-sm">Sin salidas hoy</p></div>
           </div>
           <!-- Próximas llegadas -->
-          <div class="card widget-upcoming">
+          <div class="card widget-upcoming" data-card-id="proximas">
             <div class="card-header"><h3>Próximas llegadas</h3><span class="badge badge-today">7 días</span></div>
             <div id="dashboard-upcoming"><p class="empty-state-sm">Sin llegadas próximas</p></div>
           </div>
           <!-- Ocupación Global -->
-          <div class="card widget-occupancy">
+          <div class="card widget-occupancy" data-card-id="ocupacion">
             <div class="card-header"><h3>Ocupación</h3><span class="badge badge-today">Hoy</span></div>
             <div class="ring-wrapper">
               <svg class="progress-ring" viewBox="0 0 120 120" width="120" height="120">
@@ -355,7 +379,7 @@
         <!-- ── Fila 3: Tareas + Finanzas (4 col) ── -->
         <div class="dashboard-widgets">
           <!-- Tareas del día -->
-          <div class="card widget-reminders">
+          <div class="card widget-reminders" data-card-id="tareas">
             <div class="card-header">
               <h3>Tareas del día</h3>
               <button class="btn btn-ghost btn-xs" id="btn-add-reminder">+ Agregar</button>
@@ -367,7 +391,7 @@
           <div id="dashboard-cleaning-widget" style="display:none"></div>
 
           <!-- Cotización USD -->
-          <div class="card widget-dollar">
+          <div class="card widget-dollar" data-card-id="dolar">
             <div class="card-header" style="margin-bottom:10px">
               <h3>💵 Cotización USD</h3>
               <span class="badge badge-live" id="dollar-status-badge" style="font-size:.68rem">Cargando...</span>
@@ -398,10 +422,10 @@
           </div>
 
           <!-- Proyección del mes -->
-          <div id="dashboard-forecast"></div>
+          <div id="dashboard-forecast" data-card-id="proyeccion"></div>
 
           <!-- Resultado del mes (P&L) -->
-          <div class="card">
+          <div class="card" data-card-id="pnl">
             <div class="card-header">
               <h3>💰 Resultado del mes</h3>
               <a href="#" onclick="window.milaNav&&window.milaNav(\'statistics\');setTimeout(function(){var t=document.querySelector(\'[data-tab=pl]\');if(t)t.click();},200);return false;"

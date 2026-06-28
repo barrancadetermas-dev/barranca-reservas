@@ -316,6 +316,39 @@ export class ConfigPanel {
   _bindSave(container) {
     container.querySelector('#btn-save-config')?.addEventListener('click', () => this._save(container));
 
+    // ── Nombre para mostrar — bound early, gets session on click ──
+    container.querySelector('#cfg-nombre-save')?.addEventListener('click', async () => {
+      const btn    = container.querySelector('#cfg-nombre-save');
+      const input  = container.querySelector('#cfg-user-nombre');
+      const nombre = input?.value?.trim() ?? '';
+      if (btn) { btn.disabled = true; btn.textContent = '⏳'; }
+      try {
+        const { data: { session } } = await this.db.auth.getSession();
+        const uid = session?.user?.id;
+        if (!uid) throw new Error('Sin sesión activa');
+        // Try UPDATE first (row almost certainly exists), fallback to upsert
+        const { error: updErr } = await this.db.from('user_profiles')
+          .update({ nombre: nombre || null }).eq('id', uid);
+        if (updErr) {
+          const { error: upsErr } = await this.db.from('user_profiles')
+            .upsert({ id: uid, nombre: nombre || null }, { onConflict: 'id' });
+          if (upsErr) throw upsErr;
+        }
+        // Update avatar initial in the panel
+        const avatarEl = container.querySelector('#cfg-user-avatar');
+        if (avatarEl && nombre) avatarEl.textContent = nombre[0].toUpperCase();
+        // Update everywhere in the app
+        if (window._applyUserDisplay) {
+          window._applyUserDisplay({ nombre: nombre || null, email: session.user.email });
+        }
+        showToast('Nombre guardado ✓', 'success');
+      } catch (err) {
+        showToast('Error: ' + (err?.message ?? String(err)), 'error');
+      } finally {
+        if (btn) { btn.disabled = false; btn.textContent = 'Guardar'; }
+      }
+    });
+
     // ── Tab switching ─────────────────────────────────
     const tabConfig  = container.querySelector('#cfg-tab-config');
     const tabControl = container.querySelector('#cfg-tab-control');
@@ -377,33 +410,7 @@ export class ConfigPanel {
         // Pre-llenar nombre guardado
         const nombreInput = container.querySelector('#cfg-user-nombre');
         if (nombreInput) nombreInput.value = profile?.nombre ?? '';
-        container.querySelector('#cfg-nombre-save')?.addEventListener('click', async () => {
-          const nuevoNombre = nombreInput?.value?.trim() ?? '';
-          const saveBtn = container.querySelector('#cfg-nombre-save');
-          saveBtn.disabled = true; saveBtn.textContent = '⏳';
-          try {
-            const { error } = await this.db.from('user_profiles')
-              .upsert({ id: user.id, nombre: nuevoNombre || null }, { onConflict: 'id' });
-            if (error) {
-              // Fallback: intentar UPDATE directo (puede fallar upsert por RLS)
-              const { error: updErr } = await this.db.from('user_profiles')
-                .update({ nombre: nuevoNombre || null }).eq('id', user.id);
-              if (updErr) throw updErr;
-            }
-            // Actualizar TODA la app de forma unificada
-            if (window._applyUserDisplay) {
-              window._applyUserDisplay({ nombre: nuevoNombre || null, email: user.email });
-            } else {
-              const headerName = document.getElementById('user-name');
-              if (headerName) headerName.textContent = nuevoNombre || (user.email?.split('@')[0] ?? 'Admin');
-            }
-            showToast('Nombre guardado ✓', 'success');
-          } catch (err) {
-            showToast('Error al guardar: ' + (err?.message ?? err), 'error');
-          } finally {
-            saveBtn.disabled = false; saveBtn.textContent = 'Guardar';
-          }
-        });
+
 
       } catch (err) {
         console.warn('[ConfigPanel] control tab load:', err?.message);

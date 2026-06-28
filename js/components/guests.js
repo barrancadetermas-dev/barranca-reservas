@@ -56,20 +56,23 @@ export class GuestsCRM {
             <input type="text" id="guests-search-input" class="search-input"
               placeholder="Nombre, teléfono, email...">
           </div>
-          <select id="guests-sort-select" style="border:1px solid var(--color-border);border-radius:var(--r-md);
-            padding:7px 10px;font-size:.8rem;background:var(--color-surface);color:var(--color-text);
-            cursor:pointer;min-width:180px">
-            <option value="recent">Más recientes</option>
-            <option value="name_az">Nombre A→Z</option>
-            <option value="name_za">Nombre Z→A</option>
-            <option value="last_az">Apellido A→Z</option>
-            <option value="last_za">Apellido Z→A</option>
-            <option value="spent_desc">Mayor gasto</option>
-            <option value="spent_asc">Menor gasto</option>
-            <option value="bookings_desc">Más reservas</option>
-            <option value="next_stay">Próxima estadía</option>
-            <option value="last_stay">Estadía más lejana</option>
-          </select>
+          <div class="bl-sort-wrap" style="display:flex;align-items:center;gap:8px">
+            <span class="bl-sort-label" style="font-size:.78rem;color:var(--color-text-3);white-space:nowrap">Ordenar:</span>
+            <select id="guests-sort-select" class="filter-select"
+              style="font-size:.78rem;padding:4px 8px;border:1px solid var(--color-border);
+                     border-radius:var(--r-md);background:var(--color-surface);color:var(--color-text);cursor:pointer">
+              <option value="recent">🕐 Más recientes</option>
+              <option value="name_az">🔤 Nombre A→Z</option>
+              <option value="name_za">🔤 Nombre Z→A</option>
+              <option value="last_az">🔤 Apellido A→Z</option>
+              <option value="last_za">🔤 Apellido Z→A</option>
+              <option value="spent_desc">💰 Mayor gasto</option>
+              <option value="spent_asc">💰 Menor gasto</option>
+              <option value="bookings_desc">📅 Más reservas</option>
+              <option value="next_stay">✈️ Próxima estadía</option>
+              <option value="last_stay">📆 Última estadía</option>
+            </select>
+          </div>
         </div>
       </div>
 
@@ -1037,7 +1040,7 @@ export class GuestsCRM {
         const bks    = (g.bookings ?? []).filter(b => b.status !== 'blocked' && b.status !== 'cancelled');
         const paid   = bks.reduce((s,b) => s + (b.total_paid ?? 0), 0);
         const nights = bks.reduce((s,b) => s + (b.nights ?? 0), 0);
-        const sorted = [...bks].sort((a,x) => b.check_in?.localeCompare(x.check_in ?? '') ?? 0);
+        const sorted = [...bks].sort((a,x) => (a.check_in ?? '').localeCompare(x.check_in ?? ''));
         // Unidad más frecuente
         const unitCount = {};
         bks.forEach(b => {
@@ -1068,22 +1071,20 @@ export class GuestsCRM {
 
       const card = (emoji, title, g, stat, sub) => {
         if (!g) return '';
-        return '<div style="padding:14px 16px;border-radius:var(--r-lg);border:1px solid var(--color-border);' +
-          'background:var(--color-surface);display:flex;align-items:center;gap:12px">' +
-          '<span style="font-size:1.5rem;flex-shrink:0">' + emoji + '</span>' +
-          '<div style="flex:1;min-width:0">' +
-            '<div style="font-size:.68rem;text-transform:uppercase;letter-spacing:.05em;color:var(--color-text-3);font-weight:600;margin-bottom:2px">' + title + '</div>' +
-            '<div style="font-size:.9rem;font-weight:700;color:var(--color-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + name(g) + '</div>' +
-            (g.topUnit ? '<div style="font-size:.72rem;color:var(--color-text-3)">Favorito: ' + g.topUnit + '</div>' : '') +
+        return '<div style="padding:10px 12px;border-radius:var(--r-lg);border:1px solid var(--color-border);' +
+          'background:var(--color-surface);display:flex;flex-direction:column;gap:3px;min-width:0">' +
+          '<div style="display:flex;align-items:center;gap:5px;margin-bottom:2px">' +
+            '<span style="font-size:1rem">' + emoji + '</span>' +
+            '<span style="font-size:.6rem;text-transform:uppercase;letter-spacing:.04em;color:var(--color-text-3);font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + title + '</span>' +
           '</div>' +
-          '<div style="text-align:right;flex-shrink:0">' +
-            '<div style="font-size:.88rem;font-weight:800;color:var(--color-primary)">' + stat + '</div>' +
-            '<div style="font-size:.68rem;color:var(--color-text-3)">' + sub + '</div>' +
-          '</div>' +
+          '<div style="font-size:.78rem;font-weight:700;color:var(--color-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + name(g) + '</div>' +
+          '<div style="font-size:.78rem;font-weight:800;color:var(--color-primary);margin-top:2px">' + stat + '</div>' +
+          '<div style="font-size:.65rem;color:var(--color-text-3)">' + sub + '</div>' +
+          (g.topUnit ? '<div style="font-size:.63rem;color:var(--color-text-3);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">🏠 ' + g.topUnit + '</div>' : '') +
         '</div>';
       };
 
-      const avg = g => g.bks.length ? fmt(g.paid / g.bks.length) : '—';
+      const avg = g => (g && g.bks && g.bks.length) ? fmt(g.paid / g.bks.length) : '—';
 
       area.innerHTML =
         '<div style="margin-top:28px">' +
@@ -1091,13 +1092,13 @@ export class GuestsCRM {
             '🏆 Destacados' +
             '<span style="font-size:.72rem;font-weight:400;color:var(--color-text-3);margin-left:4px">· basado en historial total</span>' +
           '</h3>' +
-          '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px">' +
-            card('💰', 'Mayor gasto histórico',    byPaid[0],     fmt(byPaid[0]?.paid ?? 0),    'Ticket prom: ' + avg(byPaid[0] ?? {bks:[],paid:0})) +
+          '<div style="display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px;overflow-x:auto">' +
+            card('💰', 'Mayor gasto histórico',    byPaid[0],     fmt(byPaid[0]?.paid ?? 0),    'Ticket prom: ' + avg(byPaid[0])) +
             card('📅', 'Más estadías acumuladas', byNights[0],   (byNights[0]?.nights ?? 0) + ' noches', byNights[0]?.bks.length + ' reservas') +
             card('🔄', 'Más reservas',            byBookings[0], byBookings[0]?.bks.length + ' reservas', fmt(byBookings[0]?.paid ?? 0) + ' total') +
             card('⭐', 'Mejor cliente del año',   byYear[0],     fmt(byYear[0]?.thisYearPaid ?? 0), 'En ' + thisYear) +
             card('🆕', 'Último registrado',        byRecent[0],  fmtDt(byRecent[0]?.created_at), byRecent[0]?.bks.length + ' reservas') +
-            (withNext[0] ? card('✈️', 'Próximo en ingresar', withNext[0], fmtDt(withNext[0]?.nextBk?.check_in), withNext[0]?.nextBk?.booking_units?.[0]?.units?.name ?? '—') : '') +
+            (withNext[0] ? card('✈️', 'Próximo en ingresar', withNext[0], fmtDt(withNext[0]?.nextBk?.check_in), (withNext[0]?.nextBk?.booking_units?.[0]?.units?.name ?? '—')) : '') +
           '</div>' +
         '</div>';
 

@@ -461,3 +461,129 @@
 [data-theme="dark"] #section-dashboard .card {
   border-left-color: var(--color-primary) !important;
 }
+
+/* =======================================================================
+   USERS PANEL — Diseño mejorado
+   ======================================================================= */
+.au-toolbar {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+  padding: 14px 16px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--r-xl);
+}
+.au-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 12px;
+}
+.au-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 16px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--r-xl);
+  border-left: 3px solid var(--color-primary);
+  transition: box-shadow .15s, transform .15s;
+  position: relative;
+}
+.au-card:hover {
+  box-shadow: 0 4px 16px rgba(0,0,0,.08);
+  transform: translateY(-1px);
+}
+.au-avatar {
+  width: 44px; height: 44px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.3rem;
+  flex-shrink: 0;
+  box-shadow: 0 2px 8px rgba(0,0,0,.15);
+  border: 2px solid rgba(255,255,255,.6);
+}
+.au-info { flex: 1; min-width: 0; }
+.au-email {
+  font-weight: 700;
+  font-size: .84rem;
+  color: var(--color-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 3px;
+}
+.au-nombre {
+  font-size: .78rem;
+  color: var(--color-text-2);
+  margin-bottom: 6px;
+  font-weight: 500;
+}
+.au-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+.au-badge {
+  font-size: .68rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: var(--r-full);
+}
+.au-status {
+  font-size: .7rem;
+  font-weight: 600;
+}
+.au-dates {
+  font-size: .68rem;
+  color: var(--color-text-3);
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.au-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  flex-shrink: 0;
+}
+.au-actions .btn {
+  font-size: .7rem !important;
+  padding: 3px 8px !important;
+  white-space: nowrap;
+}
+
+@media (max-width: 768px) {
+  .au-grid { grid-template-columns: 1fr; }
+}
+
+/* =======================================================================
+   DASHBOARD — Border subtle (2px, lighter)
+   ======================================================================= */
+#section-dashboard .card {
+  border-left-width: 2px !important;
+  border-left-color: rgba(var(--color-primary-rgb, 30,77,183), .35) !important;
+}
+.kpi-card.kpi-blue  { border-left-color: rgba(59,130,246,.4)  !important; }
+.kpi-card.kpi-amber { border-left-color: rgba(245,158,11,.4)  !important; }
+.kpi-card.kpi-rose  { border-left-color: rgba(14,165,233,.4)  !important; }
+.kpi-card.kpi-green { border-left-color: rgba(34,197,94,.4)   !important; }
+.widget-dollar      { border-left-color: rgba(34,197,94,.4)   !important; }
+.widget-reminders   { border-left-color: rgba(245,158,11,.4)  !important; }
+
+/* Destacados huéspedes — mobile scroll horizontal */
+@media (max-width: 900px) {
+  #guests-destacados-area [style*="grid-template-columns:repeat(6"] {
+    grid-template-columns: repeat(3, minmax(0,1fr)) !important;
+  }
+}
+@media (max-width: 600px) {
+  #guests-destacados-area [style*="grid-template-columns:repeat(6"] {
+    grid-template-columns: repeat(2, minmax(0,1fr)) !important;
+  }
+}
