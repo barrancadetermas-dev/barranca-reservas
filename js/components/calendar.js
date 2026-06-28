@@ -318,13 +318,20 @@ export class Calendar {
       const _editBtn = can('manageUnitNotes')
         ? '<button class="btn btn-ghost btn-xs" style="padding:1px 4px;font-size:.65rem;opacity:.5" onclick="window._calInstance.editUnitNotes(\'' + unit.id + '\',\'' + _notesSafe + '\')">\u270f\ufe0f</button>'
         : '';
+      // Extraer número y nombre para mejor presentación visual
+      const _unitNum  = unit.sort_order ?? unit.number ?? '';
+      const _unitName = (unit.name ?? ('Unidad ' + _unitNum))
+        .replace('Planta Baja','P. Baja').replace('Planta Alta','P. Alta');
       label.innerHTML =
         '<div style="display:flex;align-items:center;gap:6px">' +
-          '<span class="cal-unit-dot" style="background-color:' + unitColor + '"></span>' +
-          '<span style="font-size:.82rem;font-weight:700;color:var(--color-text)">' + unitLabel + '</span>' +
+          '<span class="cal-unit-dot" style="background-color:' + unitColor + ';width:8px;height:8px;border-radius:50%;flex-shrink:0"></span>' +
+          '<span style="font-size:.78rem;font-weight:700;color:var(--color-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + _unitName + '</span>' +
           _notesSpan + _editBtn +
         '</div>' +
-        '<span class="unit-floor" style="padding-left:16px">Hasta ' + unit.max_guests + ' pers.</span>';
+        '<span class="unit-floor" style="padding-left:14px;font-size:.63rem;color:var(--color-text-3)">' +
+          '<span style="color:var(--color-text-3);font-weight:600;opacity:.7">#' + _unitNum + '</span>' +
+          ' · Hasta ' + unit.max_guests + ' pers.' +
+        '</span>';
       grid.appendChild(label);
 
       // Celdas
@@ -412,7 +419,7 @@ export class Calendar {
       : `${lastName} ${firstName}`.trim();
 
     const bar = document.createElement('div');
-    bar.className = 'bar bar-span';
+    bar.className = 'bar bar-span' + (isPast ? ' past-bar' : '');
 
     if (this._pendingPulse.has(booking.id)) {
       bar.classList.add('bar-new-bounce');
