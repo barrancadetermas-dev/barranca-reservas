@@ -2240,33 +2240,33 @@ export class Calendar {
       .slice(0, 10);
 
     if (!upcoming.length) {
-      el.innerHTML = '<div style="font-size:.72rem;color:var(--color-text-3);padding:8px 0">Sin reservas próximas</div>';
+      el.innerHTML = '<div style="font-size:.72rem;color:var(--color-text-3);padding:6px 0">Sin reservas próximas</div>';
       return;
     }
 
     el.innerHTML = upcoming.map(b => {
-      const g      = b.guests;
-      // Formato: José M.
-      const fn     = g?.first_name ?? '';
-      const ln     = g?.last_name ?? '';
-      const guest  = fn ? fn + (ln ? ' ' + ln[0] + '.' : '') : '—';
-      const unit   = b.booking_units?.[0]?.units;
-      const color  = unit?.color ?? 'var(--color-primary)';
-      const uname  = unit?.name ?? '—';
+      const fn    = b.guests?.first_name ?? '';
+      const ln    = b.guests?.last_name  ?? '';
+      const guest = fn ? (fn + (ln ? ' ' + ln[0] + '.' : '')) : '—';
+      const unit  = b.booking_units?.[0]?.units;
+      const color = unit?.color ?? 'var(--color-primary)';
+      const uname = unit?.name  ?? '—';
       const nights = Math.round((new Date(b.check_out+'T12:00:00') - new Date(b.check_in+'T12:00:00')) / 86400000);
-      const dObj   = new Date(b.check_in+'T12:00:00');
-      const days   = Math.round((dObj - new Date(today+'T12:00:00')) / 86400000);
-      const dayStr = DAYS[dObj.getDay()] + ' ' + dObj.getDate() + ' ' + MONTHS[dObj.getMonth()];
-      const inStr  = 'en ' + days + ' día' + (days !== 1 ? 's' : '');
+      const d     = new Date(b.check_in+'T12:00:00');
+      const days  = Math.round((d - new Date(today+'T12:00:00')) / 86400000);
+      const dStr  = DAYS[d.getDay()] + ' ' + d.getDate() + ' ' + MONTHS[d.getMonth()];
+      const nStr  = nights + ' noche' + (nights !== 1 ? 's' : '');
 
-      return '<div style="font-size:.72rem;line-height:1.4;padding:5px 0;border-bottom:1px solid var(--color-border);display:flex;align-items:flex-start;gap:6px">' +
-        '<div style="width:2px;height:32px;background:' + color + ';border-radius:1px;flex-shrink:0;margin-top:2px"></div>' +
-        '<div style="min-width:0">' +
-          '<span style="font-weight:700;color:var(--color-text)">' + dayStr + '</span>' +
-          '<span style="color:var(--color-text-3);margin:0 4px">' + inStr + '</span>' +
+      return '<div style="display:flex;align-items:center;gap:6px;padding:5px 6px;border-radius:6px;' +
+        'background:var(--color-surface);border:1px solid var(--color-border);font-size:.71rem">' +
+        '<div style="width:3px;height:22px;border-radius:2px;background:' + color + ';flex-shrink:0"></div>' +
+        '<div style="min-width:0;flex:1">' +
+          '<span style="font-weight:700;color:var(--color-text)">' + dStr + '</span>' +
+          '<span style="color:var(--color-text-3);font-size:.63rem;margin:0 4px">en ' + days + 'd</span>' +
           '<span style="color:var(--color-text-2);font-weight:600">' + guest + '</span>' +
-          '<br>' +
-          '<span style="color:var(--color-text-3)">' + uname + ' · ' + nights + ' noche' + (nights!==1?'s':'') + '</span>' +
+        '</div>' +
+        '<div style="color:var(--color-text-3);font-size:.63rem;white-space:nowrap;text-align:right">' +
+          uname + ' · ' + nStr +
         '</div>' +
       '</div>';
     }).join('');

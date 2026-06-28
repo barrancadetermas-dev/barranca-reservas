@@ -169,8 +169,8 @@ export class ConfigPanel {
     return `
       <div class="tabs-bar" style="margin-bottom:20px">
         <button class="tab active" id="cfg-tab-config">⚙️ Configuración</button>
-        <button class="tab" id="cfg-tab-control">👤 Panel de Control</button>
-        <button class="tab" id="cfg-tab-users">👥 Usuarios</button>
+        <button class="tab" id="cfg-tab-control">👤 Panel &amp; Equipo</button>
+        <button class="tab" id="cfg-tab-users" style="display:none">👥 Usuarios</button>
       </div>
 
       <!-- Configuración tab -->
@@ -376,6 +376,7 @@ export class ConfigPanel {
       hideAll();
       tabControl.classList.add('active');
       paneControl.style.display = '';
+      if (paneUsers) paneUsers.style.display = '';
       try {
         const { data: { session } } = await this.db.auth.getSession();
         const user = session?.user;

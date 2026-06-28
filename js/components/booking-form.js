@@ -1843,7 +1843,7 @@ ${notes ? `
         document.dispatchEvent(new CustomEvent('booking:fullypaid'));
       }
 
-      this.close();
+      this.close(true); // force=true: guardado exitoso, no mostrar "¿Salir sin guardar?"
       document.dispatchEvent(new CustomEvent('booking:changed'));
 
     } catch (err) {

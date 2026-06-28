@@ -119,53 +119,18 @@ export class Dashboard {
   // ── Entrada pública ──────────────────────────────
   async load() {
     window._dashboardInstance = this;
-    this._renderSkeleton();
-    this._initCustomize(); // setup card visibility before rendering
     try {
-      // ── Demo mode ──
-      if (this.ctx.IS_DEMO) {
-        const { generateMockBookings, generateMockDashboard, generateMockReminders } = await import('../services/mock-data.js');
-        const now = new Date();
-        const mockBookings  = generateMockBookings(this.ctx.units, now.getFullYear(), now.getMonth());
-        const mockKPIs      = generateMockDashboard(this.ctx.units, mockBookings);
-        const mockReminders = generateMockReminders(this.ctx.units);
-        this._renderKPIs(mockKPIs, localToday());
-        this._renderOccupancyRing(mockKPIs.occupiedUnits, this.ctx.units.length);
-        this._renderDollar(null); // cotización real igual
-        this._renderArrivals(mockKPIs.arrivals);
-        this._renderReminders(mockReminders);
-        return;
-      }
       const today = toISODate(new Date());
-      const [kpis, dollar, reminders, forecast, cleaningTasks, extraStats, dineroStats] = await Promise.all([
+      const [kpis, extraStats, dineroStats] = await Promise.all([
         this._fetchKPIs(today),
-        fetchDollarRates(),
-        this._fetchTodayReminders(today),
-        this._fetchForecast(today),
-        this._fetchTodayCleaningTasks(today),
         this._fetchExtraStats(today),
         this._fetchDineroAsegurado(today),
       ]);
-
       this._renderKPIs(kpis, today);
-      this._clearSkeleton();
-      this._renderOccupancyRing(kpis.occupiedUnits, this.ctx.units.length);
-      this._renderDollar(dollar);
-      this._renderArrivals(kpis.arrivals ?? kpis.checkins ?? []);
-      this._renderDepartures(kpis.checkouts ?? []);
-      this._renderReminders(reminders);
-      this._renderForecast(forecast);
-      this._renderCleaningWidget(cleaningTasks);
-      this._renderRevPAR(extraStats);
-      this._renderCobros(extraStats);
+      this._renderUpcoming(kpis.upcoming ?? kpis.arrivals ?? []);
+      this._renderForecast(extraStats?.forecast ?? null);
       this._renderReservasMes(extraStats);
-      this._renderNextEvent(kpis, today);
       this._renderDineroAsegurado(dineroStats);
-
-      // Actualizar badge de recordatorios via evento (sin dependencia circular)
-      const pendingReminders = reminders.filter(r => !r.completed).length;
-      document.dispatchEvent(new CustomEvent('reminders:badge', { detail: { count: pendingReminders } }));
-
     } catch (err) {
       console.error('Dashboard load error:', err);
     }
@@ -175,163 +140,6 @@ export class Dashboard {
   // ══════════════════════════════════════════════════
   // PERSONALIZACIÓN: toggle de cards
   // ══════════════════════════════════════════════════
-  _initCustomize() {
-    const grid = document.getElementById('dashboard-custom-grid');
-    if (!grid) return;
-
-    const CARDS = [
-      {id:'llegadas',        label:'✅ Llegadas hoy',       def:true },
-      {id:'salidas',         label:'👋 Salidas hoy',        def:true },
-      {id:'proximas',        label:'📅 Próximas llegadas',  def:true },
-      {id:'ocupacion',       label:'🔵 Ocupación',          def:true },
-      {id:'tareas',          label:'📋 Tareas del día',     def:true },
-      {id:'dolar',           label:'💵 Cotización USD',     def:true },
-      {id:'proyeccion',      label:'📈 Proyección',         def:true },
-      {id:'pnl',             label:'💰 Resultado del mes',  def:true },
-      {id:'revpar',          label:'📊 RevPAR / ADR',       def:true },
-      {id:'cobros',          label:'💳 Cobros pendientes',  def:true },
-      {id:'reservas-mes',    label:'🗓️ Reservas del mes',  def:false},
-      {id:'limpieza',        label:'🧹 Limpieza hoy',       def:false},
-      {id:'proximo-evento',  label:'⏰ Próximo evento',     def:true },
-      {id:'dinero-asegurado',label:'🔐 Dinero asegurado',  def:true },
-    ];
-
-    // ── Helpers de persistencia ──
-    const DB_KEY  = 'mila_dash_cfg_v2';
-    const getDB   = () => JSON.parse(localStorage.getItem(DB_KEY) ?? 'null') ?? {};
-    const saveDB  = db => localStorage.setItem(DB_KEY, JSON.stringify(db));
-    const isVis   = (db, id) => { const c = CARDS.find(x=>x.id===id); return db[id]?.visible ?? c?.def ?? true; };
-    const getOrd  = db => { const o = db._order ?? CARDS.map(c=>c.id); CARDS.forEach(c=>{if(!o.includes(c.id))o.push(c.id);}); return o; };
-
-    // ── Aplicar estado desde DB ──
-    const apply = (db) => {
-      // Visibilidad
-      CARDS.forEach(({id}) => {
-        const el = grid.querySelector('[data-card-id="' + id + '"]');
-        if (el) el.style.display = isVis(db, id) ? '' : 'none';
-      });
-      // Orden
-      getOrd(db).forEach(id => {
-        const el = grid.querySelector('[data-card-id="' + id + '"]');
-        if (el) grid.appendChild(el);
-      });
-    };
-
-    // Aplicar al cargar
-    apply(getDB());
-
-    // ── Función global de toggle (accesible desde onclick inline) ──
-    window._dashToggle = (id, checked) => {
-      const db = getDB();
-      if (!db[id]) db[id] = {};
-      db[id].visible = checked;
-      saveDB(db);
-      const el = grid.querySelector('[data-card-id="' + id + '"]');
-      if (el) el.style.display = checked ? '' : 'none';
-      window._dashRenderPanel?.();
-    };
-
-    // ── Render del panel de personalización ──
-    window._dashRenderPanel = () => {
-      const togglesEl = document.getElementById('dash-card-toggles');
-      if (!togglesEl) return;
-      const db = getDB();
-      togglesEl.innerHTML = CARDS.map(({id, label}) => {
-        const vis = isVis(db, id);
-        return '<label style="display:flex;align-items:center;gap:7px;cursor:pointer;' +
-          'padding:6px 12px;border-radius:8px;user-select:none;' +
-          'border:1px solid ' + (vis ? 'var(--color-primary)' : 'var(--color-border)') + ';' +
-          'background:' + (vis ? 'var(--color-primary-l)' : 'var(--color-surface-2)') + ';' +
-          'font-size:.78rem;font-weight:600;' +
-          'color:' + (vis ? 'var(--color-primary)' : 'var(--color-text-3)') + '">' +
-          '<input type="checkbox" onchange="window._dashToggle(\'' + id + '\',this.checked)" ' +
-          (vis ? 'checked' : '') + ' style="accent-color:var(--color-primary);cursor:pointer;width:14px;height:14px"> ' +
-          label + '</label>';
-      }).join('');
-    };
-
-    // ── Botón Personalizar ──
-    const btn   = document.getElementById('btn-customize-dash');
-    const panel = document.getElementById('dash-customize-panel');
-    btn?.addEventListener('click', () => {
-      if (!panel) return;
-      const isOpen = panel.style.display !== 'none';
-      panel.style.display = isOpen ? 'none' : '';
-      if (!isOpen) window._dashRenderPanel?.();
-    });
-
-    // ── Drag & Drop ──────────────────────────────────
-    let _dragEl = null, _dragGhost = null, _overEl = null;
-    let _startX = 0, _startY = 0, _moved = false;
-
-    const visCards = () => [...grid.querySelectorAll('.dash-card')].filter(c=>c.style.display!=='none');
-
-    grid.addEventListener('pointerdown', e => {
-      const handle = e.target.closest('.dash-drag-handle');
-      if (!handle) return;
-      const card = handle.closest('.dash-card');
-      if (!card) return;
-      e.preventDefault();
-      _dragEl = card; _startX = e.clientX; _startY = e.clientY; _moved = false;
-      try { e.target.setPointerCapture(e.pointerId); } catch(_) {}
-    });
-
-    grid.addEventListener('pointermove', e => {
-      if (!_dragEl) return;
-      const dx = e.clientX - _startX, dy = e.clientY - _startY;
-      if (!_moved && Math.abs(dx)<6 && Math.abs(dy)<6) return;
-      if (!_moved) {
-        _moved = true;
-        const rect = _dragEl.getBoundingClientRect();
-        _dragGhost = _dragEl.cloneNode(true);
-        _dragGhost.className = 'bar-drag-ghost';
-        _dragGhost.style.cssText = 'position:fixed;z-index:9999;pointer-events:none;opacity:.85;' +
-          'width:'+rect.width+'px;height:'+rect.height+'px;left:'+rect.left+'px;top:'+rect.top+'px;' +
-          'background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--r-xl);' +
-          'box-shadow:0 16px 48px rgba(0,0,0,.25);transform:scale(1.03);transition:none;';
-        document.body.appendChild(_dragGhost);
-        _dragEl.style.opacity = '0.3';
-        grid.classList.add('edit-mode');
-      }
-      if (_dragGhost) {
-        const r = _dragEl.getBoundingClientRect();
-        _dragGhost.style.left = (r.left+dx)+'px';
-        _dragGhost.style.top  = (r.top+dy)+'px';
-      }
-      const cards = visCards().filter(c=>c!==_dragEl);
-      let near=null, nearD=Infinity;
-      cards.forEach(c=>{
-        const r=c.getBoundingClientRect();
-        const d=Math.hypot(e.clientX-r.left-r.width/2, e.clientY-r.top-r.height/2);
-        if(d<nearD){nearD=d;near=c;}
-      });
-      if(_overEl&&_overEl!==near)_overEl.classList.remove('drag-over');
-      if(near)near.classList.add('drag-over');
-      _overEl=near;
-    });
-
-    const endDrag = e => {
-      if(!_dragEl)return;
-      if(_dragGhost){_dragGhost.remove();_dragGhost=null;}
-      _dragEl.style.opacity='';
-      _dragEl.classList.remove('drag-source');
-      grid.classList.remove('edit-mode');
-      if(_overEl){
-        _overEl.classList.remove('drag-over');
-        const r=_overEl.getBoundingClientRect();
-        if(e&&e.clientX<r.left+r.width/2)grid.insertBefore(_dragEl,_overEl);
-        else _overEl.after(_dragEl);
-        const db=getDB();
-        db._order=[...grid.querySelectorAll('.dash-card')].map(c=>c.dataset.cardId);
-        saveDB(db);
-      }
-      _dragEl=null;_overEl=null;_moved=false;
-    };
-    grid.addEventListener('pointerup',endDrag);
-    grid.addEventListener('pointercancel',endDrag);
-    window._dashStopDrag=endDrag;
-  }
-
 
   _renderSkeleton() {
     const grid = document.getElementById('kpi-grid');

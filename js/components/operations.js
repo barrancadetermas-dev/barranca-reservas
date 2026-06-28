@@ -1048,7 +1048,7 @@ export class OperationsModule {
   _renderExpensesInOps(panel, expenses) {
     const CATEGORY_COLORS = {
       servicios:'#3B82F6', mantenimiento:'#F59E0B', limpieza:'#34D399',
-      impuestos:'#F43F5E', personal:'#A855F7', otros:'#94A3B8',
+      impuestos:'#F43F5E', personal:'#A855F7', compras:'#0EA5E9', otros:'#94A3B8',
     };
     const summary = panel.querySelector('#ops-expenses-summary');
     const list    = panel.querySelector('#ops-expenses-list');
@@ -1133,7 +1133,7 @@ export class OperationsModule {
     if (existing) existing.remove();
 
     const isEdit = !!expense;
-    const CATEGORIES = ['servicios','mantenimiento','limpieza','impuestos','personal','otros'];
+    const CATEGORIES = ['servicios','mantenimiento','limpieza','impuestos','personal','compras','otros'];
 
     const modal = document.createElement('div');
     modal.className = 'modal-overlay';
