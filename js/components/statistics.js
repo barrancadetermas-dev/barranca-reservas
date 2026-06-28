@@ -1,6 +1,7 @@
 import { isDemo, can } from '../auth/permissions.js';
 import { formatARS, showToast, getUnitLabel, getUnitColor, getUnitChipHTML, AppContext, localToday, localDateISO } from '../supabase-config.js';
 import { RevenuePanel } from './revenue-panel.js';
+import { FinancePanel } from './finance-panel.js';
 
 // ══════════════════════════════════════════════════
 // statistics.js v5.1 — MILA
@@ -31,8 +32,9 @@ export class Statistics {
     this.db           = supabase;
     this.ctx          = ctx;
     this._tab         = 'units';
-    this._revenuePanel = new RevenuePanel(supabase, ctx);
+    this._revenuePanel  = new RevenuePanel(supabase, ctx);
     window._revenuePanel = this._revenuePanel;
+    this._financePanel   = new FinancePanel(supabase, ctx);
     this._initPeriodSelectors();
     this._bindTabs();
     this._bindButtons();
@@ -72,6 +74,7 @@ export class Statistics {
       savePeriod();
       // Auto-reload the active tab when period changes
       if (this._tab === 'units')    this.loadUnits();
+      else if (this._tab === 'financ')   this._financePanel?.load?.();
       else if (this._tab === 'charts')   this.loadCharts?.();
       else if (this._tab === 'pl')       this.loadPL?.();
       else if (this._tab === 'revenue')  this._revenuePanel?.load?.();
@@ -89,6 +92,7 @@ export class Statistics {
         this._tab = tab.dataset.tab;
         this._showPanel(this._tab);
         if (this._tab === 'units')    this.loadUnits();
+        if (this._tab === 'financ')   this._financePanel?.load();
         if (this._tab === 'pl')       this.loadPL();
         if (this._tab === 'heatmap')  this.loadHeatmap();
         if (this._tab === 'charts')   this.loadCharts();
@@ -98,7 +102,7 @@ export class Statistics {
   }
 
   _showPanel(tab) {
-    ['units','pl','heatmap','charts','revenue'].forEach(t => {
+    ['units','financ','pl','heatmap','charts','revenue'].forEach(t => {
       document.getElementById(`stats-${t}-panel`)?.classList.toggle('hidden', t !== tab);
     });
   }
@@ -109,6 +113,7 @@ export class Statistics {
       if (btn) { btn.disabled = true; btn.textContent = 'Generando...'; }
       try {
         if (this._tab === 'units')    await this.loadUnits();
+        else if (this._tab === 'financ')   await this._financePanel?.load?.();
         else if (this._tab === 'heatmap')  await this.loadHeatmap?.();
         else if (this._tab === 'charts')   await this.loadCharts?.();
         else if (this._tab === 'pl')       await this.loadPL?.();

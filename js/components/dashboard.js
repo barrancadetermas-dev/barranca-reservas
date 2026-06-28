@@ -88,6 +88,7 @@ export class Dashboard {
         this._fetchForecast(today),
         this._fetchTodayCleaningTasks(today),
         this._fetchExtraStats(today),
+        this._fetchDineroAsegurado(today),
       ]);
 
       this._renderKPIs(kpis, today);
@@ -103,6 +104,7 @@ export class Dashboard {
       this._renderCobros(extraStats);
       this._renderReservasMes(extraStats);
       this._renderNextEvent(kpis, today);
+      this._renderDineroAsegurado(dineroStats);
 
       // Actualizar badge de recordatorios via evento (sin dependencia circular)
       const pendingReminders = reminders.filter(r => !r.completed).length;
@@ -132,6 +134,7 @@ export class Dashboard {
       { id: 'reservas-mes',  label: '🗓️ Reservas del mes',    default: true  },
       { id: 'limpieza',      label: '🧹 Limpieza hoy',         default: false },
       { id: 'proximo-evento',label: '⏰ Próximo evento',       default: true  },
+      { id: 'dinero-asegurado',label:'🔐 Dinero asegurado',    default: true  },
     ];
 
     const cfg = JSON.parse(localStorage.getItem('mila_dash_cfg') ?? 'null') ?? {};
@@ -1208,5 +1211,40 @@ export class Dashboard {
         '</div>' +
       '</div>'
     ).join('');
+  }
+  // ══════════════════════════════════════════════════
+  // DINERO ASEGURADO — reservas futuras confirmadas
+  // ══════════════════════════════════════════════════
+  async _fetchDineroAsegurado(today) {
+    try {
+      const { data: bks } = await this.db
+        .from('bookings')
+        .select('id, total_amount, total_paid, balance, status')
+        .eq('hotel_id', this.ctx.hotelId)
+        .gte('check_out', today)                        // solo futuras/en curso
+        .not('status', 'in', '(cancelled,blocked)');   // solo confirmadas
+
+      const rows       = bks ?? [];
+      const totalVend  = rows.reduce((s,b) => s + (b.total_amount ?? 0), 0);
+      const totalCobr  = rows.reduce((s,b) => s + (b.total_paid  ?? 0), 0);
+      const totalPend  = rows.reduce((s,b) => s + Math.max(0, (b.total_amount ?? 0) - (b.total_paid ?? 0)), 0);
+      return { totalVend, totalCobr, totalPend, count: rows.length };
+    } catch {
+      return null;
+    }
+  }
+
+  _renderDineroAsegurado(s) {
+    if (!s) return;
+    const fmt = n => '$' + Math.round(n).toLocaleString('es-AR');
+    const pct  = s.totalVend > 0 ? Math.min(100, Math.round(s.totalCobr / s.totalVend * 100)) : 0;
+    const set  = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+    set('dash-dinero-val',      fmt(s.totalVend));
+    set('dash-dinero-cobrado',  fmt(s.totalCobr));
+    set('dash-dinero-pendiente',fmt(s.totalPend));
+    set('dash-dinero-count',    s.count + ' reserva' + (s.count !== 1 ? 's' : ''));
+    set('dash-dinero-pct',      pct + '% cobrado');
+    const fill = document.getElementById('dash-dinero-bar-fill');
+    if (fill) fill.style.width = pct + '%';
   }
 }

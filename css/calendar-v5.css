@@ -562,243 +562,329 @@
 }
 @keyframes fadeIn { from { opacity:0; transform:translateY(-4px); } to { opacity:1; transform:none; } }
 
+
 /* ═══════════════════════════════════════════════════════════════
-   CALENDAR v8 — REDESIGN COMPLETO DE COHERENCIA VISUAL
-   Reemplaza estilos dispersos con un sistema unificado
+   CALENDAR v9 — DISEÑO LIMPIO Y COHERENTE
    ═══════════════════════════════════════════════════════════════ */
 
-/* ── Variables locales del calendario ─────────────────────── */
+/* ── Variables ─────────────────────────────────────────────── */
 :root {
-  --cal-header-bg:   var(--color-surface-2, #f8fafc);
-  --cal-border:      var(--color-border, rgba(0,0,0,.08));
-  --cal-cell-h:      54px;
-  --cal-label-w:     200px;
-  --cal-past-bg:     rgba(148,163,184,.045);
-  --cal-today-color: #1e4db7;
-  --cal-bar-radius:  6px;
-  --cal-shadow-bar:  0 1px 3px rgba(0,0,0,.18), 0 0 0 1px rgba(0,0,0,.06);
+  --cal-cell-h: 54px;
+  --cal-blue:   #1e4db7;
+  --cal-border: rgba(0,0,0,.07);
+  --cal-past:   rgba(148,163,184,.05);
+  --cal-bar-r:  6px;
+  --cal-bar-sh: 0 1px 3px rgba(0,0,0,.18),0 0 0 1px rgba(0,0,0,.05);
 }
 
 /* ─────────────────────────────────────────────────────────────
-   1. TOOLBAR — contenedor unificado
+   TOOLBAR — estructura en 3 grupos alineados
    ───────────────────────────────────────────────────────────── */
-#section-calendar .cal-toolbar {
+.cal-toolbar {
   display: flex;
   align-items: center;
-  gap: 10px;
-  flex-wrap: nowrap;
-  padding: 10px 14px;
+  gap: 8px;
+  height: 48px;
+  padding: 0 14px;
   background: var(--color-surface);
   border: 1px solid var(--cal-border);
-  border-radius: var(--r-xl);
-  margin-bottom: 10px;
-  box-shadow: 0 1px 3px rgba(0,0,0,.04);
+  border-radius: 12px;
+  margin-bottom: 8px;
+  box-shadow: 0 1px 4px rgba(0,0,0,.05);
 }
 
-/* Navegación mes */
-.cal-nav { gap: 6px !important; }
+/* Grupo nav: prev / title / next / (hoy) */
+.cal-tb-nav {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
 .cal-month-title {
-  font-size: .95rem !important;
+  font-size: .9rem !important;
   font-weight: 700 !important;
-  min-width: 170px !important;
   color: var(--color-text) !important;
+  min-width: 150px !important;
+  text-align: center !important;
+  letter-spacing: -.01em;
 }
 
-/* Botones del toolbar */
-#section-calendar .cal-toolbar .btn {
-  font-size: .75rem !important;
-  padding: 5px 11px !important;
-  border-radius: 8px !important;
+/* Botón genérico del toolbar */
+.cal-tb-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  height: 30px;
+  padding: 0 8px;
+  border: none;
+  border-radius: 7px;
+  background: none;
+  color: var(--color-text-2);
+  font-size: .75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background .12s, color .12s;
+  white-space: nowrap;
 }
-#section-calendar .cal-toolbar .btn-ghost {
-  color: var(--color-text-3) !important;
+.cal-tb-btn:hover {
+  background: var(--color-surface-2);
+  color: var(--color-text);
 }
-#section-calendar .cal-toolbar .btn-ghost:hover {
-  background: var(--color-surface-2) !important;
-  color: var(--color-text) !important;
+.cal-tb-btn--outline {
+  border: 1px solid var(--cal-border);
+  color: var(--color-text-2);
+  padding: 0 10px;
+}
+.cal-tb-btn--outline:hover {
+  border-color: var(--cal-blue);
+  color: var(--cal-blue);
+  background: rgba(30,77,183,.05);
 }
 
-/* Search input */
-#cal-search-input {
-  font-size: .78rem !important;
-  border-radius: 8px !important;
-  height: 32px !important;
+/* Etiqueta "Hoy" */
+.cal-tb-tag {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 8px;
+  background: var(--cal-blue);
+  color: #fff;
+  border: none;
+  border-radius: 12px;
+  font-size: .68rem;
+  font-weight: 700;
+  cursor: pointer;
+  letter-spacing: .02em;
+  margin-left: 4px;
+}
+
+/* Separador vertical */
+.cal-tb-sep {
+  width: 1px;
+  height: 20px;
+  background: var(--cal-border);
+  margin: 0 4px;
+  flex-shrink: 0;
+}
+
+/* Búsqueda */
+.cal-tb-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.cal-tb-search-icon {
+  position: absolute;
+  left: 9px;
+  color: var(--color-text-3);
+  pointer-events: none;
+}
+.cal-tb-search-input {
+  height: 30px;
+  width: 180px;
+  padding: 0 28px 0 28px;
+  border: 1px solid var(--cal-border);
+  border-radius: 8px;
+  background: var(--color-surface-2);
+  color: var(--color-text);
+  font-size: .75rem;
+  outline: none;
+  transition: width .2s, border-color .15s, background .15s;
+}
+.cal-tb-search-input::placeholder { color: var(--color-text-3); }
+.cal-tb-search-input:focus {
+  width: 220px;
+  border-color: var(--cal-blue);
+  background: var(--color-surface);
+}
+.cal-tb-search-clear {
+  position: absolute;
+  right: 7px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: .8rem;
+  color: var(--color-text-3);
+  padding: 2px;
+  line-height: 1;
+}
+.cal-tb-search-clear:hover { color: var(--color-text); }
+
+/* Acciones derechas */
+.cal-tb-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+/* Hint Shift */
+.cal-tb-hint {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: .68rem;
+  color: var(--color-text-3);
+  margin-left: 4px;
+  white-space: nowrap;
+}
+.cal-tb-kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 16px;
+  padding: 0 3px;
+  background: var(--color-surface-2);
+  border: 1px solid var(--cal-border);
+  border-radius: 3px;
+  font-size: .62rem;
+  font-weight: 700;
+  color: var(--color-text-2);
+  font-family: inherit;
+  line-height: 1;
 }
 
 /* ─────────────────────────────────────────────────────────────
-   2. BARRA DE RESUMEN — integrada, no flotante
+   BARRA DE RESUMEN
    ───────────────────────────────────────────────────────────── */
 #cal-summary-bar {
   display: flex !important;
-  gap: 6px !important;
+  gap: 5px !important;
   flex-wrap: wrap !important;
-  padding: 8px 14px !important;
-  margin-bottom: 10px !important;
+  align-items: center !important;
+  padding: 7px 12px !important;
+  margin-bottom: 8px !important;
   background: var(--color-surface) !important;
   border: 1px solid var(--cal-border) !important;
-  border-radius: var(--r-xl) !important;
+  border-radius: 10px !important;
   box-shadow: 0 1px 3px rgba(0,0,0,.04) !important;
 }
 .cal-kpi {
-  display: flex !important;
+  display: inline-flex !important;
   align-items: center !important;
   gap: 5px !important;
-  padding: 4px 10px !important;
+  padding: 3px 9px !important;
   background: var(--color-surface-2) !important;
   border: 1px solid var(--cal-border) !important;
   border-radius: 20px !important;
   font-size: .72rem !important;
   white-space: nowrap !important;
-  transition: background .12s !important;
+  cursor: default !important;
 }
-.cal-kpi:hover { background: var(--color-border) !important; }
-.cal-kpi-icon { font-size: .8rem !important; }
-.cal-kpi-val  { font-weight: 800 !important; font-size: .8rem !important; color: var(--color-text) !important; }
-.cal-kpi-lbl  { color: var(--color-text-3) !important; font-size: .7rem !important; }
+.cal-kpi-icon { font-size: .75rem !important; line-height: 1 !important; }
+.cal-kpi-val  { font-weight: 800 !important; font-size: .76rem !important; color: var(--color-text) !important; }
+.cal-kpi-lbl  { color: var(--color-text-3) !important; font-size: .68rem !important; }
 
 /* ─────────────────────────────────────────────────────────────
-   3. GRID — contenedor con sombra y borde unificado
+   CONTENEDOR DE LA GRILLA
    ───────────────────────────────────────────────────────────── */
 .cal-grid {
-  border-radius: var(--r-xl) !important;
+  border-radius: 12px !important;
   border: 1px solid var(--cal-border) !important;
-  box-shadow: 0 2px 12px rgba(0,0,0,.06), 0 0 0 1px rgba(0,0,0,.03) !important;
+  box-shadow: 0 2px 10px rgba(0,0,0,.05) !important;
   overflow: clip !important;
 }
 
 /* ─────────────────────────────────────────────────────────────
-   4. COLUMNA DE UNIDADES — diseño limpio y jerarquizado
+   COLUMNA DE UNIDADES
    ───────────────────────────────────────────────────────────── */
 .cal-unit-label-header {
-  background: var(--cal-header-bg) !important;
+  background: var(--color-surface-2) !important;
   border-right: 1px solid var(--cal-border) !important;
   border-bottom: 2px solid var(--cal-border) !important;
   padding: 10px 14px !important;
-  font-size: .65rem !important;
+  font-size: .62rem !important;
   font-weight: 700 !important;
   text-transform: uppercase !important;
   letter-spacing: .08em !important;
   color: var(--color-text-3) !important;
+  position: sticky !important;
+  left: 0 !important;
+  z-index: 5 !important;
 }
 .cal-unit-label {
-  background: var(--cal-header-bg) !important;
+  background: var(--color-surface-2) !important;
   border-right: 1px solid var(--cal-border) !important;
   border-bottom: 1px solid var(--cal-border) !important;
-  padding: 8px 12px 8px 14px !important;
+  border-left: 3px solid var(--unit-color, var(--cal-blue)) !important;
+  padding: 8px 12px !important;
   display: flex !important;
   flex-direction: column !important;
   justify-content: center !important;
-  gap: 2px !important;
+  gap: 1px !important;
   min-height: var(--cal-cell-h) !important;
-  /* Borde izquierdo grueso con color de unidad */
-  border-left: 3px solid var(--unit-color, var(--color-primary)) !important;
   position: sticky !important;
   left: 0 !important;
   z-index: 3 !important;
 }
-/* Nombre de unidad — principal */
-.cal-unit-label > div:first-child {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-.cal-unit-dot {
-  width: 7px !important;
-  height: 7px !important;
-  border-radius: 50% !important;
-  flex-shrink: 0 !important;
-}
-/* Texto de nombre */
-.cal-unit-label > div:first-child span[style*="font-weight:700"] {
-  font-size: .8rem !important;
-  font-weight: 700 !important;
-  color: var(--color-text) !important;
-  letter-spacing: -.01em;
-}
-/* Subtítulo "Hasta N pers." */
-.cal-unit-label .unit-floor {
-  font-size: .65rem !important;
-  color: var(--color-text-3) !important;
-  font-weight: 500 !important;
-  padding-left: 0 !important;
-  margin-top: 1px !important;
-}
-/* Dark mode */
 [data-theme="dark"] .cal-unit-label,
-[data-theme="dark"] .cal-unit-label-header {
-  background: var(--color-surface-2) !important;
-}
+[data-theme="dark"] .cal-unit-label-header { background: #1a2438 !important; }
 
 /* ─────────────────────────────────────────────────────────────
-   5. ENCABEZADOS DE DÍA — sistema de estados claro
+   HEADERS DE DÍA — sistema limpio
    ───────────────────────────────────────────────────────────── */
 .cal-day-header {
-  background: var(--cal-header-bg) !important;
+  background: var(--color-surface-2) !important;
   border-right: 1px solid var(--cal-border) !important;
   border-bottom: 2px solid var(--cal-border) !important;
-  padding: 6px 2px 5px !important;
+  padding: 5px 2px 4px !important;
   text-align: center !important;
-  font-size: .82rem !important;
+  font-size: .8rem !important;
   font-weight: 700 !important;
   color: var(--color-text) !important;
   line-height: 1.2 !important;
   user-select: none !important;
 }
 .cal-day-header .dh-month {
-  font-size: .52rem !important;
-  font-weight: 800 !important;
-  letter-spacing: .08em !important;
-  text-transform: uppercase !important;
-  color: var(--color-text-3) !important;
-  display: block !important;
-  line-height: 1 !important;
-  margin-bottom: 2px !important;
+  font-size: .5rem !important; font-weight: 800 !important;
+  letter-spacing: .08em !important; text-transform: uppercase !important;
+  color: var(--color-text-3) !important; display: block !important; margin-bottom: 1px !important;
 }
-.cal-day-header .dh-month.dh-month-new {
-  color: var(--cal-today-color) !important;
-}
+.cal-day-header .dh-month.dh-month-new { color: var(--cal-blue) !important; }
 .cal-day-header .dh-num {
   display: block !important;
-  font-size: .82rem !important;
+  font-size: .78rem !important;
   font-weight: 700 !important;
-  line-height: 1.1 !important;
+  line-height: 1.15 !important;
+  color: var(--color-text) !important;
 }
 .cal-day-header .day-name {
   display: block !important;
-  font-size: .55rem !important;
+  font-size: .52rem !important;
   font-weight: 500 !important;
   text-transform: uppercase !important;
   letter-spacing: .07em !important;
   color: var(--color-text-3) !important;
   margin-top: 1px !important;
-  line-height: 1 !important;
+  font-style: normal !important;   /* sin cursiva en ningún caso */
 }
 
-/* PASADO — más sutil, retrocede visualmente */
+/* PASADO */
 .cal-day-header.past-header {
   background: rgba(148,163,184,.04) !important;
-  border-bottom-color: rgba(148,163,184,.15) !important;
+  border-bottom-color: rgba(148,163,184,.12) !important;
 }
 .cal-day-header.past-header .dh-num { color: var(--color-text-3) !important; font-weight: 500 !important; }
-.cal-day-header.past-header .day-name { opacity: .6 !important; }
+.cal-day-header.past-header .day-name { opacity: .5 !important; }
 
-/* HOY — prominente y claro */
+/* HOY — azul, número blanco en círculo */
 .cal-day-header.today {
   background: rgba(30,77,183,.09) !important;
-  color: var(--cal-today-color) !important;
-  font-weight: 800 !important;
-  border-bottom: 2px solid var(--cal-today-color) !important;
+  border-bottom: 2px solid var(--cal-blue) !important;
 }
-.cal-day-header.today::before { display: none !important; } /* quitar borde izquierdo */
+.cal-day-header.today::before { display: none !important; }
 .cal-day-header.today .dh-num {
   display: inline-flex !important;
   align-items: center !important;
   justify-content: center !important;
-  width: 24px !important; height: 24px !important;
-  background: var(--cal-today-color) !important;
-  color: #fff !important;
+  width: 24px !important;
+  height: 24px !important;
+  background: var(--cal-blue) !important;
+  color: #ffffff !important;           /* blanco explícito */
   border-radius: 50% !important;
-  font-size: .75rem !important;
+  font-size: .72rem !important;
   font-weight: 800 !important;
   line-height: 1 !important;
 }
@@ -806,37 +892,38 @@
   display: inline-block !important;
   font-size: .5rem !important;
   font-weight: 800 !important;
-  letter-spacing: .07em !important;
+  letter-spacing: .06em !important;
   text-transform: uppercase !important;
-  background: var(--cal-today-color) !important;
+  background: var(--cal-blue) !important;
   color: #fff !important;
-  padding: 1px 5px !important;
+  padding: 1px 4px !important;
   border-radius: 3px !important;
   margin-top: 2px !important;
   line-height: 1.5 !important;
 }
 
-/* FIN DE SEMANA — sutil, unificado */
+/* FIN DE SEMANA — muy sutil, sin cursiva */
 .cal-day-header.weekend {
   background: rgba(100,116,139,.04) !important;
-  border-bottom-color: rgba(100,116,139,.12) !important;
 }
 .cal-day-header.weekend .dh-num { color: #64748b !important; }
-.cal-day-header.weekend .day-name { color: #94a3b8 !important; font-style: italic !important; }
+.cal-day-header.weekend .day-name {
+  color: #94a3b8 !important;
+  font-style: normal !important;    /* sin cursiva */
+  font-weight: 500 !important;
+}
 
 /* FERIADO */
-.cal-day-header.holiday {
-  background: rgba(239,68,68,.06) !important;
-}
-.cal-day-header.holiday .dh-num { color: rgba(239,68,68,.7) !important; }
+.cal-day-header.holiday { background: rgba(239,68,68,.06) !important; }
+.cal-day-header.holiday .dh-num { color: rgba(220,38,38,.75) !important; }
 
-/* Dark mode headers */
-[data-theme="dark"] .cal-day-header { background: var(--color-surface-2) !important; }
-[data-theme="dark"] .cal-day-header.today { background: rgba(59,130,246,.18) !important; }
-[data-theme="dark"] .cal-day-header.weekend { background: rgba(100,116,139,.1) !important; }
+[data-theme="dark"] .cal-day-header           { background: #1a2438 !important; }
+[data-theme="dark"] .cal-day-header.today     { background: rgba(59,130,246,.2) !important; }
+[data-theme="dark"] .cal-day-header.weekend   { background: rgba(100,116,139,.1) !important; }
+[data-theme="dark"] .cal-day-header.past-header { background: rgba(148,163,184,.07) !important; }
 
 /* ─────────────────────────────────────────────────────────────
-   6. CELDAS — sistema claro de pasado/hoy/futuro/fin semana
+   CELDAS
    ───────────────────────────────────────────────────────────── */
 .cal-cell {
   height: var(--cal-cell-h) !important;
@@ -844,108 +931,102 @@
   border-right: 1px solid var(--cal-border) !important;
   border-bottom: 1px solid var(--cal-border) !important;
   transition: background .1s !important;
-  cursor: pointer !important;
   overflow: visible !important;
 }
 
-/* Pasado: fondo muy sutil + patrón rayado */
+/* Pasado */
 .cal-cell.past-col {
-  background: var(--cal-past-bg) !important;
+  background: repeating-linear-gradient(
+    -45deg, transparent, transparent 6px,
+    rgba(148,163,184,.06) 6px, rgba(148,163,184,.06) 7px
+  ) !important;
   cursor: default !important;
 }
-.cal-cell.past-col::after {
-  content: '' !important;
-  position: absolute !important;
-  inset: 0 !important;
-  background: repeating-linear-gradient(
-    -45deg,
-    transparent, transparent 5px,
-    rgba(148,163,184,.08) 5px, rgba(148,163,184,.08) 6px
-  ) !important;
-  pointer-events: none !important;
-}
-
 /* Hoy */
 .cal-cell.today-col {
-  background: rgba(30,77,183,.05) !important;
+  background: rgba(30,77,183,.04) !important;
 }
 .cal-cell.today-col::before {
   content: '' !important;
   position: absolute !important;
   left: 0; top: 0; bottom: 0 !important;
   width: 2px !important;
-  background: var(--cal-today-color) !important;
+  background: var(--cal-blue) !important;
   opacity: .5 !important;
   z-index: 2 !important;
   pointer-events: none !important;
 }
+/* Fin de semana futuro */
+.cal-cell.weekend-col { background: rgba(100,116,139,.025) !important; }
 
-/* Fin de semana (futuro) */
-.cal-cell.weekend-col {
-  background: rgba(100,116,139,.03) !important;
-}
-
-/* Hover en futuras vacías */
-.cal-cell:not(.past-col):hover {
-  background: rgba(30,77,183,.06) !important;
-}
-/* Hover hint "+" */
+/* Hover estado futuro vacío */
+.cal-cell:not(.past-col):hover { background: rgba(30,77,183,.05) !important; }
 .cal-cell-empty:not(.past-col):hover::after {
   content: '+' !important;
   position: absolute !important;
   top: 50%; left: 50% !important;
-  transform: translate(-50%, -50%) !important;
+  transform: translate(-50%,-50%) !important;
   font-size: 1.1rem !important;
   font-weight: 200 !important;
-  color: var(--cal-today-color) !important;
-  opacity: .4 !important;
+  color: var(--cal-blue) !important;
+  opacity: .35 !important;
   pointer-events: none !important;
-  line-height: 1 !important;
 }
-/* Sin hints en pasado */
+.cal-cell.past-col:hover { background: inherit !important; }
 .cal-cell.past-col.cal-cell-empty:hover::after { display: none !important; }
-.cal-cell.past-col.cal-cell-empty:hover { background: var(--cal-past-bg) !important; }
 
-/* Dark mode cells */
-[data-theme="dark"] .cal-cell.past-col    { background: rgba(148,163,184,.08) !important; }
-[data-theme="dark"] .cal-cell.today-col   { background: rgba(59,130,246,.1)  !important; }
-[data-theme="dark"] .cal-cell.weekend-col { background: rgba(100,116,139,.07) !important; }
+[data-theme="dark"] .cal-cell.past-col    { background: rgba(148,163,184,.07) !important; }
+[data-theme="dark"] .cal-cell.today-col   { background: rgba(59,130,246,.09)  !important; }
+[data-theme="dark"] .cal-cell.weekend-col { background: rgba(100,116,139,.06) !important; }
+
+/* Heatmap por celda */
+.cal-cell[data-heat="low"]    { background: rgba(34,197,94,.03)  !important; }
+.cal-cell[data-heat="medium"] { background: rgba(250,204,21,.04) !important; }
+.cal-cell[data-heat="high"]   { background: rgba(249,115,22,.04) !important; }
+.cal-cell[data-heat="full"]   { background: rgba(239,68,68,.035) !important; }
+.cal-cell.today-col[data-heat] { background: rgba(30,77,183,.04) !important; }
 
 /* ─────────────────────────────────────────────────────────────
-   7. BARRAS DE RESERVA — más refinadas
+   BARRAS
    ───────────────────────────────────────────────────────────── */
 .bar {
   top: 8px !important;
   bottom: 8px !important;
-  font-size: .72rem !important;
+  font-size: .71rem !important;
   font-weight: 600 !important;
   letter-spacing: -.01em !important;
-  box-shadow: var(--cal-shadow-bar) !important;
-  transition: filter .12s, transform .12s, box-shadow .12s, opacity .12s !important;
+  box-shadow: var(--cal-bar-sh) !important;
+  transition: filter .12s, transform .12s, box-shadow .12s !important;
 }
 .bar:hover {
-  filter: brightness(1.08) !important;
+  filter: brightness(1.1) !important;
   transform: scaleY(1.06) !important;
-  box-shadow: 0 3px 8px rgba(0,0,0,.22), 0 0 0 1px rgba(0,0,0,.06) !important;
+  box-shadow: 0 3px 8px rgba(0,0,0,.22) !important;
 }
-/* Formas de los extremos */
-.bar-start  { left: 5px !important; right: 0 !important; border-radius: var(--cal-bar-radius) 0 0 var(--cal-bar-radius) !important; }
-.bar-end    { left: 0 !important; right: 5px !important; border-radius: 0 var(--cal-bar-radius) var(--cal-bar-radius) 0 !important; }
+.bar-start  { left: 5px !important; right: 0 !important; border-radius: var(--cal-bar-r) 0 0 var(--cal-bar-r) !important; }
+.bar-end    { left: 0 !important; right: 5px !important; border-radius: 0 var(--cal-bar-r) var(--cal-bar-r) 0 !important; }
 .bar-middle { left: 0 !important; right: 0 !important; border-radius: 0 !important; }
-.bar-solo   { left: 5px !important; right: 5px !important; border-radius: var(--cal-bar-radius) !important; }
-/* Reservas pasadas: menos saturación */
-.bar.past-bar { filter: brightness(.92) saturate(.75) !important; opacity: .8 !important; }
+.bar-solo   { left: 5px !important; right: 5px !important; border-radius: var(--cal-bar-r) !important; }
+.bar.past-bar { filter: brightness(.88) saturate(.7) !important; opacity: .75 !important; }
 .bar.past-bar:hover { filter: brightness(1) saturate(.9) !important; opacity: 1 !important; }
 
-/* ─────────────────────────────────────────────────────────────
-   8. MOBILE — ajustes proporcionales
-   ───────────────────────────────────────────────────────────── */
+/* Search highlight */
+.bar.cal-search-match {
+  outline: 2px solid rgba(255,255,255,.9) !important;
+  box-shadow: 0 0 0 3px var(--cal-blue), 0 4px 14px rgba(0,0,0,.2) !important;
+  z-index: 10 !important;
+  transform: scaleY(1.1) !important;
+}
+.bar.cal-search-dim { opacity: .15 !important; filter: grayscale(.6) !important; }
+
+/* Mobile */
 @media (max-width: 768px) {
   :root { --cal-cell-h: 46px; }
-  .cal-toolbar { flex-wrap: wrap !important; gap: 6px !important; }
-  .cal-month-title { min-width: 140px !important; font-size: .88rem !important; }
-  .bar { top: 6px !important; bottom: 6px !important; font-size: .65rem !important; }
-  .bar-resize-handle { width: 16px !important; }
+  .cal-toolbar { height: auto; padding: 8px 10px; flex-wrap: wrap; }
+  .cal-month-title { min-width: 120px !important; font-size: .82rem !important; }
+  .bar { top: 6px !important; bottom: 6px !important; font-size: .62rem !important; }
   #cal-summary-bar { gap: 4px !important; }
-  .cal-kpi { padding: 3px 8px !important; }
+  .cal-kpi { padding: 2px 7px !important; }
+  .cal-tb-hint { display: none; }
+  .cal-tb-search-input { width: 140px; }
 }

@@ -515,6 +515,35 @@
             </div>
           </div>
 
+          <!-- CARD: Dinero asegurado -->
+          <div class="card dash-card" data-card-id="dinero-asegurado">
+            <div class="dash-drag-handle" title="Arrastrar">⠿</div>
+            <div class="card-header">
+              <h3>🔐 Dinero asegurado</h3>
+              <span class="badge" style="background:#dcfce7;color:#15803d;font-size:.65rem;font-weight:700">Reservas futuras</span>
+            </div>
+            <div id="dash-dinero-val" style="font-size:1.5rem;font-weight:800;color:var(--color-text)">—</div>
+            <div style="font-size:.72rem;color:var(--color-text-3);margin-bottom:10px">total comprometido en reservas confirmadas</div>
+            <div style="display:flex;flex-direction:column;gap:4px">
+              <div style="display:flex;justify-content:space-between;font-size:.78rem">
+                <span style="color:var(--color-text-3)">Ya cobrado</span>
+                <span style="font-weight:700;color:#16a34a" id="dash-dinero-cobrado">—</span>
+              </div>
+              <div style="display:flex;justify-content:space-between;font-size:.78rem">
+                <span style="color:var(--color-text-3)">Por cobrar</span>
+                <span style="font-weight:700;color:#f59e0b" id="dash-dinero-pendiente">—</span>
+              </div>
+              <div style="display:flex;justify-content:space-between;font-size:.78rem;margin-top:2px">
+                <span style="color:var(--color-text-3)">Reservas</span>
+                <span style="font-weight:700" id="dash-dinero-count">—</span>
+              </div>
+            </div>
+            <div id="dash-dinero-bar" style="margin-top:10px;height:6px;border-radius:3px;background:var(--color-border);overflow:hidden">
+              <div id="dash-dinero-bar-fill" style="height:100%;background:#16a34a;border-radius:3px;width:0%;transition:width .6s"></div>
+            </div>
+            <div style="font-size:.65rem;color:var(--color-text-3);margin-top:4px" id="dash-dinero-pct">0% cobrado</div>
+          </div>
+
         </div>
 
         <!-- Elementos ocultos necesarios para compatibilidad -->
@@ -525,43 +554,49 @@
       <!-- ── SECTION: CALENDAR ── -->
       <section id="section-calendar" class="section">
         <div class="cal-toolbar">
-          <div class="cal-nav">
-            <button class="btn btn-ghost btn-icon" id="cal-prev" title="Mes anterior">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="19" height="19"><polyline points="15 18 9 12 15 6"/></svg>
+
+          <!-- GRUPO IZQUIERDO: Navegación -->
+          <div class="cal-tb-nav">
+            <button class="cal-tb-btn" id="cal-prev" title="Período anterior">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="16" height="16"><polyline points="15 18 9 12 15 6"/></svg>
             </button>
-            <h3 class="cal-month-title" id="cal-month-title">Junio 2026</h3>
-            <button class="btn btn-ghost btn-icon" id="cal-next" title="Mes siguiente">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="19" height="19"><polyline points="9 18 15 12 9 6"/></svg>
+            <h3 class="cal-month-title" id="cal-month-title">Jun 2026</h3>
+            <button class="cal-tb-btn" id="cal-next" title="Período siguiente">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="16" height="16"><polyline points="9 18 15 12 9 6"/></svg>
             </button>
-        <button class="btn btn-outline btn-sm cal-print-btn" id="cal-print"
-                title="Imprimir calendario" onclick="window.print()"
-                style="padding:6px 10px;font-size:.78rem">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
-          Imprimir
-        </button>
+            <button class="cal-tb-tag" id="cal-today" style="display:none">Hoy</button>
           </div>
-          <!-- 🔍 Búsqueda en el calendario -->
-          <div style="position:relative;display:flex;align-items:center;gap:0">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"
-              style="position:absolute;left:8px;color:var(--color-text-3);pointer-events:none">
+
+          <!-- DIVISOR -->
+          <div class="cal-tb-sep"></div>
+
+          <!-- GRUPO CENTRO: Búsqueda -->
+          <div class="cal-tb-search">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13" class="cal-tb-search-icon">
               <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
             </svg>
-            <input type="text" id="cal-search-input" placeholder="Buscar huésped..."
-              style="padding:5px 28px 5px 26px;border:1px solid var(--color-border);border-radius:20px;
-                     font-size:.78rem;background:var(--color-surface);color:var(--color-text);
-                     width:160px;outline:none;transition:width .2s,border-color .2s"
-              onfocus="this.style.width='200px';this.style.borderColor='var(--color-primary)'"
-              onblur="if(!this.value)this.style.width='160px';this.style.borderColor='var(--color-border)'">
-            <button id="cal-search-clear" title="Limpiar búsqueda"
-              style="display:none;position:absolute;right:6px;background:none;border:none;
-                     cursor:pointer;font-size:.9rem;color:var(--color-text-3);padding:2px">✕</button>
+            <input type="text" id="cal-search-input" class="cal-tb-search-input" placeholder="Buscar huésped o unidad...">
+            <button id="cal-search-clear" class="cal-tb-search-clear" style="display:none" title="Limpiar">✕</button>
           </div>
-          <button class="btn btn-outline btn-sm" id="cal-today" style="display:none">Hoy</button>
-          <button class="btn btn-outline btn-sm" id="cal-hide-past-btn" style="display:none" title="Ocultar/mostrar días anteriores">◀ Ocultar pasados</button>
-          <button class="btn btn-outline btn-sm" id="cal-avail-toggle" title="Ver disponibilidad libre">👁 Disponibilidad</button>
-          <span class="cal-block-hint" title="Arrastrá con SHIFT para bloquear fechas">
-            <kbd>Shift</kbd>+arrastre = 🔒 bloqueo
-          </span>
+
+          <!-- ESPACIADOR -->
+          <div style="flex:1"></div>
+
+          <!-- GRUPO DERECHO: Acciones -->
+          <div class="cal-tb-actions">
+            <button class="cal-tb-btn cal-tb-btn--outline" id="cal-avail-toggle" title="Ver disponibilidad libre">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+              Disponibilidad
+            </button>
+            <button class="cal-tb-btn" id="cal-print" title="Imprimir" onclick="window.print()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+            </button>
+            <button class="cal-tb-btn" id="cal-hide-past-btn" style="display:none" title="Ocultar pasados">◀</button>
+            <span class="cal-tb-hint" title="Arrastrá con SHIFT para bloquear fechas">
+              <kbd class="cal-tb-kbd">⇧</kbd> bloquear
+            </span>
+          </div>
+
         </div>
 
         <div class="cal-wrapper">
@@ -642,9 +677,13 @@
         </div>
         <div class="tabs-bar">
           <button class="tab active" data-tab="units">Departamentos</button>
+          <button class="tab" data-tab="financ">💵 Finanzas</button>
           <button class="tab" data-tab="pl">💰 Resultado</button>
           <button class="tab" data-tab="charts">📊 Gráficos</button>
           <button class="tab" data-tab="revenue">💡 Revenue</button>
+        </div>
+        <div id="stats-financ-panel" class="stats-panel hidden">
+          <div id="financ-container"></div>
         </div>
         <div id="stats-units-panel" class="stats-panel">
           <div id="stats-units-grid" class="stats-units-grid"></div>
