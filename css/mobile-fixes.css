@@ -1235,3 +1235,54 @@
 @media (max-width: 768px) {
   .cal-agenda-wrap { max-width: 100%; }
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   CALENDAR SCROLL FIX — sticky column z-index > bars
+   ═══════════════════════════════════════════════════════════════ */
+
+/* La columna de departamentos SIEMPRE encima de todo */
+.cal-unit-label,
+.cal-unit-label-header {
+  position: sticky !important;
+  left: 0 !important;
+  z-index: 20 !important;   /* mayor que cualquier .bar */
+  isolation: isolate !important;
+}
+.cal-unit-label-header {
+  z-index: 22 !important;   /* header aún más arriba */
+}
+
+/* Evitar que barras salgan de su celda */
+.cal-cell {
+  overflow: clip !important;      /* corta cualquier desborde */
+  overflow-clip-margin: 0 !important;
+}
+
+/* Barra en el fondo del stack — siempre detrás de sticky */
+.bar {
+  z-index: 2 !important;
+}
+.bar:hover,
+.bar.cal-search-match {
+  z-index: 4 !important;
+}
+
+/* Ghost de drag: sobre todo */
+.bar-drag-ghost { z-index: 9999 !important; }
+
+/* Tooltip del calendario: sobre todo */
+.cal-tooltip { z-index: 1000 !important; }
+
+/* Header row también sticky arriba */
+.cal-day-header {
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 15 !important;
+}
+
+/* HOY: número blanco — override final */
+.cal-day-header.today .dh-num,
+.cal-day-header.today .dh-num * {
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+}

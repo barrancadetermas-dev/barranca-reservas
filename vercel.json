@@ -23,23 +23,36 @@
       "source": "/sw.js",
       "headers": [
         { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" },
-        { "key": "Pragma",        "value": "no-cache" }
-      ]
-    },
-    {
-      "source": "/index.html",
-      "headers": [
-        { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
+        { "key": "Pragma",        "value": "no-cache" },
+        { "key": "Content-Type",  "value": "application/javascript" }
       ]
     },
     {
       "source": "/manifest.json",
       "headers": [
-        { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
+        { "key": "Cache-Control",  "value": "no-cache, no-store, must-revalidate" },
+        { "key": "Content-Type",   "value": "application/manifest+json" }
+      ]
+    },
+    {
+      "source": "/:file.png",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=86400" },
+        { "key": "Content-Type",  "value": "image/png" }
+      ]
+    },
+    {
+      "source": "/:file.ico",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=86400" },
+        { "key": "Content-Type",  "value": "image/x-icon" }
       ]
     }
   ],
   "rewrites": [
-    { "source": "/((?!assets|sw\\.js|manifest\\.json).*)", "destination": "/index.html" }
+    {
+      "source": "/((?!assets/|sw\\.js|manifest\\.json|offline\\.html|icon-|apple-touch|favicon|.*\\.png|.*\\.ico|.*\\.webp|.*\\.svg|.*\\.txt|.*\\.xml).*)",
+      "destination": "/index.html"
+    }
   ]
 }
