@@ -1030,3 +1030,50 @@
   .cal-tb-hint { display: none; }
   .cal-tb-search-input { width: 140px; }
 }
+
+/* ═══════════════════════════════════════════════════════
+   FIXES FINALES vA — HOY blanco · sin barra resumen · search
+   ═══════════════════════════════════════════════════════ */
+
+/* HOY: número BLANCO dentro del círculo — máxima especificidad */
+.cal-day-header.today .dh-num,
+.cal-day-header.today .dh-num * {
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+}
+
+/* Ocultar la barra de resumen de ocupación — el usuario la removió */
+#cal-summary-bar {
+  display: none !important;
+}
+
+/* Search input: más padding izquierdo para que el ícono no tape el texto */
+.cal-tb-search-input {
+  padding-left: 30px !important;
+}
+
+/* Toolbar: título mes más legible */
+.cal-month-title {
+  font-size: .88rem !important;
+  min-width: 155px !important;
+  letter-spacing: -.01em !important;
+}
+
+/* Toolbar compacto */
+#section-calendar .cal-toolbar {
+  height: 44px !important;
+  padding: 0 12px !important;
+}
+
+/* Disponibilidad panel: integrado sin "saltar" */
+.cal-availability-bar {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  padding: 10px 14px;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}

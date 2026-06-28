@@ -125,12 +125,23 @@ export class Calendar {
   _updateTitle() {
     const first = this._dateRange[0];
     const last  = this._dateRange[this._dateRange.length - 1] ?? first;
-    const fmt = (iso) => {
-      const d = new Date(iso + 'T12:00:00');
-      return `${d.getDate()} ${MONTH_SHORT[d.getMonth()]}`;
-    };
-    const el = document.getElementById('cal-month-title');
-    if (el) el.textContent = `${fmt(first)} – ${fmt(last)}`;
+    const dF    = new Date(first + 'T12:00:00');
+    const dL    = new Date(last  + 'T12:00:00');
+    const el    = document.getElementById('cal-month-title');
+
+    if (el) {
+      // Si el rango está en el mismo mes: "Junio 2026"
+      // Si cruza meses: "Jun – Jul 2026" o "Dic 2025 – Ene 2026"
+      const MONTHS_FULL  = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+      const MONTHS_SHORT = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+      if (dF.getMonth() === dL.getMonth() && dF.getFullYear() === dL.getFullYear()) {
+        el.textContent = MONTHS_FULL[dF.getMonth()] + ' ' + dF.getFullYear();
+      } else if (dF.getFullYear() === dL.getFullYear()) {
+        el.textContent = MONTHS_SHORT[dF.getMonth()] + ' – ' + MONTHS_SHORT[dL.getMonth()] + ' ' + dF.getFullYear();
+      } else {
+        el.textContent = MONTHS_SHORT[dF.getMonth()] + ' ' + dF.getFullYear() + ' – ' + MONTHS_SHORT[dL.getMonth()] + ' ' + dL.getFullYear();
+      }
+    }
 
     // Mostrar / ocultar botón "Hoy"
     const todayBtn = document.getElementById('cal-today');
@@ -488,6 +499,28 @@ export class Calendar {
       bar.style.boxShadow = '';
       this._hideTooltip();
     });
+
+    // ── Touch tap: mostrar tooltip en mobile ──
+    bar.addEventListener('touchstart', (e) => {
+      this._touchStartX = e.touches[0].clientX;
+      this._touchStartY = e.touches[0].clientY;
+      this._touchMoved  = false;
+    }, { passive: true });
+    bar.addEventListener('touchmove', () => {
+      this._touchMoved = true;
+    }, { passive: true });
+    bar.addEventListener('touchend', (e) => {
+      if (this._touchMoved) return; // fue un drag, no un tap
+      e.preventDefault();
+      const touch = e.changedTouches[0];
+      // Mostrar tooltip en posición del tap
+      const fakeEvent = { clientX: touch.clientX, clientY: touch.clientY };
+      this._showTooltip(booking, fakeEvent);
+      // Auto-cerrar después de 3 segundos
+      clearTimeout(this._tooltipTouchTimer);
+      this._tooltipTouchTimer = setTimeout(() => this._hideTooltip(), 3000);
+    });
+
     bar.addEventListener('click', (e) => {
       if (this._barDrag.moved) return;
       e.stopPropagation();
@@ -765,10 +798,16 @@ export class Calendar {
         document.querySelectorAll('#sidebar-mini-cal .smc-day').forEach(d => d.classList.remove('smc-selected'));
         cell.classList.add('smc-selected');
 
+        // Navegar a la sección Calendario si no está activa
+        if (typeof window.milaNav === 'function') {
+          window.milaNav('calendar');
+        }
+
         // Navegar el calendario principal a esa fecha (centrada)
         this._windowStart = this._addDays(isoDate, -PAST_OFFSET);
         cache.invalidate('bookings');
-        this.load();
+        // Pequeño delay para que la sección se active primero si hubo navegación
+        setTimeout(() => this.load(), 50);
       });
     });
   }
@@ -873,7 +912,39 @@ export class Calendar {
 
         if (wasBlock) {
           const reason = prompt('Motivo del bloqueo (mantenimiento, uso propio, reparación...):', 'Mantenimiento');
-          if (reason !== null) await this._blockRange(startUnit, d1, toISODate(last), reason.trim() || 'Bloqueo');
+          if (reason !== null) {
+            const reasonTxt = reason.trim() || 'Bloqueo';
+            // Ofrecer bloqueo multi-unidad
+            const allUnits  = this.ctx.units ?? [];
+            let targetUnits = [startUnit];
+            if (allUnits.length > 1) {
+              const blockAll = confirm(
+                '¿Bloquear SOLO esta unidad?\n\n' +
+                'OK = solo esta unidad\n' +
+                'Cancelar = elegir cuáles bloquear'
+              );
+              if (!blockAll) {
+                // Mostrar selector de unidades
+                const unitNames = allUnits.map((u, i) => (i+1) + '. ' + u.name).join('\n');
+                const sel = prompt(
+                  'Ingresá los NÚMEROS de las unidades a bloquear separados por coma:\n\n' +
+                  unitNames + '\n\nEj: 1,2,3 o dejar vacío para TODAS',
+                  ''
+                );
+                if (sel === null) { /* cancelado */ }
+                else if (sel.trim() === '') {
+                  targetUnits = allUnits.map(u => u.id);
+                } else {
+                  const nums = sel.split(',').map(s => parseInt(s.trim())).filter(n => n >= 1 && n <= allUnits.length);
+                  targetUnits = nums.map(n => allUnits[n-1]?.id).filter(Boolean);
+                }
+              }
+            }
+            // Bloquear todas las unidades seleccionadas
+            for (const uid of targetUnits) {
+              await this._blockRange(uid, d1, toISODate(last), reasonTxt);
+            }
+          }
         } else {
           this.bookingForm.open({ unitId: startUnit, checkIn: d1, checkOut: toISODate(last) });
         }

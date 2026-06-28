@@ -31,7 +31,8 @@ export class FinancePanel {
   }
 
   _buildShell() {
-    const today = localToday();
+    const n = new Date();
+    const today = n.getFullYear() + '-' + String(n.getMonth()+1).padStart(2,'0') + '-' + String(n.getDate()).padStart(2,'0');
     return `
     <div id="financ-shell">
       <!-- Selector de período -->
@@ -84,7 +85,8 @@ export class FinancePanel {
   }
 
   _getDateRange() {
-    const today = localToday();
+    const n     = new Date();
+    const today = n.getFullYear() + '-' + String(n.getMonth()+1).padStart(2,'0') + '-' + String(n.getDate()).padStart(2,'0');
     const d     = new Date(today + 'T12:00:00');
     if (this._period === 'today') return [today, today];
     if (this._period === 'week') {
@@ -107,7 +109,9 @@ export class FinancePanel {
 
   async _fetchAndRender(container) {
     const [from, to] = this._getDateRange();
-    const today = localToday();
+    // Fecha de hoy inline (sin depender del import para robustez)
+    const n     = new Date();
+    const today = n.getFullYear() + '-' + String(n.getMonth()+1).padStart(2,'0') + '-' + String(n.getDate()).padStart(2,'0');
 
     const loading = '<div style="padding:32px;text-align:center;color:var(--color-text-3)">⟳ Calculando...</div>';
     ['financ-kpis','financ-chart','financ-asegurado','financ-indicators'].forEach(id => {
@@ -116,10 +120,11 @@ export class FinancePanel {
     });
 
     try {
-      // Una sola query, filtrando por check_in dentro del período
-      const [periodoRes, futuroRes] = await Promise.all([
+      // Reservas del período + máxima reserva con nombre del huésped
+      const [periodoRes, futuroRes, maxBkRes] = await Promise.all([
+        // Período seleccionado: todas las reservas que INICIAN en el rango
         this.db.from('bookings')
-          .select('id,total_amount,total_paid,balance,nights,price_per_night,check_in,check_out,status,guests(first_name,last_name)')
+          .select('id,total_amount,total_paid,balance,nights,price_per_night,check_in,check_out,status')
           .eq('hotel_id', this.ctx.hotelId)
           .gte('check_in', from)
           .lte('check_in', to)
@@ -130,10 +135,22 @@ export class FinancePanel {
           .eq('hotel_id', this.ctx.hotelId)
           .gte('check_out', today)
           .not('status','in','(cancelled,blocked)'),
+        // Mayor reserva del período (con nombre del huésped)
+        this.db.from('bookings')
+          .select('id,total_amount,guests!bookings_guest_id_fkey(first_name,last_name)')
+          .eq('hotel_id', this.ctx.hotelId)
+          .gte('check_in', from)
+          .lte('check_in', to)
+          .not('status','in','(cancelled,blocked)')
+          .order('total_amount', { ascending: false })
+          .limit(1),
       ]);
+
+      if (periodoRes.error) throw periodoRes.error;
 
       const bks    = periodoRes.data ?? [];
       const futuro = futuroRes.data ?? [];
+      const maxBk  = maxBkRes.data?.[0] ?? null;
 
       // ── Métricas del período ──
       const totalVend  = bks.reduce((s,b) => s + (b.total_amount ?? 0), 0);
@@ -141,7 +158,7 @@ export class FinancePanel {
       const totalPend  = bks.reduce((s,b) => s + Math.max(0,(b.total_amount??0)-(b.total_paid??0)), 0);
       const totalNoch  = bks.reduce((s,b) => s + (b.nights ?? 0), 0);
       const pctCobr    = totalVend > 0 ? Math.round(totalCobr / totalVend * 100) : 0;
-      const maxBk      = bks.reduce((m,b) => (b.total_amount??0) > (m?.total_amount??0) ? b : m, null);
+      // maxBk viene de la query separada (con nombre del huésped)
       const avgBk      = bks.length > 0 ? totalVend / bks.length : 0;
       const avgNoche   = totalNoch > 0 ? totalVend / totalNoch : 0;
       const avgPend    = bks.length > 0 ? totalPend / bks.length : 0;
@@ -225,7 +242,7 @@ export class FinancePanel {
     const el = document.getElementById('financ-indicators');
     if (!el) return;
     const fmt = n => '$' + Math.round(n).toLocaleString('es-AR');
-    const maxGuest = maxBk?.guests ? (maxBk.guests.first_name + ' ' + maxBk.guests.last_name).trim() : '—';
+    const maxGuest = maxBk?.guests ? ((maxBk.guests.first_name ?? '') + ' ' + (maxBk.guests.last_name ?? '')).trim() || '—' : '—';
     const ind = (icon, label, val, sub) =>
       '<div class="card" style="padding:12px 14px;display:flex;align-items:flex-start;gap:10px">' +
         '<span style="font-size:1.2rem;flex-shrink:0">' + icon + '</span>' +

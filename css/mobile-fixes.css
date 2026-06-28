@@ -782,3 +782,58 @@
 
 /* Dashboard: dinero asegurado card */
 [data-card-id="dinero-asegurado"] .card-header h3 { color: var(--color-text); }
+
+/* ═══════════════════════════════════════════════════════
+   FIXES vB
+   ═══════════════════════════════════════════════════════ */
+
+/* ── Ocupación: ancho compacto fijo en el grid ── */
+#dashboard-custom-grid {
+  grid-template-columns: repeat(4, 1fr) !important;
+}
+/* Ocupación card: sin forzar columna entera — ocupa 1 col pero
+   con un max-width para que el ring no quede gigante */
+.dash-card.widget-occupancy {
+  max-width: 220px;
+  min-width: 0;
+}
+/* En pantallas grandes, hacer el grid 5 columnas cuando Ocupación está visible:
+   permite que las otras 4 cards de la fila mantengan buen ancho */
+@media (min-width: 1200px) {
+  #dashboard-custom-grid:has(.widget-occupancy:not([style*="display: none"])) {
+    grid-template-columns: 200px 1fr 1fr 1fr !important;
+  }
+}
+
+/* ── Dark mode: barras con mayor luminosidad ── */
+[data-theme="dark"] .bar {
+  filter: brightness(1.25) saturate(1.1) !important;
+}
+[data-theme="dark"] .bar:hover {
+  filter: brightness(1.4) saturate(1.2) !important;
+}
+[data-theme="dark"] .bar.past-bar {
+  filter: brightness(.95) saturate(.8) !important;
+  opacity: .85 !important;
+}
+[data-theme="dark"] .bar.past-bar:hover {
+  filter: brightness(1.1) saturate(1) !important;
+  opacity: 1 !important;
+}
+
+/* ── Tooltip mobile: auto-cierra, mejor posicionamiento ── */
+.cal-tooltip {
+  max-width: min(320px, calc(100vw - 32px)) !important;
+}
+@media (max-width: 768px) {
+  .cal-tooltip {
+    font-size: .78rem !important;
+    padding: 10px 12px !important;
+    max-width: calc(100vw - 24px) !important;
+    left: 50% !important;
+    transform: translateX(-50%) !important;
+    bottom: 80px !important;
+    top: auto !important;
+    position: fixed !important;
+  }
+}

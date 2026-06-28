@@ -39,19 +39,75 @@ export class Dashboard {
     };
 
     window._dashCheckOut = async (bookingId, rowId, guest) => {
-      if (!confirm(`Registrar check-out de ${guest}?`)) return;
+      // Modal de notas antes de confirmar check-out
+      const notas = prompt(
+        '👋 Check-out: ' + guest + '\n\n' +
+        'Estado de la unidad (opcional):\n' +
+        'Ej: "Dejar toallas extra", "Revisar canilla baño", "Todo OK"'
+      );
+      if (notas === null) return; // Canceló el prompt
+
       try {
-        await this.db.from('bookings')
+        // 1. Registrar check-out
+        const { error: bkErr } = await this.db.from('bookings')
           .update({ checked_out_at: new Date().toISOString() }).eq('id', bookingId);
+        if (bkErr) throw bkErr;
+
+        // 2. Obtener info de la reserva (unidad + fecha check-out)
+        const { data: bk } = await this.db.from('bookings')
+          .select('check_out, booking_units(unit_id, units(name))')
+          .eq('id', bookingId).single();
+
+        if (bk) {
+          const unitId   = bk.booking_units?.[0]?.unit_id;
+          const unitName = bk.booking_units?.[0]?.units?.name ?? '—';
+          const today    = bk.check_out;
+
+          // 3. Buscar si ya existe una tarea de limpieza para esa unidad hoy
+          const { data: existing } = await this.db.from('cleaning_tasks')
+            .select('id')
+            .eq('unit_id', unitId)
+            .eq('scheduled_date', today)
+            .limit(1);
+
+          const cleaningNote = notas.trim()
+            ? '🧹 Check-out ' + guest + ': ' + notas.trim()
+            : '🧹 Limpieza post check-out — ' + guest;
+
+          if (existing?.length) {
+            // Actualizar la tarea existente con las notas
+            await this.db.from('cleaning_tasks')
+              .update({ notes: cleaningNote, status: 'pending' })
+              .eq('id', existing[0].id);
+          } else if (unitId) {
+            // Crear nueva tarea de limpieza
+            await this.db.from('cleaning_tasks').insert({
+              hotel_id:       this.ctx.hotelId,
+              unit_id:        unitId,
+              scheduled_date: today,
+              status:         'pending',
+              notes:          cleaningNote,
+              priority:       'high',
+            });
+          }
+        }
+
+        // 4. Actualizar UI
         const row = document.getElementById(rowId);
         if (row) {
-          row.classList.add('done');
-          row.querySelector('.dac-btn')?.remove();
-          row.querySelector('.dac-left').insertAdjacentHTML('beforeend',
-            `<span class="dac-done-label">✓ Check-out registrado</span>`);
-          row.insertAdjacentHTML('beforeend', `<span class="dac-done-badge" style="background:var(--color-surface-2)">✓</span>`);
+          const statusChip = row.querySelector('[style*="padding:1px"]');
+          if (statusChip) {
+            statusChip.textContent   = '✓ Check-out';
+            statusChip.style.background = '#e0e7ff';
+            statusChip.style.color      = '#3730a3';
+          }
+          const actionBtn = row.querySelector('.btn');
+          if (actionBtn) actionBtn.remove();
         }
-        document.dispatchEvent(new CustomEvent('show:toast', { detail: { msg: `👋 Check-out: ${guest}`, type: 'success' } }));
+
+        document.dispatchEvent(new CustomEvent('show:toast', {
+          detail: { msg: '👋 Check-out registrado' + (notas.trim() ? ' · Tarea de limpieza creada' : ''), type: 'success' }
+        }));
         document.dispatchEvent(new CustomEvent('booking:changed'));
         if (typeof Sound !== 'undefined') Sound?.checkOut?.();
       } catch (e) {
@@ -81,7 +137,7 @@ export class Dashboard {
         return;
       }
       const today = toISODate(new Date());
-      const [kpis, dollar, reminders, forecast, cleaningTasks, extraStats] = await Promise.all([
+      const [kpis, dollar, reminders, forecast, cleaningTasks, extraStats, dineroStats] = await Promise.all([
         this._fetchKPIs(today),
         fetchDollarRates(),
         this._fetchTodayReminders(today),
@@ -1217,20 +1273,22 @@ export class Dashboard {
   // ══════════════════════════════════════════════════
   async _fetchDineroAsegurado(today) {
     try {
-      const { data: bks } = await this.db
+      const { data: bks, error } = await this.db
         .from('bookings')
-        .select('id, total_amount, total_paid, balance, status')
+        .select('id, total_amount, total_paid, status')
         .eq('hotel_id', this.ctx.hotelId)
-        .gte('check_out', today)                        // solo futuras/en curso
-        .not('status', 'in', '(cancelled,blocked)');   // solo confirmadas
+        .gte('check_out', today)
+        .not('status', 'in', '(cancelled,blocked)');
 
-      const rows       = bks ?? [];
-      const totalVend  = rows.reduce((s,b) => s + (b.total_amount ?? 0), 0);
-      const totalCobr  = rows.reduce((s,b) => s + (b.total_paid  ?? 0), 0);
-      const totalPend  = rows.reduce((s,b) => s + Math.max(0, (b.total_amount ?? 0) - (b.total_paid ?? 0)), 0);
+      if (error) throw error;
+      const rows      = bks ?? [];
+      const totalVend = rows.reduce((s,b) => s + (b.total_amount ?? 0), 0);
+      const totalCobr = rows.reduce((s,b) => s + (b.total_paid  ?? 0), 0);
+      const totalPend = rows.reduce((s,b) => s + Math.max(0, (b.total_amount ?? 0) - (b.total_paid ?? 0)), 0);
       return { totalVend, totalCobr, totalPend, count: rows.length };
-    } catch {
-      return null;
+    } catch (err) {
+      console.warn('[Dashboard] _fetchDineroAsegurado:', err?.message ?? err);
+      return { totalVend: 0, totalCobr: 0, totalPend: 0, count: 0 };
     }
   }
 
