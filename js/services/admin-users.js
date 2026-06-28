@@ -23,13 +23,7 @@ const STATUS_CONFIG = {
   banned:         { label: 'Bloqueado',     color: '#ef4444', dot: '🔴' },
 };
 
-// Los 8 avatares (mismos que config-panel.js)
-const AVATARS = [
-  { id: 1, emoji: '😊' }, { id: 2, emoji: '🏡' },
-  { id: 3, emoji: '⭐' }, { id: 4, emoji: '🌴' },
-  { id: 5, emoji: '🔑' }, { id: 6, emoji: '☀️' },
-  { id: 7, emoji: '🌙' }, { id: 8, emoji: '🎯' },
-];
+// Avatares: usamos iniciales en vez de emojis
 
 export class AdminUsers {
   constructor(supabase, ctx) {
@@ -179,8 +173,9 @@ export class AdminUsers {
   _renderUserCard(u) {
     const roleCfg    = ROLE_CONFIG[u.role]    ?? ROLE_CONFIG.staff;
     const statusCfg  = STATUS_CONFIG[u.status] ?? STATUS_CONFIG.inactive;
-    const av         = AVATARS.find(a => a.id === u.avatar_id) ?? AVATARS[0];
     const avatarColor = u.avatar_color ?? '#6366f1';
+    // Usar inicial del nombre o email en vez de emoji
+    const avatarLetter = (u.nombre?.[0] ?? u.email?.[0] ?? 'U').toUpperCase();
     const lastSeen   = u.last_sign_in_at
       ? this._timeAgo(new Date(u.last_sign_in_at))
       : 'Nunca';
@@ -191,8 +186,8 @@ export class AdminUsers {
     return `
       <div class="au-card">
         <!-- Avatar -->
-        <div class="au-avatar" style="background:${avatarColor}">
-          ${av.emoji}
+        <div class="au-avatar" style="background:${avatarColor};color:#fff;font-size:1.3rem;font-weight:800;font-family:system-ui,sans-serif">
+          ${avatarLetter}
         </div>
 
         <!-- Info -->

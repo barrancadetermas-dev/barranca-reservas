@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MILA — Sin conexión</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #0f172a;
+      color: #e2e8f0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100dvh;
+      padding: 24px;
+      text-align: center;
+    }
+    .card {
+      max-width: 320px;
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 20px;
+      padding: 36px 28px;
+    }
+    .logo {
+      width: 72px; height: 72px;
+      background: linear-gradient(135deg, #1e4db7, #3b82f6);
+      border-radius: 18px;
+      display: flex; align-items: center; justify-content: center;
+      margin: 0 auto 20px;
+      font-size: 2rem; font-weight: 900; color: #fff;
+    }
+    h1 { font-size: 1.2rem; font-weight: 700; margin-bottom: 8px; }
+    p  { font-size: .875rem; color: #94a3b8; line-height: 1.6; margin-bottom: 24px; }
+    button {
+      background: #1e4db7;
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      padding: 12px 24px;
+      font-size: .875rem;
+      font-weight: 600;
+      cursor: pointer;
+      width: 100%;
+    }
+    button:hover { background: #2563eb; }
+    .status { font-size: .72rem; color: #64748b; margin-top: 16px; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="logo">M</div>
+    <h1>Sin conexión</h1>
+    <p>MILA necesita conexión para sincronizar las reservas. Verificá tu señal de Wi-Fi o datos.</p>
+    <button onclick="location.reload()">🔄 Reintentar</button>
+    <div class="status" id="status">Intentando reconectar...</div>
+  </div>
+  <script>
+    window.addEventListener('online', () => location.reload());
+    setInterval(() => {
+      const s = document.getElementById('status');
+      if (navigator.onLine) location.reload();
+      else s.textContent = '● Sin señal · ' + new Date().toLocaleTimeString('es-AR');
+    }, 5000);
+  </script>
+</body>
+</html>

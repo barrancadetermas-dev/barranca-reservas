@@ -187,120 +187,120 @@ export class ConfigPanel {
       <!-- Panel de Control tab -->
       <div id="cfg-pane-control" style="display:none">
 
-        <!-- ── Perfil del usuario ──────────────────────── -->
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
-
-          <!-- Tarjeta de perfil -->
-          <div style="background:linear-gradient(135deg,var(--color-primary) 0%,var(--color-primary-h,#1d4ed8) 100%);
-                      border-radius:var(--r-xl);padding:24px;color:white;position:relative;overflow:hidden">
-            <div style="position:absolute;top:-20px;right:-20px;width:100px;height:100px;border-radius:50%;
-                         background:rgba(255,255,255,.08)"></div>
-            <div style="position:absolute;bottom:-30px;left:30px;width:70px;height:70px;border-radius:50%;
-                         background:rgba(255,255,255,.06)"></div>
-            <div style="display:flex;align-items:center;gap:14px;margin-bottom:16px;position:relative">
-              <div id="cfg-user-avatar" style="width:56px;height:56px;border-radius:50%;background:rgba(255,255,255,.25);
-                color:white;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:800;
-                flex-shrink:0;box-shadow:0 4px 12px rgba(0,0,0,.2);border:2px solid rgba(255,255,255,.4)">?</div>
-              <div>
-                <div id="cfg-user-email" style="font-weight:700;font-size:.95rem;opacity:.95">Cargando...</div>
-                <div id="cfg-user-role" style="font-size:.72rem;margin-top:4px;background:rgba(255,255,255,.2);
-                  padding:2px 10px;border-radius:var(--r-full);display:inline-block;opacity:.9">👑 Admin</div>
-              </div>
-            </div>
-            <div style="position:relative">
-              <label style="font-size:.68rem;text-transform:uppercase;letter-spacing:.06em;opacity:.8;display:block;margin-bottom:6px;font-weight:600">Nombre para mostrar</label>
-              <div style="display:flex;gap:6px">
-                <input type="text" id="cfg-user-nombre" placeholder="Tu nombre…"
-                  style="flex:1;border:1px solid rgba(255,255,255,.3);border-radius:var(--r-md);
-                         padding:6px 10px;font-size:.84rem;background:rgba(255,255,255,.15);
-                         color:white;outline:none"
-                  onkeydown="if(event.key===\'Enter\')this.nextElementSibling.click()">
-                <button id="cfg-nombre-save" class="btn btn-sm"
-                  style="background:white;color:var(--color-primary);font-weight:700;border:none;white-space:nowrap">
-                  Guardar
-                </button>
+        <!-- ── Tarjeta de perfil ── -->
+        <div style="background:linear-gradient(135deg,#1e4db7 0%,#3b82f6 100%);border-radius:var(--r-xl);padding:24px;margin-bottom:16px;position:relative;overflow:hidden">
+          <div style="position:absolute;top:-30px;right:-30px;width:120px;height:120px;border-radius:50%;background:rgba(255,255,255,.07)"></div>
+          <div style="display:flex;align-items:center;gap:16px;margin-bottom:20px;position:relative">
+            <div id="cfg-user-avatar" style="width:60px;height:60px;border-radius:50%;background:rgba(255,255,255,.2);color:#fff;display:flex;align-items:center;justify-content:center;font-size:1.5rem;font-weight:900;flex-shrink:0;box-shadow:0 4px 12px rgba(0,0,0,.25);border:2px solid rgba(255,255,255,.4)">?</div>
+            <div style="flex:1;min-width:0">
+              <div id="cfg-user-email" style="font-weight:700;font-size:.95rem;color:#fff;opacity:.95">Cargando...</div>
+              <div id="cfg-user-role" style="margin-top:5px">
+                <span style="font-size:.68rem;background:rgba(255,255,255,.2);color:#fff;padding:2px 10px;border-radius:var(--r-full);font-weight:700">👑 Admin</span>
               </div>
             </div>
           </div>
-
-          <!-- Acciones rápidas -->
-          <div style="background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--r-xl);padding:20px">
-            <div style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;
-                        color:var(--color-text-3);margin-bottom:14px">Acciones de sesión</div>
-            <div style="display:flex;flex-direction:column;gap:8px">
-              <button class="btn btn-outline btn-sm" id="cfg-logout-btn"
-                style="justify-content:flex-start;gap:8px;color:var(--color-text-2)">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15">
-                  <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/>
-                  <polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
-                </svg>
-                Cerrar sesión
-              </button>
-              <button class="btn btn-outline btn-sm" id="cfg-notify-schema"
-                style="justify-content:flex-start;gap:8px;color:var(--color-text-2)">
-                🔄 Refrescar schema Supabase
+          <!-- Nombre para mostrar -->
+          <div style="position:relative">
+            <label style="font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:rgba(255,255,255,.7);display:block;margin-bottom:6px">Nombre para mostrar</label>
+            <div style="display:flex;gap:8px">
+              <input type="text" id="cfg-user-nombre" placeholder="Tu nombre..."
+                style="flex:1;border:1px solid rgba(255,255,255,.3);border-radius:var(--r-md);padding:8px 12px;font-size:.85rem;background:rgba(255,255,255,.15);color:#fff;outline:none"
+                onkeydown="if(event.key===\'Enter\')document.getElementById(\'cfg-nombre-save\').click()">
+              <button id="cfg-nombre-save"
+                style="background:#fff;color:#1e4db7;border:none;border-radius:var(--r-md);padding:8px 16px;font-size:.8rem;font-weight:800;cursor:pointer;white-space:nowrap">
+                Guardar
               </button>
             </div>
+            <div style="font-size:.65rem;color:rgba(255,255,255,.5);margin-top:5px">Aparece en el header y en todas las vistas</div>
+          </div>
+        </div>
 
-            <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--color-border)">
-              <div style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;
-                          color:var(--color-text-3);margin-bottom:10px">Links externos</div>
-              <div style="display:flex;flex-direction:column;gap:6px">
-                <a href="https://supabase.com/dashboard/project/tuneeinpudlsezzmvaro/editor" target="_blank"
-                   style="font-size:.78rem;color:var(--color-primary);text-decoration:none;
-                          display:flex;align-items:center;gap:5px">
-                  🗄️ SQL Editor
-                </a>
-                <a href="https://vercel.com/dashboard" target="_blank"
-                   style="font-size:.78rem;color:var(--color-primary);text-decoration:none;
-                          display:flex;align-items:center;gap:5px">
-                  🚀 Vercel Dashboard
-                </a>
-              </div>
+        <!-- ── Acciones rápidas (2 columnas) ── -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+
+          <!-- Sesión -->
+          <div style="background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--r-xl);padding:16px">
+            <div style="font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--color-text-3);margin-bottom:12px">Sesión</div>
+            <div style="display:flex;flex-direction:column;gap:6px">
+              <button class="btn btn-outline btn-sm" id="cfg-logout-btn" style="justify-content:flex-start;gap:8px">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+                Cerrar sesión
+              </button>
+              <button class="btn btn-outline btn-sm" id="cfg-notify-schema" style="justify-content:flex-start;gap:8px">
+                🔄 Refrescar schema
+              </button>
+            </div>
+          </div>
+
+          <!-- Links externos -->
+          <div style="background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--r-xl);padding:16px">
+            <div style="font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--color-text-3);margin-bottom:12px">Administración</div>
+            <div style="display:flex;flex-direction:column;gap:6px">
+              <a href="https://supabase.com/dashboard/project/tuneeinpudlsezzmvaro/editor" target="_blank"
+                 style="font-size:.78rem;color:var(--color-primary);display:flex;align-items:center;gap:6px;text-decoration:none;padding:3px 0">
+                🗄️ SQL Editor
+              </a>
+              <a href="https://vercel.com/dashboard" target="_blank"
+                 style="font-size:.78rem;color:var(--color-primary);display:flex;align-items:center;gap:6px;text-decoration:none;padding:3px 0">
+                🚀 Vercel Dashboard
+              </a>
+              <a href="https://barranca-reservas.vercel.app" target="_blank"
+                 style="font-size:.78rem;color:var(--color-primary);display:flex;align-items:center;gap:6px;text-decoration:none;padding:3px 0">
+                🌐 App en producción
+              </a>
             </div>
           </div>
         </div>
 
-        <!-- ── KPIs del sistema ─────────────────────────── -->
-        <div style="background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--r-xl);padding:20px;margin-bottom:16px">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
-            <div style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--color-text-3)">📊 Sistema</div>
-            <button class="btn btn-ghost btn-sm" id="cfg-load-stats" style="font-size:.72rem">Cargar →</button>
+        <!-- ── KPIs del sistema ── -->
+        <div style="background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--r-xl);padding:18px;margin-bottom:16px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+            <div style="font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--color-text-3)">📊 Estado del sistema</div>
+            <button class="btn btn-ghost btn-sm" id="cfg-load-stats" style="font-size:.7rem">Actualizar</button>
           </div>
-          <div id="cfg-sys-stats" style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">
+          <div id="cfg-sys-stats" style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
             <div class="cfg-stat-card"><div class="cfg-stat-val" id="sys-stat-bookings">—</div><div class="cfg-stat-lbl">Reservas</div></div>
             <div class="cfg-stat-card"><div class="cfg-stat-val" id="sys-stat-guests">—</div><div class="cfg-stat-lbl">Huéspedes</div></div>
-            <div class="cfg-stat-card"><div class="cfg-stat-val" id="sys-stat-revenue">—</div><div class="cfg-stat-lbl">Ingresos totales</div></div>
+            <div class="cfg-stat-card"><div class="cfg-stat-val" id="sys-stat-revenue">—</div><div class="cfg-stat-lbl">Ingresos</div></div>
             <div class="cfg-stat-card"><div class="cfg-stat-val" id="sys-stat-cleaning">—</div><div class="cfg-stat-lbl">Limpiezas</div></div>
             <div class="cfg-stat-card"><div class="cfg-stat-val" id="sys-stat-maint">—</div><div class="cfg-stat-lbl">Mantenimiento</div></div>
             <div class="cfg-stat-card"><div class="cfg-stat-val" id="sys-stat-reminders">—</div><div class="cfg-stat-lbl">Recordatorios</div></div>
           </div>
         </div>
 
-        <!-- ── Exports ──────────────────────────────────── -->
-        <div style="background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--r-xl);padding:20px;margin-bottom:16px">
-          <div style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--color-text-3);margin-bottom:10px">📤 Exportar datos</div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap">
-            <button class="btn btn-outline btn-sm" id="cfg-export-bookings">📋 Reservas CSV</button>
-            <button class="btn btn-outline btn-sm" id="cfg-export-guests">👤 Huéspedes CSV</button>
+        <!-- ── Exportar datos ── -->
+        <div style="background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--r-xl);padding:18px;margin-bottom:16px">
+          <div style="font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--color-text-3);margin-bottom:12px">📤 Exportar datos</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:0">
+            <button class="btn btn-outline btn-sm" id="cfg-exp-toggle-csv"
+              style="gap:5px" onclick="var p=document.getElementById('cfg-exp-csv-panel');p.style.display=p.style.display==='none'?'':'none'">
+              📋 CSV / Excel ▾
+            </button>
+            <button class="btn btn-outline btn-sm" id="cfg-exp-toggle-pdf"
+              style="gap:5px;opacity:.55;cursor:default" title="Próximamente">
+              📄 Reportes PDF <span style="font-size:.62rem;background:#fef3c7;color:#92400e;padding:1px 5px;border-radius:4px;margin-left:3px">v0.2</span>
+            </button>
+          </div>
+          <div id="cfg-exp-csv-panel" style="display:none;margin-top:10px;background:var(--color-surface-2);border-radius:var(--r-lg);padding:12px">
+            <div style="font-size:.7rem;color:var(--color-text-3);margin-bottom:8px;font-weight:600">Elegí qué exportar:</div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap">
+              <button class="btn btn-outline btn-sm" id="cfg-export-bookings">📅 Reservas</button>
+              <button class="btn btn-outline btn-sm" id="cfg-export-guests">👤 Huéspedes</button>
+            </div>
           </div>
         </div>
 
-        <!-- ── Changelog ────────────────────────────────── -->
-        <div style="background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--r-xl);padding:20px">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-            <div style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--color-text-3)">📋 MILA PMS</div>
-            <span style="background:var(--color-primary);color:#fff;padding:2px 10px;border-radius:var(--r-full);font-size:.72rem;font-weight:800">V.01</span>
-          </div>
-          <div style="font-size:.78rem;color:var(--color-text-2);line-height:1.6">
-            <div style="padding:8px 0;border-bottom:1px solid var(--color-border);color:var(--color-text-3)">
-              Sistema de gestión en etapa de desarrollo activo. Las funciones se incorporan de forma incremental.
+        <!-- ── MILA Info ── -->
+        <div style="background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--r-xl);padding:18px">
+          <div style="display:flex;align-items:center;justify-content:space-between">
+            <div>
+              <div style="font-size:.92rem;font-weight:800;color:var(--color-text)">MILA PMS</div>
+              <div style="font-size:.72rem;color:var(--color-text-3);margin-top:2px">Sistema de gestión para complejos turísticos</div>
             </div>
-            <div style="padding:8px 0;font-size:.75rem;color:var(--color-text-3)">
-              Las actualizaciones se documentan internamente. Versión actual: <strong style="color:var(--color-primary)">V.01</strong>
-            </div>
+            <span style="background:var(--color-primary);color:#fff;padding:3px 12px;border-radius:var(--r-full);font-size:.75rem;font-weight:800">V.01</span>
           </div>
         </div>
+
       </div>
 
       <!-- Usuarios tab -->
@@ -313,7 +313,7 @@ export class ConfigPanel {
   _bindSave(container) {
     container.querySelector('#btn-save-config')?.addEventListener('click', () => this._save(container));
 
-    // ── Nombre para mostrar — bound early, gets session on click ──
+    // ── Nombre para mostrar — siempre funciona ──
     container.querySelector('#cfg-nombre-save')?.addEventListener('click', async () => {
       const btn    = container.querySelector('#cfg-nombre-save');
       const input  = container.querySelector('#cfg-user-nombre');
@@ -323,18 +323,25 @@ export class ConfigPanel {
         const { data: { session } } = await this.db.auth.getSession();
         const uid = session?.user?.id;
         if (!uid) throw new Error('Sin sesión activa');
-        // Try UPDATE first (row almost certainly exists), fallback to upsert
-        const { error: updErr } = await this.db.from('user_profiles')
-          .update({ nombre: nombre || null }).eq('id', uid);
-        if (updErr) {
-          const { error: upsErr } = await this.db.from('user_profiles')
-            .upsert({ id: uid, nombre: nombre || null }, { onConflict: 'id' });
-          if (upsErr) throw upsErr;
+
+        // Upsert directo — maneja tanto INSERT como UPDATE
+        const { error } = await this.db.from('user_profiles')
+          .upsert({ id: uid, nombre: nombre || null }, { onConflict: 'id' });
+
+        // Si falla el upsert (RLS), intentar UPDATE directo
+        if (error) {
+          const { error: updErr } = await this.db.from('user_profiles')
+            .update({ nombre: nombre || null }).eq('id', uid);
+          if (updErr) throw new Error('No se pudo guardar. Verificá permisos de base de datos.');
         }
-        // Update avatar initial in the panel
+
+        // Actualizar avatar en el panel
         const avatarEl = container.querySelector('#cfg-user-avatar');
-        if (avatarEl && nombre) avatarEl.textContent = nombre[0].toUpperCase();
-        // Update everywhere in the app
+        if (avatarEl) {
+          const initial = nombre ? nombre[0].toUpperCase() : (session.user.email?.[0]?.toUpperCase() ?? 'A');
+          avatarEl.textContent = initial;
+        }
+        // Actualizar toda la app
         if (window._applyUserDisplay) {
           window._applyUserDisplay({ nombre: nombre || null, email: session.user.email });
         }
