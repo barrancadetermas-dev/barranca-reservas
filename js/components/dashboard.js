@@ -231,7 +231,7 @@ export class Dashboard {
       _startX  = e.clientX;
       _startY  = e.clientY;
       _moved   = false;
-      grid.setPointerCapture?.(e.pointerId);
+      try { e.target.setPointerCapture(e.pointerId); } catch(_) {}
     });
 
     grid.addEventListener('pointermove', e => {
@@ -1067,7 +1067,7 @@ export class Dashboard {
       const year = d.getFullYear(), month = d.getMonth();
       const firstDay    = year + '-' + String(month+1).padStart(2,'0') + '-01';
       const lastDayObj  = new Date(year, month+1, 0);
-      const lastDay     = year + '-' + String(month+1).padStart(2,'00') + '-' + String(lastDayObj.getDate()).padStart(2,'0');
+      const lastDay     = year + '-' + String(month+1).padStart(2,'0') + '-' + String(lastDayObj.getDate()).padStart(2,'0');
       const daysInMonth = lastDayObj.getDate();
 
       // Previous month

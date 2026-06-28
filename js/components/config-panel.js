@@ -446,6 +446,8 @@ export class ConfigPanel {
       }
     };
     container.querySelector('#cfg-load-stats')?.addEventListener('click', loadSysStats);
+    // Auto-cargar stats al abrir la pestaña (no esperar click)
+    loadSysStats();
 
     // ── Exportar CSV ──────────────────────────────────
     container.querySelector('#cfg-export-bookings')?.addEventListener('click', async () => {

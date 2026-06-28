@@ -431,9 +431,19 @@ export class BookingForm {
     requestAnimationFrame(() => document.getElementById('detail-close')?.focus());
   }
 
-  close() {
+  close(force = false) {
+    if (!force && this._isDirty()) {
+      if (!confirm('¿Salir sin guardar? Se perderán los datos ingresados.')) return;
+    }
     document.getElementById('overlay-booking').classList.add('hidden');
     this._reset();
+  }
+
+  _isDirty() {
+    if (this._editingId) return false;
+    const vals = ['f-firstname','f-lastname','f-checkin','f-checkout','f-price']
+      .map(id => document.getElementById(id)?.value?.trim() ?? '');
+    return vals.some(v => v.length > 0) || !!this._selectedGuestId || (this._selectedUnitIds?.size > 0);
   }
 
   // ── Reset completo del form ───────────────────────
@@ -1011,27 +1021,71 @@ export class BookingForm {
           }
         }
 
-        // ── Indicador cliente nuevo / frecuente ───────
+        // ── Historial del huésped — badge + panel detallado ──
         const guestBadge = document.getElementById('guest-booking-history-badge');
         if (guestBadge) {
-          guestBadge.textContent = '⟳ Verificando...';
+          guestBadge.textContent = '⟳ Cargando...';
           guestBadge.className = 'guest-history-badge loading';
+          guestBadge.style.display = '';
           try {
-            const { count } = await this.db
+            const { data: bkHist } = await this.db
               .from('bookings')
-              .select('id', { count: 'exact', head: true })
+              .select('id,check_in,check_out,total_amount,total_paid,status,nights,booking_units(units(name,color))')
               .eq('guest_id', item.dataset.id)
-              .neq('status', 'cancelled');
-            const n = count ?? 0;
+              .not('status', 'in', '(cancelled,blocked)')
+              .order('check_in', { ascending: false })
+              .limit(10);
+            const n = bkHist?.length ?? 0;
+            const totalSpent  = (bkHist ?? []).reduce((s, b) => s + (b.total_paid  ?? 0), 0);
+            const totalNights = (bkHist ?? []).reduce((s, b) => s + (b.nights ?? 0), 0);
             if (n === 0) {
-              guestBadge.textContent  = '🆕 Cliente nuevo — primera reserva';
-              guestBadge.className    = 'guest-history-badge new';
+              guestBadge.textContent = '🆕 Primera reserva — cliente nuevo';
+              guestBadge.className   = 'guest-history-badge new';
             } else {
-              guestBadge.textContent  = `🔄 Huésped frecuente — ${n} reserva${n !== 1 ? 's' : ''} anterior${n !== 1 ? 'es' : ''}`;
-              guestBadge.className    = 'guest-history-badge returning';
+              guestBadge.innerHTML   = '🔄 Frecuente · ' + n + ' reserva' + (n !== 1 ? 's' : '') + ' · $' + Math.round(totalSpent).toLocaleString('es-AR') + ' total';
+              guestBadge.className   = 'guest-history-badge returning';
             }
-          } catch {
-            guestBadge.textContent = '';
+            // ── Panel de historial detallado ──
+            let hPanel = document.getElementById('guest-history-panel');
+            if (!hPanel) {
+              hPanel = document.createElement('div');
+              hPanel.id = 'guest-history-panel';
+              hPanel.style.cssText = 'animation:fadeSlideIn .2s ease';
+              guestBadge.after(hPanel);
+            }
+            if (n === 0) { hPanel.innerHTML = ''; return; }
+            const fmtD   = iso => new Date(iso + 'T12:00:00').toLocaleDateString('es-AR', { day: 'numeric', month: 'short', year: 'numeric' });
+            const fmtARS = v   => '$' + Math.round(v).toLocaleString('es-AR');
+            const rows = (bkHist ?? []).slice(0, 5).map(b => {
+              const u   = b.booking_units?.[0]?.units;
+              const clr = u?.color ?? 'var(--color-primary)';
+              const bal = Math.max(0, (b.total_amount ?? 0) - (b.total_paid ?? 0));
+              return '<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--color-border)">' +
+                '<div style="width:3px;height:32px;border-radius:2px;background:' + clr + ';flex-shrink:0"></div>' +
+                '<div style="flex:1;min-width:0">' +
+                  '<div style="font-size:.75rem;font-weight:700;color:var(--color-text)">' + fmtD(b.check_in) + ' → ' + fmtD(b.check_out) + '</div>' +
+                  '<div style="font-size:.68rem;color:var(--color-text-3)">' + (u?.name ?? '—') + ' · ' + (b.nights ?? 0) + ' noches</div>' +
+                '</div>' +
+                '<div style="text-align:right;flex-shrink:0">' +
+                  '<div style="font-size:.75rem;font-weight:700">' + fmtARS(b.total_paid ?? 0) + '</div>' +
+                  (bal > 0 ? '<div style="font-size:.65rem;color:#ef4444">−' + fmtARS(bal) + '</div>' : '') +
+                '</div>' +
+              '</div>';
+            }).join('');
+            hPanel.innerHTML =
+              '<div style="margin-top:10px;padding:12px 14px;border-radius:var(--r-lg);background:var(--color-surface-2);border:1px solid var(--color-border)">' +
+                '<div style="display:flex;gap:20px;margin-bottom:10px;flex-wrap:wrap">' +
+                  '<div><div style="font-size:.62rem;text-transform:uppercase;letter-spacing:.05em;color:var(--color-text-3)">Reservas</div><div style="font-weight:800;font-size:.92rem">' + n + '</div></div>' +
+                  '<div><div style="font-size:.62rem;text-transform:uppercase;letter-spacing:.05em;color:var(--color-text-3)">Noches</div><div style="font-weight:800;font-size:.92rem">' + totalNights + '</div></div>' +
+                  '<div><div style="font-size:.62rem;text-transform:uppercase;letter-spacing:.05em;color:var(--color-text-3)">Total pagado</div><div style="font-weight:800;font-size:.92rem;color:var(--color-primary)">' + fmtARS(totalSpent) + '</div></div>' +
+                  '<div><div style="font-size:.62rem;text-transform:uppercase;letter-spacing:.05em;color:var(--color-text-3)">Ticket prom.</div><div style="font-weight:800;font-size:.92rem">' + fmtARS(n > 0 ? totalSpent / n : 0) + '</div></div>' +
+                '</div>' +
+                '<div style="font-size:.68rem;font-weight:700;color:var(--color-text-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Últimas estadías</div>' +
+                rows +
+              '</div>';
+          } catch (err) {
+            guestBadge.textContent = '—';
+            guestBadge.className   = 'guest-history-badge';
           }
         }
       });

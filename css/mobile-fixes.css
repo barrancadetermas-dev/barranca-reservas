@@ -668,3 +668,84 @@
 @media (max-width: 480px) {
   .dashboard-drag-grid { grid-template-columns: 1fr; }
 }
+
+/* ── Ocupación: ancho fijo compacto en el drag grid ── */
+.dash-card.widget-occupancy {
+  /* Aunque el grid es 4 col, Ocupación no necesita tanto espacio */
+  min-width: 0;
+}
+/* En desktop: el card de Ocupación va al final de la fila y es más angosto */
+@media (min-width: 1100px) {
+  .dash-card.widget-occupancy {
+    /* Ocupar solo el espacio necesario para el ring */
+  }
+}
+
+/* ── Mobile: botón Nueva Reserva → solo "+" ─────────── */
+@media (max-width: 768px) {
+  #btn-new-booking::before {
+    content: '+';
+    font-size: 1.3rem;
+    font-weight: 300;
+    line-height: 1;
+  }
+  #btn-new-booking .btn-new-booking-icon {
+    display: none !important;
+  }
+  #btn-new-booking {
+    width: 36px !important;
+    height: 36px !important;
+    padding: 0 !important;
+    border-radius: 50% !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    font-size: 0 !important; /* hide text */
+  }
+}
+
+/* ── Sidebar: escala tipográfica coherente ───────────── */
+.nav-label {
+  font-size: .82rem !important;
+  letter-spacing: .01em;
+}
+.nav-icon svg {
+  width: 17px !important;
+  height: 17px !important;
+}
+
+/* ═══════════════════════════════════════════════════
+   FIXES ADICIONALES — Sidebar · Mobile · Formulario
+   ═══════════════════════════════════════════════════ */
+
+/* ── Sidebar: escala tipográfica coherente ── */
+.nav-label         { font-size: .8rem !important; }
+.nav-item svg      { width: 17px !important; height: 17px !important; }
+.nav-item          { gap: 9px !important; }
+
+/* ── Mobile: "Nueva Reserva" → círculo "+" ── */
+@media (max-width: 768px) {
+  #btn-new-booking { width:38px!important;height:38px!important;padding:0!important;border-radius:50%!important; }
+  #btn-new-booking .btn-label { display:none!important; }
+  #btn-new-booking::after { content:'+'; font-size:1.5rem; font-weight:300; line-height:1; }
+  #btn-new-booking svg { display:none!important; }
+}
+
+/* ── Guest history panel animation ── */
+@keyframes fadeSlideIn {
+  from { opacity:0; transform:translateY(-6px); }
+  to   { opacity:1; transform:none; }
+}
+
+/* ── Calendar search highlight ── */
+.bar.cal-search-match {
+  outline: 2px solid rgba(255,255,255,.8);
+  box-shadow: 0 0 0 3px var(--color-primary), 0 4px 14px rgba(0,0,0,.2) !important;
+  z-index: 10;
+  transform: scaleY(1.1) !important;
+}
+.bar.cal-search-dim {
+  opacity: .15 !important;
+  filter: grayscale(.6);
+  pointer-events: none;
+}

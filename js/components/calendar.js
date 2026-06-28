@@ -90,8 +90,8 @@ export class Calendar {
       const reminderMap = this._buildReminderMap(reminders);
       this._render(cellMap, reminderMap);
 
-      // ── 5. Barra de resumen superior ──
-      this._renderSummaryBar(bookings);
+    // ── 5. Barra de resumen superior ──
+    this._renderSummaryBar(bookings);
 
       // ── 6. Heatmap por fila (muy sutil) ──
       this._applyHeatmap(bookings);
@@ -667,32 +667,75 @@ export class Calendar {
     // ── 4. Mini-calendario → navega el calendario principal ──
     this._bindMiniCalSync();
 
+    // ── Búsqueda de huéspedes en el calendario ──
+    this._setupCalSearch();
+
     this.setupViewToggle();
   }
 
   // Sincroniza clicks en el mini-cal con el calendario principal
-  _bindMiniCalSync() {
-    // Observer: cada vez que el mini-cal se re-renderiza, re-bind los días
-    const container = document.getElementById('sidebar-mini-cal')
-                   ?? document.querySelector('.sidebar-mini-cal');
-    if (!container) {
-      // Si aún no existe, observar el sidebar-cal-container
-      const parent = document.getElementById('sidebar-cal-container');
-      if (parent) {
-        new MutationObserver(() => this._bindMiniCalDays()).observe(parent, { childList: true, subtree: true });
+  // ── Búsqueda de huéspedes en el calendario ──────────
+  _setupCalSearch() {
+    const input   = document.getElementById('cal-search-input');
+    const clearBtn= document.getElementById('cal-search-clear');
+    if (!input) return;
+
+    let _searchTimer = null;
+    const doSearch = (q) => {
+      q = q.trim().toLowerCase();
+      // Limpiar resaltado previo
+      document.querySelectorAll('.bar.cal-search-match,.bar.cal-search-dim').forEach(b => {
+        b.classList.remove('cal-search-match','cal-search-dim');
+      });
+      if (!q) { if (clearBtn) clearBtn.style.display='none'; return; }
+      if (clearBtn) clearBtn.style.display='';
+
+      let found = null;
+      document.querySelectorAll('.bar[data-booking-id]').forEach(bar => {
+        const bid = bar.dataset.bookingId;
+        const booking = this._lastRenderedBookings?.find(b => b.id === bid);
+        if (!booking) { bar.classList.add('cal-search-dim'); return; }
+        const g    = booking.guests;
+        const name = ((g?.first_name ?? '') + ' ' + (g?.last_name ?? '')).toLowerCase();
+        const unit = (booking.booking_units?.[0]?.units?.name ?? '').toLowerCase();
+        if (name.includes(q) || unit.includes(q)) {
+          bar.classList.add('cal-search-match');
+          if (!found) found = bar;
+        } else {
+          bar.classList.add('cal-search-dim');
+        }
+      });
+
+      // Scroll a la primera barra encontrada
+      if (found) {
+        found.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
       }
-    }
+    };
+
+    input.addEventListener('input', (e) => {
+      clearTimeout(_searchTimer);
+      _searchTimer = setTimeout(() => doSearch(e.target.value), 250);
+    });
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') { input.value=''; doSearch(''); input.blur(); }
+    });
+    clearBtn?.addEventListener('click', () => { input.value=''; doSearch(''); input.focus(); });
+  }
+
+  _bindMiniCalSync() {
     this._bindMiniCalDays();
-    // Re-bind tras navegación del mini-cal
-    const obs = new MutationObserver(() => this._bindMiniCalDays());
+    // Disconnect previous observer before creating a new one
+    if (this._miniCalObs) { this._miniCalObs.disconnect(); this._miniCalObs = null; }
     const target = document.getElementById('sidebar-cal-container');
-    if (target) obs.observe(target, { childList: true, subtree: true });
+    if (target) {
+      this._miniCalObs = new MutationObserver(() => this._bindMiniCalDays());
+      this._miniCalObs.observe(target, { childList: true, subtree: true });
+    }
   }
 
   _bindMiniCalDays() {
     const days = document.querySelectorAll('#sidebar-mini-cal .smc-day:not(.smc-empty)');
-    days.forEach(cell => {
-      if (cell.dataset.calBound) return;
+    days.forEach(cell => {      if (cell.dataset.calBound) return;
       cell.dataset.calBound = '1';
       cell.addEventListener('click', () => {
         // Extraer año/mes del título del mini-cal
@@ -1984,7 +2027,7 @@ export class Calendar {
   // 5. BARRA DE RESUMEN SUPERIOR
   // ══════════════════════════════════════════════════
   _renderSummaryBar(bookings) {
-    // Buscar o crear el contenedor
+    // Crear solo una vez; en navegaciones subsiguientes solo actualizar el contenido
     let bar = document.getElementById('cal-summary-bar');
     if (!bar) {
       const toolbar = document.querySelector('.cal-toolbar');

@@ -543,3 +543,21 @@
   line-height: 1.4;
   margin-top: 1px;
 }
+
+/* ── Búsqueda en calendario ───────────────────────── */
+.bar.cal-search-match {
+  outline: 2px solid #fff;
+  box-shadow: 0 0 0 3px var(--color-primary), 0 4px 12px rgba(0,0,0,.25) !important;
+  z-index: 10;
+  transform: scaleY(1.08) !important;
+}
+.bar.cal-search-dim {
+  opacity: .2 !important;
+  filter: grayscale(.5);
+}
+
+/* ── Formulario reserva: panel historial huésped ───── */
+#guest-history-panel {
+  animation: fadeIn .2s ease;
+}
+@keyframes fadeIn { from { opacity:0; transform:translateY(-4px); } to { opacity:1; transform:none; } }
