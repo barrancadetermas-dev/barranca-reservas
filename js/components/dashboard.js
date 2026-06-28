@@ -81,12 +81,13 @@ export class Dashboard {
         return;
       }
       const today = toISODate(new Date());
-      const [kpis, dollar, reminders, forecast, cleaningTasks] = await Promise.all([
+      const [kpis, dollar, reminders, forecast, cleaningTasks, extraStats] = await Promise.all([
         this._fetchKPIs(today),
         fetchDollarRates(),
         this._fetchTodayReminders(today),
         this._fetchForecast(today),
         this._fetchTodayCleaningTasks(today),
+        this._fetchExtraStats(today),
       ]);
 
       this._renderKPIs(kpis, today);
@@ -98,6 +99,10 @@ export class Dashboard {
       this._renderReminders(reminders);
       this._renderForecast(forecast);
       this._renderCleaningWidget(cleaningTasks);
+      this._renderRevPAR(extraStats);
+      this._renderCobros(extraStats);
+      this._renderReservasMes(extraStats);
+      this._renderNextEvent(kpis, today);
 
       // Actualizar badge de recordatorios via evento (sin dependencia circular)
       const pendingReminders = reminders.filter(r => !r.completed).length;
@@ -114,65 +119,191 @@ export class Dashboard {
   // ══════════════════════════════════════════════════
   _initCustomize() {
     const CARDS = [
-      { id: 'llegadas',  label: '✅ Llegadas hoy' },
-      { id: 'salidas',   label: '👋 Salidas hoy' },
-      { id: 'proximas',  label: '📅 Próximas llegadas' },
-      { id: 'ocupacion', label: '🔵 Ocupación' },
-      { id: 'tareas',    label: '📋 Tareas del día' },
-      { id: 'dolar',     label: '💵 Cotización USD' },
-      { id: 'proyeccion',label: '📈 Proyección' },
-      { id: 'pnl',       label: '💰 Resultado del mes' },
+      { id: 'llegadas',      label: '✅ Llegadas hoy',         default: true  },
+      { id: 'salidas',       label: '👋 Salidas hoy',          default: true  },
+      { id: 'proximas',      label: '📅 Próximas llegadas',    default: true  },
+      { id: 'ocupacion',     label: '🔵 Ocupación',            default: true  },
+      { id: 'tareas',        label: '📋 Tareas del día',       default: true  },
+      { id: 'dolar',         label: '💵 Cotización USD',        default: true  },
+      { id: 'proyeccion',    label: '📈 Proyección del mes',   default: true  },
+      { id: 'pnl',           label: '💰 Resultado del mes',    default: true  },
+      { id: 'revpar',        label: '📊 RevPAR / ADR',         default: true  },
+      { id: 'cobros',        label: '💳 Cobros pendientes',    default: true  },
+      { id: 'reservas-mes',  label: '🗓️ Reservas del mes',    default: true  },
+      { id: 'limpieza',      label: '🧹 Limpieza hoy',         default: false },
+      { id: 'proximo-evento',label: '⏰ Próximo evento',       default: true  },
     ];
 
-    const saved = JSON.parse(localStorage.getItem('mila_dash_cards') ?? 'null') ?? {};
-    const isVisible = id => saved[id] !== false; // default visible
+    const cfg = JSON.parse(localStorage.getItem('mila_dash_cfg') ?? 'null') ?? {};
+    const isVisible  = id => cfg[id]?.visible ?? CARDS.find(c => c.id === id)?.default ?? true;
+    const getOrder   = () => {
+      const order = cfg._order ?? CARDS.map(c => c.id);
+      // Ensure all cards are in the order array
+      CARDS.forEach(c => { if (!order.includes(c.id)) order.push(c.id); });
+      return order;
+    };
+    const saveCfg = () => localStorage.setItem('mila_dash_cfg', JSON.stringify(cfg));
 
-    // Apply visibility immediately
-    CARDS.forEach(({ id }) => {
-      const el = document.querySelector(`[data-card-id="${id}"]`);
-      if (el) el.style.display = isVisible(id) ? '' : 'none';
-    });
+    const grid = document.getElementById('dashboard-custom-grid');
+    if (!grid) return;
 
-    // Setup toggle panel
+    // Apply saved order
+    const applyOrder = () => {
+      const order = getOrder();
+      order.forEach(id => {
+        const el = grid.querySelector('[data-card-id="' + id + '"]');
+        if (el) grid.appendChild(el); // moves to end in order
+      });
+    };
+
+    // Apply saved visibility
+    const applyVisibility = () => {
+      CARDS.forEach(({ id }) => {
+        const el = grid.querySelector('[data-card-id="' + id + '"]');
+        if (el) el.style.display = isVisible(id) ? '' : 'none';
+      });
+    };
+
+    applyOrder();
+    applyVisibility();
+
+    // ── Toggle checkboxes ──────────────────────────────
     const togglesEl = document.getElementById('dash-card-toggles');
     if (togglesEl) {
-      togglesEl.innerHTML = CARDS.map(({ id, label }) => {
-        const vis = isVisible(id);
-        return '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;' +
-          'padding:5px 10px;border-radius:8px;border:1px solid var(--color-border);' +
-          'background:' + (vis ? 'var(--color-primary-l)' : 'var(--color-surface-2)') + ';' +
-          'font-size:.78rem;font-weight:600;color:' + (vis ? 'var(--color-primary)' : 'var(--color-text-3)') + '">' +
-          '<input type="checkbox" ' + (vis ? 'checked' : '') + ' data-card-toggle="' + id + '" ' +
-          'style="accent-color:var(--color-primary)"> ' + label +
-          '</label>';
-      }).join('');
+      const renderToggles = () => {
+        togglesEl.innerHTML = CARDS.map(({ id, label }) => {
+          const vis = isVisible(id);
+          return '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;' +
+            'padding:5px 10px;border-radius:8px;' +
+            'border:1px solid ' + (vis ? 'var(--color-primary)' : 'var(--color-border)') + ';' +
+            'background:' + (vis ? 'var(--color-primary-l)' : 'var(--color-surface-2)') + ';' +
+            'font-size:.78rem;font-weight:600;' +
+            'color:' + (vis ? 'var(--color-primary)' : 'var(--color-text-3)') + '">' +
+            '<input type="checkbox" ' + (vis ? 'checked' : '') + ' data-card-toggle="' + id + '" ' +
+            'style="accent-color:var(--color-primary)"> ' + label + '</label>';
+        }).join('');
+      };
+      renderToggles();
 
       togglesEl.addEventListener('change', e => {
         const cb = e.target;
         if (!cb.dataset.cardToggle) return;
         const id = cb.dataset.cardToggle;
-        const config = JSON.parse(localStorage.getItem('mila_dash_cards') ?? '{}');
-        config[id] = cb.checked;
-        localStorage.setItem('mila_dash_cards', JSON.stringify(config));
-        // Update card visibility
-        const cardEl = document.querySelector(`[data-card-id="${id}"]`);
+        if (!cfg[id]) cfg[id] = {};
+        cfg[id].visible = cb.checked;
+        saveCfg();
+        const cardEl = grid.querySelector('[data-card-id="' + id + '"]');
         if (cardEl) cardEl.style.display = cb.checked ? '' : 'none';
-        // Update label style
-        const lbl = cb.closest('label');
-        if (lbl) {
-          lbl.style.background    = cb.checked ? 'var(--color-primary-l)' : 'var(--color-surface-2)';
-          lbl.style.color         = cb.checked ? 'var(--color-primary)'   : 'var(--color-text-3)';
-          lbl.style.borderColor   = cb.checked ? 'var(--color-primary)'   : 'var(--color-border)';
-        }
+        renderToggles();
       });
     }
 
-    // Customize button toggle
+    // ── Drag & Drop (pointer events) ──────────────────
+    let _dragEl    = null;
+    let _dragGhost = null;
+    let _overEl    = null;
+    let _startX    = 0, _startY = 0;
+    let _moved     = false;
+
+    const getCards = () => [...grid.querySelectorAll('.dash-card:not([style*="display: none"]):not([style*="display:none"])')];
+
+    const _createGhost = (el) => {
+      const rect = el.getBoundingClientRect();
+      const g = el.cloneNode(true);
+      g.style.cssText = 'position:fixed;z-index:9999;pointer-events:none;opacity:.85;' +
+        'width:' + rect.width + 'px;height:' + rect.height + 'px;' +
+        'left:' + rect.left + 'px;top:' + rect.top + 'px;' +
+        'border-radius:var(--r-xl);box-shadow:0 16px 48px rgba(0,0,0,.25);transform:scale(1.03);' +
+        'transition:none;cursor:grabbing;';
+      g.querySelector('.dash-drag-handle')?.remove();
+      document.body.appendChild(g);
+      return g;
+    };
+
+    grid.addEventListener('pointerdown', e => {
+      const handle = e.target.closest('.dash-drag-handle');
+      if (!handle) return;
+      const card = handle.closest('.dash-card');
+      if (!card) return;
+
+      e.preventDefault();
+      _dragEl  = card;
+      _startX  = e.clientX;
+      _startY  = e.clientY;
+      _moved   = false;
+      grid.setPointerCapture?.(e.pointerId);
+    });
+
+    grid.addEventListener('pointermove', e => {
+      if (!_dragEl) return;
+      const dx = e.clientX - _startX, dy = e.clientY - _startY;
+      if (!_moved && Math.abs(dx) < 6 && Math.abs(dy) < 6) return;
+
+      if (!_moved) {
+        _moved = true;
+        _dragGhost = _createGhost(_dragEl);
+        _dragEl.classList.add('drag-source');
+        grid.classList.add('edit-mode');
+      }
+
+      // Move ghost
+      if (_dragGhost) {
+        const rect = _dragEl.getBoundingClientRect();
+        _dragGhost.style.left = (rect.left + dx) + 'px';
+        _dragGhost.style.top  = (rect.top  + dy) + 'px';
+      }
+
+      // Find drop target
+      const els = getCards().filter(c => c !== _dragEl);
+      let nearest = null, nearDist = Infinity;
+      els.forEach(c => {
+        const r = c.getBoundingClientRect();
+        const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+        const dist = Math.hypot(e.clientX - cx, e.clientY - cy);
+        if (dist < nearDist) { nearDist = dist; nearest = c; }
+      });
+
+      if (_overEl && _overEl !== nearest) _overEl.classList.remove('drag-over');
+      if (nearest) nearest.classList.add('drag-over');
+      _overEl = nearest;
+    });
+
+    const _endDrag = (e) => {
+      if (!_dragEl) return;
+      if (_dragGhost) { _dragGhost.remove(); _dragGhost = null; }
+      _dragEl.classList.remove('drag-source');
+      grid.classList.remove('edit-mode');
+      if (_overEl) {
+        _overEl.classList.remove('drag-over');
+        // Insert before or after based on position
+        const rect = _overEl.getBoundingClientRect();
+        const mid  = rect.left + rect.width / 2;
+        if (e.clientX < mid) {
+          grid.insertBefore(_dragEl, _overEl);
+        } else {
+          _overEl.after(_dragEl);
+        }
+        // Save new order
+        cfg._order = [...grid.querySelectorAll('.dash-card')].map(c => c.dataset.cardId);
+        saveCfg();
+      }
+      _dragEl = null; _overEl = null; _moved = false;
+    };
+
+    grid.addEventListener('pointerup',     _endDrag);
+    grid.addEventListener('pointercancel', _endDrag);
+    window._dashStopDrag = _endDrag;
+
+    // ── Customize button ──────────────────────────────
     const btn = document.getElementById('btn-customize-dash');
     const panel = document.getElementById('dash-customize-panel');
+    const hint  = document.getElementById('dash-edit-hint');
     btn?.addEventListener('click', () => {
       if (!panel) return;
-      panel.style.display = panel.style.display === 'none' ? '' : 'none';
+      const open = panel.style.display !== 'none';
+      panel.style.display = open ? 'none' : '';
+      if (hint) hint.style.display = open ? 'none' : '';
+      grid.classList.toggle('edit-mode', !open);
     });
   }
 
@@ -927,4 +1058,155 @@ export class Dashboard {
     </div>`;
   }
 
+  // ══════════════════════════════════════════════════
+  // EXTRA STATS — RevPAR, Cobros, Reservas del mes
+  // ══════════════════════════════════════════════════
+  async _fetchExtraStats(today) {
+    try {
+      const d    = new Date(today + 'T12:00:00');
+      const year = d.getFullYear(), month = d.getMonth();
+      const firstDay    = year + '-' + String(month+1).padStart(2,'0') + '-01';
+      const lastDayObj  = new Date(year, month+1, 0);
+      const lastDay     = year + '-' + String(month+1).padStart(2,'00') + '-' + String(lastDayObj.getDate()).padStart(2,'0');
+      const daysInMonth = lastDayObj.getDate();
+
+      // Previous month
+      const prevD     = new Date(year, month - 1, 1);
+      const prevFirst = prevD.getFullYear() + '-' + String(prevD.getMonth()+1).padStart(2,'0') + '-01';
+      const prevLast  = new Date(prevD.getFullYear(), prevD.getMonth()+1, 0);
+      const prevLastStr = prevD.getFullYear() + '-' + String(prevD.getMonth()+1).padStart(2,'0') + '-' + String(prevLast.getDate()).padStart(2,'0');
+
+      const [bkRes, prevRes] = await Promise.all([
+        this.db.from('bookings')
+          .select('id, total_amount, total_paid, balance, nights, check_in, check_out, status')
+          .eq('hotel_id', this.ctx.hotelId)
+          .not('status', 'in', '(cancelled,blocked)')
+          .gte('check_in', firstDay).lte('check_in', lastDay),
+        this.db.from('bookings')
+          .select('id', { count: 'exact', head: true })
+          .eq('hotel_id', this.ctx.hotelId)
+          .not('status', 'in', '(cancelled,blocked)')
+          .gte('check_in', prevFirst).lte('check_in', prevLastStr),
+      ]);
+
+      const bks         = bkRes.data ?? [];
+      const totalRev    = bks.reduce((s,b) => s + (b.total_amount ?? 0), 0);
+      const totalPaid   = bks.reduce((s,b) => s + (b.total_paid  ?? 0), 0);
+      const totalBal    = bks.reduce((s,b) => s + (b.balance     ?? 0), 0);
+      const totalNights = bks.reduce((s,b) => s + (b.nights      ?? 0), 0);
+      const units       = this.ctx.units?.length ?? 1;
+      const avail       = units * daysInMonth;
+      const revPAR      = avail > 0 ? totalRev / avail : 0;
+      const adr         = totalNights > 0 ? totalRev / totalNights : 0;
+      const occPct      = avail > 0 ? Math.min(100, Math.round(totalNights / avail * 100)) : 0;
+      const prevCount   = prevRes.count ?? 0;
+
+      return {
+        revPAR, adr, occPct, totalNights,
+        totalRev, totalPaid, totalBal,
+        bkCount: bks.length, prevCount,
+        ticket: bks.length > 0 ? totalRev / bks.length : 0,
+      };
+    } catch (err) {
+      console.warn('[Dashboard] extraStats error:', err);
+      return null;
+    }
+  }
+
+  _renderRevPAR(stats) {
+    if (!stats) return;
+    const fmt = n => '$' + Math.round(n).toLocaleString('es-AR');
+    const el  = document.getElementById('dash-revpar-val');
+    if (el) el.textContent = fmt(stats.revPAR);
+    const adrEl = document.getElementById('dash-adr-val');
+    if (adrEl) adrEl.textContent = fmt(stats.adr);
+    const occEl = document.getElementById('dash-occ-month-val');
+    if (occEl) occEl.textContent = stats.occPct + '%';
+    const nsEl  = document.getElementById('dash-nights-sold-val');
+    if (nsEl)  nsEl.textContent  = stats.totalNights + ' noches';
+  }
+
+  _renderCobros(stats) {
+    if (!stats) return;
+    const fmt = n => '$' + Math.round(n).toLocaleString('es-AR');
+    const valEl  = document.getElementById('dash-cobros-val');
+    if (valEl) valEl.textContent = fmt(stats.totalBal);
+    const badge  = document.getElementById('dash-cobros-badge');
+    if (badge) badge.textContent = stats.bkCount + ' res.';
+    const cobEl  = document.getElementById('dash-cobrado-val');
+    if (cobEl) cobEl.textContent = fmt(stats.totalPaid);
+    const totEl  = document.getElementById('dash-total-val');
+    if (totEl) totEl.textContent = fmt(stats.totalRev);
+    const fill   = document.getElementById('dash-cobros-bar-fill');
+    if (fill && stats.totalRev > 0) {
+      fill.style.width = Math.min(100, Math.round(stats.totalPaid / stats.totalRev * 100)) + '%';
+    }
+  }
+
+  _renderReservasMes(stats) {
+    if (!stats) return;
+    const fmt   = n => '$' + Math.round(n).toLocaleString('es-AR');
+    const valEl = document.getElementById('dash-rmes-val');
+    if (valEl) valEl.textContent = stats.bkCount;
+    const badge = document.getElementById('dash-rmes-badge');
+    if (badge) badge.textContent = fmt(stats.totalRev);
+    const vsEl  = document.getElementById('dash-rmes-vs');
+    if (vsEl) {
+      const diff = stats.bkCount - stats.prevCount;
+      const sign = diff >= 0 ? '+' : '';
+      vsEl.textContent  = sign + diff + ' vs mes ant.';
+      vsEl.style.color  = diff >= 0 ? '#16a34a' : '#ef4444';
+    }
+    const tkEl = document.getElementById('dash-rmes-ticket');
+    if (tkEl) tkEl.textContent = fmt(stats.ticket);
+  }
+
+  _renderNextEvent(kpis, today) {
+    const el = document.getElementById('dash-next-event');
+    if (!el) return;
+    const arrivals   = kpis.arrivals   ?? [];
+    const departures = kpis.checkouts  ?? [];
+    const upcoming   = kpis.upcoming   ?? [];
+
+    // Combine today's events + next upcoming
+    const events = [
+      ...arrivals.filter(b => !b.checked_in_at).map(b => ({
+        type: 'arrival', date: today,
+        guest: b.guests ? (b.guests.first_name + ' ' + b.guests.last_name) : '—',
+        unit: b.booking_units?.[0]?.units?.name ?? '—',
+        color: b.booking_units?.[0]?.units?.color ?? 'var(--color-primary)',
+      })),
+      ...departures.filter(b => !b.checked_out_at).map(b => ({
+        type: 'departure', date: today,
+        guest: b.guests ? (b.guests.first_name + ' ' + b.guests.last_name) : '—',
+        unit: b.booking_units?.[0]?.units?.name ?? '—',
+        color: b.booking_units?.[0]?.units?.color ?? '#f59e0b',
+      })),
+      ...upcoming.slice(0, 2).map(b => ({
+        type: 'upcoming', date: b.check_in,
+        guest: b.guests ? (b.guests.first_name + ' ' + b.guests.last_name) : '—',
+        unit: b.booking_units?.[0]?.units?.name ?? '—',
+        color: b.booking_units?.[0]?.units?.color ?? 'var(--color-primary)',
+      })),
+    ].slice(0, 3);
+
+    if (!events.length) {
+      el.innerHTML = '<div style="padding:8px 0;color:var(--color-text-3);font-size:.82rem">Sin eventos próximos</div>';
+      return;
+    }
+
+    const typeLabel = { arrival: '✅ Llegada', departure: '👋 Salida', upcoming: '📅 Próximo' };
+    const fmtDt = iso => iso === today ? 'hoy' : new Date(iso+'T12:00:00').toLocaleDateString('es-AR',{day:'numeric',month:'short'});
+
+    el.innerHTML = events.map(ev =>
+      '<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--color-border)">' +
+        '<div style="width:3px;height:36px;border-radius:2px;background:' + ev.color + ';flex-shrink:0"></div>' +
+        '<div style="flex:1;min-width:0">' +
+          '<div style="font-size:.65rem;color:var(--color-text-3);margin-bottom:1px">' + typeLabel[ev.type] + ' · ' + fmtDt(ev.date) + '</div>' +
+          '<div style="font-size:.8rem;font-weight:700;color:var(--color-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + ev.guest + '</div>' +
+          '<div style="font-size:.68rem;color:var(--color-text-3)">' + ev.unit + '</div>' +
+        '</div>' +
+      '</div>'
+    ).join('');
+  }
 }

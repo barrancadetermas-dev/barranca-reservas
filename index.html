@@ -297,7 +297,7 @@
 
       <!-- ── SECTION: DASHBOARD ── -->
       <section id="section-dashboard" class="section active">
-        <!-- ── Fila 1: KPIs numéricos del día ── -->
+        <!-- ── KPIs fijos arriba ── -->
         <div class="kpi-grid" id="kpi-grid">
           <div class="kpi-card kpi-blue" id="kpi-checkins">
             <div class="kpi-icon-wrap"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22"><path d="M15 3h4a2 2 0 012 2v14a2 2 0 01-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg></div>
@@ -317,13 +317,18 @@
           </div>
         </div>
 
-        <!-- ── Personalización del dashboard ── -->
-        <div style="display:flex;align-items:center;justify-content:flex-end;margin-bottom:8px">
+        <!-- ── Toolbar personalización ── -->
+        <div style="display:flex;align-items:center;justify-content:flex-end;gap:8px;margin:6px 0 10px">
+          <span style="font-size:.72rem;color:var(--color-text-3)" id="dash-edit-hint" style="display:none">
+            ↔ Arrastrá los cards para reordenar
+          </span>
           <button id="btn-customize-dash"
-            style="background:none;border:none;cursor:pointer;font-size:.72rem;color:var(--color-text-3);
-                   display:flex;align-items:center;gap:4px;padding:4px 8px;border-radius:6px"
-            onmouseover="this.style.background='var(--color-surface-2)'" onmouseout="this.style.background='none'">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13">
+            style="background:none;border:1px solid var(--color-border);cursor:pointer;font-size:.72rem;
+                   color:var(--color-text-3);display:flex;align-items:center;gap:5px;padding:4px 10px;
+                   border-radius:20px;transition:all .15s"
+            onmouseover="this.style.borderColor='var(--color-primary)';this.style.color='var(--color-primary)'"
+            onmouseout="this.style.borderColor='var(--color-border)';this.style.color='var(--color-text-3)'">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12">
               <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/>
             </svg>
             Personalizar
@@ -334,33 +339,44 @@
         <div id="dash-customize-panel" style="display:none;background:var(--color-surface);border:1px solid var(--color-border);
           border-radius:var(--r-xl);padding:16px 20px;margin-bottom:12px">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-            <span style="font-size:.82rem;font-weight:700;color:var(--color-text)">🎛️ Cards visibles</span>
-            <button onclick="document.getElementById('dash-customize-panel').style.display='none'"
+            <div>
+              <span style="font-size:.82rem;font-weight:700;color:var(--color-text)">🎛️ Personalizar Dashboard</span>
+              <span style="font-size:.72rem;color:var(--color-text-3);margin-left:8px">Activá los cards y arrastralos para reordenar</span>
+            </div>
+            <button onclick="document.getElementById('dash-customize-panel').style.display='none';document.getElementById('dash-edit-hint').style.display='none';window._dashStopDrag&&window._dashStopDrag()"
               style="background:none;border:none;cursor:pointer;font-size:1rem;color:var(--color-text-3)">✕</button>
           </div>
           <div style="display:flex;flex-wrap:wrap;gap:8px" id="dash-card-toggles"></div>
         </div>
 
-        <!-- ── Fila 2: Operativa del día (4 col) ── -->
-        <div class="dashboard-widgets" style="grid-template-columns:1fr 1fr 1fr 200px">
-          <!-- Llegadas hoy -->
-          <div class="card widget-arrivals" data-card-id="llegadas">
+        <!-- ── Grid único de cards (drag & drop) ── -->
+        <div id="dashboard-custom-grid" class="dashboard-drag-grid">
+
+          <!-- CARD: Llegadas hoy -->
+          <div class="card dash-card widget-arrivals" data-card-id="llegadas">
+            <div class="dash-drag-handle" title="Arrastrar">⠿</div>
             <div class="card-header"><h3>✅ Llegadas hoy</h3></div>
             <div class="arrivals-list" id="arrivals-list"><p class="empty-state-sm">Sin llegadas hoy</p></div>
           </div>
-          <!-- Salidas hoy -->
-          <div class="card widget-arrivals" data-card-id="salidas">
+
+          <!-- CARD: Salidas hoy -->
+          <div class="card dash-card widget-arrivals" data-card-id="salidas">
+            <div class="dash-drag-handle" title="Arrastrar">⠿</div>
             <div class="card-header"><h3>👋 Salidas hoy</h3></div>
             <div class="arrivals-list" id="departures-list"><p class="empty-state-sm">Sin salidas hoy</p></div>
           </div>
-          <!-- Próximas llegadas -->
-          <div class="card widget-upcoming" data-card-id="proximas">
-            <div class="card-header"><h3>Próximas llegadas</h3><span class="badge badge-today">7 días</span></div>
+
+          <!-- CARD: Próximas llegadas -->
+          <div class="card dash-card widget-upcoming" data-card-id="proximas">
+            <div class="dash-drag-handle" title="Arrastrar">⠿</div>
+            <div class="card-header"><h3>📅 Próximas llegadas</h3><span class="badge badge-today">7 días</span></div>
             <div id="dashboard-upcoming"><p class="empty-state-sm">Sin llegadas próximas</p></div>
           </div>
-          <!-- Ocupación Global -->
-          <div class="card widget-occupancy" data-card-id="ocupacion">
-            <div class="card-header"><h3>Ocupación</h3><span class="badge badge-today">Hoy</span></div>
+
+          <!-- CARD: Ocupación -->
+          <div class="card dash-card widget-occupancy" data-card-id="ocupacion">
+            <div class="dash-drag-handle" title="Arrastrar">⠿</div>
+            <div class="card-header"><h3>🔵 Ocupación</h3><span class="badge badge-today">Hoy</span></div>
             <div class="ring-wrapper">
               <svg class="progress-ring" viewBox="0 0 120 120" width="120" height="120">
                 <circle cx="60" cy="60" r="50" fill="none" stroke="var(--color-border)" stroke-width="10"/>
@@ -368,48 +384,33 @@
                   stroke-width="10" stroke-dasharray="314" stroke-dashoffset="314"
                   stroke-linecap="round" transform="rotate(-90 60 60)" style="transition:stroke-dashoffset .6s cubic-bezier(.4,0,.2,1)"/>
               </svg>
-              <div class="ring-text">
-                <span class="ring-pct" id="occ-pct">0%</span>
-                <span class="ring-sub" id="occ-sub">0/7</span>
-              </div>
+              <div class="ring-text"><span class="ring-pct" id="occ-pct">0%</span><span class="ring-sub" id="occ-sub">0/7</span></div>
             </div>
           </div>
-        </div>
 
-        <!-- ── Fila 3: Tareas + Finanzas (4 col) ── -->
-        <div class="dashboard-widgets">
-          <!-- Tareas del día -->
-          <div class="card widget-reminders" data-card-id="tareas">
+          <!-- CARD: Tareas del día -->
+          <div class="card dash-card widget-reminders" data-card-id="tareas">
+            <div class="dash-drag-handle" title="Arrastrar">⠿</div>
             <div class="card-header">
-              <h3>Tareas del día</h3>
+              <h3>📋 Tareas del día</h3>
               <button class="btn btn-ghost btn-xs" id="btn-add-reminder">+ Agregar</button>
             </div>
             <div class="reminders-list" id="dashboard-reminders"><p class="empty-state-sm">Sin tareas pendientes</p></div>
           </div>
 
-          <!-- Limpieza diaria (se muestra solo si hay tareas) -->
-          <div id="dashboard-cleaning-widget" style="display:none"></div>
-
-          <!-- Cotización USD -->
-          <div class="card widget-dollar" data-card-id="dolar">
+          <!-- CARD: Cotización USD -->
+          <div class="card dash-card widget-dollar" data-card-id="dolar">
+            <div class="dash-drag-handle" title="Arrastrar">⠿</div>
             <div class="card-header" style="margin-bottom:10px">
               <h3>💵 Cotización USD</h3>
               <span class="badge badge-live" id="dollar-status-badge" style="font-size:.68rem">Cargando...</span>
             </div>
             <div class="dollar-avg-row">
-              <div class="dollar-avg-col">
-                <div class="dollar-avg-label">Promedio oficial</div>
-                <div class="dollar-avg-vals">
-                  <span>C: <strong id="dol-of-buy">—</strong></span>
-                  <span>V: <strong id="dol-of-sell">—</strong></span>
-                </div>
+              <div class="dollar-avg-col"><div class="dollar-avg-label">Promedio oficial</div>
+                <div class="dollar-avg-vals"><span>C: <strong id="dol-of-buy">—</strong></span><span>V: <strong id="dol-of-sell">—</strong></span></div>
               </div>
-              <div class="dollar-avg-col">
-                <div class="dollar-avg-label">Fuentes activas</div>
-                <div class="dollar-avg-vals">
-                  <span>OK: <strong id="dol-source-count">—</strong></span>
-                  <span>Estado: <strong id="dol-source-status">—</strong></span>
-                </div>
+              <div class="dollar-avg-col"><div class="dollar-avg-label">Fuentes activas</div>
+                <div class="dollar-avg-vals"><span>OK: <strong id="dol-source-count">—</strong></span><span>Estado: <strong id="dol-source-status">—</strong></span></div>
               </div>
             </div>
             <div id="dol-spread" style="font-size:.75rem;font-weight:700;text-align:center;margin:8px 0 4px"></div>
@@ -421,23 +422,102 @@
             <p class="dollar-updated-at" id="dollar-updated-at" style="font-size:.65rem;color:var(--color-text-3);margin-top:8px"></p>
           </div>
 
-          <!-- Proyección del mes -->
-          <div id="dashboard-forecast" data-card-id="proyeccion"></div>
+          <!-- CARD: Proyección -->
+          <div class="card dash-card" data-card-id="proyeccion">
+            <div class="dash-drag-handle" title="Arrastrar">⠿</div>
+            <div id="dashboard-forecast"></div>
+          </div>
 
-          <!-- Resultado del mes (P&L) -->
-          <div class="card" data-card-id="pnl">
+          <!-- CARD: Resultado del mes (P&L) -->
+          <div class="card dash-card" data-card-id="pnl">
+            <div class="dash-drag-handle" title="Arrastrar">⠿</div>
             <div class="card-header">
               <h3>💰 Resultado del mes</h3>
-              <a href="#" onclick="window.milaNav&&window.milaNav(\'statistics\');setTimeout(function(){var t=document.querySelector(\'[data-tab=pl]\');if(t)t.click();},200);return false;"
+              <a href="#" onclick="window.milaNav&&window.milaNav('statistics');setTimeout(function(){var t=document.querySelector('[data-tab=pl]');if(t)t.click();},200);return false;"
                  class="btn btn-outline btn-sm">Ver P&amp;L →</a>
             </div>
             <div id="dashboard-pl-preview" style="font-size:.82rem;color:var(--color-text-3);padding:4px 0">
               Hacé clic en "Ver P&amp;L" para ver ingresos, comisiones y gastos del mes.
             </div>
           </div>
+
+          <!-- ── NUEVOS CARDS ── -->
+
+          <!-- CARD: RevPAR del mes -->
+          <div class="card dash-card" data-card-id="revpar">
+            <div class="dash-drag-handle" title="Arrastrar">⠿</div>
+            <div class="card-header">
+              <h3>📈 RevPAR del mes</h3>
+              <span class="badge badge-today" title="Revenue Per Available Room">KPI</span>
+            </div>
+            <div id="dash-revpar-body">
+              <div style="font-size:1.6rem;font-weight:800;color:var(--color-text)" id="dash-revpar-val">—</div>
+              <div style="font-size:.75rem;color:var(--color-text-3);margin-top:4px">por unidad disponible/día</div>
+              <div style="margin-top:10px;display:flex;gap:16px">
+                <div><div style="font-size:.7rem;color:var(--color-text-3)">ADR</div><div style="font-weight:700;font-size:.88rem" id="dash-adr-val">—</div></div>
+                <div><div style="font-size:.7rem;color:var(--color-text-3)">Ocup. mes</div><div style="font-weight:700;font-size:.88rem" id="dash-occ-month-val">—</div></div>
+                <div><div style="font-size:.7rem;color:var(--color-text-3)">Noches vendidas</div><div style="font-weight:700;font-size:.88rem" id="dash-nights-sold-val">—</div></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- CARD: Pagos pendientes -->
+          <div class="card dash-card" data-card-id="cobros">
+            <div class="dash-drag-handle" title="Arrastrar">⠿</div>
+            <div class="card-header">
+              <h3>💳 Cobros pendientes</h3>
+              <span class="badge" id="dash-cobros-badge" style="background:#fef3c7;color:#92400e">—</span>
+            </div>
+            <div style="font-size:1.6rem;font-weight:800;color:#ef4444" id="dash-cobros-val">—</div>
+            <div style="font-size:.75rem;color:var(--color-text-3);margin-top:4px">en reservas activas</div>
+            <div style="margin-top:10px">
+              <div style="display:flex;justify-content:space-between;font-size:.78rem;margin-bottom:4px">
+                <span style="color:var(--color-text-3)">Cobrado</span>
+                <span style="font-weight:700;color:#16a34a" id="dash-cobrado-val">—</span>
+              </div>
+              <div style="display:flex;justify-content:space-between;font-size:.78rem">
+                <span style="color:var(--color-text-3)">Total facturado</span>
+                <span style="font-weight:700" id="dash-total-val">—</span>
+              </div>
+              <div id="dash-cobros-bar" style="margin-top:8px;height:6px;border-radius:3px;background:var(--color-border);overflow:hidden">
+                <div id="dash-cobros-bar-fill" style="height:100%;background:#16a34a;border-radius:3px;width:0%;transition:width .6s"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- CARD: Reservas del mes -->
+          <div class="card dash-card" data-card-id="reservas-mes">
+            <div class="dash-drag-handle" title="Arrastrar">⠿</div>
+            <div class="card-header">
+              <h3>🗓️ Reservas del mes</h3>
+              <span class="badge badge-today" id="dash-rmes-badge">—</span>
+            </div>
+            <div style="font-size:1.6rem;font-weight:800;color:var(--color-text)" id="dash-rmes-val">—</div>
+            <div style="font-size:.75rem;color:var(--color-text-3);margin-top:2px">reservas activas este mes</div>
+            <div style="margin-top:10px;display:flex;gap:16px">
+              <div><div style="font-size:.7rem;color:var(--color-text-3)">vs. mes anterior</div><div style="font-weight:700;font-size:.88rem" id="dash-rmes-vs">—</div></div>
+              <div><div style="font-size:.7rem;color:var(--color-text-3)">Ticket promedio</div><div style="font-weight:700;font-size:.88rem" id="dash-rmes-ticket">—</div></div>
+            </div>
+          </div>
+
+          <!-- CARD: Limpieza hoy -->
+          <div class="card dash-card" data-card-id="limpieza" style="display:none">
+            <div class="dash-drag-handle" title="Arrastrar">⠿</div>
+            <div id="dashboard-cleaning-widget" style="margin:-4px"></div>
+          </div>
+
+          <!-- CARD: Próximo evento (24h) -->
+          <div class="card dash-card" data-card-id="proximo-evento">
+            <div class="dash-drag-handle" title="Arrastrar">⠿</div>
+            <div class="card-header"><h3>⏰ Próximo evento</h3></div>
+            <div id="dash-next-event">
+              <div style="padding:8px 0;color:var(--color-text-3);font-size:.82rem">Calculando...</div>
+            </div>
+          </div>
+
         </div>
 
-        <!-- Hidden elements (no grid) -->
+        <!-- Elementos ocultos necesarios para compatibilidad -->
         <div id="dashboard-ops-badge" style="display:none"></div>
         <div id="dashboard-revenue" style="display:none"></div>
       </section>

@@ -587,3 +587,78 @@
     grid-template-columns: repeat(2, minmax(0,1fr)) !important;
   }
 }
+
+/* =======================================================================
+   DASHBOARD DRAG GRID
+   ======================================================================= */
+.dashboard-drag-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--sp-16);
+  align-items: start;
+}
+
+.dash-card {
+  position: relative;
+  cursor: default;
+  transition: box-shadow .2s, opacity .2s, transform .15s;
+}
+.dash-card.drag-source {
+  opacity: .35;
+}
+.dash-card.drag-over {
+  box-shadow: 0 0 0 2px var(--color-primary), 0 8px 24px rgba(0,0,0,.12) !important;
+  transform: scale(1.01);
+}
+.dash-card.drag-placeholder {
+  background: var(--color-primary-l) !important;
+  border: 2px dashed var(--color-primary) !important;
+  opacity: .5;
+}
+
+/* Drag handle */
+.dash-drag-handle {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: grab;
+  color: var(--color-border-2, #cbd5e1);
+  font-size: 14px;
+  border-radius: 4px;
+  opacity: 0;
+  transition: opacity .15s, color .15s;
+  user-select: none;
+  z-index: 2;
+}
+.dash-card:hover .dash-drag-handle {
+  opacity: 1;
+  color: var(--color-text-3);
+}
+.dash-drag-handle:hover {
+  background: var(--color-surface-2);
+  color: var(--color-primary) !important;
+}
+.dash-drag-handle:active { cursor: grabbing; }
+
+/* Edit mode: always show handles */
+.dash-drag-grid.edit-mode .dash-drag-handle {
+  opacity: 1;
+}
+.dash-drag-grid.edit-mode .dash-card {
+  cursor: grab;
+}
+
+@media (max-width: 1100px) {
+  .dashboard-drag-grid { grid-template-columns: repeat(3, 1fr); }
+}
+@media (max-width: 768px) {
+  .dashboard-drag-grid { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 480px) {
+  .dashboard-drag-grid { grid-template-columns: 1fr; }
+}
