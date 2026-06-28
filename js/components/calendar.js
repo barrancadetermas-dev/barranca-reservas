@@ -96,6 +96,9 @@ export class Calendar {
       // ── 6. Heatmap por fila (muy sutil) ──
       this._applyHeatmap(bookings);
 
+      // ── 7. Mini agenda debajo del calendario ──
+      this._renderMiniAgenda(bookings);
+
       // Bindear eventos de drag/resize una vez por sesión de grid
       if (!this._barDragAbort) {
         const grid = document.getElementById('calendar-grid');
@@ -2216,5 +2219,52 @@ export class Calendar {
         }
       });
     });
+  }
+  // ══════════════════════════════════════════════════
+  // MINI AGENDA — Ayuda memoria debajo del calendario
+  // Lista compacta de próximas reservas
+  // ══════════════════════════════════════════════════
+  _renderMiniAgenda(bookings) {
+    const el = document.getElementById('cal-mini-agenda-list');
+    if (!el) return;
+
+    const today = localToday();
+    const in14  = this._addDays(today, 14);
+
+    // Filtrar reservas próximas (hasta 14 días)
+    const upcoming = bookings
+      .filter(b => !b.is_blocked && b.status !== 'blocked' && b.status !== 'cancelled'
+                && b.check_in >= today && b.check_in <= in14)
+      .sort((a, b) => a.check_in.localeCompare(b.check_in))
+      .slice(0, 8);
+
+    if (!upcoming.length) {
+      el.innerHTML = '';
+      return;
+    }
+
+    const DAYS_ES = ['dom','lun','mar','mié','jue','vie','sáb'];
+    const fmtDate = iso => {
+      const d = new Date(iso + 'T12:00:00');
+      return DAYS_ES[d.getDay()] + ' ' + d.getDate() + ' ' + ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'][d.getMonth()];
+    };
+
+    el.innerHTML = upcoming.map(b => {
+      const guest  = b.guests ? (b.guests.first_name + ' ' + (b.guests.last_name?.[0] ?? '') + '.').trim() : '—';
+      const unit   = b.booking_units?.[0]?.units;
+      const color  = unit?.color ?? 'var(--color-primary)';
+      const nights = Math.round((new Date(b.check_out+'T12:00:00') - new Date(b.check_in+'T12:00:00')) / 86400000);
+      const days   = Math.round((new Date(b.check_in+'T12:00:00') - new Date(today+'T12:00:00')) / 86400000);
+      const badge  = days === 0 ? '<span style="background:#dcfce7;color:#15803d;font-size:.6rem;padding:0px 5px;border-radius:3px;font-weight:700">HOY</span>'
+                   : days === 1 ? '<span style="background:#fef9c3;color:#854d0e;font-size:.6rem;padding:0px 5px;border-radius:3px;font-weight:700">MAÑANA</span>'
+                   : '<span style="font-size:.65rem;color:var(--color-text-3)">en ' + days + 'd</span>';
+      return '<div style="display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:8px;background:var(--color-surface);border:1px solid var(--color-border)">' +
+        '<div style="width:3px;height:28px;border-radius:2px;background:' + color + ';flex-shrink:0"></div>' +
+        '<span style="font-size:.72rem;font-weight:700;color:var(--color-text);min-width:85px">' + fmtDate(b.check_in) + '</span>' +
+        badge +
+        '<span style="font-size:.72rem;color:var(--color-text-2);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + guest + '</span>' +
+        '<span style="font-size:.65rem;color:var(--color-text-3);white-space:nowrap">' + (unit?.name ?? '—') + ' · ' + nights + 'n</span>' +
+      '</div>';
+    }).join('');
   }
 }

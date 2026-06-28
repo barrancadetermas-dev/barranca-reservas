@@ -176,141 +176,148 @@ export class Dashboard {
   // PERSONALIZACIÓN: toggle de cards
   // ══════════════════════════════════════════════════
   _initCustomize() {
-    const CARDS = [
-      { id: 'llegadas',      label: '✅ Llegadas hoy',         default: true  },
-      { id: 'salidas',       label: '👋 Salidas hoy',          default: true  },
-      { id: 'proximas',      label: '📅 Próximas llegadas',    default: true  },
-      { id: 'ocupacion',     label: '🔵 Ocupación',            default: true  },
-      { id: 'tareas',        label: '📋 Tareas del día',       default: true  },
-      { id: 'dolar',         label: '💵 Cotización USD',        default: true  },
-      { id: 'proyeccion',    label: '📈 Proyección del mes',   default: true  },
-      { id: 'pnl',           label: '💰 Resultado del mes',    default: true  },
-      { id: 'revpar',        label: '📊 RevPAR / ADR',         default: true  },
-      { id: 'cobros',        label: '💳 Cobros pendientes',    default: true  },
-      { id: 'reservas-mes',  label: '🗓️ Reservas del mes',    default: true  },
-      { id: 'limpieza',      label: '🧹 Limpieza hoy',         default: false },
-      { id: 'proximo-evento',label: '⏰ Próximo evento',       default: true  },
-      { id: 'dinero-asegurado',label:'🔐 Dinero asegurado',    default: true  },
+    const CARD_DEFS = [
+      { id:'llegadas',       label:'✅ Llegadas hoy',        def:true  },
+      { id:'salidas',        label:'👋 Salidas hoy',         def:true  },
+      { id:'proximas',       label:'📅 Próximas llegadas',   def:true  },
+      { id:'ocupacion',      label:'🔵 Ocupación',           def:true  },
+      { id:'tareas',         label:'📋 Tareas del día',      def:true  },
+      { id:'dolar',          label:'💵 Cotización USD',      def:true  },
+      { id:'proyeccion',     label:'📈 Proyección',          def:true  },
+      { id:'pnl',            label:'💰 Resultado del mes',   def:true  },
+      { id:'revpar',         label:'📊 RevPAR / ADR',        def:true  },
+      { id:'cobros',         label:'💳 Cobros pendientes',   def:true  },
+      { id:'reservas-mes',   label:'🗓️ Reservas del mes',   def:true  },
+      { id:'limpieza',       label:'🧹 Limpieza hoy',        def:false },
+      { id:'proximo-evento', label:'⏰ Próximo evento',      def:true  },
+      { id:'dinero-asegurado',label:'🔐 Dinero asegurado',  def:true  },
     ];
-
-    const cfg = JSON.parse(localStorage.getItem('mila_dash_cfg') ?? 'null') ?? {};
-    const isVisible  = id => cfg[id]?.visible ?? CARDS.find(c => c.id === id)?.default ?? true;
-    const getOrder   = () => {
-      const order = cfg._order ?? CARDS.map(c => c.id);
-      // Ensure all cards are in the order array
-      CARDS.forEach(c => { if (!order.includes(c.id)) order.push(c.id); });
-      return order;
-    };
-    const saveCfg = () => localStorage.setItem('mila_dash_cfg', JSON.stringify(cfg));
 
     const grid = document.getElementById('dashboard-custom-grid');
     if (!grid) return;
 
-    // Apply saved order
-    const applyOrder = () => {
-      const order = getOrder();
+    // ── Funciones puras de configuración ──
+    const getDB  = () => JSON.parse(localStorage.getItem('mila_dash_cfg') ?? 'null') ?? {};
+    const saveDB = db => localStorage.setItem('mila_dash_cfg', JSON.stringify(db));
+    const isVis  = (db, id) => db[id]?.visible ?? CARD_DEFS.find(c=>c.id===id)?.def ?? true;
+    const getSize= (db, id) => db[id]?.size ?? '1x1';
+
+    // ── Aplicar visibilidad desde DB ──
+    const applyVis = (db) => {
+      CARD_DEFS.forEach(({id}) => {
+        const el = grid.querySelector('[data-card-id="' + id + '"]');
+        if (el) el.style.display = isVis(db, id) ? '' : 'none';
+      });
+    };
+
+    // ── Aplicar tamaños desde DB ──
+    const applySize = (db) => {
+      CARD_DEFS.forEach(({id}) => {
+        const el = grid.querySelector('[data-card-id="' + id + '"]');
+        if (el) el.dataset.size = getSize(db, id);
+      });
+    };
+
+    // ── Aplicar orden desde DB ──
+    const applyOrder = (db) => {
+      const order = db._order ?? CARD_DEFS.map(c=>c.id);
+      CARD_DEFS.forEach(c => { if (!order.includes(c.id)) order.push(c.id); });
       order.forEach(id => {
         const el = grid.querySelector('[data-card-id="' + id + '"]');
-        if (el) grid.appendChild(el); // moves to end in order
+        if (el) grid.appendChild(el);
       });
     };
 
-    // Apply saved visibility
-    const applyVisibility = () => {
-      CARDS.forEach(({ id }) => {
-        const el = grid.querySelector('[data-card-id="' + id + '"]');
-        if (el) el.style.display = isVisible(id) ? '' : 'none';
-      });
+    // Aplicar al cargar
+    const db0 = getDB();
+    applyOrder(db0);
+    applyVis(db0);
+    applySize(db0);
+
+    // ── Render del panel de toggles ──
+    const SIZES = { '1x1':'S', '2x1':'W', '1x2':'T', '2x2':'L' };
+    const renderPanel = () => {
+      const togglesEl = document.getElementById('dash-card-toggles');
+      if (!togglesEl) return;
+      const db = getDB();
+      togglesEl.innerHTML = CARD_DEFS.map(({id, label}) => {
+        const vis  = isVis(db, id);
+        const size = getSize(db, id);
+        const sizeHTML = Object.entries(SIZES).map(([s,l]) =>
+          '<button data-dash-size="' + id + ':' + s + '" style="font-size:.6rem;width:20px;height:18px;' +
+          'border:1px solid ' + (s===size ? 'var(--color-primary)' : 'var(--color-border)') + ';' +
+          'border-radius:3px;cursor:pointer;background:' + (s===size ? 'var(--color-primary)' : 'var(--color-surface)') + ';' +
+          'color:' + (s===size ? '#fff' : 'var(--color-text-3)') + ';padding:0;font-weight:700">' + l + '</button>'
+        ).join('');
+        return '<div style="display:flex;flex-direction:column;gap:3px">' +
+          '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:5px 10px;' +
+          'border-radius:8px;border:1px solid ' + (vis ? 'var(--color-primary)' : 'var(--color-border)') + ';' +
+          'background:' + (vis ? 'var(--color-primary-l)' : 'var(--color-surface-2)') + ';' +
+          'font-size:.78rem;font-weight:600;color:' + (vis ? 'var(--color-primary)' : 'var(--color-text-3)') + '">' +
+          '<input type="checkbox" data-dash-toggle="' + id + '" ' + (vis ? 'checked' : '') + ' style="accent-color:var(--color-primary)"> ' + label + '</label>' +
+          '<div style="display:flex;gap:3px;padding:0 6px">' + sizeHTML + '</div>' +
+          '</div>';
+      }).join('');
     };
 
-    applyOrder();
-    applyVisibility();
-
-    // ── Card resize en modo edición ──────────────────
-    const applySize = (id, size) => {
-      const el = document.querySelector('[data-card-id="' + id + '"]');
-      if (!el) return;
-      el.dataset.size = size;
-    };
-    // Apply saved sizes on load
-    CARDS.forEach(({ id }) => {
-      const size = cfg[id]?.size ?? '1x1';
-      applySize(id, size);
+    // ── Evento: toggle visibilidad ──
+    document.addEventListener('change', e => {
+      const id = e.target.dataset?.dashToggle;
+      if (!id) return;
+      const db = getDB();
+      if (!db[id]) db[id] = {};
+      db[id].visible = e.target.checked;
+      saveDB(db);
+      const cardEl = grid.querySelector('[data-card-id="' + id + '"]');
+      if (cardEl) cardEl.style.display = e.target.checked ? '' : 'none';
+      renderPanel();
     });
 
-    // ── Toggle checkboxes ──────────────────────────────
-    const togglesEl = document.getElementById('dash-card-toggles');
-    if (togglesEl) {
-      const renderToggles = () => {
-        const SIZES = ['1x1','2x1','1x2','2x2'];
-        const SIZE_LABELS = {'1x1':'S','2x1':'W','1x2':'T','2x2':'L'};
-        togglesEl.innerHTML = CARDS.map(({ id, label }) => {
-          const vis  = isVisible(id);
-          const size = cfg[id]?.size ?? '1x1';
-          const sizeHTML = SIZES.map(s =>
-            '<button data-card-size="' + id + ':' + s + '" style="' +
-            'font-size:.62rem;width:22px;height:20px;border:1px solid ' + (s === size ? 'var(--color-primary)' : 'var(--color-border)') + ';' +
-            'border-radius:3px;cursor:pointer;background:' + (s === size ? 'var(--color-primary)' : 'var(--color-surface)') + ';' +
-            'color:' + (s === size ? '#fff' : 'var(--color-text-3)') + ';font-weight:700;padding:0">' + SIZE_LABELS[s] + '</button>'
-          ).join('');
-          return '<div style="display:flex;flex-direction:column;gap:3px">' +
-            '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;' +
-            'padding:5px 10px;border-radius:8px;' +
-            'border:1px solid ' + (vis ? 'var(--color-primary)' : 'var(--color-border)') + ';' +
-            'background:' + (vis ? 'var(--color-primary-l)' : 'var(--color-surface-2)') + ';' +
-            'font-size:.78rem;font-weight:600;' +
-            'color:' + (vis ? 'var(--color-primary)' : 'var(--color-text-3)') + '">' +
-            '<input type="checkbox" ' + (vis ? 'checked' : '') + ' data-card-toggle="' + id + '" ' +
-            'style="accent-color:var(--color-primary)"> ' + label + '</label>' +
-            '<div style="display:flex;gap:3px;padding:0 6px">' + sizeHTML + '</div>' +
-          '</div>';
-        }).join('');
-      };
-      renderToggles();
+    // ── Evento: cambio de tamaño ──
+    document.addEventListener('click', e => {
+      const sBtn = e.target.dataset?.dashSize;
+      if (!sBtn) return;
+      const [id, size] = sBtn.split(':');
+      const db = getDB();
+      if (!db[id]) db[id] = {};
+      db[id].size = size;
+      saveDB(db);
+      const el = grid.querySelector('[data-card-id="' + id + '"]');
+      if (el) el.dataset.size = size;
+      renderPanel();
+    });
 
-      togglesEl.addEventListener('click', e => {
-        const sBtn = e.target.dataset?.cardSize;
-        if (sBtn) {
-          const [id, size] = sBtn.split(':');
-          if (!cfg[id]) cfg[id] = {};
-          cfg[id].size = size;
-          saveCfg();
-          applySize(id, size);
-          renderToggles();
-        }
-      });
-
-      togglesEl.addEventListener('change', e => {
-        const cb = e.target;
-        if (!cb.dataset.cardToggle) return;
-        const id = cb.dataset.cardToggle;
-        if (!cfg[id]) cfg[id] = {};
-        cfg[id].visible = cb.checked;
-        saveCfg();
-        const cardEl = grid.querySelector('[data-card-id="' + id + '"]');
-        if (cardEl) cardEl.style.display = cb.checked ? '' : 'none';
-        renderToggles();
-      });
-    }
+    // ── Botón Personalizar ──
+    const btn   = document.getElementById('btn-customize-dash');
+    const panel = document.getElementById('dash-customize-panel');
+    const hint  = document.getElementById('dash-edit-hint');
+    btn?.addEventListener('click', () => {
+      if (!panel) return;
+      const open = panel.style.display !== 'none';
+      panel.style.display = open ? 'none' : '';
+      if (hint) hint.style.display = open ? 'none' : '';
+      grid.classList.toggle('edit-mode', !open);
+      if (!open) renderPanel();
+    });
 
     // ── Drag & Drop (pointer events) ──────────────────
-    let _dragEl    = null;
-    let _dragGhost = null;
-    let _overEl    = null;
-    let _startX    = 0, _startY = 0;
-    let _moved     = false;
+    let _dragEl = null, _dragGhost = null, _overEl = null;
+    let _startX = 0, _startY = 0, _moved = false;
 
-    const getCards = () => [...grid.querySelectorAll('.dash-card:not([style*="display: none"]):not([style*="display:none"])')];
+    const visCards = () => [...grid.querySelectorAll('.dash-card')].filter(c => c.style.display !== 'none');
 
     const _createGhost = (el) => {
       const rect = el.getBoundingClientRect();
-      const g = el.cloneNode(true);
-      g.style.cssText = 'position:fixed;z-index:9999;pointer-events:none;opacity:.85;' +
-        'width:' + rect.width + 'px;height:' + rect.height + 'px;' +
-        'left:' + rect.left + 'px;top:' + rect.top + 'px;' +
-        'border-radius:var(--r-xl);box-shadow:0 16px 48px rgba(0,0,0,.25);transform:scale(1.03);' +
-        'transition:none;cursor:grabbing;';
-      g.querySelector('.dash-drag-handle')?.remove();
+      const g    = el.cloneNode(true);
+      g.className  = 'dash-drag-ghost';
+      g.style.cssText = [
+        'position:fixed', 'z-index:9999', 'pointer-events:none',
+        'opacity:.88', 'width:' + rect.width + 'px', 'height:' + rect.height + 'px',
+        'left:' + rect.left + 'px', 'top:' + rect.top + 'px',
+        'border-radius:var(--r-xl)', 'box-shadow:0 16px 48px rgba(0,0,0,.25)',
+        'transform:scale(1.03)', 'transition:none', 'cursor:grabbing',
+        'background:var(--color-surface)', 'border:1px solid var(--color-border)',
+      ].join(';');
       document.body.appendChild(g);
       return g;
     };
@@ -320,12 +327,8 @@ export class Dashboard {
       if (!handle) return;
       const card = handle.closest('.dash-card');
       if (!card) return;
-
       e.preventDefault();
-      _dragEl  = card;
-      _startX  = e.clientX;
-      _startY  = e.clientY;
-      _moved   = false;
+      _dragEl = card; _startX = e.clientX; _startY = e.clientY; _moved = false;
       try { e.target.setPointerCapture(e.pointerId); } catch(_) {}
     });
 
@@ -333,74 +336,51 @@ export class Dashboard {
       if (!_dragEl) return;
       const dx = e.clientX - _startX, dy = e.clientY - _startY;
       if (!_moved && Math.abs(dx) < 6 && Math.abs(dy) < 6) return;
-
       if (!_moved) {
         _moved = true;
         _dragGhost = _createGhost(_dragEl);
         _dragEl.classList.add('drag-source');
         grid.classList.add('edit-mode');
       }
-
-      // Move ghost
       if (_dragGhost) {
         const rect = _dragEl.getBoundingClientRect();
         _dragGhost.style.left = (rect.left + dx) + 'px';
         _dragGhost.style.top  = (rect.top  + dy) + 'px';
       }
-
-      // Find drop target
-      const els = getCards().filter(c => c !== _dragEl);
-      let nearest = null, nearDist = Infinity;
-      els.forEach(c => {
+      const cards = visCards().filter(c => c !== _dragEl);
+      let near = null, nearD = Infinity;
+      cards.forEach(c => {
         const r = c.getBoundingClientRect();
-        const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
-        const dist = Math.hypot(e.clientX - cx, e.clientY - cy);
-        if (dist < nearDist) { nearDist = dist; nearest = c; }
+        const d = Math.hypot(e.clientX - r.left - r.width/2, e.clientY - r.top - r.height/2);
+        if (d < nearD) { nearD = d; near = c; }
       });
-
-      if (_overEl && _overEl !== nearest) _overEl.classList.remove('drag-over');
-      if (nearest) nearest.classList.add('drag-over');
-      _overEl = nearest;
+      if (_overEl && _overEl !== near) _overEl.classList.remove('drag-over');
+      if (near) near.classList.add('drag-over');
+      _overEl = near;
     });
 
-    const _endDrag = (e) => {
+    const endDrag = (e) => {
       if (!_dragEl) return;
       if (_dragGhost) { _dragGhost.remove(); _dragGhost = null; }
       _dragEl.classList.remove('drag-source');
-      grid.classList.remove('edit-mode');
       if (_overEl) {
         _overEl.classList.remove('drag-over');
-        // Insert before or after based on position
-        const rect = _overEl.getBoundingClientRect();
-        const mid  = rect.left + rect.width / 2;
-        if (e.clientX < mid) {
-          grid.insertBefore(_dragEl, _overEl);
-        } else {
-          _overEl.after(_dragEl);
-        }
-        // Save new order
-        cfg._order = [...grid.querySelectorAll('.dash-card')].map(c => c.dataset.cardId);
-        saveCfg();
+        const r   = _overEl.getBoundingClientRect();
+        const mid = r.left + r.width / 2;
+        if (e && e.clientX < mid) grid.insertBefore(_dragEl, _overEl);
+        else _overEl.after(_dragEl);
+        const db = getDB();
+        db._order = [...grid.querySelectorAll('.dash-card')].map(c => c.dataset.cardId);
+        saveDB(db);
       }
       _dragEl = null; _overEl = null; _moved = false;
     };
 
-    grid.addEventListener('pointerup',     _endDrag);
-    grid.addEventListener('pointercancel', _endDrag);
-    window._dashStopDrag = _endDrag;
-
-    // ── Customize button ──────────────────────────────
-    const btn = document.getElementById('btn-customize-dash');
-    const panel = document.getElementById('dash-customize-panel');
-    const hint  = document.getElementById('dash-edit-hint');
-    btn?.addEventListener('click', () => {
-      if (!panel) return;
-      const open = panel.style.display !== 'none';
-      panel.style.display = open ? 'none' : '';
-      if (hint) hint.style.display = open ? 'none' : '';
-      grid.classList.toggle('edit-mode', !open);
-    });
+    grid.addEventListener('pointerup',     endDrag);
+    grid.addEventListener('pointercancel', endDrag);
+    window._dashStopDrag = endDrag;
   }
+
 
   _renderSkeleton() {
     const grid = document.getElementById('kpi-grid');
