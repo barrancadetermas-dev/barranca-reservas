@@ -2237,7 +2237,7 @@ export class Calendar {
       .filter(b => !b.is_blocked && b.status !== 'blocked' && b.status !== 'cancelled'
                 && b.check_in >= today && b.check_in <= in30)
       .sort((a, b) => a.check_in.localeCompare(b.check_in))
-      .slice(0, 10);
+      .slice(0, 6);
 
     if (!upcoming.length) {
       el.innerHTML = '<div style="font-size:.72rem;color:var(--color-text-3);padding:6px 0">Sin reservas próximas</div>';

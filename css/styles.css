@@ -5262,3 +5262,49 @@ html, body {
 
 /* Sidebar collapsed: ocultar mini cal */
 .sidebar.collapsed .sidebar-mini-cal { display: none; }
+
+/* ══════════════════════════════════════════════════
+   MILA v5 — Dashboard cards uniformes + Calendar agenda 2col
+   ══════════════════════════════════════════════════ */
+
+/* Cards del dashboard: misma altura, flex column */
+.dash-card-uniform {
+  display: flex;
+  flex-direction: column;
+  min-height: 160px;
+}
+
+/* Grid dashboard responsive: 5 col desktop, 2 col mobile */
+#dashboard-cards {
+  grid-template-columns: repeat(5, 1fr);
+}
+@media (max-width: 1100px) {
+  #dashboard-cards { grid-template-columns: repeat(3, 1fr); }
+}
+@media (max-width: 700px) {
+  #dashboard-cards { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* Calendar agenda: 2 columnas, mitad del ancho, máx 6 items */
+.cal-agenda-wrap {
+  width: 50%;
+  margin-top: 14px;
+}
+.cal-agenda-title {
+  font-size: .72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--color-text-3);
+  margin-bottom: 8px;
+}
+#cal-mini-agenda-list {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+/* Booking form: padding antes del scrollbar */
+#modal-booking .modal-body {
+  padding-bottom: 16px;
+}
