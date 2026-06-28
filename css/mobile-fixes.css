@@ -1068,23 +1068,24 @@
   letter-spacing: -.01em !important;
 }
 
+
 /* ═══════════════════════════════════════════════════════════════
-   DASHBOARD vE — GRID LIMPIO · KPI COMPACTOS · CARD SIZES
+   DASHBOARD vF — GRID ESTRICTO 5x2 · MISMO TAMAÑO · SIN TALLAS
    ═══════════════════════════════════════════════════════════════ */
 
-/* ── KPI cards del tope: layout 2 líneas, 1/3 más chicos ── */
+/* ── KPI cards del tope: 2 líneas compactas ── */
 .kpi-grid {
   grid-template-columns: repeat(4, 1fr) !important;
   gap: 8px !important;
 }
 .kpi-card {
-  padding: 10px 12px !important;
+  padding: 10px 14px !important;
+  height: 62px !important;
   min-height: 0 !important;
-  height: 64px !important;
   display: flex !important;
   align-items: center !important;
-  gap: 10px !important;
-  flex-wrap: nowrap !important;
+  gap: 12px !important;
+  overflow: hidden !important;
 }
 .kpi-icon-wrap {
   width: 30px !important;
@@ -1092,103 +1093,87 @@
   flex-shrink: 0 !important;
 }
 .kpi-icon-wrap svg { width: 15px !important; height: 15px !important; }
-.kpi-body {
-  display: flex !important;
-  flex-direction: column !important;
-  gap: 0 !important;
-  flex: 1 !important;
-  min-width: 0 !important;
-}
-/* Fila 1: label + value en la misma línea */
-.kpi-body .kpi-row-1 {
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
-}
+.kpi-body  { display: flex !important; flex-direction: column !important; gap: 1px !important; flex: 1 !important; min-width: 0 !important; }
+.kpi-row-1 { display: flex !important; align-items: baseline !important; gap: 7px !important; }
 .kpi-label { font-size: .62rem !important; font-weight: 600 !important; white-space: nowrap !important; }
-.kpi-value { font-size: 1.25rem !important; font-weight: 800 !important; line-height: 1 !important; }
-/* Fila 2: secondary info */
-.kpi-sec  { font-size: .65rem !important; color: var(--color-text-3) !important; margin-top: 1px !important; white-space: nowrap !important; overflow: hidden !important; text-overflow: ellipsis !important; }
+.kpi-value { font-size: 1.3rem !important; font-weight: 800 !important; line-height: 1 !important; }
+.kpi-sec   { font-size: .63rem !important; color: var(--color-text-3) !important; white-space: nowrap !important; overflow: hidden !important; text-overflow: ellipsis !important; max-width: 180px !important; }
 
-/* ── Dashboard grid: 5 columnas, sin altura fija ── */
+/* ── GRID PRINCIPAL: 5 columnas fijas, altura uniforme ── */
 #dashboard-custom-grid {
   display: grid !important;
   grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
-  grid-auto-rows: auto !important;   /* ← Sin altura fija: cards se ajustan al contenido */
+  grid-auto-rows: 190px !important;  /* Todos exactamente igual */
   gap: 10px !important;
-  align-items: start !important;
+  align-items: stretch !important;
 }
 
-/* Cards: tamaño mínimo consistente pero sin cortar contenido */
+/* Cada card tiene la misma caja, contenido scrolleable */
 .dash-card.card {
-  min-height: 140px !important;
+  height: 190px !important;
   overflow: hidden !important;
   display: flex !important;
   flex-direction: column !important;
+  padding: 14px 16px 12px !important;
+  box-sizing: border-box !important;
 }
 
-/* Inner content: scrolleable si desborda mucho */
+/* Header del card: siempre fijo arriba */
+.dash-card .card-header {
+  flex-shrink: 0 !important;
+  margin-bottom: 6px !important;
+  padding-bottom: 0 !important;
+}
+.dash-card .card-header h3 { font-size: .8rem !important; }
+
+/* Contenido interior: scrolleable si desborda */
 .dash-card .arrivals-list,
 .dash-card #dashboard-upcoming,
 .dash-card .reminders-list,
+.dash-card #dash-next-event,
+.dash-card #dash-revpar-body,
+.dash-card #dashboard-pl-preview,
 .dash-card #dash-next-event {
-  flex: 1 !important;
   overflow-y: auto !important;
+  flex: 1 !important;
   min-height: 0 !important;
-  max-height: 160px !important;
 }
 
-/* Card sizes — data-size attribute */
-.dash-card[data-size="1x1"] { grid-column: span 1; }
-.dash-card[data-size="2x1"] { grid-column: span 2; }
-.dash-card[data-size="1x2"] { grid-column: span 1; grid-row: span 2; }
-.dash-card[data-size="2x2"] { grid-column: span 2; grid-row: span 2; }
-.dash-card[data-size="3x1"] { grid-column: span 3; }
-
-/* Ocupación: columna más estrecha */
-@media (min-width: 1300px) {
-  #dashboard-custom-grid {
-    grid-template-columns: repeat(4, minmax(0,1fr)) 165px !important;
-  }
-  .dash-card.widget-occupancy {
-    grid-column: 5 !important;
-  }
-  .widget-occupancy .progress-ring { width: 95px !important; height: 95px !important; }
-  .widget-occupancy .ring-pct      { font-size: 1.1rem !important; }
-}
-@media (max-width: 1299px) {
-  .dash-card.widget-occupancy { grid-column: span 1 !important; }
+/* Valores numéricos grandes: más compactos dentro del card */
+.dash-card #dash-dinero-val,
+.dash-card #dash-cobros-val,
+.dash-card #dash-rmes-val,
+.dash-card #dash-revpar-val {
+  font-size: 1.3rem !important;
 }
 
-/* Responsive */
-@media (max-width: 1300px) {
-  #dashboard-custom-grid { grid-template-columns: repeat(4, minmax(0,1fr)) !important; }
+/* Ocupación: ring centrado y más pequeño */
+.dash-card.widget-occupancy {
+  align-items: center !important;
+  justify-content: center !important;
 }
-@media (max-width: 1050px) {
-  #dashboard-custom-grid { grid-template-columns: repeat(3, minmax(0,1fr)) !important; }
-}
-@media (max-width: 768px) {
-  #dashboard-custom-grid { grid-template-columns: 1fr !important; }
-  .kpi-grid { grid-template-columns: 1fr 1fr !important; }
-  .dash-card[data-size] { grid-column: span 1 !important; grid-row: span 1 !important; }
-}
+.widget-occupancy .ring-wrapper { justify-content: center !important; margin-top: 0 !important; }
+.widget-occupancy .progress-ring { width: 95px !important; height: 95px !important; }
+.widget-occupancy .ring-pct { font-size: 1.1rem !important; }
+.widget-occupancy .ring-sub { font-size: .68rem !important; }
+.widget-occupancy .card-header { width: 100% !important; }
 
-/* ── Dark mode barras ── */
+/* Dark mode barras */
 [data-theme="dark"] .bar           { filter: brightness(1.5) saturate(1.15) !important; }
 [data-theme="dark"] .bar:hover     { filter: brightness(1.7) saturate(1.2) !important; }
 [data-theme="dark"] .bar.past-bar  { filter: brightness(1.1) saturate(.8) !important; opacity: .8 !important; }
-.bar-drag-ghost                    { position:fixed !important; z-index:9999 !important; pointer-events:none !important; }
+.bar-drag-ghost { position:fixed !important; z-index:9999 !important; pointer-events:none !important; }
 
-/* ── Config stat cards ── */
-.cfg-stat-card {
-  background: var(--color-surface-2);
-  border: 1px solid var(--color-border);
-  border-radius: var(--r-lg);
-  padding: 10px 12px;
-  text-align: center;
-}
-.cfg-stat-val { font-size: .95rem; font-weight: 800; color: var(--color-primary); line-height: 1; }
-.cfg-stat-lbl { font-size: .62rem; color: var(--color-text-3); margin-top: 3px; text-transform: uppercase; letter-spacing: .04em; font-weight: 600; }
+/* Config stat cards */
+.cfg-stat-card { background:var(--color-surface-2);border:1px solid var(--color-border);border-radius:var(--r-lg);padding:10px 12px;text-align:center; }
+.cfg-stat-val  { font-size:.95rem;font-weight:800;color:var(--color-primary);line-height:1; }
+.cfg-stat-lbl  { font-size:.62rem;color:var(--color-text-3);margin-top:3px;text-transform:uppercase;letter-spacing:.04em;font-weight:600; }
 
-/* ── User avatars with initials ── */
-.au-avatar { font-size: 1.2rem !important; font-weight: 900 !important; font-family: system-ui, -apple-system, sans-serif !important; }
+/* User avatars */
+.au-avatar { font-size:1.2rem !important;font-weight:900 !important;font-family:system-ui,-apple-system,sans-serif !important; }
+
+/* Responsive */
+@media (max-width: 1400px) { #dashboard-custom-grid { grid-template-columns: repeat(4, minmax(0,1fr)) !important; } }
+@media (max-width: 1100px) { #dashboard-custom-grid { grid-template-columns: repeat(3, minmax(0,1fr)) !important; } }
+@media (max-width: 768px)  { #dashboard-custom-grid { grid-template-columns: repeat(2, minmax(0,1fr)) !important; grid-auto-rows: 160px !important; } .kpi-grid { grid-template-columns: repeat(2, 1fr) !important; } }
+@media (max-width: 480px)  { #dashboard-custom-grid { grid-template-columns: 1fr !important; } }

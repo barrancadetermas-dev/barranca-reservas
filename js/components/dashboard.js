@@ -176,151 +176,95 @@ export class Dashboard {
   // PERSONALIZACIÓN: toggle de cards
   // ══════════════════════════════════════════════════
   _initCustomize() {
-    const CARD_DEFS = [
-      { id:'llegadas',       label:'✅ Llegadas hoy',        def:true  },
-      { id:'salidas',        label:'👋 Salidas hoy',         def:true  },
-      { id:'proximas',       label:'📅 Próximas llegadas',   def:true  },
-      { id:'ocupacion',      label:'🔵 Ocupación',           def:true  },
-      { id:'tareas',         label:'📋 Tareas del día',      def:true  },
-      { id:'dolar',          label:'💵 Cotización USD',      def:true  },
-      { id:'proyeccion',     label:'📈 Proyección',          def:true  },
-      { id:'pnl',            label:'💰 Resultado del mes',   def:true  },
-      { id:'revpar',         label:'📊 RevPAR / ADR',        def:true  },
-      { id:'cobros',         label:'💳 Cobros pendientes',   def:true  },
-      { id:'reservas-mes',   label:'🗓️ Reservas del mes',   def:true  },
-      { id:'limpieza',       label:'🧹 Limpieza hoy',        def:false },
-      { id:'proximo-evento', label:'⏰ Próximo evento',      def:true  },
-      { id:'dinero-asegurado',label:'🔐 Dinero asegurado',  def:true  },
-    ];
-
     const grid = document.getElementById('dashboard-custom-grid');
     if (!grid) return;
 
-    // ── Funciones puras de configuración ──
-    const getDB  = () => JSON.parse(localStorage.getItem('mila_dash_cfg') ?? 'null') ?? {};
-    const saveDB = db => localStorage.setItem('mila_dash_cfg', JSON.stringify(db));
-    const isVis  = (db, id) => db[id]?.visible ?? CARD_DEFS.find(c=>c.id===id)?.def ?? true;
-    const getSize= (db, id) => db[id]?.size ?? '1x1';
+    const CARDS = [
+      {id:'llegadas',        label:'✅ Llegadas hoy',       def:true },
+      {id:'salidas',         label:'👋 Salidas hoy',        def:true },
+      {id:'proximas',        label:'📅 Próximas llegadas',  def:true },
+      {id:'ocupacion',       label:'🔵 Ocupación',          def:true },
+      {id:'tareas',          label:'📋 Tareas del día',     def:true },
+      {id:'dolar',           label:'💵 Cotización USD',     def:true },
+      {id:'proyeccion',      label:'📈 Proyección',         def:true },
+      {id:'pnl',             label:'💰 Resultado del mes',  def:true },
+      {id:'revpar',          label:'📊 RevPAR / ADR',       def:true },
+      {id:'cobros',          label:'💳 Cobros pendientes',  def:true },
+      {id:'reservas-mes',    label:'🗓️ Reservas del mes',  def:false},
+      {id:'limpieza',        label:'🧹 Limpieza hoy',       def:false},
+      {id:'proximo-evento',  label:'⏰ Próximo evento',     def:true },
+      {id:'dinero-asegurado',label:'🔐 Dinero asegurado',  def:true },
+    ];
 
-    // ── Aplicar visibilidad desde DB ──
-    const applyVis = (db) => {
-      CARD_DEFS.forEach(({id}) => {
+    // ── Helpers de persistencia ──
+    const DB_KEY  = 'mila_dash_cfg_v2';
+    const getDB   = () => JSON.parse(localStorage.getItem(DB_KEY) ?? 'null') ?? {};
+    const saveDB  = db => localStorage.setItem(DB_KEY, JSON.stringify(db));
+    const isVis   = (db, id) => { const c = CARDS.find(x=>x.id===id); return db[id]?.visible ?? c?.def ?? true; };
+    const getOrd  = db => { const o = db._order ?? CARDS.map(c=>c.id); CARDS.forEach(c=>{if(!o.includes(c.id))o.push(c.id);}); return o; };
+
+    // ── Aplicar estado desde DB ──
+    const apply = (db) => {
+      // Visibilidad
+      CARDS.forEach(({id}) => {
         const el = grid.querySelector('[data-card-id="' + id + '"]');
         if (el) el.style.display = isVis(db, id) ? '' : 'none';
       });
-    };
-
-    // ── Aplicar tamaños desde DB ──
-    const applySize = (db) => {
-      CARD_DEFS.forEach(({id}) => {
-        const el = grid.querySelector('[data-card-id="' + id + '"]');
-        if (el) el.dataset.size = getSize(db, id);
-      });
-    };
-
-    // ── Aplicar orden desde DB ──
-    const applyOrder = (db) => {
-      const order = db._order ?? CARD_DEFS.map(c=>c.id);
-      CARD_DEFS.forEach(c => { if (!order.includes(c.id)) order.push(c.id); });
-      order.forEach(id => {
+      // Orden
+      getOrd(db).forEach(id => {
         const el = grid.querySelector('[data-card-id="' + id + '"]');
         if (el) grid.appendChild(el);
       });
     };
 
     // Aplicar al cargar
-    const db0 = getDB();
-    applyOrder(db0);
-    applyVis(db0);
-    applySize(db0);
+    apply(getDB());
 
-    // ── Render del panel de toggles ──
-    const SIZES = { '1x1':'S', '2x1':'W', '1x2':'T', '2x2':'L' };
-    const renderPanel = () => {
+    // ── Función global de toggle (accesible desde onclick inline) ──
+    window._dashToggle = (id, checked) => {
+      const db = getDB();
+      if (!db[id]) db[id] = {};
+      db[id].visible = checked;
+      saveDB(db);
+      const el = grid.querySelector('[data-card-id="' + id + '"]');
+      if (el) el.style.display = checked ? '' : 'none';
+      window._dashRenderPanel?.();
+    };
+
+    // ── Render del panel de personalización ──
+    window._dashRenderPanel = () => {
       const togglesEl = document.getElementById('dash-card-toggles');
       if (!togglesEl) return;
       const db = getDB();
-      togglesEl.innerHTML = CARD_DEFS.map(({id, label}) => {
-        const vis  = isVis(db, id);
-        const size = getSize(db, id);
-        const sizeHTML = Object.entries(SIZES).map(([s,l]) =>
-          '<button data-dash-size="' + id + ':' + s + '" style="font-size:.6rem;width:20px;height:18px;' +
-          'border:1px solid ' + (s===size ? 'var(--color-primary)' : 'var(--color-border)') + ';' +
-          'border-radius:3px;cursor:pointer;background:' + (s===size ? 'var(--color-primary)' : 'var(--color-surface)') + ';' +
-          'color:' + (s===size ? '#fff' : 'var(--color-text-3)') + ';padding:0;font-weight:700">' + l + '</button>'
-        ).join('');
-        return '<div style="display:flex;flex-direction:column;gap:3px">' +
-          '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:5px 10px;' +
-          'border-radius:8px;border:1px solid ' + (vis ? 'var(--color-primary)' : 'var(--color-border)') + ';' +
+      togglesEl.innerHTML = CARDS.map(({id, label}) => {
+        const vis = isVis(db, id);
+        return '<label style="display:flex;align-items:center;gap:7px;cursor:pointer;' +
+          'padding:6px 12px;border-radius:8px;user-select:none;' +
+          'border:1px solid ' + (vis ? 'var(--color-primary)' : 'var(--color-border)') + ';' +
           'background:' + (vis ? 'var(--color-primary-l)' : 'var(--color-surface-2)') + ';' +
-          'font-size:.78rem;font-weight:600;color:' + (vis ? 'var(--color-primary)' : 'var(--color-text-3)') + '">' +
-          '<input type="checkbox" data-dash-toggle="' + id + '" ' + (vis ? 'checked' : '') + ' style="accent-color:var(--color-primary)"> ' + label + '</label>' +
-          '<div style="display:flex;gap:3px;padding:0 6px">' + sizeHTML + '</div>' +
-          '</div>';
+          'font-size:.78rem;font-weight:600;' +
+          'color:' + (vis ? 'var(--color-primary)' : 'var(--color-text-3)') + '">' +
+          '<input type="checkbox" onchange="window._dashToggle(\'' + id + '\',this.checked)" ' +
+          (vis ? 'checked' : '') + ' style="accent-color:var(--color-primary);cursor:pointer;width:14px;height:14px"> ' +
+          label + '</label>';
       }).join('');
     };
-
-    // ── Evento: toggle visibilidad ──
-    document.addEventListener('change', e => {
-      const id = e.target.dataset?.dashToggle;
-      if (!id) return;
-      const db = getDB();
-      if (!db[id]) db[id] = {};
-      db[id].visible = e.target.checked;
-      saveDB(db);
-      const cardEl = grid.querySelector('[data-card-id="' + id + '"]');
-      if (cardEl) cardEl.style.display = e.target.checked ? '' : 'none';
-      renderPanel();
-    });
-
-    // ── Evento: cambio de tamaño ──
-    document.addEventListener('click', e => {
-      const sBtn = e.target.dataset?.dashSize;
-      if (!sBtn) return;
-      const [id, size] = sBtn.split(':');
-      const db = getDB();
-      if (!db[id]) db[id] = {};
-      db[id].size = size;
-      saveDB(db);
-      const el = grid.querySelector('[data-card-id="' + id + '"]');
-      if (el) el.dataset.size = size;
-      renderPanel();
-    });
 
     // ── Botón Personalizar ──
     const btn   = document.getElementById('btn-customize-dash');
     const panel = document.getElementById('dash-customize-panel');
-    const hint  = document.getElementById('dash-edit-hint');
     btn?.addEventListener('click', () => {
       if (!panel) return;
-      const open = panel.style.display !== 'none';
-      panel.style.display = open ? 'none' : '';
-      if (hint) hint.style.display = open ? 'none' : '';
-      grid.classList.toggle('edit-mode', !open);
-      if (!open) renderPanel();
+      const isOpen = panel.style.display !== 'none';
+      panel.style.display = isOpen ? 'none' : '';
+      if (!isOpen) window._dashRenderPanel?.();
     });
 
-    // ── Drag & Drop (pointer events) ──────────────────
+    // ── Drag & Drop ──────────────────────────────────
     let _dragEl = null, _dragGhost = null, _overEl = null;
     let _startX = 0, _startY = 0, _moved = false;
 
-    const visCards = () => [...grid.querySelectorAll('.dash-card')].filter(c => c.style.display !== 'none');
-
-    const _createGhost = (el) => {
-      const rect = el.getBoundingClientRect();
-      const g    = el.cloneNode(true);
-      g.className  = 'dash-drag-ghost';
-      g.style.cssText = [
-        'position:fixed', 'z-index:9999', 'pointer-events:none',
-        'opacity:.88', 'width:' + rect.width + 'px', 'height:' + rect.height + 'px',
-        'left:' + rect.left + 'px', 'top:' + rect.top + 'px',
-        'border-radius:var(--r-xl)', 'box-shadow:0 16px 48px rgba(0,0,0,.25)',
-        'transform:scale(1.03)', 'transition:none', 'cursor:grabbing',
-        'background:var(--color-surface)', 'border:1px solid var(--color-border)',
-      ].join(';');
-      document.body.appendChild(g);
-      return g;
-    };
+    const visCards = () => [...grid.querySelectorAll('.dash-card')].filter(c=>c.style.display!=='none');
 
     grid.addEventListener('pointerdown', e => {
       const handle = e.target.closest('.dash-drag-handle');
@@ -335,50 +279,57 @@ export class Dashboard {
     grid.addEventListener('pointermove', e => {
       if (!_dragEl) return;
       const dx = e.clientX - _startX, dy = e.clientY - _startY;
-      if (!_moved && Math.abs(dx) < 6 && Math.abs(dy) < 6) return;
+      if (!_moved && Math.abs(dx)<6 && Math.abs(dy)<6) return;
       if (!_moved) {
         _moved = true;
-        _dragGhost = _createGhost(_dragEl);
-        _dragEl.classList.add('drag-source');
+        const rect = _dragEl.getBoundingClientRect();
+        _dragGhost = _dragEl.cloneNode(true);
+        _dragGhost.className = 'bar-drag-ghost';
+        _dragGhost.style.cssText = 'position:fixed;z-index:9999;pointer-events:none;opacity:.85;' +
+          'width:'+rect.width+'px;height:'+rect.height+'px;left:'+rect.left+'px;top:'+rect.top+'px;' +
+          'background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--r-xl);' +
+          'box-shadow:0 16px 48px rgba(0,0,0,.25);transform:scale(1.03);transition:none;';
+        document.body.appendChild(_dragGhost);
+        _dragEl.style.opacity = '0.3';
         grid.classList.add('edit-mode');
       }
       if (_dragGhost) {
-        const rect = _dragEl.getBoundingClientRect();
-        _dragGhost.style.left = (rect.left + dx) + 'px';
-        _dragGhost.style.top  = (rect.top  + dy) + 'px';
+        const r = _dragEl.getBoundingClientRect();
+        _dragGhost.style.left = (r.left+dx)+'px';
+        _dragGhost.style.top  = (r.top+dy)+'px';
       }
-      const cards = visCards().filter(c => c !== _dragEl);
-      let near = null, nearD = Infinity;
-      cards.forEach(c => {
-        const r = c.getBoundingClientRect();
-        const d = Math.hypot(e.clientX - r.left - r.width/2, e.clientY - r.top - r.height/2);
-        if (d < nearD) { nearD = d; near = c; }
+      const cards = visCards().filter(c=>c!==_dragEl);
+      let near=null, nearD=Infinity;
+      cards.forEach(c=>{
+        const r=c.getBoundingClientRect();
+        const d=Math.hypot(e.clientX-r.left-r.width/2, e.clientY-r.top-r.height/2);
+        if(d<nearD){nearD=d;near=c;}
       });
-      if (_overEl && _overEl !== near) _overEl.classList.remove('drag-over');
-      if (near) near.classList.add('drag-over');
-      _overEl = near;
+      if(_overEl&&_overEl!==near)_overEl.classList.remove('drag-over');
+      if(near)near.classList.add('drag-over');
+      _overEl=near;
     });
 
-    const endDrag = (e) => {
-      if (!_dragEl) return;
-      if (_dragGhost) { _dragGhost.remove(); _dragGhost = null; }
+    const endDrag = e => {
+      if(!_dragEl)return;
+      if(_dragGhost){_dragGhost.remove();_dragGhost=null;}
+      _dragEl.style.opacity='';
       _dragEl.classList.remove('drag-source');
-      if (_overEl) {
+      grid.classList.remove('edit-mode');
+      if(_overEl){
         _overEl.classList.remove('drag-over');
-        const r   = _overEl.getBoundingClientRect();
-        const mid = r.left + r.width / 2;
-        if (e && e.clientX < mid) grid.insertBefore(_dragEl, _overEl);
+        const r=_overEl.getBoundingClientRect();
+        if(e&&e.clientX<r.left+r.width/2)grid.insertBefore(_dragEl,_overEl);
         else _overEl.after(_dragEl);
-        const db = getDB();
-        db._order = [...grid.querySelectorAll('.dash-card')].map(c => c.dataset.cardId);
+        const db=getDB();
+        db._order=[...grid.querySelectorAll('.dash-card')].map(c=>c.dataset.cardId);
         saveDB(db);
       }
-      _dragEl = null; _overEl = null; _moved = false;
+      _dragEl=null;_overEl=null;_moved=false;
     };
-
-    grid.addEventListener('pointerup',     endDrag);
-    grid.addEventListener('pointercancel', endDrag);
-    window._dashStopDrag = endDrag;
+    grid.addEventListener('pointerup',endDrag);
+    grid.addEventListener('pointercancel',endDrag);
+    window._dashStopDrag=endDrag;
   }
 
 

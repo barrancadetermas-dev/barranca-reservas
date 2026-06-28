@@ -2229,41 +2229,45 @@ export class Calendar {
     if (!el) return;
 
     const today = localToday();
-    const in14  = this._addDays(today, 14);
+    const in30  = this._addDays(today, 30);
+    const DAYS  = ['dom','lun','mar','mié','jue','vie','sáb'];
+    const MONTHS= ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
 
-    // Filtrar reservas próximas (hasta 14 días)
     const upcoming = bookings
       .filter(b => !b.is_blocked && b.status !== 'blocked' && b.status !== 'cancelled'
-                && b.check_in >= today && b.check_in <= in14)
+                && b.check_in >= today && b.check_in <= in30)
       .sort((a, b) => a.check_in.localeCompare(b.check_in))
-      .slice(0, 8);
+      .slice(0, 10);
 
     if (!upcoming.length) {
-      el.innerHTML = '';
+      el.innerHTML = '<div style="font-size:.72rem;color:var(--color-text-3);padding:8px 0">Sin reservas próximas</div>';
       return;
     }
 
-    const DAYS_ES = ['dom','lun','mar','mié','jue','vie','sáb'];
-    const fmtDate = iso => {
-      const d = new Date(iso + 'T12:00:00');
-      return DAYS_ES[d.getDay()] + ' ' + d.getDate() + ' ' + ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'][d.getMonth()];
-    };
-
     el.innerHTML = upcoming.map(b => {
-      const guest  = b.guests ? (b.guests.first_name + ' ' + (b.guests.last_name?.[0] ?? '') + '.').trim() : '—';
+      const g      = b.guests;
+      // Formato: José M.
+      const fn     = g?.first_name ?? '';
+      const ln     = g?.last_name ?? '';
+      const guest  = fn ? fn + (ln ? ' ' + ln[0] + '.' : '') : '—';
       const unit   = b.booking_units?.[0]?.units;
       const color  = unit?.color ?? 'var(--color-primary)';
+      const uname  = unit?.name ?? '—';
       const nights = Math.round((new Date(b.check_out+'T12:00:00') - new Date(b.check_in+'T12:00:00')) / 86400000);
-      const days   = Math.round((new Date(b.check_in+'T12:00:00') - new Date(today+'T12:00:00')) / 86400000);
-      const badge  = days === 0 ? '<span style="background:#dcfce7;color:#15803d;font-size:.6rem;padding:0px 5px;border-radius:3px;font-weight:700">HOY</span>'
-                   : days === 1 ? '<span style="background:#fef9c3;color:#854d0e;font-size:.6rem;padding:0px 5px;border-radius:3px;font-weight:700">MAÑANA</span>'
-                   : '<span style="font-size:.65rem;color:var(--color-text-3)">en ' + days + 'd</span>';
-      return '<div style="display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:8px;background:var(--color-surface);border:1px solid var(--color-border)">' +
-        '<div style="width:3px;height:28px;border-radius:2px;background:' + color + ';flex-shrink:0"></div>' +
-        '<span style="font-size:.72rem;font-weight:700;color:var(--color-text);min-width:85px">' + fmtDate(b.check_in) + '</span>' +
-        badge +
-        '<span style="font-size:.72rem;color:var(--color-text-2);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + guest + '</span>' +
-        '<span style="font-size:.65rem;color:var(--color-text-3);white-space:nowrap">' + (unit?.name ?? '—') + ' · ' + nights + 'n</span>' +
+      const dObj   = new Date(b.check_in+'T12:00:00');
+      const days   = Math.round((dObj - new Date(today+'T12:00:00')) / 86400000);
+      const dayStr = DAYS[dObj.getDay()] + ' ' + dObj.getDate() + ' ' + MONTHS[dObj.getMonth()];
+      const inStr  = 'en ' + days + ' día' + (days !== 1 ? 's' : '');
+
+      return '<div style="font-size:.72rem;line-height:1.4;padding:5px 0;border-bottom:1px solid var(--color-border);display:flex;align-items:flex-start;gap:6px">' +
+        '<div style="width:2px;height:32px;background:' + color + ';border-radius:1px;flex-shrink:0;margin-top:2px"></div>' +
+        '<div style="min-width:0">' +
+          '<span style="font-weight:700;color:var(--color-text)">' + dayStr + '</span>' +
+          '<span style="color:var(--color-text-3);margin:0 4px">' + inStr + '</span>' +
+          '<span style="color:var(--color-text-2);font-weight:600">' + guest + '</span>' +
+          '<br>' +
+          '<span style="color:var(--color-text-3)">' + uname + ' · ' + nights + ' noche' + (nights!==1?'s':'') + '</span>' +
+        '</div>' +
       '</div>';
     }).join('');
   }

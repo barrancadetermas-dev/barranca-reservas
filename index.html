@@ -621,13 +621,20 @@
 
         </div>
 
-        <div class="cal-wrapper">
-          <div id="calendar-grid" class="cal-grid"><!-- Generado por calendar.js --></div>
+        <div class="cal-wrapper" style="display:flex;gap:16px;align-items:flex-start">
+          <!-- Grilla principal: 2/3 ancho -->
+          <div style="flex:1;min-width:0;overflow-x:auto">
+            <div id="calendar-grid" class="cal-grid"><!-- Generado por calendar.js --></div>
+          </div>
+          <!-- Mini agenda: 1/3 ancho -->
+          <div style="flex:0 0 260px;min-width:0">
+            <div style="font-size:.58rem;font-weight:800;text-transform:uppercase;letter-spacing:.09em;color:var(--color-text-3);margin-bottom:8px">Próximas reservas</div>
+            <div id="cal-mini-agenda-list" style="display:flex;flex-direction:column;gap:5px"></div>
+          </div>
         </div>
-
-        <!-- ── Mini agenda: ayuda memoria de próximas reservas ── -->
-        <div id="cal-mini-agenda" style="margin-top:10px">
-          <div id="cal-mini-agenda-list"></div>
+        <!-- placeholder agenda quitado del layout antiguo-->
+        <div id="__cal-mini-agenda-old" style="display:none">
+          <div id="__unused
         </div>
 
       </section>
