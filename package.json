@@ -1,7 +1,7 @@
 {
   "name": "barranca-termas-pms",
   "version": "5.0.0",
-  "description": "Sistema de gestión de reservas — Barranca de Termas",
+  "description": "Sistema de gesti\u00f3n de reservas \u2014 Barranca de Termas",
   "private": true,
   "type": "module",
   "scripts": {
@@ -10,7 +10,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.45.0"
+    "@supabase/supabase-js": "^2.45.0",
+    "web-push": "^3.6.7"
   },
   "devDependencies": {
     "acorn": "^8.17.0",

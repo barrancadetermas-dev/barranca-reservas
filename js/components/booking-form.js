@@ -10,6 +10,7 @@ import { can, isDemo } from '../auth/permissions.js';
 import { formatARS, toISODate, showToast, getUnitLabel, getUnitColor, getUnitChipHTML, SOURCE_CONFIG } from '../supabase-config.js';
 import { logAction } from '../services/audit-service.js';
 import { DateRangePicker } from './date-range-picker.js';
+import { sendPushToStaff } from '../app.js';
 import { Bus, EVENTS } from '../services/event-bus.js';
 import { cache } from '../services/supabase-cache.js';
 import { Sound } from '../services/sound-service.js';
@@ -1845,6 +1846,23 @@ ${notes ? `
 
       this.close(true); // force=true: guardado exitoso, no mostrar "¿Salir sin guardar?"
       document.dispatchEvent(new CustomEvent('booking:changed'));
+
+      // Notificar al staff por push
+      if (!this._editingId) {
+        const guestName = document.getElementById('f-first-name')?.value?.trim() ?? '';
+        const lastName  = document.getElementById('f-last-name')?.value?.trim()  ?? '';
+        const unitNames = (selectedUnitIds ?? [])
+          .map(id => this.ctx.units.find(u => u.id === id)?.name ?? '')
+          .filter(Boolean).join(', ');
+        const ci = document.getElementById('f-check-in')?.value  ?? '';
+        const co = document.getElementById('f-check-out')?.value ?? '';
+        const fmtD = s => s ? s.split('-').reverse().join('/') : '';
+        sendPushToStaff({
+          title: `Nueva reserva — ${guestName} ${lastName}`.trim(),
+          body:  `${unitNames} · ${fmtD(ci)} → ${fmtD(co)}`,
+          data:  { bookingId: String(bookingId) },
+        }).catch(() => {});
+      }
 
     } catch (err) {
       console.error('[MILA] Booking save error:', err);
