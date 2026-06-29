@@ -1575,3 +1575,128 @@
     border-top: 1px solid var(--color-border) !important;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   MOBILE FIXES vG — Wizard steps compacto + Canal solo dot
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ── WIZARD STEPS: compacto, label solo en activo ───────────── */
+@media (max-width: 768px) {
+
+  .step-indicator {
+    padding: 8px 12px !important;
+    gap: 0 !important;
+    display: flex !important;
+    align-items: center !important;
+  }
+
+  /* Cada item: columna centrada, ocupa espacio mínimo fijo */
+  .step-item {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    gap: 2px !important;
+    flex: 0 0 auto !important;
+    cursor: pointer !important;
+  }
+
+  /* Dot más chico en mobile */
+  .step-dot {
+    width: 22px !important;
+    height: 22px !important;
+    font-size: .68rem !important;
+    flex-shrink: 0 !important;
+  }
+
+  /* Label: oculto por defecto */
+  .step-item > span {
+    display: none !important;
+  }
+
+  /* Label: visible solo en activo, abajo del dot */
+  .step-item.active > span {
+    display: block !important;
+    font-size: .62rem !important;
+    font-weight: 700 !important;
+    color: var(--color-primary) !important;
+    white-space: nowrap !important;
+    line-height: 1 !important;
+    text-align: center !important;
+  }
+
+  /* Línea divisoria: flexible entre items */
+  .step-line {
+    flex: 1 !important;
+    min-width: 6px !important;
+    max-width: 24px !important;
+    height: 1px !important;
+    margin: 0 2px !important;
+    margin-bottom: 10px !important; /* bajar al centro de los dots */
+    background: var(--color-border) !important;
+    align-self: flex-start !important;
+    margin-top: 11px !important;   /* centrar verticalmente con el dot */
+  }
+}
+
+/* ── CANAL DE ORIGEN: solo dot, label aparece al seleccionar ── */
+@media (max-width: 768px) {
+
+  /* Contenedor: fila compacta que no wrappea */
+  #f-source-selector {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    overflow-x: auto !important;
+    gap: 6px !important;
+    padding-bottom: 4px !important;
+    scrollbar-width: none !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+  #f-source-selector::-webkit-scrollbar { display: none !important; }
+
+  /* Chip no seleccionado: solo el punto de color */
+  .src-chip {
+    padding: 6px 8px !important;
+    gap: 0 !important;
+    min-width: 0 !important;
+    flex-shrink: 0 !important;
+    border-radius: 50% !important;
+    width: 32px !important;
+    height: 32px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+  }
+
+  /* Label del chip: oculto cuando no está seleccionado */
+  .src-chip .src-label {
+    display: none !important;
+  }
+
+  /* Dot un poco más grande para ser fácil de tocar */
+  .src-chip .src-dot {
+    width: 12px !important;
+    height: 12px !important;
+    flex-shrink: 0 !important;
+  }
+
+  /* Chip SELECCIONADO: muestra dot + label, forma de pill */
+  .src-chip.selected {
+    border-radius: 20px !important;
+    width: auto !important;
+    height: 32px !important;
+    padding: 6px 10px !important;
+    gap: 6px !important;
+  }
+
+  .src-chip.selected .src-label {
+    display: block !important;
+    font-size: .74rem !important;
+    font-weight: 700 !important;
+    white-space: nowrap !important;
+  }
+
+  .src-chip.selected .src-dot {
+    width: 8px !important;
+    height: 8px !important;
+  }
+}

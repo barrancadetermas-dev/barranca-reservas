@@ -1844,8 +1844,8 @@ function openMobileAvailPanel() {
   const fmtDate  = d => d.toISOString().split('T')[0];
   const tomorrow = new Date(today); tomorrow.setDate(today.getDate() + 1);
 
-  // Obtener unidades del contexto
-  const units = window.AppContext?.units ?? [];
+  // Obtener unidades del contexto (AppContext importado en este módulo)
+  const units = AppContext?.units ?? [];
 
   const overlay = document.createElement('div');
   overlay.id = 'mobile-avail-overlay';
@@ -1929,7 +1929,7 @@ function openMobileAvailPanel() {
 
     try {
       // Query directo a Supabase — no depende del calendario cargado
-      const hotelId = AppContext?.hotelId;
+      const hotelId = AppContext.hotelId;
       let bookings = [];
       if (hotelId) {
         const { data } = await supabase

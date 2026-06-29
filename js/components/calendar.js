@@ -276,6 +276,11 @@ export class Calendar {
     const corner = document.createElement('div');
     corner.className = 'cal-unit-label-header';
     corner.textContent = 'Departamento';
+    // Inline z-index: gana sobre cualquier CSS en todos los browsers
+    corner.style.zIndex   = '50';
+    corner.style.position = 'sticky';
+    corner.style.left     = '0';
+    corner.style.top      = '0';
     grid.appendChild(corner);
 
     // ── Encabezado: columnas de días ──────────────
@@ -330,6 +335,10 @@ export class Calendar {
       label.dataset.rowParity = rowParity;
       label.style.setProperty('--unit-color', unitColor);
       label.style.borderLeftColor = unitColor;
+      // Inline z-index: columna siempre encima de headers de días
+      label.style.zIndex   = '40';
+      label.style.position = 'sticky';
+      label.style.left     = '0';
       const _notes    = unit.internal_notes ?? '';
       const _notesSafe = _notes.replace(/[']/g, '&#39;');
       const _notesSpan = hasNotes
