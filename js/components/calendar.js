@@ -99,6 +99,9 @@ export class Calendar {
     // ── 5. Barra de resumen superior ──
     this._renderSummaryBar(bookings);
 
+    // ── 5b. Leyenda de canales (siempre visible) ──
+    this._renderSourceLegend();
+
       // ── 6. Heatmap por fila (muy sutil) ──
       this._applyHeatmap(bookings);
 
@@ -910,6 +913,9 @@ export class Calendar {
   // DRAG SELECTION (crear reserva / bloqueo)
   // ══════════════════════════════════════════════════
   _setupDragSelection(grid) {
+    // Staff: solo lectura, no puede crear reservas ni bloqueos
+    if (!can('createBooking')) return;
+
     if (this._selectionAbort) this._selectionAbort.abort();
     this._selectionAbort = new AbortController();
     const sig = this._selectionAbort.signal;
@@ -2288,6 +2294,56 @@ export class Calendar {
   // ══════════════════════════════════════════════════
   // 5. BARRA DE RESUMEN SUPERIOR
   // ══════════════════════════════════════════════════
+  _renderSourceLegend() {
+    const existing = document.getElementById('cal-source-legend');
+    if (existing) existing.remove();
+
+    const legend = document.createElement('div');
+    legend.id = 'cal-source-legend';
+    legend.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px 14px;padding:6px 14px 8px;' +
+      'background:var(--color-surface);border:1px solid var(--color-border);' +
+      'border-radius:10px;margin-top:6px;margin-bottom:4px;align-items:center';
+
+    // Label
+    const lbl = document.createElement('span');
+    lbl.style.cssText = 'font-size:.62rem;font-weight:700;color:var(--color-text-3);' +
+      'text-transform:uppercase;letter-spacing:.06em;margin-right:4px;flex-shrink:0';
+    lbl.textContent = 'Canal:';
+    legend.appendChild(lbl);
+
+    // Colores de barra (prioridad) + fuentes
+    const entries = [
+      { color: '#22c55e', label: 'Pagado' },
+      { color: '#3b82f6', label: 'Con seña' },
+      { color: '#f59e0b', label: 'Sin seña' },
+      { color: '#6b7280', label: 'Bloqueado' },
+    ];
+    // Agregar fuentes de reserva
+    Object.entries(SOURCE_CONFIG).forEach(([key, src]) => {
+      if (src.dot && src.dot !== '#64748B') {
+        entries.push({ color: src.dot, label: src.label });
+      }
+    });
+    // Directo al final
+    entries.push({ color: SOURCE_CONFIG.direct?.dot ?? '#64748B', label: 'Directo' });
+
+    entries.forEach(({ color, label }) => {
+      const item = document.createElement('div');
+      item.style.cssText = 'display:flex;align-items:center;gap:4px;cursor:default';
+      item.innerHTML =
+        '<span style="display:inline-block;width:10px;height:10px;border-radius:2px;' +
+        'background:' + color + ';flex-shrink:0"></span>' +
+        '<span style="font-size:.68rem;color:var(--color-text-2);white-space:nowrap">' + label + '</span>';
+      legend.appendChild(item);
+    });
+
+    // Insertar después del toolbar
+    const toolbar = document.querySelector('.cal-toolbar');
+    if (toolbar?.parentNode) {
+      toolbar.parentNode.insertBefore(legend, toolbar.nextSibling);
+    }
+  }
+
   _renderSummaryBar(bookings) {
     // Crear solo una vez; en navegaciones subsiguientes solo actualizar el contenido
     let bar = document.getElementById('cal-summary-bar');

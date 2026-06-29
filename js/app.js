@@ -444,13 +444,37 @@ export function showDemoAction(simulateFn) {
 // NAV POR ROL
 // ══════════════════════════════════════════════════
 function setupNavByRole() {
+  const isStaff   = AppContext?.role === 'staff';
   const auditNav  = document.querySelector('.nav-item[data-section="audit"]');
   const configNav = document.querySelector('.nav-item[data-section="config"]');
   const statsNav  = document.querySelector('.nav-item[data-section="statistics"]');
+  const guestsNav = document.querySelector('.nav-item[data-section="guests"]');
 
-  if (auditNav)  auditNav.style.display  = can('viewAuditLog')          ? '' : 'none';
-  if (configNav) configNav.style.display = can('manageSeasonPricing')   ? '' : 'none';
-  if (statsNav && !can('viewStats') && !isDemo()) statsNav.style.opacity = '.5';
+  if (auditNav)  auditNav.style.display  = can('viewAuditLog')         ? '' : 'none';
+  if (configNav) configNav.style.display = can('manageSeasonPricing')  ? '' : 'none';
+  if (guestsNav) guestsNav.style.display = can('viewGuestCRM')         ? '' : 'none';
+  if (statsNav)  statsNav.style.display  = can('viewStats') || isDemo() ? '' : 'none';
+
+  // Staff: ocultar controles financieros/admin del header
+  if (isStaff) {
+    ['btn-new-booking','btn-calculator','btn-sound','btn-theme',
+     'btn-pwa-install','dollar-header-badge','.dollar-badge'].forEach(id => {
+      const el = id.startsWith('.') ? document.querySelector(id) : document.getElementById(id);
+      if (el) el.style.display = 'none';
+    });
+    // Banner indicador de rol
+    const existing = document.getElementById('staff-role-banner');
+    if (!existing) {
+      const banner = document.createElement('div');
+      banner.id = 'staff-role-banner';
+      banner.style.cssText = 'position:fixed;bottom:0;left:0;right:0;z-index:250;' +
+        'background:#1A3A90;color:#fff;text-align:center;font-size:.72rem;' +
+        'font-weight:600;padding:4px 0;letter-spacing:.04em;' +
+        'padding-bottom:env(safe-area-inset-bottom,4px)';
+      banner.textContent = '👷 Modo Staff · Solo lectura';
+      document.body.appendChild(banner);
+    }
+  }
 }
 
 // ══════════════════════════════════════════════════

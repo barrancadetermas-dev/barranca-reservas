@@ -282,6 +282,10 @@ export class Dashboard {
       total:  (monthBookings ?? []).reduce((s,b) => s + (b.total_amount ?? 0), 0),
       paid:   (monthBookings ?? []).reduce((s,b) => s + (b.total_paid  ?? 0), 0),
       count:  (monthBookings ?? []).length,
+      // Para staff: balance pendiente de check-ins de hoy + próximos 7 días
+      pendingBalance: [...(checkins ?? []), ...(upcoming ?? [])]
+        .reduce((s,b) => s + (b.balance ?? 0), 0),
+      checkinCount: (checkins ?? []).length,
     };
 
     // Próximas llegadas (7 días)
@@ -485,11 +489,31 @@ export class Dashboard {
     const el = document.getElementById('dashboard-revenue');
     if (!el) return;
     const fmt = n => '$' + Math.round(n).toLocaleString('es-AR');
-    const pct = rev.total > 0 ? Math.round((rev.paid / rev.total) * 100) : 0;
+
+    // Staff: solo muestra lo que deben cobrar al ingreso (balance pendiente)
+    if (!can('viewRevenue') && can('viewBalanceOnly')) {
+      // Calcular total a cobrar de check-ins de hoy y próximos
+      const pendingBalance = rev.pendingBalance ?? 0;
+      const checkinCount   = rev.checkinCount   ?? 0;
+      el.innerHTML =
+        '<div class="dash-revenue-card">' +
+          '<div class="dash-rev-header">' +
+            '<span class="dash-rev-label">💰 A cobrar al ingreso</span>' +
+            '<span class="dash-rev-count">' + checkinCount + ' llegada' + (checkinCount !== 1 ? 's' : '') + '</span>' +
+          '</div>' +
+          '<div class="dash-rev-total" style="color:var(--color-success)">' + fmt(pendingBalance) + '</div>' +
+          '<div class="dash-rev-sub" style="font-size:.72rem;color:var(--color-text-3);margin-top:6px">' +
+            'Saldo pendiente de reservas con ingreso próximo' +
+          '</div>' +
+        '</div>';
+      return;
+    }
+
     const today = new Date();
     const daysInMonth = new Date(today.getFullYear(), today.getMonth()+1, 0).getDate();
     const daysPassed  = today.getDate();
-    const runRate     = rev.paid > 0 ? Math.round((rev.paid / daysPassed) * daysInMonth) : 0;
+    const pct     = rev.total > 0 ? Math.round((rev.paid / rev.total) * 100) : 0;
+    const runRate = rev.paid > 0 ? Math.round((rev.paid / daysPassed) * daysInMonth) : 0;
     el.innerHTML = `
       <div class="dash-revenue-card">
         <div class="dash-rev-header">
