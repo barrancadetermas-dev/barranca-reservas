@@ -228,6 +228,7 @@ async function initApp(user) {
 
     hideLogin();
     updateHeaderDate();
+    startArgentinaClock(); // reloj Argentina en tiempo real
 
     // ── UI usuario — carga inicial con email, luego reemplaza con perfil ──
     const emailFallback = user.email?.split('@')[0] ?? 'Admin';
@@ -499,10 +500,36 @@ export async function navigateTo(section) {
 if (typeof window !== 'undefined') window.milaNav = navigateTo;
 
 function updateHeaderDate() {
-  const dateStr = new Date().toLocaleDateString('es-AR', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
-  // Keep the legacy element working if it exists
+  // Legacy element (mantener compatibilidad si existe)
   const dateEl = document.getElementById('header-date');
-  if (dateEl) dateEl.textContent = dateStr;
+  if (dateEl) dateEl.textContent = new Date().toLocaleDateString('es-AR', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
+}
+
+// ── Reloj Argentina — se inicia una sola vez ──────
+let _clockTimer = null;
+function startArgentinaClock() {
+  const clockEl = document.getElementById('header-clock');
+  const dateEl  = document.getElementById('header-clock-date');
+  if (!clockEl) return;
+
+  const DAYS  = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+  const MONTHS= ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+
+  const tick = () => {
+    // Argentina = UTC-3, sin horario de verano
+    const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Argentina/Buenos_Aires' }));
+    const hh  = String(now.getHours()).padStart(2,'0');
+    const mm  = String(now.getMinutes()).padStart(2,'0');
+    const ss  = String(now.getSeconds()).padStart(2,'0');
+    clockEl.textContent = `${hh}:${mm}:${ss}`;
+    if (dateEl) {
+      dateEl.textContent = `${DAYS[now.getDay()]} ${now.getDate()} ${MONTHS[now.getMonth()]}`;
+    }
+  };
+
+  clearInterval(_clockTimer);
+  tick(); // dibujar inmediatamente
+  _clockTimer = setInterval(tick, 1000);
 }
 
 // ══════════════════════════════════════════════════
