@@ -463,13 +463,23 @@ function setupNavByRole() {
   // Staff: ocultar controles financieros/admin del header
   if (isStaff) {
     ['btn-new-booking','btn-calculator','btn-sound','btn-theme',
-     'btn-pwa-install','dollar-header-badge','.dollar-badge'].forEach(id => {
-      const el = id.startsWith('.') ? document.querySelector(id) : document.getElementById(id);
+     'btn-pwa-install','dollar-header-badge'].forEach(id => {
+      const el = document.getElementById(id);
       if (el) el.style.display = 'none';
     });
+    document.querySelectorAll('.dollar-badge').forEach(el => el.style.display = 'none');
+
+    // Ocultar cards financieras del dashboard para staff
+    // Staff ve: llegadas, salidas, ocupación, próximo evento, próximas llegadas
+    // Staff NO ve: cobros del mes, reservas del mes, RevPAR, dólar, dinero asegurado
+    const hideCards = ['cobros','rmes','revpar','dollar','dinero-asegurado'];
+    hideCards.forEach(id => {
+      const card = document.querySelector(`[data-card-id="${id}"]`);
+      if (card) card.style.display = 'none';
+    });
+
     // Banner indicador de rol
-    const existing = document.getElementById('staff-role-banner');
-    if (!existing) {
+    if (!document.getElementById('staff-role-banner')) {
       const banner = document.createElement('div');
       banner.id = 'staff-role-banner';
       banner.style.cssText = 'position:fixed;bottom:0;left:0;right:0;z-index:250;' +
