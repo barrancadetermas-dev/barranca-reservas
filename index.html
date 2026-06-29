@@ -345,7 +345,7 @@
           <span class="btn-label">Nueva Reserva</span>
         </button>
 
-        <!-- Hora Argentina + logout -->
+        <!-- Hora Argentina + avatar + logout -->
         <div style="display:flex;align-items:center;gap:6px;margin-left:4px;border-left:1px solid var(--color-border);padding-left:10px">
           <div style="display:flex;flex-direction:column;align-items:flex-end;line-height:1.15;cursor:default">
             <span id="header-clock"
@@ -353,7 +353,12 @@
             <span id="header-clock-date"
               style="font-size:.6rem;font-weight:500;color:var(--color-text-3);white-space:nowrap"></span>
           </div>
-          <button id="logout-btn" title="Cerrar sesión" style="background:none;border:none;cursor:pointer;color:var(--color-text-3);padding:4px;border-radius:6px;display:flex;align-items:center;flex-shrink:0" onmouseover="this.style.color='var(--color-text)'" onmouseout="this.style.color='var(--color-text-3)'">
+          <!-- Avatar con tooltip: nombre · mail · rol -->
+          <div id="header-avatar" title=""
+            style="position:relative;width:28px;height:28px;border-radius:50%;background:var(--color-primary);color:#fff;font-size:.7rem;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;cursor:pointer;user-select:none;transition:opacity .15s"
+            onmouseover="this.style.opacity='.8'" onmouseout="this.style.opacity='1'"
+            onclick="window._navToPanel?.()">A</div>
+          <button id="header-logout-btn" title="Cerrar sesión" style="background:none;border:none;cursor:pointer;color:var(--color-text-3);padding:4px;border-radius:6px;display:flex;align-items:center;flex-shrink:0" onmouseover="this.style.color='var(--color-text)'" onmouseout="this.style.color='var(--color-text-3)'">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
               <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/>
               <polyline points="16 17 21 12 16 7"/>

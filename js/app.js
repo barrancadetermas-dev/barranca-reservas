@@ -106,12 +106,20 @@ function initDarkMode() {
 // HELPER: Aplicar nombre y avatar de forma unificada
 // Llámalo cada vez que cambie el nombre del usuario
 // ══════════════════════════════════════════════════
-export function _applyUserDisplay({ nombre, email } = {}) {
+export function _applyUserDisplay({ nombre, email, isAdmin } = {}) {
   const displayName = nombre?.trim() || email?.split('@')[0] || 'Admin';
   const initial     = displayName[0].toUpperCase();
+  // Sidebar avatar + name
   document.querySelectorAll('#user-avatar').forEach(el => { el.textContent = initial; });
   document.querySelectorAll('#user-name').forEach(el => { el.textContent = displayName; });
-  window._currentUserDisplay = { displayName, initial, nombre: nombre ?? null, email: email ?? null };
+  // Header avatar
+  const hAvatar = document.getElementById('header-avatar');
+  if (hAvatar) {
+    hAvatar.textContent = initial;
+    const roleLabel = (isAdmin ?? window._currentUserDisplay?.isAdmin) ? ' 👑 Administrador' : '';
+    hAvatar.title = `${displayName}\n${email ?? ''}${roleLabel}`;
+  }
+  window._currentUserDisplay = { displayName, initial, nombre: nombre ?? null, email: email ?? null, isAdmin: isAdmin ?? false };
 }
 // Exponer globalmente para config-panel y otros módulos
 if (typeof window !== 'undefined') window._applyUserDisplay = _applyUserDisplay;
@@ -206,6 +214,10 @@ document.getElementById('toggle-password')?.addEventListener('click', (e) => {
 });
 
 document.getElementById('logout-btn').addEventListener('click', () => supabase.auth.signOut());
+// Header logout (ID diferente para evitar duplicado)
+document.getElementById('header-logout-btn')?.addEventListener('click', () => supabase.auth.signOut());
+// Clic en avatar → navegar a Panel & Equipo
+window._navToPanel = () => navigateTo('settings');
 
 // ══════════════════════════════════════════════════
 // INIT APP

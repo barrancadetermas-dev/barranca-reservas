@@ -24,7 +24,7 @@ const MONTH_SHORT = ['Ene','Feb','Mar','Abr','May','Jun',
                      'Jul','Ago','Sep','Oct','Nov','Dic'];
 
 // ── Días previos a HOY que siempre se muestran ──
-const PAST_OFFSET = 6;
+const PAST_OFFSET = 3;    // desktop: 3 días antes de hoy
 // ── Ancho mínimo de columna (px) ──
 const CELL_W_DESK = 38;
 const CELL_W_MOB  = 32;
@@ -32,7 +32,7 @@ const CELL_W_MOB  = 32;
 const LABEL_W     = 160;
 const LABEL_W_MOB = 108;   // mobile: columna más angosta
 // ── Días pasados visibles en mobile ──
-const PAST_OFFSET_MOB = 2; // mobile: solo 2 días antes de hoy
+const PAST_OFFSET_MOB = 1; // mobile: solo 1 día antes de hoy
 
 export class Calendar {
   constructor(supabase, ctx, bookingForm) {

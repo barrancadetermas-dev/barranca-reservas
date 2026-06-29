@@ -53,11 +53,13 @@ export class FinancePanel {
       <!-- Gráfico SVG -->
       <div style="display:grid;grid-template-columns:2fr 1fr;gap:16px;margin-bottom:20px">
         <div class="card" style="padding:16px 20px">
-          <div style="font-size:.72rem;font-weight:700;color:var(--color-text-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:12px">Distribución financiera</div>
+          <div style="font-size:.72rem;font-weight:700;color:var(--color-text-3);text-transform:uppercase;letter-spacing:.05em">Distribución financiera</div>
+          <div style="font-size:.65rem;color:var(--color-text-3);margin-bottom:12px;margin-top:1px">Mes en curso</div>
           <div id="financ-chart"></div>
         </div>
         <div class="card" style="padding:16px 20px">
-          <div style="font-size:.72rem;font-weight:700;color:var(--color-text-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:12px">Dinero asegurado</div>
+          <div style="font-size:.72rem;font-weight:700;color:var(--color-text-3);text-transform:uppercase;letter-spacing:.05em">Dinero asegurado</div>
+          <div style="font-size:.65rem;color:var(--color-text-3);margin-bottom:12px;margin-top:1px">Reservas futuras · todas</div>
           <div id="financ-asegurado"></div>
         </div>
       </div>
@@ -129,11 +131,11 @@ export class FinancePanel {
           .gte('check_in', from)
           .lte('check_in', to)
           .not('status','in','(cancelled,blocked)'),
-        // Dinero asegurado = reservas futuras confirmadas
+        // Dinero asegurado = TODAS las reservas futuras (check_in >= hoy)
         this.db.from('bookings')
           .select('id,total_amount,total_paid,status')
           .eq('hotel_id', this.ctx.hotelId)
-          .gte('check_out', today)
+          .gte('check_in', today)
           .not('status','in','(cancelled,blocked)'),
         // Mayor reserva del período (con nombre del huésped)
         this.db.from('bookings')

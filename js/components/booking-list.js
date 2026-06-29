@@ -481,9 +481,37 @@ export class BookingList {
       this._rebuildList();
     });;
 
-    // Bind botones de exportación
-    document.getElementById('btn-export-excel-list')?.addEventListener('click', () => this._exportExcel(filtered));
-    document.getElementById('btn-export-pdf-list')?.addEventListener('click',   () => this._exportPDF(filtered));
+    // Bind botones de exportación — con dropdown de filtros
+    document.getElementById('btn-export-excel-list')?.addEventListener('click', (e) => {
+      import('../services/export-service.js').then(({ showExportDropdown, exportBookingsExcel, exportBookingsCSV, exportBookingsPDF }) => {
+        showExportDropdown({
+          anchorEl: e.currentTarget,
+          type: 'bookings',
+          data: filtered,
+          onExport: ({ fmt, data, from, to }) => {
+            const range = from && to ? `${from.split('-').reverse().join('/')} → ${to.split('-').reverse().join('/')}` : '';
+            if (fmt === 'excel') exportBookingsExcel(data, 'reservas', range);
+            else if (fmt === 'pdf') exportBookingsPDF(data, range);
+            else exportBookingsCSV(data);
+          },
+        });
+      });
+    });
+    document.getElementById('btn-export-pdf-list')?.addEventListener('click', (e) => {
+      import('../services/export-service.js').then(({ showExportDropdown, exportBookingsPDF, exportBookingsExcel, exportBookingsCSV }) => {
+        showExportDropdown({
+          anchorEl: e.currentTarget,
+          type: 'bookings',
+          data: filtered,
+          onExport: ({ fmt, data, from, to }) => {
+            const range = from && to ? `${from.split('-').reverse().join('/')} → ${to.split('-').reverse().join('/')}` : '';
+            if (fmt === 'excel') exportBookingsExcel(data, 'reservas', range);
+            else if (fmt === 'pdf') exportBookingsPDF(data, range);
+            else exportBookingsCSV(data);
+          },
+        });
+      });
+    });
     document.getElementById('btn-load-more')?.addEventListener('click', () => {
       this._page++;
       this._render(today);
