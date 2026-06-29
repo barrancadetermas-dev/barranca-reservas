@@ -29,7 +29,10 @@ const PAST_OFFSET = 6;
 const CELL_W_DESK = 38;
 const CELL_W_MOB  = 32;
 // ── Ancho de la columna de etiquetas de unidad ──
-const LABEL_W = 160;
+const LABEL_W     = 160;
+const LABEL_W_MOB = 108;   // mobile: columna más angosta
+// ── Días pasados visibles en mobile ──
+const PAST_OFFSET_MOB = 2; // mobile: solo 2 días antes de hoy
 
 export class Calendar {
   constructor(supabase, ctx, bookingForm) {
@@ -38,7 +41,8 @@ export class Calendar {
     this.bookingForm = bookingForm;
 
     // ── Vista continua ──────────────────────────
-    this._windowStart  = this._addDays(localToday(), -PAST_OFFSET);
+    const isMobInit    = window.innerWidth <= 768;
+    this._windowStart  = this._addDays(localToday(), -(isMobInit ? PAST_OFFSET_MOB : PAST_OFFSET));
     this._visibleDays  = 30; // se recalcula en load()
     this._dateRange    = []; // array de ISO strings visibles
 
@@ -121,7 +125,8 @@ export class Calendar {
     const w       = wrapper ? wrapper.clientWidth : Math.max(window.innerWidth - 280, 400);
     const isMob   = window.innerWidth <= 768;
     const cellW   = isMob ? CELL_W_MOB : CELL_W_DESK;
-    return Math.max(14, Math.min(120, Math.floor((w - LABEL_W) / cellW)));
+    const labelW  = isMob ? LABEL_W_MOB : LABEL_W;
+    return Math.max(14, Math.min(120, Math.floor((w - labelW) / cellW)));
   }
 
   // ── Actualizar título ────────────────────────────
@@ -249,10 +254,11 @@ export class Calendar {
     const today   = localToday();
     const isMob   = window.innerWidth <= 768;
     const cellW   = isMob ? CELL_W_MOB : CELL_W_DESK;
+    const labelW  = isMob ? LABEL_W_MOB : LABEL_W;
     const N       = this._visibleDays;
 
-    grid.style.gridTemplateColumns = `${LABEL_W}px repeat(${N}, minmax(${cellW}px, 1fr))`;
-    grid.style.minWidth = `${LABEL_W + N * cellW}px`;
+    grid.style.gridTemplateColumns = `${labelW}px repeat(${N}, minmax(${cellW}px, 1fr))`;
+    grid.style.minWidth = `${labelW + N * cellW}px`;
     grid.style.width    = '100%';
     grid.classList.add('month-grid');
     grid.classList.remove('week-grid');
@@ -706,12 +712,14 @@ export class Calendar {
       this.load();
     });
     document.getElementById('cal-today')?.addEventListener('click', () => {
-      this._windowStart = this._addDays(localToday(), -PAST_OFFSET);
+      const isMob = window.innerWidth <= 768;
+      this._windowStart = this._addDays(localToday(), -(isMob ? PAST_OFFSET_MOB : PAST_OFFSET));
       cache.invalidate('bookings');
       this.load();
     });
     document.getElementById('cal-goto-today')?.addEventListener('click', () => {
-      this._windowStart = this._addDays(localToday(), -PAST_OFFSET);
+      const isMob = window.innerWidth <= 768;
+      this._windowStart = this._addDays(localToday(), -(isMob ? PAST_OFFSET_MOB : PAST_OFFSET));
       cache.invalidate('bookings');
       this.load();
     });

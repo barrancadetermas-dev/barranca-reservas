@@ -287,7 +287,13 @@ async function initApp(user) {
       btn.addEventListener('click', () => navigateTo(btn.dataset.section));
     });
     document.getElementById('bnav-fab')?.addEventListener('click', () => {
-      document.getElementById('btn-new-booking')?.click();
+      if (isDemo()) return showDemoAction(() => bookingForm.open());
+      bookingForm.open(); // mobile: abre formulario directo, sin calculadora
+    });
+
+    // ── Disponibilidad mobile (lupa en bottom nav) ──
+    document.getElementById('bnav-search')?.addEventListener('click', () => {
+      openMobileAvailPanel();
     });
 
     // ── Setup modales — cada uno aislado ──
@@ -1825,6 +1831,161 @@ async function setupRealNotifications(notifSvc) {
   await refresh();
   setInterval(refresh, 5 * 60 * 1000);
   document.addEventListener('booking:changed', () => setTimeout(refresh, 1200));
+}
+
+// ══════════════════════════════════════════════════════
+// DISPONIBILIDAD MOBILE — panel standalone (bottom sheet)
+// ══════════════════════════════════════════════════════
+function openMobileAvailPanel() {
+  const existing = document.getElementById('mobile-avail-overlay');
+  if (existing) { existing.remove(); return; }
+
+  const today    = new Date();
+  const fmtDate  = d => d.toISOString().split('T')[0];
+  const tomorrow = new Date(today); tomorrow.setDate(today.getDate() + 1);
+
+  // Obtener unidades del contexto
+  const units = window.AppContext?.units ?? [];
+
+  const overlay = document.createElement('div');
+  overlay.id = 'mobile-avail-overlay';
+  overlay.style.cssText = `
+    position:fixed;inset:0;z-index:2000;
+    background:rgba(0,0,0,.45);
+    display:flex;align-items:flex-end;
+  `;
+
+  overlay.innerHTML = `
+    <div id="mobile-avail-sheet" style="
+      width:100%;max-height:85dvh;overflow-y:auto;
+      background:var(--color-surface);
+      border-radius:20px 20px 0 0;
+      padding:0 0 env(safe-area-inset-bottom,12px);
+      box-shadow:0 -8px 32px rgba(0,0,0,.18);
+      animation:slideUpSheet .22s cubic-bezier(.34,1.2,.64,1);
+    ">
+      <!-- Handle -->
+      <div style="display:flex;justify-content:center;padding:10px 0 4px">
+        <div style="width:36px;height:4px;border-radius:2px;background:var(--color-border-2)"></div>
+      </div>
+      <!-- Header -->
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 20px 14px">
+        <span style="font-size:1rem;font-weight:700;color:var(--color-text)">🔍 Disponibilidad</span>
+        <button id="mobile-avail-close" style="border:none;background:none;font-size:1.3rem;color:var(--color-text-3);cursor:pointer;padding:4px 8px">✕</button>
+      </div>
+      <!-- Inputs -->
+      <div style="padding:0 16px 16px;display:flex;flex-direction:column;gap:12px">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div>
+            <label style="font-size:.72rem;font-weight:600;color:var(--color-text-3);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:5px">Check-in</label>
+            <input type="date" id="mavail-checkin" value="${fmtDate(today)}"
+              style="width:100%;border:1px solid var(--color-border);border-radius:10px;padding:10px 12px;font-size:15px;background:var(--color-surface-2);color:var(--color-text);box-sizing:border-box">
+          </div>
+          <div>
+            <label style="font-size:.72rem;font-weight:600;color:var(--color-text-3);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:5px">Check-out</label>
+            <input type="date" id="mavail-checkout" value="${fmtDate(tomorrow)}"
+              style="width:100%;border:1px solid var(--color-border);border-radius:10px;padding:10px 12px;font-size:15px;background:var(--color-surface-2);color:var(--color-text);box-sizing:border-box">
+          </div>
+        </div>
+        <div>
+          <label style="font-size:.72rem;font-weight:600;color:var(--color-text-3);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:5px">Personas</label>
+          <input type="number" id="mavail-guests" min="1" max="20" value="2"
+            style="width:100%;border:1px solid var(--color-border);border-radius:10px;padding:10px 12px;font-size:15px;background:var(--color-surface-2);color:var(--color-text);box-sizing:border-box">
+        </div>
+        <button id="mavail-search-btn"
+          style="width:100%;padding:13px;border-radius:12px;border:none;background:var(--color-primary);color:#fff;font-size:.9rem;font-weight:700;cursor:pointer;letter-spacing:.02em">
+          Ver disponibilidad
+        </button>
+        <!-- Resultados -->
+        <div id="mavail-results" style="display:none"></div>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(overlay);
+
+  const close = () => overlay.remove();
+  overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
+  overlay.querySelector('#mobile-avail-close').addEventListener('click', close);
+
+  const doSearch = () => {
+    const ci     = document.getElementById('mavail-checkin')?.value;
+    const co     = document.getElementById('mavail-checkout')?.value;
+    const guests = parseInt(document.getElementById('mavail-guests')?.value ?? '2', 10);
+    const results= document.getElementById('mavail-results');
+    if (!results) return;
+
+    if (!ci || !co || ci >= co) {
+      results.style.display = 'block';
+      results.innerHTML = `<div style="color:#ef4444;font-size:.85rem;padding:10px 0">⚠️ Check-out debe ser posterior al check-in.</div>`;
+      return;
+    }
+
+    // Usar bookings del calendario si está cargado
+    const cal = window._calInstance;
+    const bookings = cal?._lastRenderedBookings ?? [];
+    const occupiedIds = new Set();
+    bookings.forEach(b => {
+      if (b.status === 'cancelled') return;
+      if (b.check_in < co && b.check_out > ci) {
+        (b.booking_units ?? []).forEach(bu => occupiedIds.add(bu.unit_id));
+      }
+    });
+
+    const available = units.filter(u => !occupiedIds.has(u.id) && (u.max_guests ?? 0) >= guests);
+    const occupied  = units.filter(u => occupiedIds.has(u.id));
+    const tooSmall  = units.filter(u => !occupiedIds.has(u.id) && (u.max_guests ?? 0) < guests);
+
+    const fmt = s => s.split('-').reverse().join('/');
+    const nights = Math.round((new Date(co) - new Date(ci)) / 86400000);
+
+    const unitCard = (u, state) => {
+      const color = u.color ?? 'var(--color-primary)';
+      const labels = { ok: '', occupied: '✕ Ocupado', small: `⚠️ Máx ${u.max_guests} pers.` };
+      const bgMap  = { ok: `${color}18`, occupied: '#fee2e2', small: '#f3f4f6' };
+      const brdMap = { ok: `${color}55`, occupied: '#fca5a5', small: '#d1d5db' };
+      const clrMap = { ok: 'var(--color-text)', occupied: '#ef4444', small: '#9ca3af' };
+      return `<div style="
+        display:flex;align-items:center;gap:10px;
+        padding:10px 12px;border-radius:10px;
+        background:${bgMap[state]};border:1px solid ${brdMap[state]};
+        opacity:${state === 'ok' ? 1 : .65}
+      ">
+        <span style="width:10px;height:10px;border-radius:50%;background:${color};flex-shrink:0"></span>
+        <span style="flex:1;font-size:.84rem;font-weight:600;color:${clrMap[state]}">${u.name}</span>
+        <span style="font-size:.72rem;color:${clrMap[state]}">${labels[state]}</span>
+      </div>`;
+    };
+
+    results.style.display = 'block';
+    if (!available.length) {
+      results.innerHTML = `
+        <div style="text-align:center;padding:16px 0;color:#ef4444;font-weight:600">
+          😔 Sin disponibilidad para ${guests} personas
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px;margin-top:8px">
+          ${occupied.map(u => unitCard(u,'occupied')).join('')}
+          ${tooSmall.map(u => unitCard(u,'small')).join('')}
+        </div>`;
+      return;
+    }
+
+    results.innerHTML = `
+      <div style="padding:10px 0 12px;color:#16a34a;font-weight:700;font-size:.9rem">
+        ✅ ${available.length} disponible${available.length !== 1 ? 's' : ''} · ${fmt(ci)} → ${fmt(co)} · ${nights} noche${nights !== 1 ? 's' : ''}
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        ${available.map(u => unitCard(u,'ok')).join('')}
+        ${occupied.map(u => unitCard(u,'occupied')).join('')}
+        ${tooSmall.map(u => unitCard(u,'small')).join('')}
+      </div>`;
+  };
+
+  document.getElementById('mavail-search-btn').addEventListener('click', doSearch);
+  ['mavail-checkin','mavail-checkout','mavail-guests'].forEach(id => {
+    document.getElementById(id)?.addEventListener('keydown', e => { if (e.key === 'Enter') doSearch(); });
+  });
+  document.getElementById('mavail-checkin').focus();
 }
 
 function setupCalculator() {

@@ -1263,3 +1263,125 @@
   color: #ffffff !important;
   -webkit-text-fill-color: #ffffff !important;
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   MOBILE FIXES vE — 6 mejoras visuales mobile
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ── 1. BOTTOM NAV: sólido, fijo, sin transparencia ─────────── */
+@media (max-width: 768px) {
+  .bottom-nav {
+    position: fixed !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    z-index: 300 !important;
+    /* Fondo sólido — nunca transparente */
+    background: var(--color-surface) !important;
+    background-color: var(--color-surface) !important;
+    border-top: 1px solid var(--color-border) !important;
+    box-shadow: 0 -2px 16px rgba(0,0,0,.12) !important;
+    /* Sin backdrop-filter para evitar translucidez */
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    isolation: isolate;
+    /* safe area iOS */
+    padding-bottom: env(safe-area-inset-bottom, 0px) !important;
+  }
+  [data-theme="dark"] .bottom-nav {
+    background: #0f172a !important;
+    background-color: #0f172a !important;
+    border-top-color: #1e293b !important;
+  }
+}
+
+/* ── 2. CALENDARIO: columna departamentos más angosta + sólida ── */
+@media (max-width: 768px) {
+  /* Ancho fijo reducido */
+  .cal-unit-label,
+  .cal-unit-label-header {
+    width: 108px !important;
+    min-width: 108px !important;
+    max-width: 108px !important;
+  }
+
+  /* Fondo completamente sólido — sin ningún bleed de contenido */
+  .cal-unit-label {
+    background: var(--color-surface-2) !important;
+    /* isolation para que nada traspase */
+    isolation: isolate !important;
+    /* Texto compacto */
+    padding: 5px 8px !important;
+  }
+  .cal-unit-label-header {
+    background: var(--color-surface-2) !important;
+    isolation: isolate !important;
+    padding: 6px 8px !important;
+    font-size: .55rem !important;
+  }
+
+  [data-theme="dark"] .cal-unit-label,
+  [data-theme="dark"] .cal-unit-label-header {
+    background: #1a2438 !important;
+  }
+
+  /* Texto dentro de la columna: compacto en mobile */
+  .cal-unit-label > div:first-child span[style*="font-weight:700"] {
+    font-size: .7rem !important;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: block;
+    max-width: 88px;
+  }
+}
+
+/* ── 3. TÍTULO DEL CALENDARIO: centrado ─────────────────────── */
+@media (max-width: 768px) {
+  .cal-tb-nav {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 6px !important;
+    flex: 1 !important;
+  }
+  .cal-month-title {
+    text-align: center !important;
+    flex: 1 !important;
+    font-size: .88rem !important;
+    white-space: nowrap !important;
+  }
+}
+
+/* ── 4. CALENDARIO: z-index correcto para sticky + bars ─────── */
+@media (max-width: 768px) {
+  /* Sticky column siempre encima de las barras */
+  .cal-unit-label {
+    position: sticky !important;
+    left: 0 !important;
+    z-index: 25 !important;
+  }
+  .cal-unit-label-header {
+    position: sticky !important;
+    left: 0 !important;
+    z-index: 27 !important;
+  }
+  /* Barras debajo de la columna sticky */
+  .bar, .bar-span {
+    z-index: 2 !important;
+  }
+}
+
+/* ── 5. ANIMACIÓN SHEET DISPONIBILIDAD MOBILE ────────────────── */
+@keyframes slideUpSheet {
+  from { transform: translateY(100%); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+
+/* ── 6. BOTTOM NAV: ítem Disponibilidad ─────────────────────── */
+#bnav-search.active {
+  color: var(--color-primary) !important;
+}
+#bnav-search.active svg {
+  transform: scale(1.15);
+}
