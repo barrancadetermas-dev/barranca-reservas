@@ -1952,11 +1952,94 @@ export class Calendar {
         await this._openBlockModal(bookingId, bk);
         return;
       }
+
+      // Staff: panel solo-lectura con datos limitados
+      if (!can('editBooking')) {
+        await this._openStaffDetailPanel(bookingId);
+        return;
+      }
+
       await this.bookingForm.openEdit(bookingId);
     } catch (err) {
       console.error('[Calendar] _openDetailById:', err);
       showToast('Error al cargar la reserva', 'error');
     }
+  }
+
+  // ── Panel solo-lectura para staff ──────────────────
+  async _openStaffDetailPanel(bookingId) {
+    document.getElementById('overlay-staff-detail')?.remove();
+
+    const { data: b } = await this.db.from('bookings')
+      .select(`id, check_in, check_out, nights, adults, children, balance, status,
+               guests!bookings_guest_id_fkey(first_name, last_name),
+               booking_units(units(name, color, sort_order))`)
+      .eq('id', bookingId).single();
+
+    if (!b) return;
+
+    const g         = b.guests;
+    const guestName = g ? `${g.first_name ?? ''} ${g.last_name ?? ''}`.trim() : '—';
+    const units     = (b.booking_units ?? []).map(bu => bu.units?.name ?? '').filter(Boolean).join(', ');
+    const color     = b.booking_units?.[0]?.units?.color ?? '#1A3A90';
+    const nights    = b.nights ?? Math.round((new Date(b.check_out) - new Date(b.check_in)) / 86400000);
+    const guests    = (b.adults ?? 1) + (b.children ?? 0);
+    const fmtDate   = s => s ? s.split('-').reverse().join('/') : '—';
+    const fmtMoney  = n => '$' + Math.round(n ?? 0).toLocaleString('es-AR');
+    const balance   = b.balance ?? 0;
+
+    const overlay = document.createElement('div');
+    overlay.id = 'overlay-staff-detail';
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:500;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;padding:16px';
+
+    overlay.innerHTML = `
+      <div style="background:var(--color-surface);border-radius:16px;padding:0;max-width:360px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.25);overflow:hidden">
+        <!-- Header con color de unidad -->
+        <div style="background:${color};padding:16px 20px;display:flex;align-items:center;justify-content:space-between">
+          <div>
+            <div style="font-size:1.05rem;font-weight:800;color:#fff">${guestName}</div>
+            <div style="font-size:.78rem;color:rgba(255,255,255,.8);margin-top:2px">${units}</div>
+          </div>
+          <button id="staff-detail-close" style="background:rgba(255,255,255,.2);border:none;border-radius:50%;width:30px;height:30px;color:#fff;font-size:1rem;cursor:pointer;display:flex;align-items:center;justify-content:center">✕</button>
+        </div>
+        <!-- Datos -->
+        <div style="padding:18px 20px;display:flex;flex-direction:column;gap:12px">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+            <div style="background:var(--color-surface-2);border-radius:10px;padding:10px 12px">
+              <div style="font-size:.62rem;font-weight:700;color:var(--color-text-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px">Check-in</div>
+              <div style="font-size:.95rem;font-weight:700;color:var(--color-text)">${fmtDate(b.check_in)}</div>
+            </div>
+            <div style="background:var(--color-surface-2);border-radius:10px;padding:10px 12px">
+              <div style="font-size:.62rem;font-weight:700;color:var(--color-text-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px">Check-out</div>
+              <div style="font-size:.95rem;font-weight:700;color:var(--color-text)">${fmtDate(b.check_out)}</div>
+            </div>
+            <div style="background:var(--color-surface-2);border-radius:10px;padding:10px 12px">
+              <div style="font-size:.62rem;font-weight:700;color:var(--color-text-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px">Noches</div>
+              <div style="font-size:.95rem;font-weight:700;color:var(--color-text)">${nights}</div>
+            </div>
+            <div style="background:var(--color-surface-2);border-radius:10px;padding:10px 12px">
+              <div style="font-size:.62rem;font-weight:700;color:var(--color-text-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px">Personas</div>
+              <div style="font-size:.95rem;font-weight:700;color:var(--color-text)">${guests}</div>
+            </div>
+          </div>
+          <!-- Balance destacado -->
+          <div style="background:${balance > 0 ? '#f0fdf4' : '#f8fafc'};border:2px solid ${balance > 0 ? '#16a34a' : 'var(--color-border)'};border-radius:12px;padding:14px 16px;display:flex;align-items:center;justify-content:space-between">
+            <div>
+              <div style="font-size:.7rem;font-weight:700;color:${balance > 0 ? '#15803d' : 'var(--color-text-3)'};text-transform:uppercase;letter-spacing:.05em">
+                ${balance > 0 ? '💰 A cobrar al ingreso' : '✓ Pagado'}
+              </div>
+              ${balance > 0 ? `<div style="font-size:.72rem;color:#15803d;margin-top:1px">Saldo pendiente</div>` : ''}
+            </div>
+            <div style="font-size:1.4rem;font-weight:900;color:${balance > 0 ? '#16a34a' : 'var(--color-text-3)'}">
+              ${balance > 0 ? fmtMoney(balance) : '—'}
+            </div>
+          </div>
+        </div>
+      </div>`;
+
+    document.body.appendChild(overlay);
+    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+    document.getElementById('staff-detail-close').addEventListener('click', () => overlay.remove());
   }
 
   // ── Modal exclusivo para editar/eliminar bloqueos ──
