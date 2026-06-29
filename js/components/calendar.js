@@ -256,13 +256,8 @@ export class Calendar {
     const today   = localToday();
     const isMob   = window.innerWidth <= 768;
     const cellW   = isMob ? CELL_W_MOB : CELL_W_DESK;
-    const labelW  = this._measureLabelW(isMob);  // dinámico según nombres
+    const labelW  = this._measureLabelW(isMob);
     const N       = this._visibleDays;
-
-    // Siempre resetear scroll al inicio del window para que el primer día
-    // no quede oculto bajo la columna sticky de unidades
-    const wrapper = document.querySelector('.cal-wrapper');
-    if (wrapper) wrapper.scrollLeft = 0;
 
     grid.style.gridTemplateColumns = `${labelW}px repeat(${N}, minmax(${cellW}px, 1fr))`;
     grid.style.minWidth = `${labelW + N * cellW}px`;
@@ -425,6 +420,17 @@ export class Calendar {
         grid.appendChild(cell);
       });
     });
+
+    // Reset scroll al inicio del window DESPUÉS del paint completo
+    // (doble rAF garantiza que el browser terminó layout + paint)
+    const _wrapper = document.querySelector('.cal-wrapper');
+    if (_wrapper) {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          _wrapper.scrollLeft = 0;
+        });
+      });
+    }
   }
 
   // ══════════════════════════════════════════════════
