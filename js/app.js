@@ -149,15 +149,18 @@ function hideLogin() {
 
 document.getElementById('login-form').addEventListener('submit', async (e) => {
   e.preventDefault();
-  const email    = document.getElementById('login-email').value.trim();
+  const raw      = document.getElementById('login-email').value.trim();
   const password = document.getElementById('login-password').value;
   const btnText  = document.getElementById('login-btn-text');
   const spinner  = document.getElementById('login-btn-spinner');
   const errEl    = document.getElementById('login-error');
   const btn      = document.getElementById('login-btn');
 
-  if (!email || !password) {
-    errEl.textContent = 'Ingresá tu email y contraseña.';
+  // Si no contiene @ → es un nombre de usuario → convertir a email interno
+  const email = raw.includes('@') ? raw : `${raw.toLowerCase().replace(/\s+/g, '.')}@barrancadetermas.internal`;
+
+  if (!raw || !password) {
+    errEl.textContent = 'Ingresá tu usuario y contraseña.';
     errEl.classList.remove('hidden');
     return;
   }
