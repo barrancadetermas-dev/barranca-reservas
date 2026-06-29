@@ -284,6 +284,10 @@ export class Calendar {
     corner.style.setProperty('top',      '0',        'important');
     corner.style.setProperty('z-index',  '100',      'important');
     corner.style.setProperty('background', 'var(--color-surface-2)', 'important');
+    corner.style.setProperty('width',    '100%',     'important');
+    corner.style.setProperty('min-width','0',        'important');
+    corner.style.setProperty('max-width','100%',     'important');
+    corner.style.setProperty('overflow', 'hidden',   'important');
     grid.appendChild(corner);
 
     // ── Encabezado: columnas de días ──────────────
@@ -347,6 +351,11 @@ export class Calendar {
       label.style.setProperty('left',       '0',       'important');
       label.style.setProperty('z-index',    '80',      'important');
       label.style.setProperty('background', 'var(--color-surface-2)', 'important');
+      // Ancho controlado por grid template — nunca mayor al labelW calculado
+      label.style.setProperty('width',      '100%',    'important');
+      label.style.setProperty('min-width',  '0',       'important');
+      label.style.setProperty('max-width',  '100%',    'important');
+      label.style.setProperty('overflow',   'hidden',  'important');
       const _notes     = unit.internal_notes ?? '';
       const _notesSafe  = _notes.replace(/[']/g, '&#39;');
       const _notesSpan  = hasNotes
