@@ -30,19 +30,19 @@
     {
       "source": "/manifest.json",
       "headers": [
-        { "key": "Cache-Control",  "value": "no-cache, no-store, must-revalidate" },
-        { "key": "Content-Type",   "value": "application/manifest+json" }
+        { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" },
+        { "key": "Content-Type",  "value": "application/manifest+json" }
       ]
     },
     {
-      "source": "/:file.png",
+      "source": "/icons/(.*).png",
       "headers": [
         { "key": "Cache-Control", "value": "public, max-age=86400" },
         { "key": "Content-Type",  "value": "image/png" }
       ]
     },
     {
-      "source": "/:file.ico",
+      "source": "/icons/(.*).ico",
       "headers": [
         { "key": "Cache-Control", "value": "public, max-age=86400" },
         { "key": "Content-Type",  "value": "image/x-icon" }
@@ -51,7 +51,7 @@
   ],
   "rewrites": [
     {
-      "source": "/((?!assets/|sw\\.js|manifest\\.json|offline\\.html|icon-|apple-touch|favicon|.*\\.png|.*\\.ico|.*\\.webp|.*\\.svg|.*\\.txt|.*\\.xml).*)",
+      "source": "/((?!assets/|sw\\.js|manifest\\.json|offline\\.html|icons/|favicon|.*\\.png|.*\\.ico|.*\\.webp|.*\\.svg|.*\\.txt|.*\\.xml).*)",
       "destination": "/index.html"
     }
   ]
