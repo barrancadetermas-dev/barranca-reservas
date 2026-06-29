@@ -1908,77 +1908,89 @@ function openMobileAvailPanel() {
   overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
   overlay.querySelector('#mobile-avail-close').addEventListener('click', close);
 
-  const doSearch = () => {
-    const ci     = document.getElementById('mavail-checkin')?.value;
-    const co     = document.getElementById('mavail-checkout')?.value;
-    const guests = parseInt(document.getElementById('mavail-guests')?.value ?? '2', 10);
-    const results= document.getElementById('mavail-results');
+  const doSearch = async () => {
+    const ci      = document.getElementById('mavail-checkin')?.value;
+    const co      = document.getElementById('mavail-checkout')?.value;
+    const guests  = parseInt(document.getElementById('mavail-guests')?.value ?? '2', 10);
+    const results = document.getElementById('mavail-results');
+    const btn     = document.getElementById('mavail-search-btn');
     if (!results) return;
 
     if (!ci || !co || ci >= co) {
       results.style.display = 'block';
-      results.innerHTML = `<div style="color:#ef4444;font-size:.85rem;padding:10px 0">⚠️ Check-out debe ser posterior al check-in.</div>`;
+      results.innerHTML = '<div style="color:#ef4444;font-size:.85rem;padding:10px 0">⚠️ Check-out debe ser posterior al check-in.</div>';
       return;
     }
 
-    // Usar bookings del calendario si está cargado
-    const cal = window._calInstance;
-    const bookings = cal?._lastRenderedBookings ?? [];
-    const occupiedIds = new Set();
-    bookings.forEach(b => {
-      if (b.status === 'cancelled') return;
-      if (b.check_in < co && b.check_out > ci) {
-        (b.booking_units ?? []).forEach(bu => occupiedIds.add(bu.unit_id));
-      }
-    });
-
-    const available = units.filter(u => !occupiedIds.has(u.id) && (u.max_guests ?? 0) >= guests);
-    const occupied  = units.filter(u => occupiedIds.has(u.id));
-    const tooSmall  = units.filter(u => !occupiedIds.has(u.id) && (u.max_guests ?? 0) < guests);
-
-    const fmt = s => s.split('-').reverse().join('/');
-    const nights = Math.round((new Date(co) - new Date(ci)) / 86400000);
-
-    const unitCard = (u, state) => {
-      const color = u.color ?? 'var(--color-primary)';
-      const labels = { ok: '', occupied: '✕ Ocupado', small: `⚠️ Máx ${u.max_guests} pers.` };
-      const bgMap  = { ok: `${color}18`, occupied: '#fee2e2', small: '#f3f4f6' };
-      const brdMap = { ok: `${color}55`, occupied: '#fca5a5', small: '#d1d5db' };
-      const clrMap = { ok: 'var(--color-text)', occupied: '#ef4444', small: '#9ca3af' };
-      return `<div style="
-        display:flex;align-items:center;gap:10px;
-        padding:10px 12px;border-radius:10px;
-        background:${bgMap[state]};border:1px solid ${brdMap[state]};
-        opacity:${state === 'ok' ? 1 : .65}
-      ">
-        <span style="width:10px;height:10px;border-radius:50%;background:${color};flex-shrink:0"></span>
-        <span style="flex:1;font-size:.84rem;font-weight:600;color:${clrMap[state]}">${u.name}</span>
-        <span style="font-size:.72rem;color:${clrMap[state]}">${labels[state]}</span>
-      </div>`;
-    };
-
+    // Loading
     results.style.display = 'block';
-    if (!available.length) {
-      results.innerHTML = `
-        <div style="text-align:center;padding:16px 0;color:#ef4444;font-weight:600">
-          😔 Sin disponibilidad para ${guests} personas
-        </div>
-        <div style="display:flex;flex-direction:column;gap:6px;margin-top:8px">
-          ${occupied.map(u => unitCard(u,'occupied')).join('')}
-          ${tooSmall.map(u => unitCard(u,'small')).join('')}
-        </div>`;
-      return;
-    }
+    results.innerHTML = '<div style="text-align:center;padding:16px;color:var(--color-text-3);font-size:.85rem">Buscando...</div>';
+    if (btn) { btn.disabled = true; btn.textContent = 'Buscando...'; }
 
-    results.innerHTML = `
-      <div style="padding:10px 0 12px;color:#16a34a;font-weight:700;font-size:.9rem">
-        ✅ ${available.length} disponible${available.length !== 1 ? 's' : ''} · ${fmt(ci)} → ${fmt(co)} · ${nights} noche${nights !== 1 ? 's' : ''}
-      </div>
-      <div style="display:flex;flex-direction:column;gap:6px">
-        ${available.map(u => unitCard(u,'ok')).join('')}
-        ${occupied.map(u => unitCard(u,'occupied')).join('')}
-        ${tooSmall.map(u => unitCard(u,'small')).join('')}
-      </div>`;
+    try {
+      // Query directo a Supabase — no depende del calendario cargado
+      const hotelId = AppContext?.hotelId;
+      let bookings = [];
+      if (hotelId) {
+        const { data } = await supabase
+          .from('bookings')
+          .select('id,check_in,check_out,status,booking_units(unit_id)')
+          .eq('hotel_id', hotelId)
+          .neq('status', 'cancelled')
+          .lte('check_in', co)
+          .gt('check_out', ci);
+        bookings = data ?? [];
+      } else {
+        bookings = window._calInstance?._lastRenderedBookings ?? [];
+      }
+
+      const occupiedIds = new Set();
+      bookings.forEach(b => {
+        if (b.status === 'cancelled') return;
+        if (b.check_in < co && b.check_out > ci) {
+          (b.booking_units ?? []).forEach(bu => occupiedIds.add(bu.unit_id));
+        }
+      });
+
+      const available = units.filter(u => !occupiedIds.has(u.id) && (u.max_guests ?? 0) >= guests);
+      const occupied  = units.filter(u => occupiedIds.has(u.id));
+      const tooSmall  = units.filter(u => !occupiedIds.has(u.id) && (u.max_guests ?? 0) < guests);
+
+      const fmt    = s => s.split('-').reverse().join('/');
+      const nights = Math.round((new Date(co) - new Date(ci)) / 86400000);
+
+      const unitCard = (u, state) => {
+        const color  = u.color ?? 'var(--color-primary)';
+        const lbl    = { ok: '', occupied: '✕ Ocupado', small: 'Max ' + u.max_guests + ' pers.' };
+        const bg     = { ok: color + '18', occupied: '#fee2e2', small: '#f3f4f6' };
+        const brd    = { ok: color + '55', occupied: '#fca5a5', small: '#d1d5db' };
+        const clr    = { ok: 'var(--color-text)', occupied: '#ef4444', small: '#9ca3af' };
+        return '<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;background:' + bg[state] + ';border:1px solid ' + brd[state] + ';opacity:' + (state === 'ok' ? 1 : .65) + '">'
+          + '<span style="width:10px;height:10px;border-radius:50%;background:' + color + ';flex-shrink:0"></span>'
+          + '<span style="flex:1;font-size:.84rem;font-weight:600;color:' + clr[state] + '">' + u.name + '</span>'
+          + '<span style="font-size:.72rem;color:' + clr[state] + '">' + lbl[state] + '</span>'
+          + '</div>';
+      };
+
+      if (!available.length) {
+        results.innerHTML = '<div style="text-align:center;padding:16px 0;color:#ef4444;font-weight:600">😔 Sin disponibilidad para ' + guests + ' personas</div>'
+          + '<div style="display:flex;flex-direction:column;gap:6px;margin-top:8px">'
+          + occupied.map(u => unitCard(u,'occupied')).join('')
+          + tooSmall.map(u => unitCard(u,'small')).join('')
+          + '</div>';
+      } else {
+        results.innerHTML = '<div style="padding:10px 0 12px;color:#16a34a;font-weight:700;font-size:.9rem">✅ ' + available.length + ' disponible' + (available.length !== 1 ? 's' : '') + ' · ' + fmt(ci) + ' → ' + fmt(co) + ' · ' + nights + ' noche' + (nights !== 1 ? 's' : '') + '</div>'
+          + '<div style="display:flex;flex-direction:column;gap:6px">'
+          + available.map(u => unitCard(u,'ok')).join('')
+          + occupied.map(u => unitCard(u,'occupied')).join('')
+          + tooSmall.map(u => unitCard(u,'small')).join('')
+          + '</div>';
+      }
+    } catch(err) {
+      results.innerHTML = '<div style="color:#ef4444;font-size:.82rem;padding:8px 0">❌ Error: ' + err.message + '</div>';
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = 'Ver disponibilidad'; }
+    }
   };
 
   document.getElementById('mavail-search-btn').addEventListener('click', doSearch);

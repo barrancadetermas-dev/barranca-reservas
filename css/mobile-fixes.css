@@ -1385,3 +1385,193 @@
 #bnav-search.active svg {
   transform: scale(1.15);
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   MOBILE FIXES vF — z-index, toolbar sticky, wizard steps
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ── FIX 1: z-index definitivo — headers de días DETRÁS de columna sticky ── */
+@media (max-width: 768px) {
+
+  /* La columna de departamentos GANA sobre todo */
+  .cal-unit-label {
+    z-index: 30 !important;
+    background: var(--color-surface-2) !important;
+    isolation: isolate !important;
+  }
+  .cal-unit-label-header {
+    z-index: 32 !important;
+    background: var(--color-surface-2) !important;
+    isolation: isolate !important;
+  }
+  [data-theme="dark"] .cal-unit-label,
+  [data-theme="dark"] .cal-unit-label-header {
+    background: #1a2438 !important;
+  }
+
+  /* Headers de días: DETRÁS de la columna sticky */
+  .cal-day-header {
+    z-index: 10 !important;
+    /* Fondo sólido para que no haya bleed si el header scrollea */
+    background: var(--color-surface-2) !important;
+  }
+  [data-theme="dark"] .cal-day-header {
+    background: #1a2438 !important;
+  }
+
+  /* Barras de reserva: debajo de todo sticky */
+  .bar, .bar-span { z-index: 2 !important; }
+  .bar:hover, .bar.cal-search-match { z-index: 4 !important; }
+}
+
+/* ── FIX 2: TOOLBAR DEL CALENDARIO — fijo en mobile, solo nav ── */
+@media (max-width: 768px) {
+
+  /* Toolbar sticky arriba — no scrollea con el contenido */
+  .cal-toolbar {
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 50 !important;
+    /* Fondo sólido para que nada se transluzca */
+    background: var(--color-surface) !important;
+    border-radius: 0 !important;
+    border-left: none !important;
+    border-right: none !important;
+    border-top: none !important;
+    margin-bottom: 0 !important;
+    /* Solo muestra la navegación — todo lo demás oculto */
+    height: 44px !important;
+    padding: 0 10px !important;
+    gap: 0 !important;
+    display: flex !important;
+    align-items: center !important;
+  }
+
+  /* Nav: ocupa todo el ancho → centrado */
+  .cal-tb-nav {
+    flex: 1 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 4px !important;
+  }
+
+  /* Título centrado */
+  .cal-month-title {
+    flex: 1 !important;
+    text-align: center !important;
+    font-size: .88rem !important;
+    min-width: 0 !important;
+    white-space: nowrap !important;
+  }
+
+  /* Ocultar en toolbar: separadores, búsqueda, spacer, acciones */
+  .cal-tb-sep,
+  .cal-tb-search,
+  .cal-toolbar > [style*="flex:1"],
+  .cal-tb-actions,
+  .cal-tb-hint,
+  #cal-summary-bar {
+    display: none !important;
+  }
+
+  /* Botones prev/next: tamaño touch-friendly */
+  .cal-tb-btn#cal-prev,
+  .cal-tb-btn#cal-next {
+    width: 36px !important;
+    height: 36px !important;
+    padding: 0 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+  }
+
+  /* "Hoy" tag: compacto */
+  #cal-today {
+    font-size: .7rem !important;
+    padding: 3px 8px !important;
+    height: auto !important;
+  }
+}
+
+/* ── FIX 3: WIZARD STEPS — solo nombre del paso activo ──────── */
+@media (max-width: 768px) {
+
+  /* Contenedor compacto */
+  .step-indicator {
+    padding: 10px 14px !important;
+    gap: 0 !important;
+    overflow: hidden !important;
+  }
+
+  /* Todos los items: solo círculo, sin label */
+  .step-item {
+    flex-direction: column !important;
+    align-items: center !important;
+    gap: 3px !important;
+    flex: 0 !important;
+    min-width: 0 !important;
+  }
+
+  /* Labels ocultos por defecto */
+  .step-item span {
+    display: none !important;
+  }
+
+  /* Solo el paso activo muestra su label */
+  .step-item.active span {
+    display: block !important;
+    font-size: .68rem !important;
+    font-weight: 700 !important;
+    color: var(--color-primary) !important;
+    white-space: nowrap !important;
+  }
+
+  /* Círculos más chicos en mobile */
+  .step-dot {
+    width: 24px !important;
+    height: 24px !important;
+    font-size: .7rem !important;
+  }
+
+  /* Línea divisora más corta */
+  .step-line {
+    flex: 1 !important;
+    margin: 0 4px !important;
+    /* Mantener vertical center con los dots */
+    margin-bottom: 14px !important;
+  }
+
+  /* ── SCROLL DEL MODAL: corrección para evitar doble scrollbar ── */
+  #modal-booking {
+    max-height: 95dvh !important;
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: hidden !important;
+  }
+
+  /* El step-indicator no hace scroll */
+  .step-indicator {
+    flex-shrink: 0 !important;
+  }
+
+  /* El contenido de cada paso scrollea internamente */
+  .step-content {
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    flex: 1 !important;
+    min-height: 0 !important;
+    /* padding bottom para que el footer no tape */
+    padding-bottom: 80px !important;
+  }
+
+  /* Footer fijo abajo */
+  .modal-footer {
+    flex-shrink: 0 !important;
+    position: sticky !important;
+    bottom: 0 !important;
+    background: var(--color-surface) !important;
+    z-index: 10 !important;
+    border-top: 1px solid var(--color-border) !important;
+  }
+}
