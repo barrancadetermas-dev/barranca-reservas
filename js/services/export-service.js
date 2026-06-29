@@ -106,6 +106,14 @@ export function showExportDropdown({ anchorEl, type, data, onExport }) {
   dd.style.left = `${Math.max(8, rect.right - 300)}px`;
   document.body.appendChild(dd);
 
+  // Reposicionar si se sale del viewport por abajo
+  requestAnimationFrame(() => {
+    const ddRect = dd.getBoundingClientRect();
+    if (ddRect.bottom > window.innerHeight - 12) {
+      dd.style.top  = `${rect.top - ddRect.height - 6}px`;
+    }
+  });
+
   // Cerrar al click fuera
   const outside = e => { if (!dd.contains(e.target) && e.target !== anchorEl) { dd.remove(); document.removeEventListener('mousedown', outside); } };
   setTimeout(() => document.addEventListener('mousedown', outside), 0);

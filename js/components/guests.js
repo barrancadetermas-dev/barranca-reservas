@@ -81,7 +81,16 @@ export class GuestsCRM {
         ${[10,25,50,100].map(n => `<button onclick="window._guestsCRM?._setLimit(${n})"
           id="bl-limit-${n}" style="font-size:.68rem;padding:2px 9px;border-radius:999px;cursor:pointer;
           border:1px solid var(--color-border);background:var(--color-surface-2);color:var(--color-text-2)">${n}</button>`).join('')}
+        <div style="display:flex;gap:5px;margin:6px 0 4px;align-items:center;flex-wrap:wrap">
+        <span style="font-size:.7rem;color:var(--color-text-3)">Mostrar:</span>
+        ${[10,25,50,100].map(n => `<button onclick="window._guestsCRM?._setLimit(${n})"
+          id="bl-limit-${n}" style="font-size:.68rem;padding:2px 9px;border-radius:999px;cursor:pointer;
+          border:1px solid var(--color-border);background:var(--color-surface-2);color:var(--color-text-2)">${n}</button>`).join('')}
         <span style="font-size:.7rem;color:var(--color-text-3);margin-left:8px" id="bl-total-label"></span>
+        <button id="btn-export-guests" class="btn btn-outline btn-sm" style="margin-left:auto;gap:5px;font-size:.72rem">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Exportar ▾
+        </button>
       </div>
       <div id="guests-results-area">
         <div style="padding:16px;text-align:center;color:var(--color-text-3)">⟳ Cargando...</div>
@@ -96,6 +105,24 @@ export class GuestsCRM {
       if (q.length === 0) { this._loadAll(); return; }
       if (q.length < 2) return;
       this._searchTimer = setTimeout(() => this._search(q), 280);
+    });
+
+    // Botón Exportar huéspedes
+    document.getElementById('btn-export-guests')?.addEventListener('click', (e) => {
+      const btn = e.currentTarget;
+      import('../services/export-service.js').then(({ showExportDropdown, exportBookingsExcel, exportBookingsCSV, exportBookingsPDF }) => {
+        showExportDropdown({
+          anchorEl: btn,
+          type: 'guests',
+          data: this._allGuestsData ?? [],
+          onExport: ({ fmt: f, data, from, to }) => {
+            const range = from && to ? `${from.split('-').reverse().join('/')} → ${to.split('-').reverse().join('/')}` : '';
+            if (f === 'excel') exportBookingsExcel(data, 'huespedes', range);
+            else if (f === 'pdf') exportBookingsPDF(data, range);
+            else exportBookingsCSV(data);
+          },
+        });
+      }).catch(err => console.error('[Export guests]', err));
     });
 
     // Sort selector
@@ -177,6 +204,7 @@ export class GuestsCRM {
       area.innerHTML = '<div class="empty-state"><span class="empty-state-icon">👤</span><p>Sin huéspedes aún.</p></div>';
       return;
     }
+    this._allGuestsData = guests; // cache para exportar
     guests.forEach(g => {
       const bks = (g.bookings ?? []).filter(b => b.status !== 'blocked' && b.status !== 'cancelled');
       g.total_bookings = bks.length;

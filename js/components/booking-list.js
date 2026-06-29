@@ -456,8 +456,10 @@ export class BookingList {
       <div style="display:flex;gap:8px">`;
 
     if (can('exportData')) {
-      html += `<button class="btn btn-outline btn-sm" id="btn-export-excel-list">📊 Excel</button>
-               <button class="btn btn-outline btn-sm" id="btn-export-pdf-list">📄 PDF</button>`;
+      html += `<button class="btn btn-outline btn-sm" id="btn-export-list" style="gap:5px">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Exportar ▾
+      </button>`;
     }
     html += `</div></div>`;
 
@@ -481,30 +483,14 @@ export class BookingList {
       this._rebuildList();
     });;
 
-    // Bind botones de exportación — con dropdown de filtros
-    document.getElementById('btn-export-excel-list')?.addEventListener('click', (e) => {
-      const btn = e.currentTarget; // capturar antes del async — e.currentTarget es null en .then()
+    // Bind botón único EXPORTAR ▾
+    document.getElementById('btn-export-list')?.addEventListener('click', (e) => {
+      const btn = e.currentTarget;
       import('../services/export-service.js').then(({ showExportDropdown, exportBookingsExcel, exportBookingsCSV, exportBookingsPDF }) => {
         showExportDropdown({
           anchorEl: btn,
           type: 'bookings',
-          data: this._allBookings ?? filtered,
-          onExport: ({ fmt: f, data, from, to }) => {
-            const range = from && to ? `${from.split('-').reverse().join('/')} → ${to.split('-').reverse().join('/')}` : '';
-            if (f === 'excel') exportBookingsExcel(data, 'reservas', range);
-            else if (f === 'pdf') exportBookingsPDF(data, range);
-            else exportBookingsCSV(data);
-          },
-        });
-      }).catch(err => console.error('[Export]', err));
-    });
-    document.getElementById('btn-export-pdf-list')?.addEventListener('click', (e) => {
-      const btn = e.currentTarget;
-      import('../services/export-service.js').then(({ showExportDropdown, exportBookingsPDF, exportBookingsExcel, exportBookingsCSV }) => {
-        showExportDropdown({
-          anchorEl: btn,
-          type: 'bookings',
-          data: this._allBookings ?? filtered,
+          data: this._allBookings ?? [],
           onExport: ({ fmt: f, data, from, to }) => {
             const range = from && to ? `${from.split('-').reverse().join('/')} → ${to.split('-').reverse().join('/')}` : '';
             if (f === 'excel') exportBookingsExcel(data, 'reservas', range);

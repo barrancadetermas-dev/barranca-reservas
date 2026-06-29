@@ -116,8 +116,9 @@ export function _applyUserDisplay({ nombre, email, isAdmin } = {}) {
   const hAvatar = document.getElementById('header-avatar');
   if (hAvatar) {
     hAvatar.textContent = initial;
-    const roleLabel = (isAdmin ?? window._currentUserDisplay?.isAdmin) ? ' 👑 Administrador' : '';
-    hAvatar.title = `${displayName}\n${email ?? ''}${roleLabel}`;
+    const isAdm = isAdmin ?? window._currentUserDisplay?.isAdmin;
+    const crownLine = isAdm ? '👑 Administrador\n' : '';
+    hAvatar.title = `${crownLine}${displayName}\n${email ?? ''}`;
   }
   window._currentUserDisplay = { displayName, initial, nombre: nombre ?? null, email: email ?? null, isAdmin: isAdmin ?? false };
 }
@@ -218,12 +219,14 @@ document.getElementById('logout-btn').addEventListener('click', () => supabase.a
 document.getElementById('header-logout-btn')?.addEventListener('click', () => supabase.auth.signOut());
 // Clic en avatar → navegar a Configuración → activar tab Panel & Equipo
 window._navToPanel = () => {
-  navigateTo('settings');
-  // Esperar que la sección renderice, luego activar el tab Panel & Equipo
-  setTimeout(() => {
+  navigateTo('config');
+  // Esperar a que el tab cfg-tab-control esté en el DOM (puede tardar si carga async)
+  const tryClick = (attempts = 0) => {
     const tab = document.getElementById('cfg-tab-control');
-    tab?.click();
-  }, 180);
+    if (tab) { tab.click(); return; }
+    if (attempts < 15) setTimeout(() => tryClick(attempts + 1), 80);
+  };
+  setTimeout(() => tryClick(), 60);
 };
 
 // ══════════════════════════════════════════════════
