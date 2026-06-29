@@ -254,8 +254,6 @@ async function initApp(user) {
     hideLogin();
     updateHeaderDate();
     startArgentinaClock(); // reloj Argentina en tiempo real
-    // Suscribir a notificaciones push (staff + admin)
-    setTimeout(() => _initPushSubscription(), 3000);
 
     // ── UI usuario — carga inicial con email, luego reemplaza con perfil ──
     const emailFallback = user.email?.split('@')[0] ?? 'Admin';
@@ -569,61 +567,6 @@ function updateHeaderDate() {
 
 // ── Reloj Argentina — se inicia una sola vez ──────
 let _clockTimer = null;
-// ══════════════════════════════════════════════════
-// WEB PUSH — suscripción al push service
-// ══════════════════════════════════════════════════
-const VAPID_PUBLIC_KEY = 'BKasNVM-wN1OG1Fg6welKnO_AgLHLJsWz7Iyh4o-MsmI6Oj__C2Vjjy6xsWOtxJGIoxiaZPegyg1kZUK1derIQo';
-
-function _urlBase64ToUint8Array(base64String) {
-  const padding = '='.repeat((4 - base64String.length % 4) % 4);
-  const base64  = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
-  const raw     = atob(base64);
-  return Uint8Array.from([...raw].map(c => c.charCodeAt(0)));
-}
-
-async function _initPushSubscription() {
-  try {
-    if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
-    const reg = await navigator.serviceWorker.ready;
-    if (!reg) return;
-
-    // Pedir permiso si no está dado
-    let permission = Notification.permission;
-    if (permission === 'denied') return; // usuario rechazó explícitamente
-    if (permission === 'default') {
-      permission = await Notification.requestPermission();
-    }
-    if (permission !== 'granted') return;
-
-    // Suscribir al push
-    let sub = await reg.pushManager.getSubscription();
-    if (!sub) {
-      sub = await reg.pushManager.subscribe({
-        userVisibleOnly:      true,
-        applicationServerKey: _urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
-      });
-    }
-
-    // Guardar suscripción en Supabase
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-    const hotelId = AppContext?.hotelId;
-    if (!hotelId) return;
-
-    const j = sub.toJSON();
-    await supabase.from('push_subscriptions').upsert({
-      user_id:  user.id,
-      hotel_id: hotelId,
-      endpoint: j.endpoint,
-      p256dh:   j.keys?.p256dh,
-      auth_key: j.keys?.auth,
-    }, { onConflict: 'user_id,endpoint' });
-
-  } catch (err) {
-    console.warn('[Push] suscripción fallida:', err.message);
-  }
-}
-
 function startArgentinaClock() {
   const clockEl = document.getElementById('header-clock');
   const dateEl  = document.getElementById('header-clock-date');
