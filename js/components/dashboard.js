@@ -136,6 +136,9 @@ export class Dashboard {
       this._renderNextEvent(kpis, today);
       this._renderRevPAR(extraStats);
       this._renderCobros(extraStats);
+      this._renderOccupancyRing(kpis.occupiedUnits ?? 0, this.ctx.units?.length ?? 7);
+      this._renderArrivals(kpis.arrivals ?? []);
+      this._renderDepartures(kpis.checkouts ?? []);
       // Update header badge
       const buyEl = document.getElementById('dollar-badge-buy');
       const sellEl = document.getElementById('dollar-badge-value');
