@@ -277,7 +277,7 @@ export class Calendar {
     // ── Encabezado: esquina ───────────────────────
     const corner = document.createElement('div');
     corner.className = 'cal-unit-label-header';
-    corner.textContent = 'Departamento';
+    corner.textContent = 'Unidades';
     // setProperty con 'important' — gana sobre cualquier CSS !important
     corner.style.setProperty('position', 'sticky',  'important');
     corner.style.setProperty('left',     '0',        'important');
@@ -2129,22 +2129,39 @@ export class Calendar {
   // ── Mide el texto más largo de todos los departamentos para calcular LABEL_W ──
   _measureLabelW(isMob) {
     const units = AppContext?.units ?? [];
-    if (!units.length) return isMob ? 108 : 160;
 
-    // Canvas offscreen para medir texto real
-    const canvas = document.createElement('canvas');
-    const ctx    = canvas.getContext('2d');
-    ctx.font     = isMob ? '700 11px system-ui' : '700 12px system-ui';
-
+    // Intentar medir con canvas offscreen; fallback a estimación si no disponible
     let maxPx = 0;
-    units.forEach(u => {
-      const name = this._getUnitDisplayName(u)
-        .replace('Planta Baja','P. Baja').replace('Planta Alta','P. Alta');
-      const w = ctx.measureText(name).width;
-      if (w > maxPx) maxPx = w;
-    });
+    try {
+      const canvas = document.createElement('canvas');
+      const ctx    = canvas.getContext?.('2d');
+      if (ctx) {
+        ctx.font = isMob ? '700 11px system-ui' : '700 12px system-ui';
+        // Medir cada nombre (con abreviaciones aplicadas)
+        units.forEach(u => {
+          const name = this._getUnitDisplayName(u)
+            .replace('Planta Baja', 'P. Baja').replace('Planta Alta', 'P. Alta');
+          const w = ctx.measureText(name).width;
+          if (w > maxPx) maxPx = w;
+        });
+        // También considerar el texto del header "Unidades"
+        const headerW = ctx.measureText('Unidades').width;
+        if (headerW > maxPx) maxPx = headerW;
+      }
+    } catch (_) {
+      // Canvas no disponible — estimación por longitud de caracteres
+    }
 
-    // dot(8) + gap(6) + texto + padding(20) + lápiz(22)
+    // Fallback: 7px por carácter si canvas no funcionó
+    if (maxPx === 0 && units.length > 0) {
+      const longestName = units.reduce((max, u) => {
+        const name = this._getUnitDisplayName(u);
+        return name.length > max.length ? name : max;
+      }, '');
+      maxPx = longestName.length * (isMob ? 6.5 : 7);
+    }
+
+    // dot(8) + gap(6) + texto + padding + lápiz
     const total = Math.ceil(maxPx) + (isMob ? 48 : 56);
     const min = isMob ? LABEL_W_MIN_MOB : LABEL_W_MIN;
     const max = isMob ? LABEL_W_MAX_MOB : LABEL_W_MAX;

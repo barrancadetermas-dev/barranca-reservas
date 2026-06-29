@@ -3,7 +3,7 @@
 // Estrategia: Network First con fallback offline
 // ═══════════════════════════════════════════════════
 
-const CACHE_NAME  = 'mila-v5';
+const CACHE_NAME  = 'mila-v6';
 const OFFLINE_URL = '/offline.html';
 
 const STATIC_ASSETS = [
