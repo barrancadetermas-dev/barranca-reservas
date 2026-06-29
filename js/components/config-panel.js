@@ -356,6 +356,9 @@ export class ConfigPanel {
     const tabConfig  = container.querySelector('#cfg-tab-config');
     const tabControl = container.querySelector('#cfg-tab-control');
     const tabUsers   = container.querySelector('#cfg-tab-users');
+
+    // Mostrar tab Usuarios solo para admin
+    if (can('manageUsers') && tabUsers) tabUsers.style.display = '';
     const paneConfig  = container.querySelector('#cfg-pane-config');
     const paneControl = container.querySelector('#cfg-pane-control');
     const paneUsers   = container.querySelector('#cfg-pane-users');
