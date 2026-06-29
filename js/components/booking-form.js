@@ -10,7 +10,7 @@ import { can, isDemo } from '../auth/permissions.js';
 import { formatARS, toISODate, showToast, getUnitLabel, getUnitColor, getUnitChipHTML, SOURCE_CONFIG } from '../supabase-config.js';
 import { logAction } from '../services/audit-service.js';
 import { DateRangePicker } from './date-range-picker.js';
-import { sendPushToStaff } from '../app.js';
+import { sendPushToStaff } from '../services/push-service.js';
 import { Bus, EVENTS } from '../services/event-bus.js';
 import { cache } from '../services/supabase-cache.js';
 import { Sound } from '../services/sound-service.js';

@@ -560,7 +560,7 @@ function updateHeaderDate() {
 // ── Reloj Argentina — se inicia una sola vez ──────
 let _clockTimer = null;
 // ══════════════════════════════════════════════════
-// WEB PUSH — suscripción y envío
+// WEB PUSH — suscripción al push service
 // ══════════════════════════════════════════════════
 const VAPID_PUBLIC_KEY = 'BKasNVM-wN1OG1Fg6welKnO_AgLHLJsWz7Iyh4o-MsmI6Oj__C2Vjjy6xsWOtxJGIoxiaZPegyg1kZUK1derIQo';
 
@@ -611,21 +611,6 @@ async function _initPushSubscription() {
 
   } catch (err) {
     console.warn('[Push] suscripción fallida:', err.message);
-  }
-}
-
-// Enviar push a todos los staff del hotel
-export async function sendPushToStaff({ title, body, data = {} }) {
-  try {
-    const hotelId = AppContext?.hotelId;
-    if (!hotelId) return;
-    await fetch('/api/send-push', {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ hotel_id: hotelId, title, body, data }),
-    });
-  } catch (err) {
-    console.warn('[Push] envío fallido:', err.message);
   }
 }
 

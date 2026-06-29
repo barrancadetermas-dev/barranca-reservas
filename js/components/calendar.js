@@ -2295,6 +2295,9 @@ export class Calendar {
   // 5. BARRA DE RESUMEN SUPERIOR
   // ══════════════════════════════════════════════════
   _renderSourceLegend() {
+    // Solo para staff — admin ya conoce los colores
+    if (can('editBooking')) return;
+
     const existing = document.getElementById('cal-source-legend');
     if (existing) existing.remove();
 
