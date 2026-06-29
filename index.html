@@ -58,7 +58,14 @@
   <div class="login-card">
     <div class="login-logo">
       <div class="login-logo-icon">
-        <img src="/icon-192.png" alt="MILA" width="68" height="68" style="border-radius:14px;display:block;">
+        <!-- SVG inline: no depende de /icon-192.png, nunca se rompe -->
+        <svg width="68" height="68" viewBox="0 0 68 68" fill="none" xmlns="http://www.w3.org/2000/svg" style="display:block;border-radius:14px;">
+          <rect width="68" height="68" rx="14" fill="#1E4DB7"/>
+          <!-- Letra M centrada, blanca -->
+          <text x="34" y="46" text-anchor="middle" font-family="system-ui,-apple-system,sans-serif" font-weight="800" font-size="30" fill="white" letter-spacing="-1">M</text>
+          <!-- Punto azul claro debajo de la M -->
+          <circle cx="34" cy="56" r="2.5" fill="rgba(255,255,255,0.55)"/>
+        </svg>
       </div>
       <div>
         <h1 class="login-hotel-name">MILA</h1>
@@ -111,7 +118,10 @@
   <aside id="sidebar" class="sidebar">
     <div class="sidebar-logo">
       <div class="sidebar-logo-mark">
-        <img src="/icon-192.png" alt="MILA" width="48" height="48" style="border-radius:10px;display:block;">
+        <svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" style="display:block;border-radius:10px;">
+          <rect width="48" height="48" rx="10" fill="#1E4DB7"/>
+          <text x="24" y="33" text-anchor="middle" font-family="system-ui,-apple-system,sans-serif" font-weight="800" font-size="22" fill="white" letter-spacing="-0.5">M</text>
+        </svg>
       </div>
       <div class="sidebar-logo-text">
         <span class="sidebar-name">MILA <span class="sidebar-sub-inline">· Sistema Inteligente</span></span>

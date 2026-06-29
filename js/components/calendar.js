@@ -276,11 +276,12 @@ export class Calendar {
     const corner = document.createElement('div');
     corner.className = 'cal-unit-label-header';
     corner.textContent = 'Departamento';
-    // Inline z-index: gana sobre cualquier CSS en todos los browsers
-    corner.style.zIndex   = '50';
-    corner.style.position = 'sticky';
-    corner.style.left     = '0';
-    corner.style.top      = '0';
+    // setProperty con 'important' — gana sobre cualquier CSS !important
+    corner.style.setProperty('position', 'sticky',  'important');
+    corner.style.setProperty('left',     '0',        'important');
+    corner.style.setProperty('top',      '0',        'important');
+    corner.style.setProperty('z-index',  '100',      'important');
+    corner.style.setProperty('background', 'var(--color-surface-2)', 'important');
     grid.appendChild(corner);
 
     // ── Encabezado: columnas de días ──────────────
@@ -313,6 +314,10 @@ export class Calendar {
       dh.className = cls;
       dh.dataset.date = iso;
       dh.title = holiday?.label ?? '';
+      // z-index bajo inline — siempre DETRÁS de la columna sticky de departamentos
+      dh.style.setProperty('position', 'sticky', 'important');
+      dh.style.setProperty('top',      '0',      'important');
+      dh.style.setProperty('z-index',  '5',      'important');
 
       dh.innerHTML = (showMonth ? '<span class="dh-month' + (dayOfMon === 1 && colIdx !== 0 ? ' dh-month-new' : '') + '">' + MONTH_SHORT[date.getMonth()] + '</span>' : '') +
         '<span class="dh-num">' + dayOfMon + '</span>' +
@@ -333,12 +338,13 @@ export class Calendar {
       const label = document.createElement('div');
       label.className = 'cal-unit-label';
       label.dataset.rowParity = rowParity;
-      label.style.setProperty('--unit-color', unitColor);
-      label.style.borderLeftColor = unitColor;
-      // Inline z-index: columna siempre encima de headers de días
-      label.style.zIndex   = '40';
-      label.style.position = 'sticky';
-      label.style.left     = '0';
+      label.style.setProperty('--unit-color',  unitColor);
+      label.style.setProperty('border-left-color', unitColor, 'important');
+      // setProperty con 'important' — siempre encima de headers de días
+      label.style.setProperty('position',   'sticky',  'important');
+      label.style.setProperty('left',       '0',       'important');
+      label.style.setProperty('z-index',    '80',      'important');
+      label.style.setProperty('background', 'var(--color-surface-2)', 'important');
       const _notes    = unit.internal_notes ?? '';
       const _notesSafe = _notes.replace(/[']/g, '&#39;');
       const _notesSpan = hasNotes
