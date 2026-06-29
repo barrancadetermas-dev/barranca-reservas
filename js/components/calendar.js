@@ -692,11 +692,15 @@ export class Calendar {
   // ══════════════════════════════════════════════════
   _setupControls() {
     document.getElementById('cal-prev')?.addEventListener('click', () => {
+      // Recompute visibleDays BEFORE shifting so prev/next stay symmetric
+      this._visibleDays = this._computeVisibleDays();
       this._windowStart = this._addDays(this._windowStart, -this._visibleDays);
       cache.invalidate('bookings');
       this.load();
     });
     document.getElementById('cal-next')?.addEventListener('click', () => {
+      // Recompute visibleDays BEFORE shifting so prev/next stay symmetric
+      this._visibleDays = this._computeVisibleDays();
       this._windowStart = this._addDays(this._windowStart, +this._visibleDays);
       cache.invalidate('bookings');
       this.load();
@@ -2237,7 +2241,7 @@ export class Calendar {
       .filter(b => !b.is_blocked && b.status !== 'blocked' && b.status !== 'cancelled'
                 && b.check_in >= today && b.check_in <= in30)
       .sort((a, b) => a.check_in.localeCompare(b.check_in))
-      .slice(0, 6);
+      .slice(0, 6); // 6 items = 2 col × 3 rows
 
     if (!upcoming.length) {
       el.innerHTML = '<div style="font-size:.72rem;color:var(--color-text-3);padding:6px 0">Sin reservas próximas</div>';

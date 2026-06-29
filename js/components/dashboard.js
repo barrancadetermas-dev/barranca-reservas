@@ -121,16 +121,26 @@ export class Dashboard {
     window._dashboardInstance = this;
     try {
       const today = toISODate(new Date());
-      const [kpis, extraStats, dineroStats] = await Promise.all([
+      const [kpis, extraStats, dineroStats, dollarRates] = await Promise.all([
         this._fetchKPIs(today),
         this._fetchExtraStats(today),
         this._fetchDineroAsegurado(today),
+        fetchDollarRates().catch(() => null),
       ]);
       this._renderKPIs(kpis, today);
       this._renderUpcoming(kpis.upcoming ?? kpis.arrivals ?? []);
       this._renderForecast(extraStats?.forecast ?? null);
       this._renderReservasMes(extraStats);
       this._renderDineroAsegurado(dineroStats);
+      this._renderDollar(dollarRates);
+      // Update header badge
+      const buyEl = document.getElementById('dollar-badge-buy');
+      const sellEl = document.getElementById('dollar-badge-value');
+      if (dollarRates?.oficial) {
+        const fmt = v => v ? `$${Math.round(v).toLocaleString('es-AR')}` : '—';
+        if (buyEl)  buyEl.textContent  = fmt(dollarRates.oficial.buy);
+        if (sellEl) sellEl.textContent = fmt(dollarRates.oficial.sell);
+      }
     } catch (err) {
       console.error('Dashboard load error:', err);
     }
@@ -1063,7 +1073,7 @@ export class Dashboard {
     ].slice(0, 3);
 
     if (!events.length) {
-      el.innerHTML = '<div style="padding:8px 0;color:var(--color-text-3);font-size:.82rem">Sin eventos próximos</div>';
+      el.innerHTML = '<div style="padding:16px 0;text-align:center;color:var(--color-text-3);font-size:.82rem">📅 No hay eventos registrados</div>';
       return;
     }
 
