@@ -276,9 +276,8 @@ export class ConfigPanel {
               style="gap:5px" onclick="var p=document.getElementById('cfg-exp-csv-panel');p.style.display=p.style.display==='none'?'':'none'">
               📋 CSV / Excel ▾
             </button>
-            <button class="btn btn-outline btn-sm" id="cfg-exp-toggle-pdf"
-              style="gap:5px;opacity:.55;cursor:default" title="Próximamente">
-              📄 Reportes PDF <span style="font-size:.62rem;background:#fef3c7;color:#92400e;padding:1px 5px;border-radius:4px;margin-left:3px">v0.2</span>
+            <button class="btn btn-outline btn-sm" id="cfg-exp-toggle-pdf" style="gap:5px">
+              📄 Reportes PDF
             </button>
           </div>
           <div id="cfg-exp-csv-panel" style="display:none;margin-top:10px;background:var(--color-surface-2);border-radius:var(--r-lg);padding:12px">
@@ -519,6 +518,12 @@ export class ConfigPanel {
       });
     });
 
+    // ── Reportes PDF ──────────────────────────────────
+    container.querySelector('#cfg-exp-toggle-pdf')?.addEventListener('click', (e) => {
+      const btn = e.currentTarget;
+      this._showStatsPDFDropdown(btn);
+    });
+
     // ── Logout ────────────────────────────────────────
     container.querySelector('#cfg-logout-btn')?.addEventListener('click', () => {
       if (confirm('¿Cerrar sesión?')) this.db.auth.signOut();
@@ -650,5 +655,281 @@ export class ConfigPanel {
 
   static getNumber(key, defaultVal = 0) {
     return parseFloat(AppContext.config?.[key] ?? defaultVal) || defaultVal;
+  }
+
+  // ══════════════════════════════════════════════════
+  // REPORTES PDF — dropdown con rango + departamentos
+  // ══════════════════════════════════════════════════
+  _showStatsPDFDropdown(anchorEl) {
+    document.getElementById('_mila-stats-pdf-dd')?.remove();
+
+    const now   = new Date();
+    const y     = now.getFullYear();
+    const m     = String(now.getMonth() + 1).padStart(2, '0');
+    const first = `${y}-${m}-01`;
+    const last  = new Date(y, now.getMonth() + 1, 0);
+    const lastS = `${y}-${m}-${String(last.getDate()).padStart(2, '0')}`;
+
+    const units  = AppContext?.units ?? [];
+    const unitOpts = units.map(u =>
+      `<option value="${u.id}" style="color:${u.color??'#1A3A90'}">${u.name}</option>`
+    ).join('');
+
+    const dd = document.createElement('div');
+    dd.id = '_mila-stats-pdf-dd';
+    const rect = anchorEl.getBoundingClientRect();
+    dd.style.cssText = `position:fixed;z-index:9999;background:var(--color-surface);border:1px solid var(--color-border);border-radius:12px;padding:14px 16px;box-shadow:0 8px 32px rgba(0,0,0,.14);width:300px;font-family:system-ui,sans-serif`;
+    dd.innerHTML = `
+      <div style="font-size:.8rem;font-weight:700;color:var(--color-text);margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--color-border)">
+        📄 Reporte PDF de Estadísticas
+      </div>
+      <label style="display:block;font-size:.68rem;font-weight:600;color:var(--color-text-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Rango de fechas</label>
+      <div style="display:flex;gap:6px;align-items:center;margin-bottom:12px">
+        <input type="date" id="_spdf-from" value="${first}" style="flex:1;padding:5px 8px;border:1px solid var(--color-border);border-radius:7px;font-size:.75rem;color:var(--color-text);background:var(--color-surface);min-width:0">
+        <span style="color:var(--color-text-3);font-size:.8rem">→</span>
+        <input type="date" id="_spdf-to" value="${lastS}" style="flex:1;padding:5px 8px;border:1px solid var(--color-border);border-radius:7px;font-size:.75rem;color:var(--color-text);background:var(--color-surface);min-width:0">
+      </div>
+      <label style="display:block;font-size:.68rem;font-weight:600;color:var(--color-text-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">
+        Departamentos <span style="color:var(--color-text-3);font-weight:400">(vacío = todos)</span>
+      </label>
+      <select id="_spdf-units" multiple style="width:100%;height:80px;padding:4px 6px;border:1px solid var(--color-border);border-radius:7px;font-size:.75rem;color:var(--color-text);background:var(--color-surface);margin-bottom:12px">
+        ${unitOpts}
+      </select>
+      <button id="_spdf-gen" style="width:100%;padding:9px;border-radius:8px;border:none;background:#1A3A90;color:#fff;font-size:.8rem;font-weight:700;cursor:pointer">
+        Generar PDF
+      </button>`;
+
+    dd.style.top  = `${rect.bottom + 6}px`;
+    dd.style.left = `${Math.max(8, rect.right - 300)}px`;
+    document.body.appendChild(dd);
+
+    requestAnimationFrame(() => {
+      const r = dd.getBoundingClientRect();
+      if (r.bottom > window.innerHeight - 12) dd.style.top = `${rect.top - r.height - 6}px`;
+    });
+
+    const close = () => { dd.remove(); document.removeEventListener('mousedown', outside); };
+    const outside = (ev) => { if (!dd.contains(ev.target) && ev.target !== anchorEl) close(); };
+    setTimeout(() => document.addEventListener('mousedown', outside), 0);
+
+    document.getElementById('_spdf-gen').addEventListener('click', async () => {
+      const from    = document.getElementById('_spdf-from')?.value ?? '';
+      const to      = document.getElementById('_spdf-to')?.value   ?? '';
+      const selEl   = document.getElementById('_spdf-units');
+      const unitIds = selEl ? [...selEl.selectedOptions].map(o => o.value) : [];
+      close();
+      await this._generateStatsPDF({ from, to, unitIds });
+    });
+  }
+
+  async _generateStatsPDF({ from, to, unitIds }) {
+    if (!from || !to) { showToast('Seleccioná un rango de fechas', 'warning'); return; }
+
+    showToast('⏳ Generando reporte...', 'info');
+
+    try {
+      // ── Fetch reservas del rango ──────────────────
+      const { data: bookings, error: bErr } = await this.db.from('bookings')
+        .select('id,check_in,check_out,nights,total_amount,total_paid,balance,price_per_night,status,source,booking_units(unit_id,units(name,color,sort_order))')
+        .eq('hotel_id', this.ctx.hotelId)
+        .neq('status', 'cancelled').neq('status', 'blocked')
+        .lte('check_in', to).gt('check_out', from);
+      if (bErr) throw bErr;
+
+      // ── Fetch gastos del rango ────────────────────
+      const { data: expenses } = await this.db.from('expenses')
+        .select('id,category,description,amount,paid,due_date')
+        .eq('hotel_id', this.ctx.hotelId)
+        .gte('due_date', from).lte('due_date', to);
+
+      // ── Unidades a incluir ────────────────────────
+      const allUnits  = AppContext?.units ?? [];
+      const filtered  = unitIds.length > 0 ? allUnits.filter(u => unitIds.includes(u.id)) : allUnits;
+      const unitIdSet = new Set(filtered.map(u => u.id));
+
+      // ── Calcular estadísticas por unidad ─────────
+      const daysTotal  = Math.max(1, Math.round((new Date(to) - new Date(from)) / 86400000) + 1);
+      const statsMap   = {};
+      filtered.forEach(u => { statsMap[u.id] = { unit: u, nightsOcc: 0, revenue: 0, bookingCount: 0, cobrado: 0 }; });
+
+      (bookings ?? []).forEach(b => {
+        (b.booking_units ?? []).forEach(({ unit_id }) => {
+          if (!statsMap[unit_id]) return;
+          const ci   = new Date(Math.max(new Date(b.check_in + 'T00:00:00'), new Date(from + 'T00:00:00')));
+          const co   = new Date(Math.min(new Date(b.check_out + 'T00:00:00'), new Date(to   + 'T23:59:59')));
+          const n    = Math.max(0, Math.round((co - ci) / 86400000));
+          const tot  = Math.round((new Date(b.check_out + 'T00:00:00') - new Date(b.check_in + 'T00:00:00')) / 86400000);
+          const frac = tot > 0 ? n / tot : 0;
+          statsMap[unit_id].nightsOcc    += n;
+          statsMap[unit_id].bookingCount += 1;
+          statsMap[unit_id].revenue      += (b.total_amount ?? 0) * frac;
+          statsMap[unit_id].cobrado      += (b.total_paid   ?? 0) * frac;
+        });
+      });
+
+      const stats       = Object.values(statsMap).sort((a, b) => b.revenue - a.revenue);
+      const totalRev    = stats.reduce((s, u) => s + u.revenue, 0);
+      const totalCobr   = stats.reduce((s, u) => s + u.cobrado, 0);
+      const totalNights = stats.reduce((s, u) => s + u.nightsOcc, 0);
+      const totalBks    = stats.reduce((s, u) => s + u.bookingCount, 0);
+      const totalExpPaid= (expenses ?? []).filter(e => e.paid).reduce((s, e) => s + e.amount, 0);
+      const totalExpAll = (expenses ?? []).reduce((s, e) => s + e.amount, 0);
+      const netResult   = totalRev - totalExpPaid;
+
+      const fmtDate = s => s ? s.split('-').reverse().join('/') : '';
+      const fmtMoney = n => '$' + Math.round(n ?? 0).toLocaleString('es-AR');
+      const range   = `${fmtDate(from)} → ${fmtDate(to)}`;
+      const genDate = new Date().toLocaleDateString('es-AR', { day:'2-digit', month:'long', year:'numeric' });
+
+      // Agrupar gastos por categoría
+      const expCat = {};
+      (expenses ?? []).forEach(e => {
+        if (!expCat[e.category]) expCat[e.category] = { total: 0, paid: 0 };
+        expCat[e.category].total += e.amount;
+        if (e.paid) expCat[e.category].paid += e.amount;
+      });
+
+      const unitRows = stats.map((s, i) => {
+        const occ  = Math.min(100, Math.round(s.nightsOcc / daysTotal * 100));
+        const barW = Math.max(2, occ);
+        return `<tr style="background:${i%2===0?'#fff':'#f8fafc'}">
+          <td>
+            <div style="display:flex;align-items:center;gap:7px">
+              <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${s.unit.color??'#1A3A90'};flex-shrink:0"></span>
+              ${s.unit.name}
+            </div>
+          </td>
+          <td style="text-align:center">${s.bookingCount}</td>
+          <td style="text-align:center">${s.nightsOcc}</td>
+          <td style="text-align:center">
+            <div style="display:flex;align-items:center;gap:5px">
+              <div style="flex:1;height:6px;background:#e2e8f0;border-radius:3px;min-width:40px">
+                <div style="width:${barW}%;height:100%;background:${s.unit.color??'#1A3A90'};border-radius:3px"></div>
+              </div>
+              <span style="font-size:10px;font-weight:700;color:${s.unit.color??'#1A3A90'};min-width:28px">${occ}%</span>
+            </div>
+          </td>
+          <td style="text-align:right;color:#16a34a;font-weight:600">${fmtMoney(s.cobrado)}</td>
+          <td style="text-align:right;font-weight:700;color:#1A3A90">${fmtMoney(s.revenue)}</td>
+        </tr>`;
+      }).join('');
+
+      const expRows = Object.entries(expCat).map(([cat, v], i) =>
+        `<tr style="background:${i%2===0?'#fff':'#f8fafc'}">
+          <td style="text-transform:capitalize">${cat}</td>
+          <td style="text-align:right;color:#16a34a">${fmtMoney(v.paid)}</td>
+          <td style="text-align:right;color:#f59e0b">${fmtMoney(v.total - v.paid)}</td>
+          <td style="text-align:right;font-weight:700">${fmtMoney(v.total)}</td>
+        </tr>`
+      ).join('') || `<tr><td colspan="4" style="text-align:center;color:#94a3b8;padding:12px">Sin gastos registrados en el período</td></tr>`;
+
+      const w = window.open('', '_blank');
+      if (!w) { showToast('Permitir ventanas emergentes para exportar', 'warning'); return; }
+
+      w.document.write(`<!DOCTYPE html><html lang="es"><head>
+        <meta charset="utf-8"><title>MILA · Estadísticas ${range}</title>
+        <style>
+          *{box-sizing:border-box;margin:0;padding:0}
+          body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#1e293b;background:#fff;padding:28px 32px;font-size:12px}
+          .header{display:flex;align-items:center;justify-content:space-between;border-bottom:3px solid #1A3A90;padding-bottom:14px;margin-bottom:18px}
+          .logo{display:flex;align-items:center;gap:10px}
+          .logo-box{width:38px;height:38px;border-radius:9px;background:#1A3A90;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:900;font-size:18px;flex-shrink:0}
+          .logo-name{font-size:16px;font-weight:800;color:#1A3A90}
+          .logo-sub{font-size:9px;color:#64748b;margin-top:1px}
+          .meta{text-align:right;line-height:1.6;color:#64748b}
+          .meta strong{color:#1e293b}
+          .kpis{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;margin-bottom:18px}
+          .kpi{background:#f0f4fa;border-radius:9px;padding:10px 11px;border-left:3px solid}
+          .kpi-l{font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#64748b;margin-bottom:3px}
+          .kpi-v{font-size:14px;font-weight:800}
+          .sec{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#1A3A90;margin:16px 0 7px;padding-bottom:4px;border-bottom:1.5px solid #ddeaff}
+          table{width:100%;border-collapse:collapse}
+          thead tr{background:#1A3A90;color:#fff}
+          th{padding:7px 9px;text-align:left;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.04em}
+          td{padding:6px 9px;border-bottom:1px solid #f1f5f9;vertical-align:middle}
+          tfoot tr{background:#f0f4fa;font-weight:700}
+          tfoot td{padding:7px 9px;border-top:2px solid #1A3A90}
+          .result{margin-top:16px;background:${netResult>=0?'#f0fdf4':'#fef2f2'};border:1.5px solid ${netResult>=0?'#bbf7d0':'#fecaca'};border-radius:10px;padding:12px 16px;display:flex;justify-content:space-between;align-items:center}
+          .result-lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:${netResult>=0?'#15803d':'#dc2626'}}
+          .result-val{font-size:18px;font-weight:900;color:${netResult>=0?'#15803d':'#dc2626'}}
+          .print-btn{margin-top:18px;padding:8px 18px;background:#1A3A90;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer}
+          @media print{.no-print{display:none}body{padding:16px}@page{margin:1.5cm}}
+        </style>
+      </head><body>
+        <div class="header">
+          <div class="logo">
+            <div class="logo-box">M</div>
+            <div><div class="logo-name">MILA</div><div class="logo-sub">Sistema Inteligente para Alojamientos</div></div>
+          </div>
+          <div class="meta">
+            <div><strong>Reporte de Estadísticas</strong></div>
+            <div>${range}${unitIds.length > 0 ? ' · ' + filtered.map(u=>u.name).join(', ') : ' · Todos los departamentos'}</div>
+            <div>Generado: ${genDate}</div>
+          </div>
+        </div>
+
+        <div class="kpis">
+          <div class="kpi" style="border-color:#1A3A90"><div class="kpi-l">Reservas</div><div class="kpi-v" style="color:#1A3A90">${totalBks}</div></div>
+          <div class="kpi" style="border-color:#1A3A90"><div class="kpi-l">Noches</div><div class="kpi-v" style="color:#1A3A90">${totalNights}</div></div>
+          <div class="kpi" style="border-color:#1A3A90"><div class="kpi-l">Ingresos</div><div class="kpi-v" style="color:#1A3A90">${fmtMoney(totalRev)}</div></div>
+          <div class="kpi" style="border-color:#16a34a"><div class="kpi-l">Cobrado</div><div class="kpi-v" style="color:#16a34a">${fmtMoney(totalCobr)}</div></div>
+          <div class="kpi" style="border-color:#ef4444"><div class="kpi-l">Gastos pagados</div><div class="kpi-v" style="color:#ef4444">${fmtMoney(totalExpPaid)}</div></div>
+          <div class="kpi" style="border-color:${netResult>=0?'#16a34a':'#ef4444'}"><div class="kpi-l">Resultado neto</div><div class="kpi-v" style="color:${netResult>=0?'#16a34a':'#ef4444'}">${fmtMoney(netResult)}</div></div>
+        </div>
+
+        <div class="sec">Rendimiento por departamento</div>
+        <table>
+          <thead><tr>
+            <th>Departamento</th>
+            <th style="text-align:center">Reservas</th>
+            <th style="text-align:center">Noches</th>
+            <th style="text-align:center">Ocupación</th>
+            <th style="text-align:right">Cobrado</th>
+            <th style="text-align:right">Total facturado</th>
+          </tr></thead>
+          <tbody>${unitRows}</tbody>
+          <tfoot><tr>
+            <td>TOTAL</td>
+            <td style="text-align:center">${totalBks}</td>
+            <td style="text-align:center">${totalNights}</td>
+            <td style="text-align:center">—</td>
+            <td style="text-align:right;color:#16a34a">${fmtMoney(totalCobr)}</td>
+            <td style="text-align:right;color:#1A3A90">${fmtMoney(totalRev)}</td>
+          </tr></tfoot>
+        </table>
+
+        ${(expenses ?? []).length > 0 ? `
+        <div class="sec">Gastos operativos</div>
+        <table>
+          <thead><tr>
+            <th>Categoría</th>
+            <th style="text-align:right">Pagado</th>
+            <th style="text-align:right">Pendiente</th>
+            <th style="text-align:right">Total</th>
+          </tr></thead>
+          <tbody>${expRows}</tbody>
+          <tfoot><tr>
+            <td>TOTAL</td>
+            <td style="text-align:right;color:#16a34a">${fmtMoney(totalExpPaid)}</td>
+            <td style="text-align:right;color:#f59e0b">${fmtMoney(totalExpAll - totalExpPaid)}</td>
+            <td style="text-align:right">${fmtMoney(totalExpAll)}</td>
+          </tr></tfoot>
+        </table>` : ''}
+
+        <div class="result">
+          <div class="result-lbl">${netResult >= 0 ? '✅ Resultado neto del período' : '⚠️ Resultado neto del período'}</div>
+          <div class="result-val">${fmtMoney(netResult)}</div>
+        </div>
+
+        <div class="no-print">
+          <button class="print-btn" onclick="window.print()">🖨 Imprimir / Guardar PDF</button>
+        </div>
+      </body></html>`);
+      w.document.close();
+
+    } catch (err) {
+      console.error('[StatsPDF]', err);
+      showToast('Error generando reporte: ' + err.message, 'error');
+    }
   }
 }
