@@ -29,10 +29,10 @@ const PAST_OFFSET = 3;    // desktop: 3 días antes de hoy
 const CELL_W_DESK = 38;
 const CELL_W_MOB  = 32;
 // ── Ancho de la columna de labels (dinámico — ver _measureLabelW) ──
-const LABEL_W_MIN     = 100;
-const LABEL_W_MAX     = 220;
-const LABEL_W_MIN_MOB = 88;
-const LABEL_W_MAX_MOB = 150;
+const LABEL_W_MIN     = 90;
+const LABEL_W_MAX     = 200;
+const LABEL_W_MIN_MOB = 80;
+const LABEL_W_MAX_MOB = 140;
 // ── Días pasados visibles en mobile ──
 const PAST_OFFSET_MOB = 1; // mobile: solo 1 día antes de hoy
 
@@ -277,7 +277,7 @@ export class Calendar {
     // ── Encabezado: esquina ───────────────────────
     const corner = document.createElement('div');
     corner.className = 'cal-unit-label-header';
-    corner.textContent = 'Unidades';
+    corner.textContent = 'Unidad';
     // setProperty con 'important' — gana sobre cualquier CSS !important
     corner.style.setProperty('position', 'sticky',  'important');
     corner.style.setProperty('left',     '0',        'important');
@@ -354,7 +354,7 @@ export class Calendar {
         : '';
       // Lapiz => renombrar departamento por sesion (localStorage)
       const _editBtn = can('manageUnitNotes')
-        ? '<button class="btn btn-ghost btn-xs" data-unit-id="' + unit.id + '" title="Renombrar (solo tu sesion)" style="padding:1px 4px;font-size:.65rem;opacity:.5;flex-shrink:0" onclick="event.stopPropagation();window._calInstance.editUnitDisplayName(\'' + unit.id + '\')">\u270f\ufe0f</button>'
+        ? '<button class="btn btn-ghost btn-xs" data-unit-id="' + unit.id + '" title="Renombrar (solo tu sesion)" style="padding:1px 2px;font-size:.6rem;opacity:.5;flex-shrink:0;line-height:1" onclick="event.stopPropagation();window._calInstance.editUnitDisplayName(\'' + unit.id + '\')">\u270f\ufe0f</button>'
         : '';
       // Nombre: localStorage primero, luego unit.name
       const _unitNum  = unit.sort_order ?? unit.number ?? '';
@@ -362,8 +362,8 @@ export class Calendar {
         .replace('Planta Baja','P. Baja').replace('Planta Alta','P. Alta');
       label.dataset.unitId = unit.id;
       label.innerHTML =
-        '<div style="display:flex;align-items:center;gap:6px">' +
-          '<span class="cal-unit-dot" style="background-color:' + unitColor + ';width:8px;height:8px;border-radius:50%;flex-shrink:0"></span>' +
+        '<div style="display:flex;align-items:center;gap:3px">' +
+          '<span class="cal-unit-dot" style="background-color:' + unitColor + ';width:7px;height:7px;border-radius:50%;flex-shrink:0;margin-right:1px"></span>' +
           '<span class="cal-unit-name" style="font-size:.78rem;font-weight:700;color:var(--color-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;min-width:0">' + _unitName + '</span>' +
           _notesSpan + _editBtn +
         '</div>' +
@@ -2144,8 +2144,8 @@ export class Calendar {
           const w = ctx.measureText(name).width;
           if (w > maxPx) maxPx = w;
         });
-        // También considerar el texto del header "Unidades"
-        const headerW = ctx.measureText('Unidades').width;
+        // También considerar el texto del header "Unidad"
+        const headerW = ctx.measureText('Unidad').width;
         if (headerW > maxPx) maxPx = headerW;
       }
     } catch (_) {
@@ -2161,8 +2161,8 @@ export class Calendar {
       maxPx = longestName.length * (isMob ? 6.5 : 7);
     }
 
-    // dot(8) + gap(6) + texto + padding + lápiz
-    const total = Math.ceil(maxPx) + (isMob ? 48 : 56);
+    // dot(8) + gap(4) + texto + padding(16) + lápiz(18) = ~46 desktop, ~38 mobile
+    const total = Math.ceil(maxPx) + (isMob ? 38 : 46);
     const min = isMob ? LABEL_W_MIN_MOB : LABEL_W_MIN;
     const max = isMob ? LABEL_W_MAX_MOB : LABEL_W_MAX;
     return Math.max(min, Math.min(max, total));
