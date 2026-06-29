@@ -460,19 +460,26 @@ export class ConfigPanel {
       const { showExportDropdown, exportBookingsExcel, exportBookingsCSV, exportBookingsPDF } =
         await import('../services/export-service.js');
 
-      // Cargar TODAS las reservas del hotel para filtrar en el dropdown
-      const { data: allBookings } = await this.db.from('bookings')
-        .select('id,check_in,check_out,status,nights,total_amount,total_paid,balance,price_per_night,notes,source,guests(first_name,last_name,dni,email,phone),booking_units(unit_id,units(name))')
+      // Mismo select que booking-list con FK hint explícito (evita $0 por ambigüedad PostgREST)
+      const { data: allBookings, error: bErr } = await this.db.from('bookings')
+        .select(`id, check_in, check_out, nights, status, source,
+          total_amount, total_paid, balance, price_per_night,
+          notes, is_blocked, block_reason,
+          guests!bookings_guest_id_fkey(id, first_name, last_name, dni, phone, email),
+          booking_units(unit_id, units(name, sort_order, color))`)
         .eq('hotel_id', this.ctx.hotelId)
-        .not('status','in','(blocked)')
+        .not('status', 'in', '(blocked)')
         .order('check_in', { ascending: false });
+
+      if (bErr) { showToast('Error: ' + bErr.message, 'error'); return; }
+      if (!allBookings?.length) { showToast('Sin reservas para exportar', 'info'); return; }
 
       showExportDropdown({
         anchorEl: btn,
         type: 'bookings',
-        data: allBookings ?? [],
+        data: allBookings,
         onExport: ({ fmt: f, data, from, to }) => {
-          const range = from && to ? `${from.split('-').reverse().join('/')} → ${to.split('-').reverse().join('/')}` : '';
+          const range = from && to ? from.split('-').reverse().join('/') + ' → ' + to.split('-').reverse().join('/') : '';
           if (f === 'excel') exportBookingsExcel(data, 'reservas', range);
           else if (f === 'pdf') exportBookingsPDF(data, range);
           else exportBookingsCSV(data);
@@ -485,20 +492,26 @@ export class ConfigPanel {
       const { showExportDropdown, exportBookingsExcel, exportBookingsCSV, exportBookingsPDF } =
         await import('../services/export-service.js');
 
-      // Para huéspedes, traer reservas con datos de huésped para filtrar por rango/depto
-      const { data: allBookings } = await this.db.from('bookings')
-        .select('id,check_in,check_out,status,nights,total_amount,total_paid,balance,price_per_night,notes,source,guests(first_name,last_name,dni,email,phone),booking_units(unit_id,units(name))')
+      const { data: allBookings, error: gErr } = await this.db.from('bookings')
+        .select(`id, check_in, check_out, nights, status, source,
+          total_amount, total_paid, balance, price_per_night,
+          notes, is_blocked, block_reason,
+          guests!bookings_guest_id_fkey(id, first_name, last_name, dni, phone, email),
+          booking_units(unit_id, units(name, sort_order, color))`)
         .eq('hotel_id', this.ctx.hotelId)
-        .not('status','in','(blocked,cancelled)')
-        .not('guest_id','is','null')
+        .not('status', 'in', '(blocked,cancelled)')
+        .not('guest_id', 'is', null)
         .order('check_in', { ascending: false });
+
+      if (gErr) { showToast('Error: ' + gErr.message, 'error'); return; }
+      if (!allBookings?.length) { showToast('Sin huéspedes para exportar', 'info'); return; }
 
       showExportDropdown({
         anchorEl: btn,
         type: 'guests',
-        data: allBookings ?? [],
+        data: allBookings,
         onExport: ({ fmt: f, data, from, to }) => {
-          const range = from && to ? `${from.split('-').reverse().join('/')} → ${to.split('-').reverse().join('/')}` : '';
+          const range = from && to ? from.split('-').reverse().join('/') + ' → ' + to.split('-').reverse().join('/') : '';
           if (f === 'excel') exportBookingsExcel(data, 'huespedes', range);
           else if (f === 'pdf') exportBookingsPDF(data, range);
           else exportBookingsCSV(data);
