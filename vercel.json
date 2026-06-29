@@ -50,7 +50,7 @@
   ],
   "rewrites": [
     {
-      "source": "/((?!sw\\.js|manifest\\.json|offline\\.html|assets/|api/|instalar\\.html|.*\\.png|.*\\.ico|.*\\.webp|.*\\.svg|.*\\.txt|.*\\.xml).*)",
+      "source": "/((?!sw\\.js|manifest\\.json|offline\\.html|assets/|.*\\.png|.*\\.ico|.*\\.webp|.*\\.svg|.*\\.txt|.*\\.xml).*)",
       "destination": "/index.html"
     }
   ]

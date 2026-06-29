@@ -28,11 +28,9 @@ const PAST_OFFSET = 3;    // desktop: 3 días antes de hoy
 // ── Ancho mínimo de columna (px) ──
 const CELL_W_DESK = 38;
 const CELL_W_MOB  = 32;
-// ── Ancho de la columna de labels (dinámico — ver _measureLabelW) ──
-const LABEL_W_MIN     = 90;
-const LABEL_W_MAX     = 200;
-const LABEL_W_MIN_MOB = 80;
-const LABEL_W_MAX_MOB = 140;
+// ── Ancho de la columna de etiquetas de unidad ──
+const LABEL_W     = 160;
+const LABEL_W_MOB = 108;   // mobile: columna más angosta
 // ── Días pasados visibles en mobile ──
 const PAST_OFFSET_MOB = 1; // mobile: solo 1 día antes de hoy
 
@@ -99,9 +97,6 @@ export class Calendar {
     // ── 5. Barra de resumen superior ──
     this._renderSummaryBar(bookings);
 
-    // ── 5b. Leyenda de canales (siempre visible) ──
-    this._renderSourceLegend();
-
       // ── 6. Heatmap por fila (muy sutil) ──
       this._applyHeatmap(bookings);
 
@@ -130,7 +125,7 @@ export class Calendar {
     const w       = wrapper ? wrapper.clientWidth : Math.max(window.innerWidth - 280, 400);
     const isMob   = window.innerWidth <= 768;
     const cellW   = isMob ? CELL_W_MOB : CELL_W_DESK;
-    const labelW  = this._measureLabelW(isMob);
+    const labelW  = isMob ? LABEL_W_MOB : LABEL_W;
     return Math.max(14, Math.min(120, Math.floor((w - labelW) / cellW)));
   }
 
@@ -259,7 +254,7 @@ export class Calendar {
     const today   = localToday();
     const isMob   = window.innerWidth <= 768;
     const cellW   = isMob ? CELL_W_MOB : CELL_W_DESK;
-    const labelW  = this._measureLabelW(isMob);
+    const labelW  = isMob ? LABEL_W_MOB : LABEL_W;
     const N       = this._visibleDays;
 
     grid.style.gridTemplateColumns = `${labelW}px repeat(${N}, minmax(${cellW}px, 1fr))`;
@@ -280,17 +275,13 @@ export class Calendar {
     // ── Encabezado: esquina ───────────────────────
     const corner = document.createElement('div');
     corner.className = 'cal-unit-label-header';
-    corner.textContent = 'Unidad';
+    corner.textContent = 'Departamento';
     // setProperty con 'important' — gana sobre cualquier CSS !important
     corner.style.setProperty('position', 'sticky',  'important');
     corner.style.setProperty('left',     '0',        'important');
     corner.style.setProperty('top',      '0',        'important');
     corner.style.setProperty('z-index',  '100',      'important');
     corner.style.setProperty('background', 'var(--color-surface-2)', 'important');
-    corner.style.setProperty('width',    '100%',     'important');
-    corner.style.setProperty('min-width','0',        'important');
-    corner.style.setProperty('max-width','100%',     'important');
-    corner.style.setProperty('overflow', 'hidden',   'important');
     grid.appendChild(corner);
 
     // ── Encabezado: columnas de días ──────────────
@@ -354,34 +345,27 @@ export class Calendar {
       label.style.setProperty('left',       '0',       'important');
       label.style.setProperty('z-index',    '80',      'important');
       label.style.setProperty('background', 'var(--color-surface-2)', 'important');
-      // Ancho controlado por grid template — nunca mayor al labelW calculado
-      label.style.setProperty('width',      '100%',    'important');
-      label.style.setProperty('min-width',  '0',       'important');
-      label.style.setProperty('max-width',  '100%',    'important');
-      label.style.setProperty('overflow',   'hidden',  'important');
-      const _notes     = unit.internal_notes ?? '';
-      const _notesSafe  = _notes.replace(/[']/g, '&#39;');
-      const _notesSpan  = hasNotes
-        ? '<span title="' + _notes.replace(/"/g,'&quot;') + '" style="cursor:help;font-size:.85rem" onclick="window._calInstance._showUnitNote(event,\'' + _notesSafe + '\')">\u{1F4DD}</span>'
+      const _notes    = unit.internal_notes ?? '';
+      const _notesSafe = _notes.replace(/[']/g, '&#39;');
+      const _notesSpan = hasNotes
+        ? '<span title="' + _notes.replace(/"/g, '&quot;') + '" style="cursor:help;font-size:.85rem" onclick="window._calInstance._showUnitNote(event,\'' + _notesSafe + '\')">\u{1F4DD}</span>'
         : '';
-      // Lapiz => renombrar departamento por sesion (localStorage)
       const _editBtn = can('manageUnitNotes')
-        ? '<button class="btn btn-ghost btn-xs" data-unit-id="' + unit.id + '" title="Renombrar (solo tu sesion)" style="padding:1px 2px;font-size:.6rem;opacity:.5;flex-shrink:0;line-height:1" onclick="event.stopPropagation();window._calInstance.editUnitDisplayName(\'' + unit.id + '\')">\u270f\ufe0f</button>'
+        ? '<button class="btn btn-ghost btn-xs" style="padding:1px 4px;font-size:.65rem;opacity:.5" onclick="window._calInstance.editUnitNotes(\'' + unit.id + '\',\'' + _notesSafe + '\')">\u270f\ufe0f</button>'
         : '';
-      // Nombre: localStorage primero, luego unit.name
+      // Extraer número y nombre para mejor presentación visual
       const _unitNum  = unit.sort_order ?? unit.number ?? '';
-      const _unitName = this._getUnitDisplayName(unit)
+      const _unitName = (unit.name ?? ('Unidad ' + _unitNum))
         .replace('Planta Baja','P. Baja').replace('Planta Alta','P. Alta');
-      label.dataset.unitId = unit.id;
       label.innerHTML =
-        '<div style="display:flex;align-items:center;gap:3px">' +
-          '<span class="cal-unit-dot" style="background-color:' + unitColor + ';width:7px;height:7px;border-radius:50%;flex-shrink:0;margin-right:1px"></span>' +
-          '<span class="cal-unit-name" style="font-size:.78rem;font-weight:700;color:var(--color-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;min-width:0">' + _unitName + '</span>' +
+        '<div style="display:flex;align-items:center;gap:6px">' +
+          '<span class="cal-unit-dot" style="background-color:' + unitColor + ';width:8px;height:8px;border-radius:50%;flex-shrink:0"></span>' +
+          '<span style="font-size:.78rem;font-weight:700;color:var(--color-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + _unitName + '</span>' +
           _notesSpan + _editBtn +
         '</div>' +
         '<span class="unit-floor" style="padding-left:14px;font-size:.63rem;color:var(--color-text-3)">' +
           '<span style="color:var(--color-text-3);font-weight:600;opacity:.7">#' + _unitNum + '</span>' +
-          ' \xb7 Hasta ' + unit.max_guests + ' pers.' +
+          ' · Hasta ' + unit.max_guests + ' pers.' +
         '</span>';
       grid.appendChild(label);
 
@@ -432,17 +416,6 @@ export class Calendar {
         grid.appendChild(cell);
       });
     });
-
-    // Reset scroll al inicio del window DESPUÉS del paint completo
-    // (doble rAF garantiza que el browser terminó layout + paint)
-    const _wrapper = document.querySelector('.cal-wrapper');
-    if (_wrapper) {
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          _wrapper.scrollLeft = 0;
-        });
-      });
-    }
   }
 
   // ══════════════════════════════════════════════════
@@ -913,9 +886,6 @@ export class Calendar {
   // DRAG SELECTION (crear reserva / bloqueo)
   // ══════════════════════════════════════════════════
   _setupDragSelection(grid) {
-    // Staff: solo lectura, no puede crear reservas ni bloqueos
-    if (!can('createBooking')) return;
-
     if (this._selectionAbort) this._selectionAbort.abort();
     this._selectionAbort = new AbortController();
     const sig = this._selectionAbort.signal;
@@ -1952,94 +1922,11 @@ export class Calendar {
         await this._openBlockModal(bookingId, bk);
         return;
       }
-
-      // Staff: panel solo-lectura con datos limitados
-      if (!can('editBooking')) {
-        await this._openStaffDetailPanel(bookingId);
-        return;
-      }
-
       await this.bookingForm.openEdit(bookingId);
     } catch (err) {
       console.error('[Calendar] _openDetailById:', err);
       showToast('Error al cargar la reserva', 'error');
     }
-  }
-
-  // ── Panel solo-lectura para staff ──────────────────
-  async _openStaffDetailPanel(bookingId) {
-    document.getElementById('overlay-staff-detail')?.remove();
-
-    const { data: b } = await this.db.from('bookings')
-      .select(`id, check_in, check_out, nights, adults, children, balance, status,
-               guests!bookings_guest_id_fkey(first_name, last_name),
-               booking_units(units(name, color, sort_order))`)
-      .eq('id', bookingId).single();
-
-    if (!b) return;
-
-    const g         = b.guests;
-    const guestName = g ? `${g.first_name ?? ''} ${g.last_name ?? ''}`.trim() : '—';
-    const units     = (b.booking_units ?? []).map(bu => bu.units?.name ?? '').filter(Boolean).join(', ');
-    const color     = b.booking_units?.[0]?.units?.color ?? '#1A3A90';
-    const nights    = b.nights ?? Math.round((new Date(b.check_out) - new Date(b.check_in)) / 86400000);
-    const guests    = (b.adults ?? 1) + (b.children ?? 0);
-    const fmtDate   = s => s ? s.split('-').reverse().join('/') : '—';
-    const fmtMoney  = n => '$' + Math.round(n ?? 0).toLocaleString('es-AR');
-    const balance   = b.balance ?? 0;
-
-    const overlay = document.createElement('div');
-    overlay.id = 'overlay-staff-detail';
-    overlay.style.cssText = 'position:fixed;inset:0;z-index:500;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;padding:16px';
-
-    overlay.innerHTML = `
-      <div style="background:var(--color-surface);border-radius:16px;padding:0;max-width:360px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.25);overflow:hidden">
-        <!-- Header con color de unidad -->
-        <div style="background:${color};padding:16px 20px;display:flex;align-items:center;justify-content:space-between">
-          <div>
-            <div style="font-size:1.05rem;font-weight:800;color:#fff">${guestName}</div>
-            <div style="font-size:.78rem;color:rgba(255,255,255,.8);margin-top:2px">${units}</div>
-          </div>
-          <button id="staff-detail-close" style="background:rgba(255,255,255,.2);border:none;border-radius:50%;width:30px;height:30px;color:#fff;font-size:1rem;cursor:pointer;display:flex;align-items:center;justify-content:center">✕</button>
-        </div>
-        <!-- Datos -->
-        <div style="padding:18px 20px;display:flex;flex-direction:column;gap:12px">
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-            <div style="background:var(--color-surface-2);border-radius:10px;padding:10px 12px">
-              <div style="font-size:.62rem;font-weight:700;color:var(--color-text-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px">Check-in</div>
-              <div style="font-size:.95rem;font-weight:700;color:var(--color-text)">${fmtDate(b.check_in)}</div>
-            </div>
-            <div style="background:var(--color-surface-2);border-radius:10px;padding:10px 12px">
-              <div style="font-size:.62rem;font-weight:700;color:var(--color-text-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px">Check-out</div>
-              <div style="font-size:.95rem;font-weight:700;color:var(--color-text)">${fmtDate(b.check_out)}</div>
-            </div>
-            <div style="background:var(--color-surface-2);border-radius:10px;padding:10px 12px">
-              <div style="font-size:.62rem;font-weight:700;color:var(--color-text-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px">Noches</div>
-              <div style="font-size:.95rem;font-weight:700;color:var(--color-text)">${nights}</div>
-            </div>
-            <div style="background:var(--color-surface-2);border-radius:10px;padding:10px 12px">
-              <div style="font-size:.62rem;font-weight:700;color:var(--color-text-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px">Personas</div>
-              <div style="font-size:.95rem;font-weight:700;color:var(--color-text)">${guests}</div>
-            </div>
-          </div>
-          <!-- Balance destacado -->
-          <div style="background:${balance > 0 ? '#f0fdf4' : '#f8fafc'};border:2px solid ${balance > 0 ? '#16a34a' : 'var(--color-border)'};border-radius:12px;padding:14px 16px;display:flex;align-items:center;justify-content:space-between">
-            <div>
-              <div style="font-size:.7rem;font-weight:700;color:${balance > 0 ? '#15803d' : 'var(--color-text-3)'};text-transform:uppercase;letter-spacing:.05em">
-                ${balance > 0 ? '💰 A cobrar al ingreso' : '✓ Pagado'}
-              </div>
-              ${balance > 0 ? `<div style="font-size:.72rem;color:#15803d;margin-top:1px">Saldo pendiente</div>` : ''}
-            </div>
-            <div style="font-size:1.4rem;font-weight:900;color:${balance > 0 ? '#16a34a' : 'var(--color-text-3)'}">
-              ${balance > 0 ? fmtMoney(balance) : '—'}
-            </div>
-          </div>
-        </div>
-      </div>`;
-
-    document.body.appendChild(overlay);
-    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
-    document.getElementById('staff-detail-close').addEventListener('click', () => overlay.remove());
   }
 
   // ── Modal exclusivo para editar/eliminar bloqueos ──
@@ -2230,107 +2117,6 @@ export class Calendar {
       });
   }
 
-  // ── Nombre de display: localStorage primero, luego unit.name ──
-  _getUnitDisplayName(unit) {
-    return localStorage.getItem('mila_unit_name_' + unit.id) || unit.name || ('Unidad ' + (unit.sort_order ?? ''));
-  }
-
-  // ── Mide el texto más largo de todos los departamentos para calcular LABEL_W ──
-  _measureLabelW(isMob) {
-    const units = AppContext?.units ?? [];
-
-    // Intentar medir con canvas offscreen; fallback a estimación si no disponible
-    let maxPx = 0;
-    try {
-      const canvas = document.createElement('canvas');
-      const ctx    = canvas.getContext?.('2d');
-      if (ctx) {
-        ctx.font = isMob ? '700 11px system-ui' : '700 12px system-ui';
-        // Medir cada nombre (con abreviaciones aplicadas)
-        units.forEach(u => {
-          const name = this._getUnitDisplayName(u)
-            .replace('Planta Baja', 'P. Baja').replace('Planta Alta', 'P. Alta');
-          const w = ctx.measureText(name).width;
-          if (w > maxPx) maxPx = w;
-        });
-        // También considerar el texto del header "Unidad"
-        const headerW = ctx.measureText('Unidad').width;
-        if (headerW > maxPx) maxPx = headerW;
-      }
-    } catch (_) {
-      // Canvas no disponible — estimación por longitud de caracteres
-    }
-
-    // Fallback: 7px por carácter si canvas no funcionó
-    if (maxPx === 0 && units.length > 0) {
-      const longestName = units.reduce((max, u) => {
-        const name = this._getUnitDisplayName(u);
-        return name.length > max.length ? name : max;
-      }, '');
-      maxPx = longestName.length * (isMob ? 6.5 : 7);
-    }
-
-    // dot(8) + gap(4) + texto + padding(16) + lápiz(18) = ~46 desktop, ~38 mobile
-    const total = Math.ceil(maxPx) + (isMob ? 38 : 46);
-    const min = isMob ? LABEL_W_MIN_MOB : LABEL_W_MIN;
-    const max = isMob ? LABEL_W_MAX_MOB : LABEL_W_MAX;
-    return Math.max(min, Math.min(max, total));
-  }
-
-  // ── Edición inline del nombre del departamento (por sesión) ──
-  editUnitDisplayName(unitId) {
-    const unit = AppContext?.units?.find(u => u.id === unitId);
-    if (!unit) return;
-
-    // Buscar el span del nombre dentro del label del departamento
-    const allLabels = document.querySelectorAll('.cal-unit-label');
-    let targetSpan  = null;
-    let targetLabel = null;
-    allLabels.forEach(lbl => {
-      // Identificar la fila por data-unit o por el onclick del lápiz
-      const pencil = lbl.querySelector('button[onclick*="' + unitId + '"]');
-      if (pencil) {
-        targetLabel = lbl;
-        targetSpan  = lbl.querySelector('span[style*="font-size:.78rem"]')
-                   ?? lbl.querySelector('span[style*="font-weight:700"]');
-      }
-    });
-    if (!targetSpan) return;
-
-    const currentName = this._getUnitDisplayName(unit)
-      .replace('Planta Baja','P. Baja').replace('Planta Alta','P. Alta');
-
-    // Reemplazar span por input inline
-    const input = document.createElement('input');
-    input.type  = 'text';
-    input.value = currentName;
-    input.style.cssText = 'font-size:.78rem;font-weight:700;color:var(--color-text);'
-      + 'border:1px solid var(--color-primary);border-radius:4px;padding:1px 5px;'
-      + 'width:100%;min-width:60px;max-width:140px;background:var(--color-surface);'
-      + 'outline:none;box-shadow:0 0 0 2px var(--color-primary-t)';
-
-    targetSpan.replaceWith(input);
-    input.focus();
-    input.select();
-
-    const save = () => {
-      const val = input.value.trim();
-      if (val && val !== unit.name) {
-        localStorage.setItem('mila_unit_name_' + unitId, val);
-      } else if (!val || val === unit.name) {
-        localStorage.removeItem('mila_unit_name_' + unitId);
-      }
-      showToast('Nombre actualizado ✓', 'success');
-      this.load(); // re-render con nuevo ancho
-    };
-
-    input.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') { e.preventDefault(); save(); }
-      if (e.key === 'Escape') { this.load(); } // cancelar
-    });
-    input.addEventListener('blur', save, { once: true });
-  }
-
   // ══════════════════════════════════════════════════
   // ELEMENTOS DE UI PERSISTENTES
   // ══════════════════════════════════════════════════
@@ -2377,59 +2163,6 @@ export class Calendar {
   // ══════════════════════════════════════════════════
   // 5. BARRA DE RESUMEN SUPERIOR
   // ══════════════════════════════════════════════════
-  _renderSourceLegend() {
-    // Solo para staff — admin ya conoce los colores
-    if (can('editBooking')) return;
-
-    const existing = document.getElementById('cal-source-legend');
-    if (existing) existing.remove();
-
-    const legend = document.createElement('div');
-    legend.id = 'cal-source-legend';
-    legend.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px 14px;padding:6px 14px 8px;' +
-      'background:var(--color-surface);border:1px solid var(--color-border);' +
-      'border-radius:10px;margin-top:6px;margin-bottom:4px;align-items:center';
-
-    // Label
-    const lbl = document.createElement('span');
-    lbl.style.cssText = 'font-size:.62rem;font-weight:700;color:var(--color-text-3);' +
-      'text-transform:uppercase;letter-spacing:.06em;margin-right:4px;flex-shrink:0';
-    lbl.textContent = 'Canal:';
-    legend.appendChild(lbl);
-
-    // Colores de barra (prioridad) + fuentes
-    const entries = [
-      { color: '#22c55e', label: 'Pagado' },
-      { color: '#3b82f6', label: 'Con seña' },
-      { color: '#f59e0b', label: 'Sin seña' },
-      { color: '#6b7280', label: 'Bloqueado' },
-    ];
-    // Agregar fuentes de reserva
-    Object.entries(SOURCE_CONFIG).forEach(([key, src]) => {
-      if (src.dot && src.dot !== '#64748B') {
-        entries.push({ color: src.dot, label: src.label });
-      }
-    });
-    // Directo al final
-    entries.push({ color: SOURCE_CONFIG.direct?.dot ?? '#64748B', label: 'Directo' });
-
-    entries.forEach(({ color, label }) => {
-      const item = document.createElement('div');
-      item.style.cssText = 'display:flex;align-items:center;gap:4px;cursor:default';
-      item.innerHTML =
-        '<span style="display:inline-block;width:10px;height:10px;border-radius:2px;' +
-        'background:' + color + ';flex-shrink:0"></span>' +
-        '<span style="font-size:.68rem;color:var(--color-text-2);white-space:nowrap">' + label + '</span>';
-      legend.appendChild(item);
-    });
-
-    // Insertar después del toolbar
-    const toolbar = document.querySelector('.cal-toolbar');
-    if (toolbar?.parentNode) {
-      toolbar.parentNode.insertBefore(legend, toolbar.nextSibling);
-    }
-  }
-
   _renderSummaryBar(bookings) {
     // Crear solo una vez; en navegaciones subsiguientes solo actualizar el contenido
     let bar = document.getElementById('cal-summary-bar');

@@ -276,8 +276,9 @@ export class ConfigPanel {
               style="gap:5px" onclick="var p=document.getElementById('cfg-exp-csv-panel');p.style.display=p.style.display==='none'?'':'none'">
               📋 CSV / Excel ▾
             </button>
-            <button class="btn btn-outline btn-sm" id="cfg-exp-toggle-pdf" style="gap:5px">
-              📄 Reportes PDF
+            <button class="btn btn-outline btn-sm" id="cfg-exp-toggle-pdf"
+              style="gap:5px;opacity:.55;cursor:default" title="Próximamente">
+              📄 Reportes PDF <span style="font-size:.62rem;background:#fef3c7;color:#92400e;padding:1px 5px;border-radius:4px;margin-left:3px">v0.2</span>
             </button>
           </div>
           <div id="cfg-exp-csv-panel" style="display:none;margin-top:10px;background:var(--color-surface-2);border-radius:var(--r-lg);padding:12px">
@@ -356,9 +357,6 @@ export class ConfigPanel {
     const tabConfig  = container.querySelector('#cfg-tab-config');
     const tabControl = container.querySelector('#cfg-tab-control');
     const tabUsers   = container.querySelector('#cfg-tab-users');
-
-    // Mostrar tab Usuarios solo para admin
-    if (can('manageUsers') && tabUsers) tabUsers.style.display = '';
     const paneConfig  = container.querySelector('#cfg-pane-config');
     const paneControl = container.querySelector('#cfg-pane-control');
     const paneUsers   = container.querySelector('#cfg-pane-users');
@@ -462,26 +460,19 @@ export class ConfigPanel {
       const { showExportDropdown, exportBookingsExcel, exportBookingsCSV, exportBookingsPDF } =
         await import('../services/export-service.js');
 
-      // Mismo select que booking-list con FK hint explícito (evita $0 por ambigüedad PostgREST)
-      const { data: allBookings, error: bErr } = await this.db.from('bookings')
-        .select(`id, check_in, check_out, nights, status, source,
-          total_amount, total_paid, balance, price_per_night,
-          notes, is_blocked, block_reason,
-          guests!bookings_guest_id_fkey(id, first_name, last_name, dni, phone, email),
-          booking_units(unit_id, units(name, sort_order, color))`)
+      // Cargar TODAS las reservas del hotel para filtrar en el dropdown
+      const { data: allBookings } = await this.db.from('bookings')
+        .select('id,check_in,check_out,status,nights,total_amount,total_paid,balance,price_per_night,notes,source,guests(first_name,last_name,dni,email,phone),booking_units(unit_id,units(name))')
         .eq('hotel_id', this.ctx.hotelId)
-        .not('status', 'in', '(blocked)')
+        .not('status','in','(blocked)')
         .order('check_in', { ascending: false });
-
-      if (bErr) { showToast('Error: ' + bErr.message, 'error'); return; }
-      if (!allBookings?.length) { showToast('Sin reservas para exportar', 'info'); return; }
 
       showExportDropdown({
         anchorEl: btn,
         type: 'bookings',
-        data: allBookings,
+        data: allBookings ?? [],
         onExport: ({ fmt: f, data, from, to }) => {
-          const range = from && to ? from.split('-').reverse().join('/') + ' → ' + to.split('-').reverse().join('/') : '';
+          const range = from && to ? `${from.split('-').reverse().join('/')} → ${to.split('-').reverse().join('/')}` : '';
           if (f === 'excel') exportBookingsExcel(data, 'reservas', range);
           else if (f === 'pdf') exportBookingsPDF(data, range);
           else exportBookingsCSV(data);
@@ -494,37 +485,25 @@ export class ConfigPanel {
       const { showExportDropdown, exportBookingsExcel, exportBookingsCSV, exportBookingsPDF } =
         await import('../services/export-service.js');
 
-      const { data: allBookings, error: gErr } = await this.db.from('bookings')
-        .select(`id, check_in, check_out, nights, status, source,
-          total_amount, total_paid, balance, price_per_night,
-          notes, is_blocked, block_reason,
-          guests!bookings_guest_id_fkey(id, first_name, last_name, dni, phone, email),
-          booking_units(unit_id, units(name, sort_order, color))`)
+      // Para huéspedes, traer reservas con datos de huésped para filtrar por rango/depto
+      const { data: allBookings } = await this.db.from('bookings')
+        .select('id,check_in,check_out,status,nights,total_amount,total_paid,balance,price_per_night,notes,source,guests(first_name,last_name,dni,email,phone),booking_units(unit_id,units(name))')
         .eq('hotel_id', this.ctx.hotelId)
-        .not('status', 'in', '(blocked,cancelled)')
-        .not('guest_id', 'is', null)
+        .not('status','in','(blocked,cancelled)')
+        .not('guest_id','is','null')
         .order('check_in', { ascending: false });
-
-      if (gErr) { showToast('Error: ' + gErr.message, 'error'); return; }
-      if (!allBookings?.length) { showToast('Sin huéspedes para exportar', 'info'); return; }
 
       showExportDropdown({
         anchorEl: btn,
         type: 'guests',
-        data: allBookings,
+        data: allBookings ?? [],
         onExport: ({ fmt: f, data, from, to }) => {
-          const range = from && to ? from.split('-').reverse().join('/') + ' → ' + to.split('-').reverse().join('/') : '';
+          const range = from && to ? `${from.split('-').reverse().join('/')} → ${to.split('-').reverse().join('/')}` : '';
           if (f === 'excel') exportBookingsExcel(data, 'huespedes', range);
           else if (f === 'pdf') exportBookingsPDF(data, range);
           else exportBookingsCSV(data);
         },
       });
-    });
-
-    // ── Reportes PDF ──────────────────────────────────
-    container.querySelector('#cfg-exp-toggle-pdf')?.addEventListener('click', (e) => {
-      const btn = e.currentTarget;
-      this._showStatsPDFDropdown(btn);
     });
 
     // ── Logout ────────────────────────────────────────
@@ -658,307 +637,5 @@ export class ConfigPanel {
 
   static getNumber(key, defaultVal = 0) {
     return parseFloat(AppContext.config?.[key] ?? defaultVal) || defaultVal;
-  }
-
-  // ══════════════════════════════════════════════════
-  // REPORTES PDF — dropdown con rango + departamentos
-  // ══════════════════════════════════════════════════
-  _showStatsPDFDropdown(anchorEl) {
-    document.getElementById('_mila-stats-pdf-dd')?.remove();
-
-    const now   = new Date();
-    const y     = now.getFullYear();
-    const mo    = String(now.getMonth() + 1).padStart(2, '0');
-    const first = y + '-' + mo + '-01';
-    const lastD = new Date(y, now.getMonth() + 1, 0);
-    const lastS = y + '-' + mo + '-' + String(lastD.getDate()).padStart(2, '0');
-    const units = AppContext?.units ?? [];
-
-    const checkboxes = units.map(u =>
-      '<label style="display:flex;align-items:center;gap:7px;cursor:pointer;padding:4px 0">' +
-        '<input type="checkbox" value="' + u.id + '" checked ' +
-          'style="width:14px;height:14px;accent-color:' + (u.color || '#1A3A90') + ';cursor:pointer">' +
-        '<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:' + (u.color || '#1A3A90') + ';flex-shrink:0"></span>' +
-        '<span style="font-size:.76rem;font-weight:600;color:' + (u.color || '#1A3A90') + '">' + u.name + '</span>' +
-      '</label>'
-    ).join('');
-
-    const dd = document.createElement('div');
-    dd.id = '_mila-stats-pdf-dd';
-    const rect = anchorEl.getBoundingClientRect();
-    dd.style.cssText = 'position:fixed;z-index:9999;background:var(--color-surface);border:1px solid var(--color-border);border-radius:12px;padding:14px 16px;box-shadow:0 8px 32px rgba(0,0,0,.14);width:280px;font-family:system-ui,sans-serif';
-    dd.innerHTML =
-      '<div style="font-size:.8rem;font-weight:700;color:var(--color-text);margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--color-border)">📄 Reporte PDF de Estadísticas</div>' +
-      '<label style="display:block;font-size:.68rem;font-weight:600;color:var(--color-text-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Período</label>' +
-      '<div style="display:flex;gap:6px;align-items:center;margin-bottom:12px">' +
-        '<input type="date" id="_spdf-from" value="' + first + '" style="flex:1;padding:5px 8px;border:1px solid var(--color-border);border-radius:7px;font-size:.75rem;color:var(--color-text);background:var(--color-surface);min-width:0">' +
-        '<span style="color:var(--color-text-3);font-size:.8rem">&#8594;</span>' +
-        '<input type="date" id="_spdf-to" value="' + lastS + '" style="flex:1;padding:5px 8px;border:1px solid var(--color-border);border-radius:7px;font-size:.75rem;color:var(--color-text);background:var(--color-surface);min-width:0">' +
-      '</div>' +
-      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">' +
-        '<label style="font-size:.68rem;font-weight:600;color:var(--color-text-3);text-transform:uppercase;letter-spacing:.05em">Departamentos</label>' +
-        '<button onclick="document.querySelectorAll(\'#_mila-stats-pdf-dd input[type=checkbox]\').forEach(x=>x.checked=!x.checked)" style="font-size:.65rem;color:var(--color-primary);background:none;border:none;cursor:pointer;text-decoration:underline">invertir</button>' +
-      '</div>' +
-      '<div id="_spdf-units-wrap" style="max-height:140px;overflow-y:auto;border:1px solid var(--color-border);border-radius:7px;padding:6px 10px;margin-bottom:12px;background:var(--color-surface-2)">' +
-        checkboxes +
-      '</div>' +
-      '<button id="_spdf-gen" style="width:100%;padding:9px;border-radius:8px;border:none;background:#1A3A90;color:#fff;font-size:.8rem;font-weight:700;cursor:pointer">Generar PDF</button>';
-
-    dd.style.top  = (rect.bottom + 6) + 'px';
-    dd.style.left = Math.max(8, rect.right - 280) + 'px';
-    document.body.appendChild(dd);
-    requestAnimationFrame(() => {
-      const r = dd.getBoundingClientRect();
-      if (r.bottom > window.innerHeight - 12) dd.style.top = (rect.top - r.height - 6) + 'px';
-    });
-
-    const close = () => { dd.remove(); document.removeEventListener('mousedown', outside); };
-    const outside = ev => { if (!dd.contains(ev.target) && ev.target !== anchorEl) close(); };
-    setTimeout(() => document.addEventListener('mousedown', outside), 0);
-
-    document.getElementById('_spdf-gen').addEventListener('click', async () => {
-      const from    = document.getElementById('_spdf-from')?.value ?? '';
-      const to      = document.getElementById('_spdf-to')?.value   ?? '';
-      const checked = [...dd.querySelectorAll('input[type=checkbox]:checked')].map(x => x.value);
-      close();
-      await this._generateStatsPDF({ from, to, unitIds: checked });
-    });
-  }
-
-  async _generateStatsPDF({ from, to, unitIds }) {
-    if (!from || !to) { showToast('Selecciona un rango de fechas', 'warning'); return; }
-
-    showToast('\u23f3 Generando reporte...', 'info');
-    try {
-      // Fetch reservas que solapan el período
-      const { data: bookings, error: bErr } = await this.db.from('bookings')
-        .select('id,check_in,check_out,nights,total_amount,total_paid,balance,price_per_night,status,source,booking_units(unit_id)')
-        .eq('hotel_id', this.ctx.hotelId)
-        .neq('status', 'cancelled').neq('status', 'blocked')
-        .lte('check_in', to).gt('check_out', from);
-      if (bErr) throw bErr;
-
-      // Fetch gastos del período
-      const { data: expenses } = await this.db.from('expenses')
-        .select('id,category,description,amount,paid,due_date')
-        .eq('hotel_id', this.ctx.hotelId)
-        .or('due_date.is.null,and(due_date.gte.' + from + ',due_date.lte.' + to + ')');
-
-      // Unidades seleccionadas (preservar orden original)
-      const allUnits = AppContext?.units ?? [];
-      const filtered = unitIds.length > 0 ? allUnits.filter(u => unitIds.includes(u.id)) : allUnits;
-      const daysTotal = Math.max(1, Math.round((new Date(to + 'T00:00:00') - new Date(from + 'T00:00:00')) / 86400000) + 1);
-
-      // Computar stats por unidad
-      const statsMap = {};
-      filtered.forEach(u => { statsMap[u.id] = { unit: u, nightsOcc: 0, revenue: 0, cobrado: 0, bookingCount: 0, bkIds: new Set() }; });
-
-      (bookings ?? []).forEach(b => {
-        (b.booking_units ?? []).forEach(({ unit_id }) => {
-          if (!statsMap[unit_id]) return;
-          const ci  = new Date(Math.max(+new Date(b.check_in + 'T00:00:00'), +new Date(from + 'T00:00:00')));
-          const co  = new Date(Math.min(+new Date(b.check_out + 'T00:00:00'), +new Date(to + 'T23:59:59')));
-          const n   = Math.max(0, Math.round((co - ci) / 86400000));
-          if (n === 0) return;
-          const tot = Math.max(1, Math.round((+new Date(b.check_out + 'T00:00:00') - +new Date(b.check_in + 'T00:00:00')) / 86400000));
-          const frac = n / tot;
-          // Usar total_amount; fallback a price_per_night * nights totales si es null/0
-          const baseAmt = (b.total_amount && b.total_amount > 0) ? b.total_amount : ((b.price_per_night ?? 0) * tot);
-          const paidAmt = (b.total_paid && b.total_paid > 0) ? b.total_paid : 0;
-          statsMap[unit_id].nightsOcc    += n;
-          statsMap[unit_id].revenue      += baseAmt * frac;
-          statsMap[unit_id].cobrado      += paidAmt * frac;
-          if (!statsMap[unit_id].bkIds.has(b.id)) {
-            statsMap[unit_id].bookingCount++;
-            statsMap[unit_id].bkIds.add(b.id);
-          }
-        });
-      });
-
-      const stats      = Object.values(statsMap).sort((a, b) => b.revenue - a.revenue);
-      const totalRev   = stats.reduce((s, u) => s + u.revenue, 0);
-      const totalCobr  = stats.reduce((s, u) => s + u.cobrado, 0);
-      const totalNights= stats.reduce((s, u) => s + u.nightsOcc, 0);
-      const totalBks   = stats.reduce((s, u) => s + u.bookingCount, 0);
-      const expList    = expenses ?? [];
-      const totalExpPaid = expList.filter(e => e.paid).reduce((s, e) => s + e.amount, 0);
-      const totalExpAll  = expList.reduce((s, e) => s + e.amount, 0);
-      const netResult  = totalRev - totalExpPaid;
-      const pctCobr    = totalRev > 0 ? Math.round(totalCobr / totalRev * 100) : 0;
-
-      const fmtM  = n => '$' + Math.round(n ?? 0).toLocaleString('es-AR');
-      const fmtD  = s => s ? s.split('-').reverse().join('/') : '';
-      const range = fmtD(from) + ' \u2192 ' + fmtD(to);
-      const genDate = new Date().toLocaleDateString('es-AR', { day:'2-digit', month:'long', year:'numeric' });
-      const depsLabel = unitIds.length > 0 && unitIds.length < allUnits.length
-        ? filtered.map(u => u.name).join(' · ')
-        : 'Todos los departamentos';
-
-      // SVG: barras de ingresos por unidad
-      const maxRev = Math.max(...stats.map(s => s.revenue), 1);
-      const barH = 18; const barGap = 8; const svgH = stats.length * (barH + barGap) + 10;
-      const svgBars = stats.map((s, i) => {
-        const barW = Math.max(2, Math.round(s.revenue / maxRev * 360));
-        const occW = Math.max(2, Math.round(s.nightsOcc / daysTotal * 100 * 3.6));
-        const y = i * (barH + barGap);
-        const color = s.unit.color || '#1A3A90';
-        return '<g transform="translate(0,' + y + ')">' +
-          '<text x="0" y="13" style="font-size:10px;font-weight:700;fill:' + color + '">' + s.unit.name + '</text>' +
-          '<rect x="130" y="4" width="360" height="10" rx="5" fill="#f1f5f9"/>' +
-          '<rect x="130" y="4" width="' + barW + '" height="10" rx="5" fill="' + color + '"/>' +
-          '<text x="498" y="13" style="font-size:9px;font-weight:700;fill:' + color + '">' + fmtM(s.revenue) + '</text>' +
-          '</g>';
-      }).join('');
-
-      // SVG: barra de ocupación por unidad
-      const occBars = stats.map((s, i) => {
-        const occ   = Math.min(100, Math.round(s.nightsOcc / daysTotal * 100));
-        const occW2 = Math.max(2, Math.round(occ / 100 * 360));
-        const color = s.unit.color || '#1A3A90';
-        const y = i * (barH + barGap);
-        return '<g transform="translate(0,' + y + ')">' +
-          '<text x="0" y="13" style="font-size:10px;font-weight:700;fill:' + color + '">' + s.unit.name + '</text>' +
-          '<rect x="130" y="4" width="360" height="10" rx="5" fill="#f1f5f9"/>' +
-          '<rect x="130" y="4" width="' + occW2 + '" height="10" rx="5" fill="' + color + '"/>' +
-          '<text x="498" y="13" style="font-size:10px;font-weight:800;fill:' + color + '">' + occ + '%</text>' +
-          '</g>';
-      }).join('');
-
-      // Gastos por categoría
-      const expCat = {};
-      expList.forEach(e => {
-        if (!expCat[e.category]) expCat[e.category] = { total: 0, paid: 0 };
-        expCat[e.category].total += e.amount;
-        if (e.paid) expCat[e.category].paid += e.amount;
-      });
-      const maxExp = Math.max(...Object.values(expCat).map(v => v.total), 1);
-      const expBars = Object.entries(expCat).map(([cat, v], i) => {
-        const bW = Math.max(2, Math.round(v.total / maxExp * 360));
-        const y  = i * (barH + barGap);
-        return '<g transform="translate(0,' + y + ')">' +
-          '<text x="0" y="13" style="font-size:10px;font-weight:600;fill:#475569;text-transform:capitalize">' + cat + '</text>' +
-          '<rect x="130" y="4" width="360" height="10" rx="5" fill="#f1f5f9"/>' +
-          '<rect x="130" y="4" width="' + bW + '" height="10" rx="5" fill="#ef4444"/>' +
-          '<text x="498" y="13" style="font-size:9px;font-weight:700;fill:#ef4444">' + fmtM(v.total) + '</text>' +
-          '</g>';
-      }).join('');
-      const expSvgH = Math.max(20, Object.keys(expCat).length * (barH + barGap) + 10);
-
-      // Tabla detalle de unidades
-      const unitRows = stats.map((s, i) => {
-        const occ   = Math.min(100, Math.round(s.nightsOcc / daysTotal * 100));
-        const color = s.unit.color || '#1A3A90';
-        const pend  = s.revenue - s.cobrado;
-        return '<tr style="background:' + (i % 2 === 0 ? '#fff' : '#f8fafc') + '">' +
-          '<td><div style="display:flex;align-items:center;gap:7px">' +
-            '<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:' + color + ';flex-shrink:0"></span>' +
-            '<span style="color:' + color + ';font-weight:700">' + s.unit.name + '</span>' +
-          '</div></td>' +
-          '<td style="text-align:center">' + s.bookingCount + '</td>' +
-          '<td style="text-align:center">' + s.nightsOcc + '</td>' +
-          '<td style="text-align:center;font-weight:700;color:' + color + '">' + occ + '%</td>' +
-          '<td style="text-align:right;color:#16a34a;font-weight:600">' + fmtM(s.cobrado) + '</td>' +
-          '<td style="text-align:right;color:#f59e0b">' + fmtM(pend) + '</td>' +
-          '<td style="text-align:right;font-weight:800;color:#1A3A90">' + fmtM(s.revenue) + '</td>' +
-          '</tr>';
-      }).join('');
-
-      const expRows = Object.entries(expCat).map(([cat, v], i) =>
-        '<tr style="background:' + (i % 2 === 0 ? '#fff' : '#f8fafc') + '">' +
-          '<td style="text-transform:capitalize;color:#475569">' + cat + '</td>' +
-          '<td style="text-align:right;color:#16a34a">' + fmtM(v.paid) + '</td>' +
-          '<td style="text-align:right;color:#f59e0b">' + fmtM(v.total - v.paid) + '</td>' +
-          '<td style="text-align:right;font-weight:700">' + fmtM(v.total) + '</td>' +
-          '</tr>'
-      ).join('') || '<tr><td colspan="4" style="text-align:center;color:#94a3b8;padding:14px">Sin gastos en el período</td></tr>';
-
-      const resColor = netResult >= 0 ? '#15803d' : '#dc2626';
-      const resBg    = netResult >= 0 ? '#f0fdf4' : '#fef2f2';
-      const resBord  = netResult >= 0 ? '#bbf7d0' : '#fecaca';
-
-      const w = window.open('', '_blank');
-      if (!w) { showToast('Permití ventanas emergentes para exportar', 'warning'); return; }
-
-      w.document.write('<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><title>MILA \xb7 Estadisticas ' + range + '</title><style>' +
-        '*{box-sizing:border-box;margin:0;padding:0}' +
-        'body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#1e293b;background:#fff;padding:24px 28px;font-size:12px}' +
-        '.hdr{display:flex;align-items:flex-start;justify-content:space-between;border-bottom:3px solid #1A3A90;padding-bottom:12px;margin-bottom:16px}' +
-        '.logo{display:flex;align-items:center;gap:10px}' +
-        '.logo-box{width:36px;height:36px;border-radius:8px;background:#1A3A90;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:900;font-size:17px;flex-shrink:0}' +
-        '.logo-nm{font-size:15px;font-weight:800;color:#1A3A90}.logo-sb{font-size:9px;color:#64748b;margin-top:1px}' +
-        '.meta{text-align:right;font-size:10px;color:#64748b;line-height:1.7}' +
-        '.meta b{color:#1e293b;font-size:11px}' +
-        '.kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px}' +
-        '.kpi{border-radius:9px;padding:10px 12px;border-left:3px solid}' +
-        '.kpi-l{font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#64748b;margin-bottom:3px}' +
-        '.kpi-v{font-size:15px;font-weight:800}' +
-        '.kpi-s{font-size:9px;color:#64748b;margin-top:2px}' +
-        '.kpis2{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:18px}' +
-        '.sec{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#1A3A90;margin:16px 0 8px;padding-bottom:4px;border-bottom:2px solid #ddeaff;display:flex;align-items:center;gap:6px}' +
-        '.chart-box{background:#f8fafc;border-radius:10px;padding:14px 16px;margin-bottom:14px}' +
-        '.chart-title{font-size:10px;font-weight:700;color:#475569;margin-bottom:10px}' +
-        'table{width:100%;border-collapse:collapse}' +
-        'thead tr{background:#1A3A90;color:#fff}' +
-        'th{padding:7px 9px;text-align:left;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.04em}' +
-        'td{padding:6px 9px;border-bottom:1px solid #f1f5f9;vertical-align:middle;font-size:11px}' +
-        'tfoot tr{background:#eef2ff}' +
-        'tfoot td{padding:7px 9px;border-top:2px solid #1A3A90;font-weight:800}' +
-        '.result{margin-top:16px;background:' + resBg + ';border:2px solid ' + resBord + ';border-radius:12px;padding:14px 18px;display:flex;justify-content:space-between;align-items:center}' +
-        '.result-l{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:' + resColor + '}' +
-        '.result-v{font-size:20px;font-weight:900;color:' + resColor + '}' +
-        '.print-btn{margin-top:18px;padding:8px 20px;background:#1A3A90;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer}' +
-        '@media print{.no-print{display:none}body{padding:12px}@page{margin:1.2cm;size:A4}}' +
-      '</style></head><body>' +
-
-      '<div class="hdr"><div class="logo"><div class="logo-box">M</div><div><div class="logo-nm">MILA</div><div class="logo-sb">Sistema Inteligente para Alojamientos</div></div></div>' +
-      '<div class="meta"><div><b>Reporte de Estad\xedsticas</b></div><div>' + range + '</div><div>' + depsLabel + '</div><div>Generado: ' + genDate + '</div></div></div>' +
-
-      '<div class="kpis">' +
-        '<div class="kpi" style="background:#eff6ff;border-color:#1A3A90"><div class="kpi-l">Reservas</div><div class="kpi-v" style="color:#1A3A90">' + totalBks + '</div><div class="kpi-s">' + filtered.length + ' departamento' + (filtered.length !== 1 ? 's' : '') + '</div></div>' +
-        '<div class="kpi" style="background:#eff6ff;border-color:#1A3A90"><div class="kpi-l">Noches vendidas</div><div class="kpi-v" style="color:#1A3A90">' + totalNights + '</div><div class="kpi-s">de ' + (daysTotal * filtered.length) + ' posibles</div></div>' +
-        '<div class="kpi" style="background:#eff6ff;border-color:#1A3A90"><div class="kpi-l">Ingresos totales</div><div class="kpi-v" style="color:#1A3A90">' + fmtM(totalRev) + '</div><div class="kpi-s">bruto del per\xedodo</div></div>' +
-      '</div>' +
-      '<div class="kpis2">' +
-        '<div class="kpi" style="background:#f0fdf4;border-color:#16a34a"><div class="kpi-l">Cobrado</div><div class="kpi-v" style="color:#16a34a">' + fmtM(totalCobr) + '</div><div class="kpi-s">' + pctCobr + '% del total</div></div>' +
-        '<div class="kpi" style="background:#fef2f2;border-color:#ef4444"><div class="kpi-l">Gastos pagados</div><div class="kpi-v" style="color:#ef4444">' + fmtM(totalExpPaid) + '</div><div class="kpi-s">de ' + fmtM(totalExpAll) + ' comprometidos</div></div>' +
-        '<div class="kpi" style="background:' + resBg + ';border-color:' + resColor + '"><div class="kpi-l">Resultado neto</div><div class="kpi-v" style="color:' + resColor + '">' + fmtM(netResult) + '</div><div class="kpi-s">' + (netResult >= 0 ? 'Positivo ✓' : 'Negativo ⚠') + '</div></div>' +
-      '</div>' +
-
-      '<div class="chart-box">' +
-        '<div class="chart-title">\u2192 Ingresos por departamento</div>' +
-        '<svg width="100%" viewBox="0 0 580 ' + svgH + '" xmlns="http://www.w3.org/2000/svg">' + svgBars + '</svg>' +
-      '</div>' +
-
-      '<div class="chart-box">' +
-        '<div class="chart-title">\u2192 Ocupaci\xf3n por departamento (' + daysTotal + ' d\xedas del per\xedodo)</div>' +
-        '<svg width="100%" viewBox="0 0 580 ' + svgH + '" xmlns="http://www.w3.org/2000/svg">' + occBars + '</svg>' +
-      '</div>' +
-
-      '<div class="sec">Detalle por departamento</div>' +
-      '<table><thead><tr><th>Departamento</th><th style="text-align:center">Reservas</th><th style="text-align:center">Noches</th><th style="text-align:center">Ocupaci\xf3n</th><th style="text-align:right">Cobrado</th><th style="text-align:right">Pendiente</th><th style="text-align:right">Total facturado</th></tr></thead>' +
-      '<tbody>' + unitRows + '</tbody>' +
-      '<tfoot><tr><td>TOTAL</td><td style="text-align:center">' + totalBks + '</td><td style="text-align:center">' + totalNights + '</td><td style="text-align:center">\u2014</td><td style="text-align:right;color:#16a34a">' + fmtM(totalCobr) + '</td><td style="text-align:right;color:#f59e0b">' + fmtM(totalRev - totalCobr) + '</td><td style="text-align:right;color:#1A3A90">' + fmtM(totalRev) + '</td></tr></tfoot>' +
-      '</table>' +
-
-      (expList.length > 0 ?
-        '<div class="chart-box" style="margin-top:16px">' +
-          '<div class="chart-title">\u2192 Distribuci\xf3n de gastos por categor\xeda</div>' +
-          '<svg width="100%" viewBox="0 0 580 ' + expSvgH + '" xmlns="http://www.w3.org/2000/svg">' + expBars + '</svg>' +
-        '</div>' +
-        '<div class="sec">Gastos operativos</div>' +
-        '<table><thead><tr><th>Categor\xeda</th><th style="text-align:right">Pagado</th><th style="text-align:right">Pendiente</th><th style="text-align:right">Total</th></tr></thead>' +
-        '<tbody>' + expRows + '</tbody>' +
-        '<tfoot><tr><td>TOTAL</td><td style="text-align:right;color:#16a34a">' + fmtM(totalExpPaid) + '</td><td style="text-align:right;color:#f59e0b">' + fmtM(totalExpAll - totalExpPaid) + '</td><td style="text-align:right">' + fmtM(totalExpAll) + '</td></tr></tfoot></table>'
-      : '') +
-
-      '<div class="result"><div class="result-l">' + (netResult >= 0 ? '\u2705 Resultado neto del per\xedodo' : '\u26a0\ufe0f Resultado neto del per\xedodo') + '</div><div class="result-v">' + fmtM(netResult) + '</div></div>' +
-      '<div class="no-print"><button class="print-btn" onclick="window.print()">\u{1F5A8} Imprimir / Guardar PDF</button></div>' +
-      '</body></html>');
-      w.document.close();
-
-    } catch (err) {
-      console.error('[StatsPDF]', err);
-      showToast('Error: ' + (err.message || err), 'error');
-    }
   }
 }

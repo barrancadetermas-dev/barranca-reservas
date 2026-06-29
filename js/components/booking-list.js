@@ -561,26 +561,25 @@ export class BookingList {
               <span class="bl-nights">${nights} ${nights === 1 ? 'noche' : 'noches'}</span>
             </div>
             <div class="bl-col-amount">
-              ${can('viewRevenue') ? `
-                <div class="bl-amount-total">${formatARS(b.total_amount)}</div>
-                ${b.total_paid > 0 && b.balance > 0
-                  ? '<div class=\"bl-amount-breakdown\"><span class=\"bl-paid\">−' + formatARS(b.total_paid) + '</span><span class=\"bl-sep\">=</span><span class=\"bl-balance\">' + formatARS(b.balance) + '</span></div>'
-                  : b.balance <= 0 ? '<div class=\"bl-amount-paid\">✓ Pagado</div>' : ''
-                }
-              ` : can('viewBalanceOnly') ? `
-                ${b.balance > 0
-                  ? '<div style=\"font-weight:700;color:#16a34a;font-size:.88rem\">💰 ' + formatARS(b.balance) + '</div><div style=\"font-size:.65rem;color:var(--color-text-3);margin-top:2px\">Al ingreso</div>'
-                  : '<div class=\"bl-amount-paid\">✓ Pagado</div>'
-                }
-              ` : ''}
+              <div class="bl-amount-total">${formatARS(b.total_amount)}</div>
+              ${b.total_paid > 0 && b.balance > 0
+                ? `<div class="bl-amount-breakdown">
+                    <span class="bl-paid">−${formatARS(b.total_paid)}</span>
+                    <span class="bl-sep">=</span>
+                    <span class="bl-balance">${formatARS(b.balance)}</span>
+                   </div>`
+                : b.balance <= 0
+                  ? `<div class="bl-amount-paid">✓ Pagado</div>`
+                  : ''
+              }
             </div>
             <div class="bl-col-status">
               <span class="status-badge ${statusCls}">${statusLbl}</span>
-              ${b.balance > 0 && can('addPayment') ? `<button data-action="pay-full" class="bl-action-btn bl-payfull-btn"
+              ${b.balance > 0 ? `<button data-action="pay-full" class="bl-action-btn bl-payfull-btn"
                 onclick="event.stopPropagation()">✅ Cobrar</button>` : ''}
             </div>
             <div class="booking-actions-cell" onclick="event.stopPropagation()">
-              ${can('editBooking') ? `<button data-action="edit"
+              <button data-action="edit"
                 class="bl-action-btn"
                 title="Editar reserva">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15">
@@ -594,15 +593,15 @@ export class BookingList {
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15">
                   <path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z"/>
                 </svg>
-              </button>` : ''}
-              ${can('markBadExperience') ? `<button data-action="flag"
+              </button>
+              <button data-action="flag"
                 class="bl-action-btn ${isBad ? 'danger' : ''}"
                 title="${isBad ? 'Huésped marcado como conflictivo' : 'Marcar huésped'}">
                 <svg viewBox="0 0 24 24" fill="${isBad ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2" width="14" height="14">
                   <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/>
                 </svg>
-              </button>` : ''}
-              ${b.check_out === today && b.status !== 'cancelled' && can('checkInOut')
+              </button>
+              ${b.check_out === today && b.status !== 'cancelled'
                 ? `<button data-action="checkout" class="bl-action-btn" title="Registrar check-out"
                      style="color:#22c55e;border-color:#22c55e;background:rgba(34,197,94,.08)">
                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="14" height="14"><polyline points="20 6 9 17 4 12"/></svg>

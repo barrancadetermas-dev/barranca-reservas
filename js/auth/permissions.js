@@ -21,54 +21,44 @@ export const ROLE_PERMISSIONS = {
     editPayment:          true,
     deletePayment:        true,
     viewRevenue:          true,
-    viewBalanceOnly:      true,
     viewStats:            true,
     viewCommissions:      true,
     viewPL:               true,
     exportData:           true,
     manageExpenses:       true,
     manageReminders:      true,
-    viewReminders:        true,
     markBadExperience:    true,
     viewGuestCRM:         true,
     manageUsers:          true,
     viewAuditLog:         true,
     manageSeasonPricing:  true,
     manageUnitNotes:      true,
-    viewCalendarReadOnly: true,
-    viewOperationsReadOnly: true,
-    viewDashboardOps:     true,
   },
 
-  // 👷 Staff (Encargada) — Solo vista operativa, sin datos financieros
+  // 👷 Staff — Operativa diaria
   staff: {
-    createBooking:        false,
-    editBooking:          false,
-    deleteBooking:        false,
-    cancelBooking:        false,
-    duplicateBooking:     false,
-    checkInOut:           false,
-    addPayment:           false,
-    editPayment:          false,
-    deletePayment:        false,
-    viewRevenue:          false,   // sin totales ni señas
-    viewBalanceOnly:      true,    // solo "monto al ingreso" (balance)
+    createBooking:        true,
+    editBooking:          true,
+    deleteBooking:        false,   // solo admin puede eliminar
+    cancelBooking:        true,
+    duplicateBooking:     true,
+    checkInOut:           true,
+    addPayment:           true,
+    editPayment:          true,
+    deletePayment:        false,   // solo admin
+    viewRevenue:          false,   // no ve stats financieras globales
     viewStats:            false,
     viewCommissions:      false,
     viewPL:               false,
     exportData:           false,
     manageExpenses:       false,
-    manageReminders:      false,   // solo ver, no crear
-    viewReminders:        true,
-    markBadExperience:    false,
-    viewGuestCRM:         false,
+    manageReminders:      true,
+    markBadExperience:    true,
+    viewGuestCRM:         true,
     manageUsers:          false,
     viewAuditLog:         false,
     manageSeasonPricing:  false,
     manageUnitNotes:      false,
-    viewCalendarReadOnly: true,    // calendario solo lectura
-    viewOperationsReadOnly: true,  // operaciones solo vista
-    viewDashboardOps:     true,    // ingresos/salidas/recambios/alojados
   },
 
   // 🎭 Demo — Navegación libre, nada se guarda

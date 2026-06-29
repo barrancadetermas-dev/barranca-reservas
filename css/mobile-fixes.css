@@ -1295,15 +1295,14 @@
   }
 }
 
-/* ── 2. CALENDARIO: columna departamentos — ancho controlado por JS (_measureLabelW) ── */
+/* ── 2. CALENDARIO: columna departamentos más angosta + sólida ── */
 @media (max-width: 768px) {
-  /* Ancho dinámico — NO forzar ancho fijo, el grid template lo maneja */
+  /* Ancho fijo reducido */
   .cal-unit-label,
   .cal-unit-label-header {
-    min-width: 0 !important;
-    max-width: none !important;
-    width: auto !important;
-    box-sizing: border-box !important;
+    width: 108px !important;
+    min-width: 108px !important;
+    max-width: 108px !important;
   }
 
   /* Fondo completamente sólido — sin ningún bleed de contenido */

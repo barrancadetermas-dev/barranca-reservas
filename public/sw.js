@@ -3,7 +3,7 @@
 // Estrategia: Network First con fallback offline
 // ═══════════════════════════════════════════════════
 
-const CACHE_NAME  = 'mila-v7';
+const CACHE_NAME  = 'mila-v5';
 const OFFLINE_URL = '/offline.html';
 
 const STATIC_ASSETS = [
@@ -82,38 +82,6 @@ self.addEventListener('fetch', (e) => {
         if (res.ok) caches.open(CACHE_NAME).then(c => c.put(request, res.clone()));
         return res;
       });
-    })
-  );
-});
-
-// ── WEB PUSH — mostrar notificación al recibirla ──
-self.addEventListener('push', e => {
-  if (!e.data) return;
-  let payload;
-  try { payload = e.data.json(); } catch { payload = { title: 'MILA', body: e.data.text() }; }
-
-  const { title, body, icon, badge, tag, data } = payload;
-  e.waitUntil(
-    self.registration.showNotification(title ?? 'MILA', {
-      body:  body  ?? '',
-      icon:  icon  ?? '/icon-192.png',
-      badge: badge ?? '/favicon-32.png',
-      tag:   tag   ?? 'mila',
-      data:  data  ?? {},
-      vibrate: [200, 100, 200],
-      requireInteraction: false,
-    })
-  );
-});
-
-// ── Click en la notificación → abrir la app ──
-self.addEventListener('notificationclick', e => {
-  e.notification.close();
-  e.waitUntil(
-    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
-      const existing = list.find(c => c.url.includes(self.location.origin));
-      if (existing) return existing.focus();
-      return clients.openWindow(self.location.origin + '/index.html');
     })
   );
 });
