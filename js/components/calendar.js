@@ -710,6 +710,11 @@ export class Calendar {
       cache.invalidate('bookings');
       this.load();
     });
+    document.getElementById('cal-goto-today')?.addEventListener('click', () => {
+      this._windowStart = this._addDays(localToday(), -PAST_OFFSET);
+      cache.invalidate('bookings');
+      this.load();
+    });
 
     // ── 4. Mini-calendario → navega el calendario principal ──
     this._bindMiniCalSync();
@@ -2241,14 +2246,21 @@ export class Calendar {
       .filter(b => !b.is_blocked && b.status !== 'blocked' && b.status !== 'cancelled'
                 && b.check_in >= today && b.check_in <= in30)
       .sort((a, b) => a.check_in.localeCompare(b.check_in))
-      .slice(0, 6); // 6 items = 2 col × 3 rows
+      .slice(0, 7); // máx 7 — una por slot
 
-    if (!upcoming.length) {
-      el.innerHTML = '<div style="font-size:.72rem;color:var(--color-text-3);padding:6px 0">Sin reservas próximas</div>';
-      return;
-    }
+    const SLOTS = 7;
+    const cards = [];
 
-    el.innerHTML = upcoming.map(b => {
+    for (let i = 0; i < SLOTS; i++) {
+      const b = upcoming[i];
+      if (!b) {
+        cards.push(
+          '<div class="cal-agenda-slot cal-agenda-slot--empty">' +
+            '<span class="cal-agenda-empty-text">Sin reserva&nbsp;:(</span>' +
+          '</div>'
+        );
+        continue;
+      }
       const fn    = b.guests?.first_name ?? '';
       const ln    = b.guests?.last_name  ?? '';
       const guest = fn ? (fn + (ln ? ' ' + ln[0] + '.' : '')) : '—';
@@ -2260,19 +2272,21 @@ export class Calendar {
       const days  = Math.round((d - new Date(today+'T12:00:00')) / 86400000);
       const dStr  = DAYS[d.getDay()] + ' ' + d.getDate() + ' ' + MONTHS[d.getMonth()];
       const nStr  = nights + ' noche' + (nights !== 1 ? 's' : '');
+      const daysLabel = days === 0 ? 'hoy' : days === 1 ? 'mañana' : 'en ' + days + 'd';
 
-      return '<div style="display:flex;align-items:center;gap:6px;padding:5px 6px;border-radius:6px;' +
-        'background:var(--color-surface);border:1px solid var(--color-border);font-size:.71rem">' +
-        '<div style="width:3px;height:22px;border-radius:2px;background:' + color + ';flex-shrink:0"></div>' +
-        '<div style="min-width:0;flex:1">' +
-          '<span style="font-weight:700;color:var(--color-text)">' + dStr + '</span>' +
-          '<span style="color:var(--color-text-3);font-size:.63rem;margin:0 4px">en ' + days + 'd</span>' +
-          '<span style="color:var(--color-text-2);font-weight:600">' + guest + '</span>' +
-        '</div>' +
-        '<div style="color:var(--color-text-3);font-size:.63rem;white-space:nowrap;text-align:right">' +
-          uname + ' · ' + nStr +
-        '</div>' +
-      '</div>';
-    }).join('');
+      cards.push(
+        '<div class="cal-agenda-slot">' +
+          '<div class="cal-agenda-slot-bar" style="background:' + color + '"></div>' +
+          '<div class="cal-agenda-slot-body">' +
+            '<div class="cal-agenda-slot-date">' + dStr + '</div>' +
+            '<div class="cal-agenda-slot-days">' + daysLabel + '</div>' +
+            '<div class="cal-agenda-slot-guest">' + guest + '</div>' +
+            '<div class="cal-agenda-slot-unit">' + uname + ' · ' + nStr + '</div>' +
+          '</div>' +
+        '</div>'
+      );
+    }
+
+    el.innerHTML = cards.join('');
   }
 }

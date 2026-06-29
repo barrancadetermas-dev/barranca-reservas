@@ -133,6 +133,7 @@ export class Dashboard {
       this._renderReservasMes(extraStats);
       this._renderDineroAsegurado(dineroStats);
       this._renderDollar(dollarRates);
+      this._renderNextEvent(kpis, today);
       // Update header badge
       const buyEl = document.getElementById('dollar-badge-buy');
       const sellEl = document.getElementById('dollar-badge-value');
