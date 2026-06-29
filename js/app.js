@@ -216,8 +216,15 @@ document.getElementById('toggle-password')?.addEventListener('click', (e) => {
 document.getElementById('logout-btn').addEventListener('click', () => supabase.auth.signOut());
 // Header logout (ID diferente para evitar duplicado)
 document.getElementById('header-logout-btn')?.addEventListener('click', () => supabase.auth.signOut());
-// Clic en avatar → navegar a Panel & Equipo
-window._navToPanel = () => navigateTo('settings');
+// Clic en avatar → navegar a Configuración → activar tab Panel & Equipo
+window._navToPanel = () => {
+  navigateTo('settings');
+  // Esperar que la sección renderice, luego activar el tab Panel & Equipo
+  setTimeout(() => {
+    const tab = document.getElementById('cfg-tab-control');
+    tab?.click();
+  }, 180);
+};
 
 // ══════════════════════════════════════════════════
 // INIT APP
@@ -245,14 +252,15 @@ async function initApp(user) {
     // ── UI usuario — carga inicial con email, luego reemplaza con perfil ──
     const emailFallback = user.email?.split('@')[0] ?? 'Admin';
     const metaName      = user.user_metadata?.name ?? emailFallback;
-    _applyUserDisplay({ nombre: metaName, email: user.email });
+    const isAdminUser   = AppContext.role === 'admin';
+    _applyUserDisplay({ nombre: metaName, email: user.email, isAdmin: isAdminUser });
 
     document.getElementById('user-role-badge').textContent = getRoleLabel(AppContext.role);
 
     // Cargar perfil desde user_profiles (nombre guardado tiene prioridad máxima)
     supabase.from('user_profiles').select('nombre').eq('id', user.id).single()
       .then(({ data }) => {
-        _applyUserDisplay({ nombre: data?.nombre || metaName, email: user.email });
+        _applyUserDisplay({ nombre: data?.nombre || metaName, email: user.email, isAdmin: isAdminUser });
       }).catch(() => {});
 
     // ── Demo banner ──

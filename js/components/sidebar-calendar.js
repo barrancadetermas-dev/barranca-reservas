@@ -14,6 +14,8 @@ export class SidebarCalendar {
   }
 
   async init(container) {
+    // Limpiar instancia anterior para evitar duplicados
+    container.querySelector('#sidebar-mini-cal')?.remove();
     const today  = new Date();
     this._year   = today.getFullYear();
     this._month  = today.getMonth();

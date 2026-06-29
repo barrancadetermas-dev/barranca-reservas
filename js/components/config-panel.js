@@ -454,41 +454,56 @@ export class ConfigPanel {
     // Auto-cargar stats al abrir la pestaña (no esperar click)
     loadSysStats();
 
-    // ── Exportar CSV ──────────────────────────────────
-    container.querySelector('#cfg-export-bookings')?.addEventListener('click', async () => {
-      try {
-        const { data } = await this.db.from('bookings')
-          .select('id, status, check_in, check_out, guests(first_name,last_name), booking_units(units(name)), price_per_night, adults, children, source, created_at')
-          .eq('hotel_id', this.ctx.hotelId)
-          .order('check_in', { ascending: false });
-        if (!data?.length) { showToast('Sin reservas para exportar', 'info'); return; }
-        const rows = [['ID','Estado','Check-in','Check-out','Huésped','Unidad','Precio/noche','Adultos','Menores','Canal','Creado']];
-        data.forEach(b => rows.push([
-          b.id, b.status, b.check_in, b.check_out,
-          (b.guests ? b.guests.first_name + ' ' + b.guests.last_name : '').trim(),
-          b.booking_units?.[0]?.units?.name ?? '',
-          b.price_per_night ?? 0, b.adults ?? 1, b.children ?? 0, b.source ?? '', b.created_at?.split('T')[0],
-        ]));
-        _downloadCSV(rows, 'reservas_mila.csv');
-        showToast('✅ Reservas exportadas', 'success');
-      } catch (err) { showToast('Error: ' + (err?.message ?? err), 'error'); }
+    // ── Exportar datos — con dropdown de rango ──────────
+    container.querySelector('#cfg-export-bookings')?.addEventListener('click', async (e) => {
+      const btn = e.currentTarget;
+      const { showExportDropdown, exportBookingsExcel, exportBookingsCSV, exportBookingsPDF } =
+        await import('../services/export-service.js');
+
+      // Cargar TODAS las reservas del hotel para filtrar en el dropdown
+      const { data: allBookings } = await this.db.from('bookings')
+        .select('id,check_in,check_out,status,nights,total_amount,total_paid,balance,price_per_night,notes,source,guests(first_name,last_name,dni,email,phone),booking_units(unit_id,units(name))')
+        .eq('hotel_id', this.ctx.hotelId)
+        .not('status','in','(blocked)')
+        .order('check_in', { ascending: false });
+
+      showExportDropdown({
+        anchorEl: btn,
+        type: 'bookings',
+        data: allBookings ?? [],
+        onExport: ({ fmt: f, data, from, to }) => {
+          const range = from && to ? `${from.split('-').reverse().join('/')} → ${to.split('-').reverse().join('/')}` : '';
+          if (f === 'excel') exportBookingsExcel(data, 'reservas', range);
+          else if (f === 'pdf') exportBookingsPDF(data, range);
+          else exportBookingsCSV(data);
+        },
+      });
     });
 
-    container.querySelector('#cfg-export-guests')?.addEventListener('click', async () => {
-      try {
-        const { data } = await this.db.from('guests')
-          .select('id, first_name, last_name, dni, email, phone, country, tags, created_at')
-          .eq('hotel_id', this.ctx.hotelId)
-          .order('last_name');
-        if (!data?.length) { showToast('Sin huéspedes para exportar', 'info'); return; }
-        const rows = [['ID','Nombre','Apellido','DNI','Email','Teléfono','País','Etiquetas','Creado']];
-        data.forEach(g => rows.push([
-          g.id, g.first_name ?? '', g.last_name ?? '', g.dni ?? '', g.email ?? '',
-          g.phone ?? '', g.country ?? '', (g.tags ?? []).join(';'), g.created_at?.split('T')[0],
-        ]));
-        _downloadCSV(rows, 'huespedes_mila.csv');
-        showToast('✅ Huéspedes exportados', 'success');
-      } catch (err) { showToast('Error: ' + (err?.message ?? err), 'error'); }
+    container.querySelector('#cfg-export-guests')?.addEventListener('click', async (e) => {
+      const btn = e.currentTarget;
+      const { showExportDropdown, exportBookingsExcel, exportBookingsCSV, exportBookingsPDF } =
+        await import('../services/export-service.js');
+
+      // Para huéspedes, traer reservas con datos de huésped para filtrar por rango/depto
+      const { data: allBookings } = await this.db.from('bookings')
+        .select('id,check_in,check_out,status,nights,total_amount,total_paid,balance,price_per_night,notes,source,guests(first_name,last_name,dni,email,phone),booking_units(unit_id,units(name))')
+        .eq('hotel_id', this.ctx.hotelId)
+        .not('status','in','(blocked,cancelled)')
+        .not('guest_id','is','null')
+        .order('check_in', { ascending: false });
+
+      showExportDropdown({
+        anchorEl: btn,
+        type: 'guests',
+        data: allBookings ?? [],
+        onExport: ({ fmt: f, data, from, to }) => {
+          const range = from && to ? `${from.split('-').reverse().join('/')} → ${to.split('-').reverse().join('/')}` : '';
+          if (f === 'excel') exportBookingsExcel(data, 'huespedes', range);
+          else if (f === 'pdf') exportBookingsPDF(data, range);
+          else exportBookingsCSV(data);
+        },
+      });
     });
 
     // ── Logout ────────────────────────────────────────

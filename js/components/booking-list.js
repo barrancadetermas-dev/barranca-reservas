@@ -483,34 +483,36 @@ export class BookingList {
 
     // Bind botones de exportación — con dropdown de filtros
     document.getElementById('btn-export-excel-list')?.addEventListener('click', (e) => {
+      const btn = e.currentTarget; // capturar antes del async — e.currentTarget es null en .then()
       import('../services/export-service.js').then(({ showExportDropdown, exportBookingsExcel, exportBookingsCSV, exportBookingsPDF }) => {
         showExportDropdown({
-          anchorEl: e.currentTarget,
+          anchorEl: btn,
           type: 'bookings',
-          data: filtered,
-          onExport: ({ fmt, data, from, to }) => {
+          data: this._allBookings ?? filtered,
+          onExport: ({ fmt: f, data, from, to }) => {
             const range = from && to ? `${from.split('-').reverse().join('/')} → ${to.split('-').reverse().join('/')}` : '';
-            if (fmt === 'excel') exportBookingsExcel(data, 'reservas', range);
-            else if (fmt === 'pdf') exportBookingsPDF(data, range);
+            if (f === 'excel') exportBookingsExcel(data, 'reservas', range);
+            else if (f === 'pdf') exportBookingsPDF(data, range);
             else exportBookingsCSV(data);
           },
         });
-      });
+      }).catch(err => console.error('[Export]', err));
     });
     document.getElementById('btn-export-pdf-list')?.addEventListener('click', (e) => {
+      const btn = e.currentTarget;
       import('../services/export-service.js').then(({ showExportDropdown, exportBookingsPDF, exportBookingsExcel, exportBookingsCSV }) => {
         showExportDropdown({
-          anchorEl: e.currentTarget,
+          anchorEl: btn,
           type: 'bookings',
-          data: filtered,
-          onExport: ({ fmt, data, from, to }) => {
+          data: this._allBookings ?? filtered,
+          onExport: ({ fmt: f, data, from, to }) => {
             const range = from && to ? `${from.split('-').reverse().join('/')} → ${to.split('-').reverse().join('/')}` : '';
-            if (fmt === 'excel') exportBookingsExcel(data, 'reservas', range);
-            else if (fmt === 'pdf') exportBookingsPDF(data, range);
+            if (f === 'excel') exportBookingsExcel(data, 'reservas', range);
+            else if (f === 'pdf') exportBookingsPDF(data, range);
             else exportBookingsCSV(data);
           },
         });
-      });
+      }).catch(err => console.error('[Export]', err));
     });
     document.getElementById('btn-load-more')?.addEventListener('click', () => {
       this._page++;
