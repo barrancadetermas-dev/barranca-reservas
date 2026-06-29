@@ -28,9 +28,11 @@ const PAST_OFFSET = 3;    // desktop: 3 días antes de hoy
 // ── Ancho mínimo de columna (px) ──
 const CELL_W_DESK = 38;
 const CELL_W_MOB  = 32;
-// ── Ancho de la columna de etiquetas de unidad ──
-const LABEL_W     = 160;
-const LABEL_W_MOB = 108;   // mobile: columna más angosta
+// ── Ancho de la columna de labels (dinámico — ver _measureLabelW) ──
+const LABEL_W_MIN     = 100;
+const LABEL_W_MAX     = 220;
+const LABEL_W_MIN_MOB = 88;
+const LABEL_W_MAX_MOB = 150;
 // ── Días pasados visibles en mobile ──
 const PAST_OFFSET_MOB = 1; // mobile: solo 1 día antes de hoy
 
@@ -125,7 +127,7 @@ export class Calendar {
     const w       = wrapper ? wrapper.clientWidth : Math.max(window.innerWidth - 280, 400);
     const isMob   = window.innerWidth <= 768;
     const cellW   = isMob ? CELL_W_MOB : CELL_W_DESK;
-    const labelW  = isMob ? LABEL_W_MOB : LABEL_W;
+    const labelW  = this._measureLabelW(isMob);
     return Math.max(14, Math.min(120, Math.floor((w - labelW) / cellW)));
   }
 
@@ -254,7 +256,7 @@ export class Calendar {
     const today   = localToday();
     const isMob   = window.innerWidth <= 768;
     const cellW   = isMob ? CELL_W_MOB : CELL_W_DESK;
-    const labelW  = isMob ? LABEL_W_MOB : LABEL_W;
+    const labelW  = this._measureLabelW(isMob);  // dinámico según nombres
     const N       = this._visibleDays;
 
     grid.style.gridTemplateColumns = `${labelW}px repeat(${N}, minmax(${cellW}px, 1fr))`;
@@ -345,27 +347,29 @@ export class Calendar {
       label.style.setProperty('left',       '0',       'important');
       label.style.setProperty('z-index',    '80',      'important');
       label.style.setProperty('background', 'var(--color-surface-2)', 'important');
-      const _notes    = unit.internal_notes ?? '';
-      const _notesSafe = _notes.replace(/[']/g, '&#39;');
-      const _notesSpan = hasNotes
-        ? '<span title="' + _notes.replace(/"/g, '&quot;') + '" style="cursor:help;font-size:.85rem" onclick="window._calInstance._showUnitNote(event,\'' + _notesSafe + '\')">\u{1F4DD}</span>'
+      const _notes     = unit.internal_notes ?? '';
+      const _notesSafe  = _notes.replace(/[']/g, '&#39;');
+      const _notesSpan  = hasNotes
+        ? '<span title="' + _notes.replace(/"/g,'&quot;') + '" style="cursor:help;font-size:.85rem" onclick="window._calInstance._showUnitNote(event,\'' + _notesSafe + '\')">\u{1F4DD}</span>'
         : '';
+      // Lapiz => renombrar departamento por sesion (localStorage)
       const _editBtn = can('manageUnitNotes')
-        ? '<button class="btn btn-ghost btn-xs" style="padding:1px 4px;font-size:.65rem;opacity:.5" onclick="window._calInstance.editUnitNotes(\'' + unit.id + '\',\'' + _notesSafe + '\')">\u270f\ufe0f</button>'
+        ? '<button class="btn btn-ghost btn-xs" data-unit-id="' + unit.id + '" title="Renombrar (solo tu sesion)" style="padding:1px 4px;font-size:.65rem;opacity:.5;flex-shrink:0" onclick="event.stopPropagation();window._calInstance.editUnitDisplayName(\'' + unit.id + '\')">\u270f\ufe0f</button>'
         : '';
-      // Extraer número y nombre para mejor presentación visual
+      // Nombre: localStorage primero, luego unit.name
       const _unitNum  = unit.sort_order ?? unit.number ?? '';
-      const _unitName = (unit.name ?? ('Unidad ' + _unitNum))
+      const _unitName = this._getUnitDisplayName(unit)
         .replace('Planta Baja','P. Baja').replace('Planta Alta','P. Alta');
+      label.dataset.unitId = unit.id;
       label.innerHTML =
         '<div style="display:flex;align-items:center;gap:6px">' +
           '<span class="cal-unit-dot" style="background-color:' + unitColor + ';width:8px;height:8px;border-radius:50%;flex-shrink:0"></span>' +
-          '<span style="font-size:.78rem;font-weight:700;color:var(--color-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + _unitName + '</span>' +
+          '<span class="cal-unit-name" style="font-size:.78rem;font-weight:700;color:var(--color-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;min-width:0">' + _unitName + '</span>' +
           _notesSpan + _editBtn +
         '</div>' +
         '<span class="unit-floor" style="padding-left:14px;font-size:.63rem;color:var(--color-text-3)">' +
           '<span style="color:var(--color-text-3);font-weight:600;opacity:.7">#' + _unitNum + '</span>' +
-          ' · Hasta ' + unit.max_guests + ' pers.' +
+          ' \xb7 Hasta ' + unit.max_guests + ' pers.' +
         '</span>';
       grid.appendChild(label);
 
@@ -2115,6 +2119,90 @@ export class Calendar {
         if (unit) unit.internal_notes = newNote.trim() || null;
         this.load();
       });
+  }
+
+  // ── Nombre de display: localStorage primero, luego unit.name ──
+  _getUnitDisplayName(unit) {
+    return localStorage.getItem('mila_unit_name_' + unit.id) || unit.name || ('Unidad ' + (unit.sort_order ?? ''));
+  }
+
+  // ── Mide el texto más largo de todos los departamentos para calcular LABEL_W ──
+  _measureLabelW(isMob) {
+    const units = AppContext?.units ?? [];
+    if (!units.length) return isMob ? 108 : 160;
+
+    // Canvas offscreen para medir texto real
+    const canvas = document.createElement('canvas');
+    const ctx    = canvas.getContext('2d');
+    ctx.font     = isMob ? '700 11px system-ui' : '700 12px system-ui';
+
+    let maxPx = 0;
+    units.forEach(u => {
+      const name = this._getUnitDisplayName(u)
+        .replace('Planta Baja','P. Baja').replace('Planta Alta','P. Alta');
+      const w = ctx.measureText(name).width;
+      if (w > maxPx) maxPx = w;
+    });
+
+    // dot(8) + gap(6) + texto + padding(20) + lápiz(22)
+    const total = Math.ceil(maxPx) + (isMob ? 48 : 56);
+    const min = isMob ? LABEL_W_MIN_MOB : LABEL_W_MIN;
+    const max = isMob ? LABEL_W_MAX_MOB : LABEL_W_MAX;
+    return Math.max(min, Math.min(max, total));
+  }
+
+  // ── Edición inline del nombre del departamento (por sesión) ──
+  editUnitDisplayName(unitId) {
+    const unit = AppContext?.units?.find(u => u.id === unitId);
+    if (!unit) return;
+
+    // Buscar el span del nombre dentro del label del departamento
+    const allLabels = document.querySelectorAll('.cal-unit-label');
+    let targetSpan  = null;
+    let targetLabel = null;
+    allLabels.forEach(lbl => {
+      // Identificar la fila por data-unit o por el onclick del lápiz
+      const pencil = lbl.querySelector('button[onclick*="' + unitId + '"]');
+      if (pencil) {
+        targetLabel = lbl;
+        targetSpan  = lbl.querySelector('span[style*="font-size:.78rem"]')
+                   ?? lbl.querySelector('span[style*="font-weight:700"]');
+      }
+    });
+    if (!targetSpan) return;
+
+    const currentName = this._getUnitDisplayName(unit)
+      .replace('Planta Baja','P. Baja').replace('Planta Alta','P. Alta');
+
+    // Reemplazar span por input inline
+    const input = document.createElement('input');
+    input.type  = 'text';
+    input.value = currentName;
+    input.style.cssText = 'font-size:.78rem;font-weight:700;color:var(--color-text);'
+      + 'border:1px solid var(--color-primary);border-radius:4px;padding:1px 5px;'
+      + 'width:100%;min-width:60px;max-width:140px;background:var(--color-surface);'
+      + 'outline:none;box-shadow:0 0 0 2px var(--color-primary-t)';
+
+    targetSpan.replaceWith(input);
+    input.focus();
+    input.select();
+
+    const save = () => {
+      const val = input.value.trim();
+      if (val && val !== unit.name) {
+        localStorage.setItem('mila_unit_name_' + unitId, val);
+      } else if (!val || val === unit.name) {
+        localStorage.removeItem('mila_unit_name_' + unitId);
+      }
+      showToast('Nombre actualizado ✓', 'success');
+      this.load(); // re-render con nuevo ancho
+    };
+
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); save(); }
+      if (e.key === 'Escape') { this.load(); } // cancelar
+    });
+    input.addEventListener('blur', save, { once: true });
   }
 
   // ══════════════════════════════════════════════════
