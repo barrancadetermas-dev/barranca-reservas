@@ -23,7 +23,6 @@
       "source": "/sw.js",
       "headers": [
         { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" },
-        { "key": "Pragma",        "value": "no-cache" },
         { "key": "Content-Type",  "value": "application/javascript" }
       ]
     },
@@ -35,14 +34,14 @@
       ]
     },
     {
-      "source": "/icons/(.*).png",
+      "source": "/:file.png",
       "headers": [
         { "key": "Cache-Control", "value": "public, max-age=86400" },
         { "key": "Content-Type",  "value": "image/png" }
       ]
     },
     {
-      "source": "/icons/(.*).ico",
+      "source": "/:file.ico",
       "headers": [
         { "key": "Cache-Control", "value": "public, max-age=86400" },
         { "key": "Content-Type",  "value": "image/x-icon" }
@@ -51,7 +50,7 @@
   ],
   "rewrites": [
     {
-      "source": "/((?!assets/|sw\\.js|manifest\\.json|offline\\.html|icons/|favicon|.*\\.png|.*\\.ico|.*\\.webp|.*\\.svg|.*\\.txt|.*\\.xml).*)",
+      "source": "/((?!sw\\.js|manifest\\.json|offline\\.html|assets/|.*\\.png|.*\\.ico|.*\\.webp|.*\\.svg|.*\\.txt|.*\\.xml).*)",
       "destination": "/index.html"
     }
   ]
