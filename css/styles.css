@@ -5408,3 +5408,32 @@ html, body {
 #modal-booking .modal-body {
   padding-bottom: 16px;
 }
+
+/* ══════════════════════════════════════════════════════
+   HEADER SPACING — Reducir gaps para que entre el email
+   ══════════════════════════════════════════════════════ */
+.header-right {
+  gap: 6px !important;   /* era var(--sp-12) = 12px */
+}
+.main-header, .app-header {
+  padding: 0 16px !important;   /* era 0 24px */
+}
+/* Conn-indicator: más compacto */
+.conn-indicator {
+  padding: 4px 8px !important;   /* era 4px 10px */
+  gap: 5px !important;
+}
+/* User-name: más espacio para el mail */
+#user-name {
+  max-width: 160px !important;   /* era 100px */
+}
+/* User section: separador ajustado */
+#user-name + button,
+[style*="border-left"][style*="padding-left"] {
+  padding-left: 8px !important;
+  margin-left: 2px !important;
+}
+/* dollar-badge: padding interno reducido */
+.dollar-badge {
+  padding: 4px 9px !important;
+}

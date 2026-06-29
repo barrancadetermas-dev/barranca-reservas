@@ -253,8 +253,9 @@
           </button>
           <div id="theme-panel" style="display:none">
             <div class="theme-panel-title">Apariencia</div>
+            <!-- Modo: Día / Noche / Pantalla completa -->
             <div style="margin-bottom:6px;font-size:.62rem;color:#94a3b8;letter-spacing:.05em;text-transform:uppercase">Modo</div>
-            <div style="display:flex;gap:6px;margin-bottom:14px">
+            <div style="display:flex;gap:6px;margin-bottom:10px">
               <button id="theme-mode-light"
                 style="flex:1;padding:6px 0;border-radius:8px;border:2px solid var(--color-border);background:var(--color-surface-2);cursor:pointer;font-size:.78rem;font-weight:600;color:var(--color-text-2);display:flex;align-items:center;justify-content:center;gap:5px">
                 ☀️ Día
@@ -264,13 +265,22 @@
                 🌙 Noche
               </button>
             </div>
+            <!-- Pantalla completa -->
+            <button id="btn-fullscreen"
+              style="width:100%;margin-bottom:14px;padding:7px 0;border-radius:8px;border:2px solid var(--color-border);background:var(--color-surface-2);cursor:pointer;font-size:.78rem;font-weight:600;color:var(--color-text-2);display:flex;align-items:center;justify-content:center;gap:6px;transition:all .15s">
+              <svg id="fs-icon-expand" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><path d="M8 3H5a2 2 0 00-2 2v3m18 0V5a2 2 0 00-2-2h-3m0 18h3a2 2 0 002-2v-3M3 16v3a2 2 0 002 2h3"/></svg>
+              <svg id="fs-icon-compress" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15" style="display:none"><path d="M8 3v3a2 2 0 01-2 2H3m18 0h-3a2 2 0 01-2-2V3m0 18v-3a2 2 0 012-2h3M3 16h3a2 2 0 012 2v3"/></svg>
+              <span id="fs-label">Pantalla completa</span>
+            </button>
+            <!-- Colores — orden cromático: rojo · verde · azul · azul oscuro · violeta · rosa -->
             <div style="margin-bottom:4px;font-size:.62rem;color:#94a3b8;letter-spacing:.05em;text-transform:uppercase">Color</div>
-            <div class="theme-swatches" style="display:flex;gap:5px;flex-wrap:wrap">
-              <button class="theme-swatch"        data-theme="navy"    title="Azul MILA"   style="background:#1A3A90"></button>
-              <button class="theme-swatch active" data-theme="blue"    title="Azul Real"   style="background:#1E4DB7"></button>
-              <button class="theme-swatch"        data-theme="royal"   title="Azul Zafiro" style="background:#2563EB"></button>
-              <button class="theme-swatch"        data-theme="ocean"   title="Azul Cielo"  style="background:#0284C7"></button>
-              <button class="theme-swatch"        data-theme="slate"   title="Pizarra"     style="background:#475569"></button>
+            <div class="theme-swatches" style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px">
+              <button class="theme-swatch" data-theme="red"    title="Rojo"        style="background:#DC2626"></button>
+              <button class="theme-swatch" data-theme="green"  title="Verde"       style="background:#16A34A"></button>
+              <button class="theme-swatch" data-theme="blue"   title="Azul"        style="background:#1E4DB7"></button>
+              <button class="theme-swatch active" data-theme="navy" title="Azul MILA (oficial)" style="background:#1A3A90"></button>
+              <button class="theme-swatch" data-theme="violet" title="Violeta"     style="background:#7C3AED"></button>
+              <button class="theme-swatch" data-theme="rose"   title="Rosa"        style="background:#DB2777"></button>
             </div>
           </div>
         </div>

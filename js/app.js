@@ -1663,12 +1663,13 @@ function setupSoundButton() {
 // TEMAS DE COLOR
 // ══════════════════════════════════════════════════
 const THEMES = {
-  // ── Paleta MILA ─────────────────────────────────
-  navy:   { primary:'#1A3A90', primaryH:'#0D2A6E', primaryL:'#DDEAFF', primaryT:'rgba(26,58,144,.12)',   sidebarBg:'#050F24', sidebarActive:'#0D1F42', sidebarAccent:'#60A5FA' },
-  blue:   { primary:'#1E4DB7', primaryH:'#1A3A90', primaryL:'#DDEAFF', primaryT:'rgba(30,77,183,.12)',   sidebarBg:'#0D1F42', sidebarActive:'#1A3472', sidebarAccent:'#60A5FA' },
-  royal:  { primary:'#2563EB', primaryH:'#1D4ED8', primaryL:'#DBEAFE', primaryT:'rgba(37,99,235,.12)',   sidebarBg:'#1E3A8A', sidebarActive:'#1E40AF', sidebarAccent:'#93C5FD' },
-  ocean:  { primary:'#0284C7', primaryH:'#0369A1', primaryL:'#E0F2FE', primaryT:'rgba(2,132,199,.12)',   sidebarBg:'#0C4A6E', sidebarActive:'#075985', sidebarAccent:'#38BDF8' },
-  slate:  { primary:'#475569', primaryH:'#334155', primaryL:'#F1F5F9', primaryT:'rgba(71,85,105,.12)',   sidebarBg:'#020617', sidebarActive:'#0F172A', sidebarAccent:'#94A3B8' },
+  // ── Orden cromático: rojo · verde · azul · azul oscuro (MILA oficial) · violeta · rosa ──
+  red:    { primary:'#DC2626', primaryH:'#B91C1C', primaryL:'#FEE2E2', primaryT:'rgba(220,38,38,.12)',    sidebarBg:'#3B0A0A', sidebarActive:'#7F1D1D', sidebarAccent:'#FCA5A5' },
+  green:  { primary:'#16A34A', primaryH:'#15803D', primaryL:'#DCFCE7', primaryT:'rgba(22,163,74,.12)',    sidebarBg:'#052E16', sidebarActive:'#14532D', sidebarAccent:'#86EFAC' },
+  blue:   { primary:'#1E4DB7', primaryH:'#1A3A90', primaryL:'#DDEAFF', primaryT:'rgba(30,77,183,.12)',    sidebarBg:'#0D1F42', sidebarActive:'#1A3472', sidebarAccent:'#60A5FA' },
+  navy:   { primary:'#1A3A90', primaryH:'#0D2A6E', primaryL:'#DDEAFF', primaryT:'rgba(26,58,144,.12)',    sidebarBg:'#050F24', sidebarActive:'#0D1F42', sidebarAccent:'#60A5FA' },
+  violet: { primary:'#7C3AED', primaryH:'#6D28D9', primaryL:'#EDE9FE', primaryT:'rgba(124,58,237,.12)',   sidebarBg:'#1A0B35', sidebarActive:'#2E1065', sidebarAccent:'#C4B5FD' },
+  rose:   { primary:'#DB2777', primaryH:'#BE185D', primaryL:'#FCE7F3', primaryT:'rgba(219,39,119,.12)',   sidebarBg:'#350B1F', sidebarActive:'#6B1A3B', sidebarAccent:'#FBCFE8' },
 };
 
 function setupThemeSystem() {
@@ -1681,7 +1682,7 @@ function setupThemeSystem() {
   }
 
   // Apply saved theme immediately
-  const saved = localStorage.getItem('mila_theme') ?? 'blue';
+  const saved = localStorage.getItem('mila_theme') ?? 'navy';
   applyTheme(saved);
   markActiveSwatch(saved);
 
@@ -1756,6 +1757,36 @@ function setupThemeSystem() {
     e.stopPropagation();
     window._setDarkMode('dark');
   });
+
+  // ── Pantalla completa ──────────────────────────────────────
+  const fsBtn      = document.getElementById('btn-fullscreen');
+  const fsExpand   = document.getElementById('fs-icon-expand');
+  const fsCompress = document.getElementById('fs-icon-compress');
+  const fsLabel    = document.getElementById('fs-label');
+
+  const _syncFsIcon = () => {
+    const isFs = !!document.fullscreenElement;
+    if (fsExpand)   fsExpand.style.display   = isFs ? 'none' : '';
+    if (fsCompress) fsCompress.style.display = isFs ? ''     : 'none';
+    if (fsLabel)    fsLabel.textContent = isFs ? 'Salir de pantalla completa' : 'Pantalla completa';
+    if (fsBtn) {
+      const active = 'border-color:var(--color-primary);background:var(--color-primary-l);color:var(--color-primary)';
+      const reset  = 'border-color:var(--color-border);background:var(--color-surface-2);color:var(--color-text-2)';
+      fsBtn.style.cssText = fsBtn.style.cssText.replace(/border-color:[^;]+;background:[^;]+;color:[^;]+/, '') + (isFs ? active : reset);
+    }
+  };
+
+  fsBtn?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen?.().catch(() => {});
+    } else {
+      document.exitFullscreen?.().catch(() => {});
+    }
+  });
+
+  document.addEventListener('fullscreenchange', _syncFsIcon);
+  _syncFsIcon(); // estado inicial
 }
 
 function applyTheme(name) {
