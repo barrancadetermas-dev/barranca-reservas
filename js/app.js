@@ -341,7 +341,9 @@ async function initApp(user) {
 
     // ── Recargar la sección activa cuando cambia una reserva (debounced) ──
     document.addEventListener('booking:changed', () => {
-      debouncedCalendarLoad(400);
+      // SIEMPRE invalidar cache antes de recargar — evita mostrar datos viejos
+      cache.invalidate('bookings', 'reminders', 'payments');
+      debouncedCalendarLoad(300);
       window._sidebarCal?.refresh().catch(console.error);
     });
 
@@ -967,13 +969,20 @@ async function loadDollarBadge() {
 let _realtimeChannel = null;
 // Debounced reload — evita múltiples recargas simultáneas
 let _calLoadTimer = null;
-function debouncedCalendarLoad(delay = 400) {
+function debouncedCalendarLoad(delay = 300) {
   clearTimeout(_calLoadTimer);
   _calLoadTimer = setTimeout(() => {
-    if (currentSection === 'calendar')    calendar?.load();
-    if (currentSection === 'dashboard')   dashboard?.load();
-    if (currentSection === 'bookings')    bookingList?.load();
-    if (currentSection === 'statistics')  statistics?.loadUnits?.();
+    // Invalidar cache SIEMPRE — garantiza datos frescos desde Supabase
+    cache.invalidate('bookings', 'reminders', 'payments');
+    // Recargar la sección activa (y componentes secundarios)
+    if (currentSection === 'calendar')    { calendar?.load(); }
+    if (currentSection === 'dashboard')   { dashboard?.load(); }
+    if (currentSection === 'bookings')    { bookingList?.load(); }
+    if (currentSection === 'statistics')  { statistics?.loadUnits?.(); statistics?.loadPL?.(); }
+    if (currentSection === 'operations')  { operations?.load?.(); }
+    if (currentSection === 'guests')      { guestsCRM?.load?.(); }
+    // El sidebar mini-calendar siempre se actualiza
+    window._sidebarCal?.refresh().catch(() => {});
   }, delay);
 }
 

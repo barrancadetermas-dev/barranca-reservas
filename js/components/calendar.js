@@ -2265,13 +2265,14 @@ export class Calendar {
     const DAYS  = ['dom','lun','mar','mié','jue','vie','sáb'];
     const MONTHS= ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
 
+    // Mobile: máx 6 cards; Desktop: máx 7
+    const SLOTS = window.innerWidth <= 768 ? 6 : 7;
+
     const upcoming = bookings
       .filter(b => !b.is_blocked && b.status !== 'blocked' && b.status !== 'cancelled'
                 && b.check_in >= today && b.check_in <= in30)
       .sort((a, b) => a.check_in.localeCompare(b.check_in))
-      .slice(0, 7); // máx 7 — una por slot
-
-    const SLOTS = 7;
+      .slice(0, SLOTS);
     const cards = [];
 
     for (let i = 0; i < SLOTS; i++) {

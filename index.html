@@ -58,13 +58,16 @@
   <div class="login-card">
     <div class="login-logo">
       <div class="login-logo-icon">
-        <!-- SVG inline: no depende de /icon-192.png, nunca se rompe -->
-        <svg width="68" height="68" viewBox="0 0 68 68" fill="none" xmlns="http://www.w3.org/2000/svg" style="display:block;border-radius:14px;">
+        <!-- Icono MILA real desde /public — SW v5 garantiza no 404 cacheado -->
+        <img src="/icon-192.png" alt="MILA" width="68" height="68"
+             style="border-radius:14px;display:block;"
+             onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+        <!-- Fallback SVG si el archivo no carga -->
+        <svg width="68" height="68" viewBox="0 0 68 68" fill="none" xmlns="http://www.w3.org/2000/svg"
+             style="display:none;border-radius:14px;flex-shrink:0">
           <rect width="68" height="68" rx="14" fill="#1E4DB7"/>
-          <!-- Letra M centrada, blanca -->
-          <text x="34" y="46" text-anchor="middle" font-family="system-ui,-apple-system,sans-serif" font-weight="800" font-size="30" fill="white" letter-spacing="-1">M</text>
-          <!-- Punto azul claro debajo de la M -->
-          <circle cx="34" cy="56" r="2.5" fill="rgba(255,255,255,0.55)"/>
+          <text x="34" y="46" text-anchor="middle" font-family="system-ui,-apple-system,sans-serif"
+                font-weight="800" font-size="28" fill="white">M</text>
         </svg>
       </div>
       <div>
@@ -118,9 +121,14 @@
   <aside id="sidebar" class="sidebar">
     <div class="sidebar-logo">
       <div class="sidebar-logo-mark">
-        <svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" style="display:block;border-radius:10px;">
+        <img src="/icon-192.png" alt="MILA" width="48" height="48"
+             style="border-radius:10px;display:block;"
+             onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+        <svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"
+             style="display:none;border-radius:10px;flex-shrink:0">
           <rect width="48" height="48" rx="10" fill="#1E4DB7"/>
-          <text x="24" y="33" text-anchor="middle" font-family="system-ui,-apple-system,sans-serif" font-weight="800" font-size="22" fill="white" letter-spacing="-0.5">M</text>
+          <text x="24" y="33" text-anchor="middle" font-family="system-ui,-apple-system,sans-serif"
+                font-weight="800" font-size="20" fill="white">M</text>
         </svg>
       </div>
       <div class="sidebar-logo-text">
