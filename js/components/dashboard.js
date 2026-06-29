@@ -134,6 +134,8 @@ export class Dashboard {
       this._renderDineroAsegurado(dineroStats);
       this._renderDollar(dollarRates);
       this._renderNextEvent(kpis, today);
+      this._renderRevPAR(extraStats);
+      this._renderCobros(extraStats);
       // Update header badge
       const buyEl = document.getElementById('dollar-badge-buy');
       const sellEl = document.getElementById('dollar-badge-value');

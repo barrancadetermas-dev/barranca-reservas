@@ -2256,7 +2256,7 @@ export class Calendar {
       if (!b) {
         cards.push(
           '<div class="cal-agenda-slot cal-agenda-slot--empty">' +
-            '<span class="cal-agenda-empty-text">Sin reserva&nbsp;:(</span>' +
+            '<span class="cal-agenda-empty-text">Sin reserva&nbsp;😢</span>' +
           '</div>'
         );
         continue;
