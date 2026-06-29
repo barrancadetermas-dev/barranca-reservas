@@ -639,9 +639,9 @@ export class Dashboard {
     }
 
     // Promedio oficial
-    const mainVal = rates.oficial?.sell ?? null;
+    const mainVal = rates.oficial?.buy ?? null;
     const headerBadge = document.getElementById('dollar-badge-value');
-    if (headerBadge) headerBadge.textContent = mainVal ? `$${Math.round(mainVal).toLocaleString('es-AR')}` : '—';
+    if (headerBadge) headerBadge.textContent = rates.oficial?.buy ? `$${Math.round(rates.oficial.buy).toLocaleString('es-AR')}` : '—';
 
     // Widget principal en dashboard
     const el = document.getElementById('dollar-widget-body');
@@ -672,14 +672,14 @@ export class Dashboard {
         <div class="dollar-source-row ${!src ? 'dollar-source-fail' : ''}">
           <span class="dollar-source-name">${def.label}</span>
           <span class="dollar-source-val ${!src ? 'text-muted' : ''}">
-            ${src ? fmt(src.sell) : '<span title="Sin respuesta">⚠ —</span>'}
+            ${src ? fmt(src.buy) : '<span title="Sin respuesta">⚠ —</span>'}
           </span>
         </div>`;
     }).join('');
 
     el.innerHTML = `
       <div class="dollar-main-val">${mainVal ? `$${Number(mainVal).toLocaleString('es-AR', {minimumFractionDigits:2})}` : '—'}</div>
-      <div class="dollar-main-label">Dólar Oficial Venta · Promedio</div>
+      <div class="dollar-main-label">Dólar Oficial Compra · Promedio</div>
       <div class="dollar-sources-list">${sourceRows}</div>
       <div class="dollar-footer">
         <span class="dollar-src-count">${sources.length}/3 fuente${sources.length !== 1 ? 's' : ''}</span>
