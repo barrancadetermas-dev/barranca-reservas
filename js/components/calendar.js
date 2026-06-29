@@ -259,6 +259,11 @@ export class Calendar {
     const labelW  = this._measureLabelW(isMob);  // dinámico según nombres
     const N       = this._visibleDays;
 
+    // Siempre resetear scroll al inicio del window para que el primer día
+    // no quede oculto bajo la columna sticky de unidades
+    const wrapper = document.querySelector('.cal-wrapper');
+    if (wrapper) wrapper.scrollLeft = 0;
+
     grid.style.gridTemplateColumns = `${labelW}px repeat(${N}, minmax(${cellW}px, 1fr))`;
     grid.style.minWidth = `${labelW + N * cellW}px`;
     grid.style.width    = '100%';
