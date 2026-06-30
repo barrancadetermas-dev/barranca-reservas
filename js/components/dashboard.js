@@ -1114,25 +1114,41 @@ export class Dashboard {
     const totalUnits = data.totalUnits || 1;
     const barW   = 5, gap = 1;
     const chartW = days.length * (barW + gap) - gap;
-    const chartH = 36;
-    const colorFor = pct => pct >= 70 ? '#22c55e' : pct >= 35 ? '#f59e0b' : '#cbd5e1';
+    const chartH = 34;
+    // Umbrales pensados para ocupación real de hotel chico (rara vez
+    // toca 70%+ con mucha anticipación): así el color ya dice algo
+    // incluso en valores bajos, en vez de quedar todo gris parejo.
+    const colorFor = pct => pct >= 50 ? '#22c55e' : pct >= 20 ? '#f59e0b' : '#94a3b8';
+    const refY = chartH - Math.round(chartH * 0.5); // línea de referencia al 50%
 
     const bars = days.map((d, i) => {
       const pct = Math.round((d.occupied / totalUnits) * 100);
-      const h   = Math.max(2, Math.round((pct / 100) * chartH));
+      // Piso más generoso que antes (4px) para que valores chicos (8-10%)
+      // sigan siendo visibles como barra y no como una línea perdida.
+      const h   = pct <= 0 ? 1 : Math.max(4, Math.round((pct / 100) * chartH));
       const x   = i * (barW + gap);
       const y   = chartH - h;
       const isToday = d.date === today;
-      return `<rect x="${x}" y="${y}" width="${barW}" height="${h}" rx="1" fill="${colorFor(pct)}" opacity="${isToday ? 1 : 0.85}">` +
-             `<title>${new Date(d.date+'T12:00:00').toLocaleDateString('es-AR',{day:'numeric',month:'short'})}: ${pct}% (${d.occupied}/${totalUnits})</title></rect>`;
+      const fecha = new Date(d.date+'T12:00:00').toLocaleDateString('es-AR',{day:'numeric',month:'short'});
+      return `<rect x="${x}" y="${y}" width="${barW}" height="${h}" rx="1" fill="${colorFor(pct)}" opacity="${isToday ? 1 : 0.85}" style="cursor:pointer">` +
+             `<title>${isToday ? 'Hoy' : fecha}: ${pct}% ocupado (${d.occupied}/${totalUnits})</title></rect>`;
     }).join('');
 
+    const lastDate = new Date(days[days.length - 1].date + 'T12:00:00')
+      .toLocaleDateString('es-AR', { day: 'numeric', month: 'short' });
+
     el.innerHTML = `
-      <div style="display:flex;flex-direction:column;gap:8px;height:100%;justify-content:center">
+      <div style="display:flex;flex-direction:column;gap:4px;height:100%;justify-content:center">
         <svg viewBox="0 0 ${chartW} ${chartH}" width="100%" height="${chartH}" style="display:block;overflow:visible">
+          <line x1="0" y1="${refY}" x2="${chartW}" y2="${refY}" stroke="var(--color-border)" stroke-width="0.6" stroke-dasharray="2,2" />
+          <line x1="0" y1="0" x2="0" y2="${chartH}" stroke="var(--color-primary)" stroke-width="1" opacity="0.6" />
           ${bars}
         </svg>
-        <div style="display:flex;justify-content:space-between;gap:4px">
+        <div style="display:flex;justify-content:space-between;font-size:.58rem;color:var(--color-text-3);padding:0 1px">
+          <span>hoy</span>
+          <span>${lastDate}</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;gap:4px;margin-top:2px">
           <div style="text-align:center;flex:1">
             <div style="font-size:.95rem;font-weight:700;color:var(--color-text)">${pct7}%</div>
             <div style="font-size:.62rem;color:var(--color-text-3)">7 días</div>
