@@ -105,6 +105,9 @@ export class Statistics {
     ['units','financ','pl','heatmap','charts','revenue'].forEach(t => {
       document.getElementById(`stats-${t}-panel`)?.classList.toggle('hidden', t !== tab);
     });
+    // Finanzas tiene su propio selector de Período/Rango — el Mes/Año de
+    // arriba queda redundante y se oculta solo en esa pestaña.
+    document.getElementById('stats-toolbar')?.classList.toggle('hidden', tab === 'financ');
   }
 
   _bindButtons() {
