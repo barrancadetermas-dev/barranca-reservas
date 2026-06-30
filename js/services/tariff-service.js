@@ -45,7 +45,7 @@ export async function fetchCustomColumns(db, hotelId, rangeFrom, rangeTo) {
   });
 }
 
-export async function upsertCustomColumn(db, hotelId, payload) {
+export function upsertCustomColumn(db, hotelId, payload) {
   return db.from('tariff_custom_columns').upsert({ hotel_id: hotelId, ...payload });
 }
 export async function deleteCustomColumn(db, id) {

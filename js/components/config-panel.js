@@ -1034,28 +1034,68 @@ export class ConfigPanel {
     const units = (this.ctx.units ?? []).slice().sort((a,b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
     const rateMap = new Map();
     rates.forEach(r => rateMap.set(`${r.unit_id}|${r.year}|${r.month}`, r));
+    customCols.forEach(c => {
+      c._priceMap = new Map((c.tariff_custom_prices ?? []).map(p => [p.unit_id, p]));
+    });
 
-    const monthHeaders = this._tariffMonths.map(m =>
-      `<th style="text-align:right;padding:6px 8px;font-size:.66rem;color:var(--color-text-3);text-transform:uppercase">${MONTH_NAMES[m.month-1]} ${m.year}</th>`
-    ).join('');
+    // ── Armar la lista de columnas (meses + personalizadas intercaladas por fecha) ──
+    const bucketOf = (c) => {
+      if (!c.date_from) return -1; // siempre visible → al final
+      const [y, mo] = c.date_from.split('-').map(Number);
+      return this._tariffMonths.findIndex(m => m.year === y && m.month === mo);
+    };
+    const columns = [];
+    this._tariffMonths.forEach((m, idx) => {
+      columns.push({ type: 'month', m });
+      customCols.filter(c => bucketOf(c) === idx).forEach(c => columns.push({ type: 'custom', c }));
+    });
+    customCols.filter(c => bucketOf(c) === -1).forEach(c => columns.push({ type: 'custom', c }));
+
+    const colHeaders = columns.map(col => {
+      if (col.type === 'month') {
+        const m = col.m;
+        return `<th style="text-align:center;padding:6px 8px;font-size:.66rem;color:var(--color-text-3);text-transform:uppercase">${MONTH_NAMES[m.month-1]} ${m.year}</th>`;
+      }
+      const c = col.c;
+      const vig = c.date_from && c.date_to
+        ? `${c.date_from.split('-').reverse().join('/')} → ${c.date_to.split('-').reverse().join('/')}`
+        : 'Siempre visible';
+      return `
+        <th style="text-align:center;padding:6px 8px;font-size:.66rem;color:var(--color-text-3);text-transform:uppercase;background:var(--color-surface-2);border-radius:8px 8px 0 0">
+          <div style="display:flex;align-items:center;justify-content:center;gap:4px;white-space:nowrap">
+            <span title="${vig}${c.note ? ' · ' + c.note : ''}">🏷️ ${c.title}</span>
+            <button class="tariff-custom-del" data-id="${c.id}" title="Eliminar columna" style="background:none;border:none;cursor:pointer;font-size:.75rem;padding:0;opacity:.6">🗑️</button>
+          </div>
+        </th>`;
+    }).join('');
 
     const rows = units.map(u => {
-      const cells = this._tariffMonths.map(m => {
-        const r = rateMap.get(`${u.id}|${m.year}|${m.month}`);
-        const price = r?.price_per_night ?? '';
-        const promoOn = !!r?.promo_active;
-        const promoPay = r?.promo_pay ?? '';
-        const promoFree = r?.promo_free ?? '';
+      const cells = columns.map(col => {
+        if (col.type === 'month') {
+          const m = col.m;
+          const r = rateMap.get(`${u.id}|${m.year}|${m.month}`);
+          const price = r?.price_per_night ?? '';
+          const promoOn = !!r?.promo_active;
+          const promoPay = r?.promo_pay ?? '';
+          const promoFree = r?.promo_free ?? '';
+          return `
+            <td style="padding:5px 6px;text-align:right">
+              <div style="display:flex;align-items:center;justify-content:flex-end;gap:4px">
+                <input type="number" class="tariff-price-input" data-unit="${u.id}" data-year="${m.year}" data-month="${m.month}"
+                  value="${price}" placeholder="—" style="width:78px;padding:4px 6px;font-size:.78rem;text-align:right;border:1px solid var(--color-border);border-radius:6px;background:var(--color-surface)">
+                <button class="tariff-promo-btn" data-unit="${u.id}" data-year="${m.year}" data-month="${m.month}"
+                  data-on="${promoOn ? '1':'0'}" data-pay="${promoPay}" data-free="${promoFree}"
+                  title="Promo (ej: 2+1)" style="background:none;border:none;cursor:pointer;font-size:.85rem;padding:2px;opacity:${promoOn ? '1':'.35'}">✏️</button>
+              </div>
+              ${promoOn && promoPay && promoFree ? `<div style="font-size:.62rem;color:#D97706;text-align:right;margin-top:2px">${promoPay}+${promoFree} activa</div>` : ''}
+            </td>`;
+        }
+        const c = col.c;
+        const p = c._priceMap.get(u.id);
         return `
-          <td style="padding:5px 6px;text-align:right">
-            <div style="display:flex;align-items:center;justify-content:flex-end;gap:4px">
-              <input type="number" class="tariff-price-input" data-unit="${u.id}" data-year="${m.year}" data-month="${m.month}"
-                value="${price}" placeholder="—" style="width:78px;padding:4px 6px;font-size:.78rem;text-align:right;border:1px solid var(--color-border);border-radius:6px;background:var(--color-surface)">
-              <button class="tariff-promo-btn" data-unit="${u.id}" data-year="${m.year}" data-month="${m.month}"
-                data-on="${promoOn ? '1':'0'}" data-pay="${promoPay}" data-free="${promoFree}"
-                title="Promo (ej: 2+1)" style="background:none;border:none;cursor:pointer;font-size:.85rem;padding:2px;opacity:${promoOn ? '1':'.35'}">✏️</button>
-            </div>
-            ${promoOn && promoPay && promoFree ? `<div style="font-size:.62rem;color:#D97706;text-align:right;margin-top:2px">${promoPay}+${promoFree} activa</div>` : ''}
+          <td style="padding:5px 6px;text-align:right;background:var(--color-surface-2)">
+            <input type="number" class="tariff-custom-price-input" data-col="${c.id}" data-unit="${u.id}"
+              value="${p?.price ?? ''}" placeholder="—" style="width:78px;padding:4px 6px;font-size:.78rem;text-align:right;border:1px solid var(--color-border);border-radius:6px;background:var(--color-surface)">
           </td>`;
       }).join('');
       return `
@@ -1067,73 +1107,19 @@ export class ConfigPanel {
         </tr>`;
     }).join('');
 
-    const customRows = customCols.map(c => {
-      const vig = c.date_from && c.date_to
-        ? `${c.date_from.split('-').reverse().join('/')} → ${c.date_to.split('-').reverse().join('/')}`
-        : 'Siempre visible';
-      const priceMap = new Map((c.tariff_custom_prices ?? []).map(p => [p.unit_id, p]));
-      const unitRows = units.map(u => {
-        const p = priceMap.get(u.id);
-        return `
-          <tr>
-            <td style="padding:5px 8px;font-size:.78rem;white-space:nowrap">
-              <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${u.color ?? 'var(--color-primary)'};margin-right:6px"></span>${u.name}
-            </td>
-            <td style="padding:5px 6px;text-align:right">
-              <input type="number" class="tariff-custom-price-input" data-col="${c.id}" data-unit="${u.id}"
-                value="${p?.price ?? ''}" placeholder="—" style="width:78px;padding:4px 6px;font-size:.78rem;text-align:right;border:1px solid var(--color-border);border-radius:6px;background:var(--color-surface)">
-            </td>
-            <td style="padding:5px 6px;text-align:right">
-              <input type="number" class="tariff-custom-nights-input" data-col="${c.id}" data-unit="${u.id}"
-                value="${p?.nights ?? ''}" placeholder="noches" style="width:64px;padding:4px 6px;font-size:.78rem;text-align:right;border:1px solid var(--color-border);border-radius:6px;background:var(--color-surface)">
-            </td>
-          </tr>`;
-      }).join('');
-      return `
-        <div style="background:var(--color-surface-2);border:1px solid var(--color-border);border-radius:8px;margin-bottom:6px">
-          <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px">
-            <div style="min-width:0">
-              <div style="font-size:.82rem;font-weight:700;color:var(--color-text)">🏷️ ${c.title}</div>
-              <div style="font-size:.68rem;color:var(--color-text-3)">${vig}${c.note ? ' · ' + c.note : ''}</div>
-            </div>
-            <div style="display:flex;gap:4px;flex-shrink:0">
-              <button class="btn btn-ghost btn-xs tariff-custom-edit" data-id="${c.id}">✏️ Precios</button>
-              <button class="btn btn-ghost btn-xs tariff-custom-del" data-id="${c.id}">🗑️</button>
-            </div>
-          </div>
-          <div id="tariff-custom-panel-${c.id}" style="display:none;padding:0 12px 12px;overflow-x:auto">
-            <table style="border-collapse:collapse;width:auto">
-              <thead><tr>
-                <th style="text-align:left;padding:4px 8px;font-size:.62rem;color:var(--color-text-3);text-transform:uppercase">Depto</th>
-                <th style="text-align:right;padding:4px 6px;font-size:.62rem;color:var(--color-text-3);text-transform:uppercase">Precio</th>
-                <th style="text-align:right;padding:4px 6px;font-size:.62rem;color:var(--color-text-3);text-transform:uppercase">Noches</th>
-              </tr></thead>
-              <tbody>${unitRows}</tbody>
-            </table>
-          </div>
-        </div>`;
-    }).join('');
-
     el.innerHTML = `
-      <div style="overflow-x:auto;margin-bottom:16px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <span style="font-size:.7rem;color:var(--color-text-3)">Los precios se guardan automáticamente al salir del campo. El ✏️ permite activar una promo tipo "2+1".</span>
+        <button class="btn btn-outline btn-sm" id="btn-add-tariff-custom" style="flex-shrink:0;margin-left:10px">+ Agregar columna</button>
+      </div>
+      <div style="overflow-x:auto;margin-bottom:8px">
         <table style="border-collapse:collapse;width:auto">
           <thead><tr>
             <th style="text-align:left;padding:6px 16px 6px 8px;font-size:.66rem;color:var(--color-text-3);text-transform:uppercase">Departamento</th>
-            ${monthHeaders}
+            ${colHeaders}
           </tr></thead>
           <tbody>${rows}</tbody>
         </table>
-      </div>
-      <div style="font-size:.7rem;color:var(--color-text-3);margin-bottom:14px">
-        Los precios se guardan automáticamente al salir del campo. El ✏️ permite activar una promo tipo "2+1" (pagás 2 noches, 1 gratis).
-      </div>
-
-      <div style="border-top:1px solid var(--color-border);padding-top:14px">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-          <span style="font-size:.78rem;font-weight:700;color:var(--color-text)">Columnas personalizadas</span>
-          <button class="btn btn-outline btn-sm" id="btn-add-tariff-custom">+ Agregar columna</button>
-        </div>
-        ${customRows || '<div style="font-size:.78rem;color:var(--color-text-3)">Sin columnas personalizadas (ej: "Finde largo").</div>'}
       </div>`;
 
     this._bindTariffEditorEvents(units);
@@ -1185,27 +1171,13 @@ export class ConfigPanel {
       this._openTariffCustomModal(units);
     });
 
-    // Editar precios de una columna personalizada existente (toggle panel inline)
-    el.querySelectorAll('.tariff-custom-edit').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const id = btn.dataset.id;
-        const panel = document.getElementById(`tariff-custom-panel-${id}`);
-        if (!panel) return;
-        panel.style.display = panel.style.display === 'none' ? '' : 'none';
-      });
-    });
-
-    // Guardar precio/noches de columna personalizada al salir del campo
-    el.querySelectorAll('.tariff-custom-price-input, .tariff-custom-nights-input').forEach(input => {
+    // Guardar precio de columna personalizada al salir del campo
+    el.querySelectorAll('.tariff-custom-price-input').forEach(input => {
       input.addEventListener('change', async () => {
         const { col, unit } = input.dataset;
-        const panel = document.getElementById(`tariff-custom-panel-${col}`);
-        const priceInput  = panel.querySelector(`.tariff-custom-price-input[data-unit="${unit}"]`);
-        const nightsInput = panel.querySelector(`.tariff-custom-nights-input[data-unit="${unit}"]`);
-        const price = parseFloat(priceInput.value);
+        const price = parseFloat(input.value);
         if (isNaN(price) || price <= 0) return;
-        const nights = parseInt(nightsInput.value) || null;
-        const { error } = await upsertCustomPrice(this.db, col, unit, { price, nights });
+        const { error } = await upsertCustomPrice(this.db, col, unit, { price });
         if (error) { showToast('Error al guardar: ' + error.message, 'error'); return; }
         showToast('Precio guardado ✓', 'success');
       });
@@ -1213,7 +1185,8 @@ export class ConfigPanel {
 
     // Eliminar columna personalizada
     el.querySelectorAll('.tariff-custom-del').forEach(btn => {
-      btn.addEventListener('click', async () => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
         if (!confirm('¿Eliminar esta columna personalizada? Se borran también sus precios cargados.')) return;
         const { error } = await deleteCustomColumn(this.db, btn.dataset.id);
         if (error) { showToast('Error: ' + error.message, 'error'); return; }
@@ -1273,10 +1246,8 @@ export class ConfigPanel {
       if (error) { showToast('Error: ' + error.message, 'error'); return; }
 
       close();
-      showToast('Columna creada ✓ — cargá el precio por unidad', 'success');
+      showToast('Columna creada ✓ — cargá el precio por unidad en la tabla', 'success');
       await this._renderTariffEditorBody();
-      const panel = document.getElementById(`tariff-custom-panel-${data.id}`);
-      if (panel) panel.style.display = '';
     };
   }
 }
