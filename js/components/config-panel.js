@@ -1071,25 +1071,54 @@ export class ConfigPanel {
       const vig = c.date_from && c.date_to
         ? `${c.date_from.split('-').reverse().join('/')} → ${c.date_to.split('-').reverse().join('/')}`
         : 'Siempre visible';
+      const priceMap = new Map((c.tariff_custom_prices ?? []).map(p => [p.unit_id, p]));
+      const unitRows = units.map(u => {
+        const p = priceMap.get(u.id);
+        return `
+          <tr>
+            <td style="padding:5px 8px;font-size:.78rem;white-space:nowrap">
+              <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${u.color ?? 'var(--color-primary)'};margin-right:6px"></span>${u.name}
+            </td>
+            <td style="padding:5px 6px;text-align:right">
+              <input type="number" class="tariff-custom-price-input" data-col="${c.id}" data-unit="${u.id}"
+                value="${p?.price ?? ''}" placeholder="—" style="width:78px;padding:4px 6px;font-size:.78rem;text-align:right;border:1px solid var(--color-border);border-radius:6px;background:var(--color-surface)">
+            </td>
+            <td style="padding:5px 6px;text-align:right">
+              <input type="number" class="tariff-custom-nights-input" data-col="${c.id}" data-unit="${u.id}"
+                value="${p?.nights ?? ''}" placeholder="noches" style="width:64px;padding:4px 6px;font-size:.78rem;text-align:right;border:1px solid var(--color-border);border-radius:6px;background:var(--color-surface)">
+            </td>
+          </tr>`;
+      }).join('');
       return `
-        <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;
-          background:var(--color-surface-2);border:1px solid var(--color-border);border-radius:8px;margin-bottom:6px">
-          <div style="min-width:0">
-            <div style="font-size:.82rem;font-weight:700;color:var(--color-text)">🏷️ ${c.title}</div>
-            <div style="font-size:.68rem;color:var(--color-text-3)">${vig}${c.note ? ' · ' + c.note : ''}</div>
+        <div style="background:var(--color-surface-2);border:1px solid var(--color-border);border-radius:8px;margin-bottom:6px">
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px">
+            <div style="min-width:0">
+              <div style="font-size:.82rem;font-weight:700;color:var(--color-text)">🏷️ ${c.title}</div>
+              <div style="font-size:.68rem;color:var(--color-text-3)">${vig}${c.note ? ' · ' + c.note : ''}</div>
+            </div>
+            <div style="display:flex;gap:4px;flex-shrink:0">
+              <button class="btn btn-ghost btn-xs tariff-custom-edit" data-id="${c.id}">✏️ Precios</button>
+              <button class="btn btn-ghost btn-xs tariff-custom-del" data-id="${c.id}">🗑️</button>
+            </div>
           </div>
-          <div style="display:flex;gap:4px;flex-shrink:0">
-            <button class="btn btn-ghost btn-xs tariff-custom-edit" data-id="${c.id}">✏️ Precios</button>
-            <button class="btn btn-ghost btn-xs tariff-custom-del" data-id="${c.id}">🗑️</button>
+          <div id="tariff-custom-panel-${c.id}" style="display:none;padding:0 12px 12px;overflow-x:auto">
+            <table style="border-collapse:collapse;width:auto">
+              <thead><tr>
+                <th style="text-align:left;padding:4px 8px;font-size:.62rem;color:var(--color-text-3);text-transform:uppercase">Depto</th>
+                <th style="text-align:right;padding:4px 6px;font-size:.62rem;color:var(--color-text-3);text-transform:uppercase">Precio</th>
+                <th style="text-align:right;padding:4px 6px;font-size:.62rem;color:var(--color-text-3);text-transform:uppercase">Noches</th>
+              </tr></thead>
+              <tbody>${unitRows}</tbody>
+            </table>
           </div>
         </div>`;
     }).join('');
 
     el.innerHTML = `
       <div style="overflow-x:auto;margin-bottom:16px">
-        <table style="border-collapse:collapse;width:100%">
+        <table style="border-collapse:collapse;width:auto">
           <thead><tr>
-            <th style="text-align:left;padding:6px 8px;font-size:.66rem;color:var(--color-text-3);text-transform:uppercase">Departamento</th>
+            <th style="text-align:left;padding:6px 16px 6px 8px;font-size:.66rem;color:var(--color-text-3);text-transform:uppercase">Departamento</th>
             ${monthHeaders}
           </tr></thead>
           <tbody>${rows}</tbody>
@@ -1156,13 +1185,29 @@ export class ConfigPanel {
       this._openTariffCustomModal(units);
     });
 
-    // Editar precios de una columna personalizada existente
+    // Editar precios de una columna personalizada existente (toggle panel inline)
     el.querySelectorAll('.tariff-custom-edit').forEach(btn => {
-      btn.addEventListener('click', async () => {
+      btn.addEventListener('click', () => {
         const id = btn.dataset.id;
-        const titleEl = btn.closest('div[style*="space-between"]')?.querySelector('div > div');
-        await this._editTariffCustomPrices(id, titleEl?.textContent ?? 'Columna', units);
-        await this._renderTariffEditorBody();
+        const panel = document.getElementById(`tariff-custom-panel-${id}`);
+        if (!panel) return;
+        panel.style.display = panel.style.display === 'none' ? '' : 'none';
+      });
+    });
+
+    // Guardar precio/noches de columna personalizada al salir del campo
+    el.querySelectorAll('.tariff-custom-price-input, .tariff-custom-nights-input').forEach(input => {
+      input.addEventListener('change', async () => {
+        const { col, unit } = input.dataset;
+        const panel = document.getElementById(`tariff-custom-panel-${col}`);
+        const priceInput  = panel.querySelector(`.tariff-custom-price-input[data-unit="${unit}"]`);
+        const nightsInput = panel.querySelector(`.tariff-custom-nights-input[data-unit="${unit}"]`);
+        const price = parseFloat(priceInput.value);
+        if (isNaN(price) || price <= 0) return;
+        const nights = parseInt(nightsInput.value) || null;
+        const { error } = await upsertCustomPrice(this.db, col, unit, { price, nights });
+        if (error) { showToast('Error al guardar: ' + error.message, 'error'); return; }
+        showToast('Precio guardado ✓', 'success');
       });
     });
 
@@ -1228,23 +1273,10 @@ export class ConfigPanel {
       if (error) { showToast('Error: ' + error.message, 'error'); return; }
 
       close();
-      showToast('Columna creada ✓ — ahora cargá el precio por unidad', 'success');
-      await this._editTariffCustomPrices(data.id, title, units);
+      showToast('Columna creada ✓ — cargá el precio por unidad', 'success');
       await this._renderTariffEditorBody();
+      const panel = document.getElementById(`tariff-custom-panel-${data.id}`);
+      if (panel) panel.style.display = '';
     };
-  }
-
-  // ── Cargar precio por unidad para una columna personalizada (prompts encadenados) ──
-  async _editTariffCustomPrices(customColumnId, title, units) {
-    for (const u of units) {
-      const val = prompt(`${title} — precio para "${u.name}" (vacío = sin cambios)`, '');
-      if (val === null || val.trim() === '') continue;
-      const price = parseFloat(val);
-      if (isNaN(price)) continue;
-      const nightsStr = prompt(`¿Cuántas noches incluye ese precio? (opcional, ej: 3)`, '') ?? '';
-      const nights = parseInt(nightsStr) || null;
-      await upsertCustomPrice(this.db, customColumnId, u.id, { price, nights });
-    }
-    showToast('Precios de la columna guardados ✓', 'success');
   }
 }
