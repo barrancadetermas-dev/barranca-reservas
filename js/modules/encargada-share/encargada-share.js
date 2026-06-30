@@ -203,13 +203,15 @@ function _injectModal() {
           <p style="font-size:.7rem;color:var(--color-text-3);margin-top:3px">Número de WhatsApp predeterminado. Podés modificarlo antes de enviar.</p>
         </div>
 
-        <!-- 4. Vista previa del mensaje (oculta hasta generar) -->
         <div id="enc-preview-section" style="display:none">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-            <span style="font-size:.78rem;font-weight:700;color:var(--color-text)">Mensaje generado</span>
+            <div>
+              <span style="font-size:.78rem;font-weight:700;color:var(--color-text)">Mensaje generado</span>
+              <span id="enc-editable-hint" style="font-size:.7rem;color:#0284c7;margin-left:8px;display:none">✏️ Editable — completá las líneas NOTA:</span>
+            </div>
             <button id="enc-copy-btn" class="btn btn-outline btn-sm" style="font-size:.7rem;padding:3px 8px">📋 Copiar</button>
           </div>
-          <textarea id="enc-wa-text" rows="10" class="wa-textarea" readonly style="font-size:.72rem;font-family:monospace;width:100%;resize:vertical"></textarea>
+          <textarea id="enc-wa-text" rows="12" class="wa-textarea" style="font-size:.72rem;font-family:monospace;width:100%;resize:vertical"></textarea>
         </div>
 
         <!-- 5. Aviso sobre PDF -->
@@ -285,10 +287,22 @@ function _bindEvents() {
     const text = generateEncargadaWhatsApp(filtered, _rangeLabel(), includeAmounts);
     const textarea = _modalEl.querySelector('#enc-wa-text');
     textarea.value = text;
+    // Modo limpieza → editable para agregar notas por depto
+    textarea.readOnly = includeAmounts;
+    if (!includeAmounts) {
+      textarea.style.border = '1.5px solid var(--color-primary)';
+      textarea.title = 'Podés editar este texto — completá las líneas NOTA: antes de enviar';
+    } else {
+      textarea.style.border = '';
+    }
+    const hint = _modalEl.querySelector('#enc-editable-hint');
+    if (hint) hint.style.display = includeAmounts ? 'none' : 'inline';
     const section = _modalEl.querySelector('#enc-preview-section');
     section.style.display = 'block';
     setTimeout(() => section.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 50);
-    showToast(`✓ Mensaje generado (${filtered.length} reservas)`, 'success');
+    showToast(includeAmounts
+      ? `✓ Mensaje generado (${filtered.length} reservas)`
+      : `✓ Generado · Completá las líneas NOTA: antes de enviar`, 'success');
   });
 
   // Copiar
