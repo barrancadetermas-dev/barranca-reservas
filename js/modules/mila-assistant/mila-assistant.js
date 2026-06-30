@@ -65,6 +65,9 @@ const PRESETS = {
 // Estado de los campos por fila (en memoria, no persiste entre sesiones)
 const fieldState = {};
 let lastQueryId = null;
+let requestSeq = 0; // guard de carrera: evita que una respuesta vieja pise a una más nueva
+const answerCache = new Map(); // cache corta (15s) para no repetir la misma consulta dos veces seguidas
+const CACHE_TTL_MS = 15000;
 const recentQueries = []; // últimas consultas ejecutadas (en memoria, máx. 4)
 
 export function initMilaAssistant(options = {}) {
@@ -385,7 +388,12 @@ function attachRow(rowEl, todayISO) {
   if (q.type !== 'text') {
     rowEl.addEventListener('click', () => { Sound?.click?.(); runQuery(queryId); });
   }
-  rowEl.addEventListener('keydown', (e) => { if (e.key === 'Enter' && q.type !== 'text') runQuery(queryId); });
+  rowEl.addEventListener('keydown', (e) => {
+    if ((e.key === 'Enter' || e.key === ' ') && q.type !== 'text') {
+      e.preventDefault(); // evita que Espacio haga scroll de la página
+      runQuery(queryId);
+    }
+  });
 }
 
 function markActiveRow(queryId) {
@@ -441,67 +449,78 @@ function showLoading(q) {
 async function runQuery(queryId) {
   const q = QUERIES.find(x => x.id === queryId);
   const s = fieldState[queryId];
+  const myRequestId = ++requestSeq;
+  const cacheKey = `${queryId}|${JSON.stringify(s)}`;
+  const cached = answerCache.get(cacheKey);
+  const guardedRender = (subtitle, html) => {
+    answerCache.set(cacheKey, { subtitle, html, ts: Date.now() });
+    if (myRequestId === requestSeq) renderAnswer(q, subtitle, html);
+  };
   markActiveRow(queryId);
+  if (cached && Date.now() - cached.ts < CACHE_TTL_MS) {
+    renderAnswer(q, cached.subtitle, cached.html);
+    return;
+  }
   showLoading(q);
   try {
     switch (queryId) {
       case 'checkinout': {
         const data = await MilaData.fetchCheckInsOuts(s.date);
-        renderAnswer(q, fmtDate(s.date), checkInOutHTML(data));
+        guardedRender(fmtDate(s.date), checkInOutHTML(data));
         break;
       }
       case 'reservas': {
         const data = await MilaData.fetchReservasByDate(s.date);
-        renderAnswer(q, fmtDate(s.date), reservasHTML(data));
+        guardedRender(fmtDate(s.date), reservasHTML(data));
         break;
       }
       case 'disponib': {
-        if (s.from >= s.to) { renderAnswer(q, '', emptyState('⚠️ La fecha de salida debe ser posterior al ingreso')); return; }
+        if (s.from >= s.to) { if (myRequestId === requestSeq) renderAnswer(q, '', emptyState('⚠️ La fecha de salida debe ser posterior al ingreso')); return; }
         const data = await MilaData.fetchDisponibilidad(s.from, s.to);
-        renderAnswer(q, `${fmtDate(s.from)} → ${fmtDate(s.to)}`, disponibilidadHTML(data));
+        guardedRender(`${fmtDate(s.from)} → ${fmtDate(s.to)}`, disponibilidadHTML(data));
         break;
       }
       case 'facturacion': {
         const data = await MilaData.fetchFacturacion(s.from, s.to);
-        renderAnswer(q, `${fmtDate(s.from)} → ${fmtDate(s.to)}`, facturacionHTML(data));
+        guardedRender(`${fmtDate(s.from)} → ${fmtDate(s.to)}`, facturacionHTML(data));
         break;
       }
       case 'ocupacion': {
         const { label, from, to } = PRESETS[s.preset]();
         const data = await MilaData.fetchOcupacion(from, to);
-        renderAnswer(q, label, ocupacionHTML(data));
+        guardedRender(label, ocupacionHTML(data));
         break;
       }
       case 'precios': {
         if (!s.unitId) return;
-        if (s.from >= s.to) { renderAnswer(q, '', emptyState('⚠️ La fecha de salida debe ser posterior al ingreso')); return; }
+        if (s.from >= s.to) { if (myRequestId === requestSeq) renderAnswer(q, '', emptyState('⚠️ La fecha de salida debe ser posterior al ingreso')); return; }
         const data = await MilaData.fetchPrecios(s.unitId, s.from, s.to);
-        renderAnswer(q, `${fmtDate(s.from)} → ${fmtDate(s.to)}`, preciosHTML(data));
+        guardedRender(`${fmtDate(s.from)} → ${fmtDate(s.to)}`, preciosHTML(data));
         break;
       }
       case 'pagos': {
         const data = await MilaData.fetchPagosPendientes();
-        renderAnswer(q, '', pagosHTML(data));
+        guardedRender('', pagosHTML(data));
         break;
       }
       case 'bloqueos': {
         const data = await MilaData.fetchBloqueos(s.date);
-        renderAnswer(q, fmtDate(s.date), bloqueosHTML(data));
+        guardedRender(fmtDate(s.date), bloqueosHTML(data));
         break;
       }
       case 'huesped': {
         if (!s.query || s.query.trim().length < 2) {
-          renderAnswer(q, '', emptyState('Escribí al menos 2 letras del nombre.'));
+          if (myRequestId === requestSeq) renderAnswer(q, '', emptyState('Escribí al menos 2 letras del nombre.'));
           return;
         }
         const data = await MilaData.fetchGuestSearch(s.query);
-        renderAnswer(q, `"${esc(s.query)}"`, huespedHTML(data));
+        guardedRender(`"${esc(s.query)}"`, huespedHTML(data));
         break;
       }
     }
   } catch (err) {
     console.error('[MILA Assistant]', err);
-    renderAnswer(q, '', emptyState('Ocurrió un error al consultar. Probá de nuevo.'));
+    if (myRequestId === requestSeq) renderAnswer(q, '', emptyState('Ocurrió un error al consultar. Probá de nuevo.'));
   }
 }
 
@@ -526,6 +545,11 @@ function renderAnswer(q, subtitle, contentHTML) {
   answerEl.classList.add('mila-answer-pop');
   answerEl.querySelector('#mila-answer-clear').addEventListener('click', () => {
     Sound?.click?.();
+    if (lastQueryId === 'huesped') {
+      fieldState.huesped.query = '';
+      const input = bodyEl.querySelector('#mila-guest-input');
+      if (input) input.value = '';
+    }
     lastQueryId = null;
     bodyEl.querySelectorAll('.mila-row').forEach(r => r.classList.remove('is-active'));
     answerEl.innerHTML = answerPlaceholder();
