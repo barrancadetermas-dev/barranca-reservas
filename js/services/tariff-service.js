@@ -73,33 +73,51 @@ export function monthsInRange(fromISO, toISO) {
 }
 
 // ── Construye la estructura final lista para pintar la tabla ──
-// Devuelve { months: [{year,month,label}], customCols: [...], rows: [{unit, cells:[...]}]}
+// Devuelve { columns: [{type:'month'|'custom', ...}], rows: [{unit, cells:[...]}] }
+// Las columnas de mes y las personalizadas se intercalan en orden cronológico:
+// si "Finde 17/Ago" cae dentro de agosto, queda Agosto | Finde 17/Ago | Septiembre.
 export function buildTariffGrid({ units, rates, customCols, months }) {
   const rateMap = new Map(); // unitId|year|month -> rate row
   rates.forEach(r => rateMap.set(`${r.unit_id}|${r.year}|${r.month}`, r));
 
-  const monthCols = months.map(m => ({
+  const monthColumns = months.map(m => ({
+    type: 'month',
     key: `m-${m.year}-${m.month}`,
     label: MONTH_NAMES[m.month - 1],
     year: m.year, month: m.month,
+    sortKey: `${m.year}-${String(m.month).padStart(2,'0')}-01`,
   }));
 
+  const customColumns = (customCols ?? []).map(c => ({
+    type: 'custom',
+    key: `c-${c.id}`,
+    id: c.id,
+    label: c.title,
+    note: c.note,
+    prices: c.tariff_custom_prices ?? [],
+    // Sin fechas → al final de todo (no tiene posición cronológica real)
+    sortKey: c.date_from ?? '9999-99-99',
+  }));
+
+  const columns = [...monthColumns, ...customColumns].sort((a,b) => a.sortKey.localeCompare(b.sortKey));
+
   const rows = (units ?? []).map(u => {
-    const cells = monthCols.map(mc => {
-      const r = rateMap.get(`${u.id}|${mc.year}|${mc.month}`);
-      return {
-        price: r?.price_per_night ?? null,
-        promoActive: !!r?.promo_active,
-        promoPay:    r?.promo_pay  ?? null,
-        promoFree:   r?.promo_free ?? null,
-      };
+    const cells = columns.map(col => {
+      if (col.type === 'month') {
+        const r = rateMap.get(`${u.id}|${col.year}|${col.month}`);
+        return {
+          type: 'month',
+          price: r?.price_per_night ?? null,
+          promoActive: !!r?.promo_active,
+          promoPay:    r?.promo_pay  ?? null,
+          promoFree:   r?.promo_free ?? null,
+        };
+      }
+      const p = col.prices.find(x => x.unit_id === u.id);
+      return { type: 'custom', price: p?.price ?? null, nights: p?.nights ?? null, note: p?.note ?? null };
     });
-    const customCells = (customCols ?? []).map(c => {
-      const p = (c.tariff_custom_prices ?? []).find(x => x.unit_id === u.id);
-      return { price: p?.price ?? null, nights: p?.nights ?? null, note: p?.note ?? null };
-    });
-    return { unit: u, cells, customCells };
+    return { unit: u, cells };
   });
 
-  return { monthCols, customCols: customCols ?? [], rows };
+  return { columns, rows };
 }

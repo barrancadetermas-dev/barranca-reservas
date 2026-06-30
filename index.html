@@ -1126,6 +1126,42 @@
 <div id="toast-container" class="toast-container"></div>
 
 <!-- Context Menu -->
+<!-- ═══════════════════════════════════════════════════
+     MODAL: Nueva columna personalizada (Cuadro Tarifario)
+═══════════════════════════════════════════════════ -->
+<div id="overlay-tariff-custom" class="modal-overlay hidden">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-header">
+      <h3>🏷️ Nueva columna personalizada</h3>
+      <button class="modal-close" id="tariff-custom-close">✕</button>
+    </div>
+    <div class="modal-body" style="display:flex;flex-direction:column;gap:14px">
+      <div class="form-group">
+        <label>Título <span class="req">*</span></label>
+        <input type="text" id="tariff-custom-title" placeholder="Ej: Finde 17/Ago">
+      </div>
+      <div class="form-group">
+        <label>Nota (opcional)</label>
+        <input type="text" id="tariff-custom-note" placeholder="Ej: Incluye late check-out">
+      </div>
+      <div class="form-group">
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+          <input type="checkbox" id="tariff-custom-use-dates" checked style="width:auto">
+          Asociar a un rango de fechas
+        </label>
+        <span class="label-hint">Si lo desmarcás, la columna queda siempre visible en el cuadro tarifario.</span>
+      </div>
+      <div id="tariff-custom-dates-wrap">
+        <div id="tariff-custom-drp"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" id="tariff-custom-cancel">Cancelar</button>
+      <button class="btn btn-primary" id="tariff-custom-confirm">Crear columna</button>
+    </div>
+  </div>
+</div>
+
 <div id="ctx-menu" class="ctx-menu hidden">
   <button id="ctx-new-booking" class="ctx-item">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>

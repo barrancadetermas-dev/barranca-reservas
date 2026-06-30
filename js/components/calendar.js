@@ -2522,38 +2522,11 @@ export class Calendar {
       ]);
 
       const units = (AppContext.units ?? []).slice().sort((a,b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
-      const { monthCols, rows } = buildTariffGrid({ units, rates, customCols, months });
+      const { columns, rows } = buildTariffGrid({ units, rates, customCols, months });
 
       const fmt = n => n == null ? '—' : '$' + Math.round(n).toLocaleString('es-AR');
-      const totalCols = monthCols.length + customCols.length;
 
-      const headerHTML = `
-        <tr>
-          <th style="text-align:left;padding:6px 10px;font-size:.66rem;color:var(--color-text-3);text-transform:uppercase;letter-spacing:.04em;font-weight:700">Depto</th>
-          ${monthCols.map(mc => `<th style="text-align:right;padding:6px 10px;font-size:.66rem;color:var(--color-text-3);text-transform:uppercase;letter-spacing:.04em;font-weight:700">${mc.label}</th>`).join('')}
-          ${customCols.map(c => `<th style="text-align:right;padding:6px 10px;font-size:.66rem;color:#D97706;text-transform:uppercase;letter-spacing:.04em;font-weight:700" title="${c.note ?? ''}">${c.title}</th>`).join('')}
-        </tr>`;
-
-      const bodyHTML = rows.map((row, i) => {
-        const monthCells = row.cells.map(cell => {
-          const promoTag = cell.promoActive && cell.promoPay && cell.promoFree
-            ? `<span style="font-size:.58rem;background:#FEF3C7;color:#92400E;padding:0 4px;border-radius:3px;margin-left:4px">${cell.promoPay}+${cell.promoFree}</span>`
-            : '';
-          return `<td style="text-align:right;padding:5px 10px;font-size:.74rem;color:var(--color-text);white-space:nowrap">${fmt(cell.price)}${promoTag}</td>`;
-        }).join('');
-        const customCells = row.customCells.map(cc => {
-          const sub = cc.nights ? `<span style="font-size:.6rem;color:var(--color-text-3)"> /${cc.nights}n</span>` : '';
-          return `<td style="text-align:right;padding:5px 10px;font-size:.74rem;font-weight:600;color:var(--color-text);white-space:nowrap">${fmt(cc.price)}${sub}</td>`;
-        }).join('');
-        return `<tr style="background:${i % 2 === 0 ? 'transparent' : 'var(--color-surface-2)'}">
-          <td style="padding:5px 10px;font-size:.74rem;color:var(--color-text);white-space:nowrap">
-            <span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${row.unit.color ?? 'var(--color-primary)'};margin-right:6px"></span>${row.unit.name}
-          </td>
-          ${monthCells}${customCells}
-        </tr>`;
-      }).join('');
-
-      if (!totalCols) {
+      if (!columns.length) {
         wrap.innerHTML = `<div class="cal-agenda-title">Cuadro tarifario</div>
           <div style="font-size:.74rem;color:var(--color-text-3);padding:6px 2px">
             Sin tarifas cargadas. Configurálas en <strong>Configuración → Cuadro Tarifario</strong>.
@@ -2561,10 +2534,51 @@ export class Calendar {
         return;
       }
 
+      // Ancho automático de la columna de departamento (mide el nombre más largo)
+      let deptColW = 90;
+      try {
+        const canvas = document.createElement('canvas');
+        const ctx2   = canvas.getContext('2d');
+        ctx2.font    = '700 12px system-ui';
+        let maxPx = 0;
+        units.forEach(u => { const w = ctx2.measureText(u.name).width; if (w > maxPx) maxPx = w; });
+        deptColW = Math.max(80, Math.min(180, Math.ceil(maxPx) + 30));
+      } catch (_) {}
+
+      const COL_W = 88; // ancho fijo por columna, similar a una card de agenda
+
+      const headerHTML = `
+        <tr>
+          <th style="text-align:left;padding:6px 10px;font-size:.66rem;color:var(--color-text-3);text-transform:uppercase;letter-spacing:.04em;font-weight:700;width:${deptColW}px;min-width:${deptColW}px">Depto</th>
+          ${columns.map(col => col.type === 'month'
+            ? `<th style="text-align:right;padding:6px 8px;font-size:.66rem;color:var(--color-text-3);text-transform:uppercase;letter-spacing:.04em;font-weight:700;width:${COL_W}px;min-width:${COL_W}px">${col.label}</th>`
+            : `<th style="text-align:right;padding:6px 8px;font-size:.62rem;color:#D97706;text-transform:uppercase;letter-spacing:.03em;font-weight:700;width:${COL_W}px;min-width:${COL_W}px" title="${col.note ?? ''}">🏷️ ${col.label}</th>`
+          ).join('')}
+        </tr>`;
+
+      const bodyHTML = rows.map((row, i) => {
+        const cellsHTML = row.cells.map(cell => {
+          if (cell.type === 'month') {
+            const promoTag = cell.promoActive && cell.promoPay && cell.promoFree
+              ? `<span style="font-size:.56rem;background:#FEF3C7;color:#92400E;padding:0 3px;border-radius:3px;margin-left:3px">${cell.promoPay}+${cell.promoFree}</span>`
+              : '';
+            return `<td style="text-align:right;padding:5px 8px;font-size:.74rem;color:var(--color-text);white-space:nowrap">${fmt(cell.price)}${promoTag}</td>`;
+          }
+          const sub = cell.nights ? `<span style="font-size:.58rem;color:var(--color-text-3)"> /${cell.nights}n</span>` : '';
+          return `<td style="text-align:right;padding:5px 8px;font-size:.74rem;font-weight:600;color:var(--color-text);white-space:nowrap">${fmt(cell.price)}${sub}</td>`;
+        }).join('');
+        return `<tr style="background:${i % 2 === 0 ? 'transparent' : 'var(--color-surface-2)'}">
+          <td style="padding:5px 10px;font-size:.74rem;color:var(--color-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
+            <span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${row.unit.color ?? 'var(--color-primary)'};margin-right:6px"></span>${row.unit.name}
+          </td>
+          ${cellsHTML}
+        </tr>`;
+      }).join('');
+
       wrap.innerHTML = `
         <div class="cal-agenda-title">Cuadro tarifario</div>
-        <div style="max-height:170px;overflow-y:auto;border:1px solid var(--color-border);border-radius:8px">
-          <table style="width:100%;border-collapse:collapse">
+        <div style="max-height:170px;overflow:auto;border:1px solid var(--color-border);border-radius:8px;display:inline-block;max-width:100%">
+          <table style="border-collapse:collapse;table-layout:fixed">
             <thead style="position:sticky;top:0;background:var(--color-surface);z-index:1">${headerHTML}</thead>
             <tbody>${bodyHTML}</tbody>
           </table>
@@ -2574,6 +2588,7 @@ export class Calendar {
       wrap.innerHTML = '';
     }
   }
+
 
   _renderMiniAgenda(bookings) {
     const el = document.getElementById('cal-mini-agenda-list');

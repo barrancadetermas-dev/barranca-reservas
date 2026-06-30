@@ -10,6 +10,7 @@ import { logAction } from '../services/audit-service.js';
 import { AdminUsers } from '../services/admin-users.js';
 import { fetchMonthlyRates, fetchCustomColumns, upsertMonthlyRate, upsertCustomColumn,
          deleteCustomColumn, upsertCustomPrice, MONTH_NAMES } from '../services/tariff-service.js';
+import { DateRangePicker } from './date-range-picker.js';
 
 
 // Definición completa de la configuración
@@ -1129,23 +1130,8 @@ export class ConfigPanel {
     });
 
     // Agregar columna personalizada
-    document.getElementById('btn-add-tariff-custom')?.addEventListener('click', async () => {
-      const title = prompt('Título de la columna (ej: "Finde 17/Ago")');
-      if (!title) return;
-      const note = prompt('Nota opcional (ej: "Incluye late check-out")', '') ?? '';
-      const useDates = confirm('¿Querés que esta columna solo aparezca cuando esas fechas estén visibles en el calendario?\n\nAceptar = sí, cargar fechas.\nCancelar = mostrar siempre.');
-      let dateFrom = null, dateTo = null;
-      if (useDates) {
-        dateFrom = prompt('Fecha desde (AAAA-MM-DD)');
-        dateTo   = prompt('Fecha hasta (AAAA-MM-DD)');
-      }
-      const { data, error } = await upsertCustomColumn(this.db, this.ctx.hotelId, {
-        title, note: note || null, date_from: dateFrom || null, date_to: dateTo || null, position: 999, active: true,
-      }).select().single();
-      if (error) { showToast('Error: ' + error.message, 'error'); return; }
-      showToast('Columna creada ✓ — ahora cargá el precio por unidad', 'success');
-      await this._editTariffCustomPrices(data.id, title, units);
-      await this._renderTariffEditorBody();
+    document.getElementById('btn-add-tariff-custom')?.addEventListener('click', () => {
+      this._openTariffCustomModal(units);
     });
 
     // Editar precios de una columna personalizada existente
@@ -1168,6 +1154,62 @@ export class ConfigPanel {
         await this._renderTariffEditorBody();
       });
     });
+  }
+
+  // ── Modal: crear columna personalizada con selector de fechas real ──
+  _openTariffCustomModal(units) {
+    const overlay   = document.getElementById('overlay-tariff-custom');
+    const titleEl   = document.getElementById('tariff-custom-title');
+    const noteEl    = document.getElementById('tariff-custom-note');
+    const useDateEl = document.getElementById('tariff-custom-use-dates');
+    const datesWrap = document.getElementById('tariff-custom-dates-wrap');
+    if (!overlay) return;
+
+    titleEl.value = '';
+    noteEl.value  = '';
+    useDateEl.checked = true;
+    datesWrap.style.display = '';
+    overlay.classList.remove('hidden');
+
+    let picker = this._tariffDrp;
+    if (!picker) {
+      picker = new DateRangePicker('tariff-custom-drp', { onChange: () => {} });
+      this._tariffDrp = picker;
+    } else {
+      picker.clear();
+    }
+
+    useDateEl.onchange = () => {
+      datesWrap.style.display = useDateEl.checked ? '' : 'none';
+    };
+
+    const close = () => overlay.classList.add('hidden');
+    document.getElementById('tariff-custom-close').onclick  = close;
+    document.getElementById('tariff-custom-cancel').onclick = close;
+
+    document.getElementById('tariff-custom-confirm').onclick = async () => {
+      const title = titleEl.value.trim();
+      if (!title) { showToast('Ingresá un título', 'warning'); return; }
+      const note  = noteEl.value.trim();
+
+      let dateFrom = null, dateTo = null;
+      if (useDateEl.checked) {
+        const { checkIn, checkOut } = picker.getValue();
+        if (!checkIn || !checkOut) { showToast('Seleccioná el rango de fechas en el calendario', 'warning'); return; }
+        dateFrom = checkIn;
+        dateTo   = checkOut;
+      }
+
+      const { data, error } = await upsertCustomColumn(this.db, this.ctx.hotelId, {
+        title, note: note || null, date_from: dateFrom, date_to: dateTo, position: 999, active: true,
+      }).select().single();
+      if (error) { showToast('Error: ' + error.message, 'error'); return; }
+
+      close();
+      showToast('Columna creada ✓ — ahora cargá el precio por unidad', 'success');
+      await this._editTariffCustomPrices(data.id, title, units);
+      await this._renderTariffEditorBody();
+    };
   }
 
   // ── Cargar precio por unidad para una columna personalizada (prompts encadenados) ──
