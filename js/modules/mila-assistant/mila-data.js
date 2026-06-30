@@ -178,22 +178,35 @@ export async function fetchBloqueos(dateISO) {
 }
 
 // 9) Búsqueda de huésped por nombre — misma forma que el autocompletado del buscador rápido (app.js)
+// 9) Búsqueda de huésped por nombre — MISMO criterio que el Buscador de Huéspedes (guests.js):
+// se busca en la tabla `guests` directamente (no como filtro embebido sobre bookings, que
+// PostgREST no resuelve de forma confiable) con el mismo .or() sobre nombre/apellido/teléfono/email/DNI.
 export async function fetchGuestSearch(query) {
   const hotelId = AppContext.hotelId;
   const q = query.trim();
   if (q.length < 2) return [];
-  const { data } = await supabase.from('bookings')
-    .select(`id, check_in, check_out, status, total_amount, total_paid, ${guestSel}, ${unitsSel}`)
-    .eq('hotel_id', hotelId)
-    .neq('status', 'cancelled')
-    .or(`guests.first_name.ilike.%${q}%,guests.last_name.ilike.%${q}%`)
-    .order('check_in', { ascending: false })
-    .limit(10);
 
-  return (data ?? []).map(b => ({
-    id: b.id, checkIn: b.check_in, checkOut: b.check_out, guest: guestName(b), unit: unitNames(b),
-    status: b.status, balance: Math.max(0, (b.total_amount ?? 0) - (b.total_paid ?? 0)),
-  }));
+  const { data: guests } = await supabase.from('guests')
+    .select(`id, first_name, last_name, bookings!bookings_guest_id_fkey(id, check_in, check_out, status, total_amount, total_paid, ${unitsSel})`)
+    .eq('hotel_id', hotelId)
+    .or(`first_name.ilike.%${q}%,last_name.ilike.%${q}%,phone.ilike.%${q}%,email.ilike.%${q}%,dni.ilike.%${q}%`)
+    .order('created_at', { ascending: false })
+    .limit(15);
+
+  const rows = [];
+  (guests ?? []).forEach(g => {
+    const name = `${g.first_name ?? ''} ${g.last_name ?? ''}`.trim() || '—';
+    (g.bookings ?? [])
+      .filter(b => b.status !== 'cancelled' && b.status !== 'blocked')
+      .sort((a, b) => b.check_in.localeCompare(a.check_in))
+      .forEach(b => {
+        rows.push({
+          id: b.id, checkIn: b.check_in, checkOut: b.check_out, guest: name, unit: unitNames(b),
+          status: b.status, balance: Math.max(0, (b.total_amount ?? 0) - (b.total_paid ?? 0)),
+        });
+      });
+  });
+  return rows.slice(0, 10);
 }
 
 // 10) Tendencia de ocupación de los próximos N días — mismo criterio de solapamiento que fetchOcupacion(),

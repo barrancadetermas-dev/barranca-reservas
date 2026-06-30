@@ -197,10 +197,15 @@ select.mila-pill {
 .mila-chevron { font-size: 1.1rem; color: var(--color-text-3); font-weight: 800; padding: 0 4px; }
 
 /* ── Búsqueda de huésped (fila tipo 'text', stack vertical) ── */
-.mila-row-stack { grid-template-rows: auto auto; cursor: default; }
+.mila-row-stack { grid-template-rows: auto auto; cursor: default; padding-bottom: 12px; }
 .mila-row-stack:hover { transform: none; box-shadow: 0 1px 3px rgba(15,23,42,.05); }
-.mila-row-stack .mila-row-controls { grid-column: 1 / -1; width: 100%; margin-top: 8px; }
+.mila-row-stack .mila-row-controls {
+  grid-column: 1 / -1; margin-top: 9px;
+  margin-left: -13px; margin-right: -13px; width: calc(100% + 26px);
+  padding: 0 6px;
+}
 .mila-search-pill {
+  width: 100%; box-sizing: border-box;
   display: flex; align-items: center; gap: 7px;
   border: 1px solid var(--color-border); background: var(--color-bg);
   border-radius: 10px; padding: 7px 10px; color: var(--color-text-3);
