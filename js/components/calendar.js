@@ -2656,8 +2656,10 @@ export class Calendar {
         '<div class="cal-agenda-slot">' +
           barHTML +
           '<div class="cal-agenda-slot-body">' +
-            '<div class="cal-agenda-slot-date">' + dStr + '</div>' +
-            '<div class="cal-agenda-slot-days">' + daysLabel + '</div>' +
+            '<div style="display:flex;align-items:baseline;justify-content:space-between;gap:4px">' +
+              '<span class="cal-agenda-slot-date">' + dStr + '</span>' +
+              '<span class="cal-agenda-slot-days">' + daysLabel + '</span>' +
+            '</div>' +
             '<div class="cal-agenda-slot-guest">' + guest + '</div>' +
             '<div class="cal-agenda-slot-unit">' + unitLabel + '</div>' +
           '</div>' +

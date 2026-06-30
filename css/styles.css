@@ -5375,11 +5375,14 @@ html, body {
   white-space: nowrap !important;
   overflow: hidden !important;
   text-overflow: ellipsis !important;
+  min-width: 0 !important;
 }
 .cal-agenda-slot-days {
   font-size: .6rem !important;
   color: var(--color-primary) !important;
   font-weight: 600 !important;
+  flex-shrink: 0 !important;
+  white-space: nowrap !important;
 }
 .cal-agenda-slot-guest {
   font-size: .69rem !important;
