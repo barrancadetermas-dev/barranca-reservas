@@ -7,6 +7,7 @@
 // de mila-data.js (mismas consultas, mismos criterios).
 // ══════════════════════════════════════════════════
 import { AppContext, formatARS, localToday, localDateISO } from '../../supabase-config.js';
+import { Sound } from '../../services/sound-service.js';
 import * as MilaData from './mila-data.js';
 
 let ctx = null;       // { can, isDemo, showToast, getBookingOpener }
@@ -30,7 +31,7 @@ const ICON_PATHS = {
   precios:     '<path d="M20.59 13.41L11 22.99 1 13l10-10h9c.55 0 1 .45 1 1v9.41z"/><circle cx="7.5" cy="7.5" r="1.5"/>',
   pagos:       '<rect x="1.5" y="5" width="21" height="14" rx="2"/><line x1="1.5" y1="10" x2="22.5" y2="10"/>',
   bloqueos:    '<rect x="3.5" y="11" width="17" height="10" rx="2"/><path d="M7 11V7.5a5 5 0 0110 0V11"/>',
-  brand:       '<path d="M12 2l2.2 6.3L20.5 10.5 14.2 12.7 12 19 9.8 12.7 3.5 10.5 9.8 8.3z"/>',
+  brand:       '<rect x="4" y="8" width="16" height="11" rx="3"/><path d="M12 8V4"/><circle cx="12" cy="3" r="1.4" fill="currentColor" stroke="none"/><circle cx="9" cy="13.5" r="1.3" fill="currentColor" stroke="none"/><circle cx="15" cy="13.5" r="1.3" fill="currentColor" stroke="none"/><path d="M2 12.5h2"/><path d="M20 12.5h2"/>',
 };
 const iconSVG = (id, size = 16) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="${size}" height="${size}">${ICON_PATHS[id]}</svg>`;
 
@@ -86,16 +87,16 @@ function renderPage() {
       <div class="mila-grid">
         <div class="mila-left">
           <div class="mila-page-header">
-            <span class="mila-page-emoji"><svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20">${ICON_PATHS.brand}</svg></span>
+            <span class="mila-page-emoji"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18">${ICON_PATHS.brand}</svg></span>
             <div>
               <div class="mila-page-title">MILA <span class="mila-beta">BETA</span></div>
               <div class="mila-page-sub">Asistente inteligente</div>
             </div>
           </div>
 
-          <div class="mila-section-label">Consultas rápidas</div>
+          <div class="mila-section-label"><span class="mila-live-dot"></span>Consultas rápidas</div>
           <div class="mila-rows">
-            ${QUERIES.map(q => rowTemplate(q, todayISO)).join('')}
+            ${QUERIES.map((q, i) => rowTemplate(q, todayISO, i)).join('')}
           </div>
 
           <div class="mila-soon-card">
@@ -111,6 +112,13 @@ function renderPage() {
           </div>
         </div>
 
+        <div class="mila-connector" aria-hidden="true">
+          <span class="mila-connector-dot"></span>
+          <span class="mila-connector-dot"></span>
+          <span class="mila-connector-dot"></span>
+          <svg class="mila-connector-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><polyline points="9 18 15 12 9 6"/></svg>
+        </div>
+
         <div class="mila-right">
           <div class="mila-answer" id="mila-answer">${answerPlaceholder()}</div>
         </div>
@@ -124,7 +132,7 @@ function renderPage() {
 function answerPlaceholder() {
   return `
     <div class="mila-answer-empty">
-      <span class="mila-answer-empty-icon">🤖</span>
+      <span class="mila-answer-empty-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" width="34" height="34">${ICON_PATHS.brand}</svg></span>
       <div class="mila-answer-empty-title">Elegí una consulta</div>
       <div class="mila-answer-empty-text">Las respuestas van a aparecer acá al instante, sin cambiar de pantalla.</div>
     </div>`;
@@ -141,7 +149,7 @@ function pillHTML(field, label, value) {
   </button>`;
 }
 
-function rowTemplate(q, todayISO) {
+function rowTemplate(q, todayISO, idx = null) {
   const s = initState(q, todayISO);
   let controls = '';
   switch (q.type) {
@@ -174,8 +182,10 @@ function rowTemplate(q, todayISO) {
       break;
   }
   const isActive = lastQueryId === q.id ? ' is-active' : '';
+  const enterCls = idx !== null ? ' mila-row-enter' : '';
+  const styleAttr = idx !== null ? ` style="--i:${idx}"` : '';
   return `
-    <div class="mila-row${isActive}" data-query="${q.id}" tabindex="0" role="button">
+    <div class="mila-row${isActive}${enterCls}" data-query="${q.id}" tabindex="0" role="button"${styleAttr}>
       <span class="mila-row-icon ${colorClass(q.color)}">${iconSVG(q.id)}</span>
       <div class="mila-row-text">
         <div class="mila-row-title">${q.title}</div>
@@ -209,6 +219,7 @@ function attachRow(rowEl, todayISO) {
       // 1 noche por defecto: si todavía no se tocó "Salida", sigue a "Ingreso"
       if (field === 'from' && (q.type === 'range' || q.type === 'unit-range') && !s.toEdited) s.to = addDays(val, 1);
       if (field === 'to') s.toEdited = true;
+      Sound?.click?.();
       const fresh = document.createElement('div');
       fresh.innerHTML = rowTemplate(q, todayISO).trim();
       const newRow = fresh.firstElementChild;
@@ -223,12 +234,13 @@ function attachRow(rowEl, todayISO) {
     sel.addEventListener('change', (e) => {
       e.stopPropagation();
       s[sel.dataset.field] = sel.value;
+      Sound?.click?.();
       runQuery(queryId); // ── auto-ejecuta al cambiar el desplegable ──
     });
   });
 
   // Click en cualquier otra parte de la fila → ejecutar la consulta con los valores actuales
-  rowEl.addEventListener('click', () => runQuery(queryId));
+  rowEl.addEventListener('click', () => { Sound?.click?.(); runQuery(queryId); });
   rowEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') runQuery(queryId); });
 }
 
@@ -311,6 +323,8 @@ async function runQuery(queryId) {
 
 // ── Pinta la respuesta en el panel derecho (o debajo, en mobile) ──
 function renderAnswer(q, subtitle, contentHTML) {
+  Sound?.success?.();
+  answerEl.classList.remove('mila-answer-pop');
   answerEl.innerHTML = `
     <div class="mila-answer-head">
       <div class="mila-answer-head-left">
@@ -324,7 +338,10 @@ function renderAnswer(q, subtitle, contentHTML) {
     </div>
     <div class="mila-answer-body">${contentHTML}</div>
   `;
+  void answerEl.offsetWidth; // forzar reflow para reiniciar la animación
+  answerEl.classList.add('mila-answer-pop');
   answerEl.querySelector('#mila-answer-clear').addEventListener('click', () => {
+    Sound?.click?.();
     lastQueryId = null;
     bodyEl.querySelectorAll('.mila-row').forEach(r => r.classList.remove('is-active'));
     answerEl.innerHTML = answerPlaceholder();

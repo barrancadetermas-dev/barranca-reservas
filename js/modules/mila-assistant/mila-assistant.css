@@ -6,20 +6,32 @@
    del sistema. No modifica ninguna clase del proyecto.
    ══════════════════════════════════════════════════ */
 
-.nav-item-mila .nav-icon { font-size: 16px; width: 19px; justify-content: center; }
+.nav-item-mila .nav-icon { width: 19px; justify-content: center; }
 .nav-item-mila .nav-label { font-style: italic; }
+.mila-nav-bot svg { animation: mila-nav-wiggle 3.2s ease-in-out infinite; transform-origin: 50% 85%; }
+@keyframes mila-nav-wiggle {
+  0%, 100% { transform: rotate(0deg) translateY(0); }
+  6%  { transform: rotate(-9deg) translateY(-1px); }
+  12% { transform: rotate(8deg) translateY(-1px); }
+  18% { transform: rotate(-5deg); }
+  24% { transform: rotate(0deg); }
+}
 
 .mila-page { max-width: 980px; margin: 0 auto; }
 
-.mila-grid { display: grid; grid-template-columns: 380px 1fr; gap: 22px; align-items: start; }
+.mila-grid { display: grid; grid-template-columns: 380px 28px 1fr; gap: 8px; align-items: stretch; }
 
 /* ── Columna izquierda ── */
-.mila-page-header { display: flex; align-items: center; gap: 10px; margin-bottom: 18px; }
+.mila-page-header { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
 .mila-page-emoji {
-  width: 40px; height: 40px; border-radius: 12px; flex-shrink: 0;
+  width: 34px; height: 34px; border-radius: 10px; flex-shrink: 0;
   background: linear-gradient(135deg, var(--color-primary), var(--color-primary-h));
   display: flex; align-items: center; justify-content: center; color: #fff;
-  box-shadow: 0 4px 12px var(--color-primary-t);
+  animation: mila-breathe 2.6s ease-in-out infinite;
+}
+@keyframes mila-breathe {
+  0%, 100% { box-shadow: 0 4px 12px var(--color-primary-t); }
+  50%      { box-shadow: 0 4px 18px var(--color-primary-t), 0 0 0 6px var(--color-primary-t); }
 }
 .mila-page-title { font-weight: 800; font-size: 1.05rem; color: var(--color-text); display: flex; align-items: center; gap: 6px; }
 .mila-beta {
@@ -30,34 +42,50 @@
 .mila-page-sub { font-size: .76rem; color: var(--color-text-3); font-style: italic; margin-top: 1px; }
 
 .mila-section-label {
-  font-size: .68rem; font-weight: 800; letter-spacing: .04em; text-transform: uppercase;
-  color: var(--color-primary); margin-bottom: 8px;
+  font-size: .66rem; font-weight: 800; letter-spacing: .04em; text-transform: uppercase;
+  color: var(--color-primary); margin-bottom: 6px;
+  display: flex; align-items: center; gap: 6px;
+}
+.mila-live-dot {
+  width: 6px; height: 6px; border-radius: 50%; background: var(--color-success);
+  animation: mila-pulse-dot 1.8s ease-in-out infinite;
+}
+@keyframes mila-pulse-dot {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(34,197,94,.5); opacity: 1; }
+  50%      { box-shadow: 0 0 0 4px rgba(34,197,94,0); opacity: .7; }
 }
 
-.mila-rows { display: flex; flex-direction: column; gap: 6px; }
+.mila-rows { display: flex; flex-direction: column; gap: 5px; }
 
 /* ── Fila tipo "chip de pregunta" — compacta, alineada con grid interno ── */
 .mila-row {
   background: var(--color-surface);
   border: 1px solid var(--color-border);
-  border-radius: 13px;
-  padding: 9px 11px;
+  border-radius: 12px;
+  padding: 7px 10px;
   display: grid;
-  grid-template-columns: 30px 1fr auto;
+  grid-template-columns: 26px 1fr auto;
   align-items: center;
-  column-gap: 10px;
+  column-gap: 9px;
   cursor: pointer;
   box-shadow: 0 1px 2px rgba(15,23,42,.04);
   transition: border-color .12s ease, box-shadow .12s ease, transform .12s ease;
 }
-.mila-row:hover { border-color: var(--color-primary); box-shadow: 0 2px 8px rgba(15,23,42,.07); }
-.mila-row:active { transform: scale(.995); }
-.mila-row.is-active { border-color: var(--color-primary); background: var(--color-primary-t); }
+.mila-row:hover { border-color: var(--color-primary); box-shadow: -3px 0 0 0 var(--color-primary), 0 3px 10px rgba(15,23,42,.08); transform: translateX(1px); }
+.mila-row:active { transform: scale(.98); }
+.mila-row.is-active { border-color: var(--color-primary); background: var(--color-primary-t); box-shadow: -3px 0 0 0 var(--color-primary); }
+
+.mila-row-enter { opacity: 0; animation: mila-row-in .4s cubic-bezier(.22,1,.36,1) forwards; animation-delay: calc(var(--i, 0) * 50ms); }
+@keyframes mila-row-in {
+  from { opacity: 0; transform: translateY(8px) scale(.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
 
 .mila-row-icon {
-  width: 30px; height: 30px; border-radius: 9px;
+  width: 26px; height: 26px; border-radius: 8px;
   display: flex; align-items: center; justify-content: center;
 }
+.mila-row-icon svg { width: 14px; height: 14px; }
 .mila-ic-cyan   { background: #E0F7FA; color: #0891B2; }
 .mila-ic-blue   { background: #E0EAFF; color: #2563EB; }
 .mila-ic-green  { background: #E3F9E5; color: #16A34A; }
@@ -68,8 +96,8 @@
 .mila-ic-indigo { background: #E5E4FF; color: #4F46E5; }
 
 .mila-row-text { min-width: 0; }
-.mila-row-title { font-size: .8rem; font-weight: 700; color: var(--color-text); line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.mila-row-sub { font-size: .66rem; color: var(--color-text-3); line-height: 1.25; margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mila-row-title { font-size: .78rem; font-weight: 700; color: var(--color-text); line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mila-row-sub { font-size: .64rem; color: var(--color-text-3); line-height: 1.2; margin-top: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 .mila-row-controls { display: flex; gap: 5px; align-items: center; justify-self: end; }
 
@@ -81,8 +109,8 @@
   background: var(--color-surface-2);
   color: var(--color-text-2);
   border-radius: 999px;
-  padding: 5px 9px;
-  font-size: .68rem;
+  padding: 4px 8px;
+  font-size: .66rem;
   font-weight: 700;
   font-family: inherit;
   line-height: 1;
@@ -107,43 +135,78 @@ select.mila-pill {
 
 /* ── Bloque "Próximamente" (deshabilitado) ── */
 .mila-soon-card {
-  margin-top: 16px;
-  display: flex; gap: 10px;
+  margin-top: 12px;
+  display: flex; gap: 9px;
   background: linear-gradient(135deg, var(--color-primary-l), var(--color-primary-t));
   border: 1px solid var(--color-primary);
-  border-radius: 14px;
-  padding: 14px;
+  border-radius: 13px;
+  padding: 11px 12px;
 }
-.mila-soon-bot { font-size: 18px; flex-shrink: 0; line-height: 1.3; }
-.mila-soon-title { font-weight: 800; font-size: .82rem; color: var(--color-primary); font-style: italic; }
-.mila-soon-text { font-size: .72rem; color: var(--color-text-2); margin-top: 3px; line-height: 1.4; }
-.mila-soon-input-row { display: flex; gap: 6px; margin-top: 10px; }
+.mila-soon-bot { font-size: 16px; flex-shrink: 0; line-height: 1.3; }
+.mila-soon-title { font-weight: 800; font-size: .78rem; color: var(--color-primary); font-style: italic; }
+.mila-soon-text { font-size: .7rem; color: var(--color-text-2); margin-top: 2px; line-height: 1.35; }
+.mila-soon-input-row { display: flex; gap: 6px; margin-top: 8px; }
 .mila-soon-input {
   flex: 1; border: 1px solid var(--color-border); border-radius: 8px;
-  padding: 6px 10px; font-size: .74rem; background: var(--color-surface); color: var(--color-text-3); font-style: italic;
+  padding: 5px 9px; font-size: .72rem; background: var(--color-surface); color: var(--color-text-3); font-style: italic;
 }
 .mila-soon-mic {
   border: 1px solid var(--color-border); background: var(--color-surface);
-  border-radius: 8px; width: 32px; cursor: not-allowed; font-size: .8rem;
+  border-radius: 8px; width: 30px; cursor: not-allowed; font-size: .78rem;
 }
 .mila-soon-input:disabled, .mila-soon-mic:disabled { cursor: not-allowed; }
 
 /* ── Columna derecha: respuesta dinámica ── */
+.mila-connector {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  position: relative; gap: 10px; padding: 4px 0;
+}
+.mila-connector::before {
+  content: ''; position: absolute; top: 0; bottom: 0; left: 50%; width: 2px; transform: translateX(-50%);
+  background: linear-gradient(180deg, transparent, var(--color-primary-l) 15%, var(--color-primary-l) 85%, transparent);
+}
+.mila-connector-dot {
+  width: 5px; height: 5px; border-radius: 50%; background: var(--color-primary); position: relative; z-index: 1;
+  animation: mila-flow 2.4s ease-in-out infinite;
+  opacity: 0;
+}
+.mila-connector-dot:nth-child(1) { animation-delay: 0s; }
+.mila-connector-dot:nth-child(2) { animation-delay: .35s; }
+.mila-connector-dot:nth-child(3) { animation-delay: .7s; }
+@keyframes mila-flow {
+  0%   { opacity: 0; transform: translateY(-14px); }
+  15%  { opacity: 1; }
+  85%  { opacity: 1; }
+  100% { opacity: 0; transform: translateY(14px); }
+}
+.mila-connector-arrow {
+  position: relative; z-index: 1; color: var(--color-primary);
+  background: var(--color-bg); border-radius: 50%; padding: 3px;
+  box-shadow: 0 0 0 4px var(--color-bg);
+}
+
 .mila-right { position: sticky; top: 0; }
 .mila-answer {
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: 16px;
-  padding: 16px;
-  min-height: 420px;
+  padding: 14px;
+  min-height: 340px;
 }
 
 .mila-answer-empty {
-  height: 100%; min-height: 388px;
+  height: 100%; min-height: 310px;
   display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center;
   color: var(--color-text-3);
 }
-.mila-answer-empty-icon { font-size: 30px; margin-bottom: 8px; opacity: .55; }
+.mila-answer-empty-icon { margin-bottom: 8px; opacity: .55; color: var(--color-primary); animation: mila-float 3s ease-in-out infinite; }
+@keyframes mila-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
+
+.mila-answer-pop { animation: mila-answer-in .3s cubic-bezier(.22,1,.36,1); }
+@keyframes mila-answer-in {
+  from { opacity: .4; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
 .mila-answer-empty-title { font-weight: 700; font-size: .9rem; color: var(--color-text-2); font-style: italic; }
 .mila-answer-empty-text { font-size: .76rem; max-width: 260px; margin-top: 4px; line-height: 1.4; }
 
@@ -221,7 +284,8 @@ select.mila-pill {
 
 /* ── Mobile: 1 columna, respuesta debajo de las preguntas ── */
 @media (max-width: 900px) {
-  .mila-grid { grid-template-columns: 1fr; }
+  .mila-grid { grid-template-columns: 1fr; gap: 14px; }
+  .mila-connector { display: none; }
   .mila-right { position: static; }
   .mila-answer { min-height: 0; }
   .mila-answer-empty { min-height: 140px; }
