@@ -1014,7 +1014,7 @@ export class ConfigPanel {
 
     const now = new Date();
     // Próximos 3 meses (incluye el actual) — suficiente para precargar tarifas con anticipación
-    this._tariffMonths = [0,1,2].map(i => {
+    this._tariffMonths = [0,1,2,3,4,5].map(i => {
       const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
       return { year: d.getFullYear(), month: d.getMonth() + 1 };
     });

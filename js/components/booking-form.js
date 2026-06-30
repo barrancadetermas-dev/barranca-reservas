@@ -789,12 +789,21 @@ export class BookingForm {
       const [y, mo] = checkIn.split('-').map(Number);
       const rates = await fetchMonthlyRates(this.db, this.ctx.hotelId, [{ year: y, month: mo }]);
       let total = 0, found = 0;
+      let promoActive = false, promoPay = null, promoFree = null;
       unitIds.forEach(uid => {
         const r = rates.find(x => String(x.unit_id) === String(uid) && x.year === y && x.month === mo);
         if (r?.price_per_night) { total += r.price_per_night; found++; }
+        // Si cualquiera de las unidades seleccionadas tiene la promo activa
+        // ese mes, la avisamos (no la sumamos al precio: son noches gratis,
+        // no un ajuste de tarifa por noche).
+        if (r?.promo_active) {
+          promoActive = true;
+          promoPay  = r.promo_pay  ?? promoPay;
+          promoFree = r.promo_free ?? promoFree;
+        }
       });
       if (!found) return null;
-      return total;
+      return { price: total, promoActive, promoPay, promoFree };
     } catch { return null; }
   }
 
@@ -812,20 +821,27 @@ export class BookingForm {
 
     // Sugerencia rápida desde el Cuadro Tarifario (mes + depto)
     let tariffHTML = '';
-    const tariffPrice = await this._getTariffSuggestedPrice(unitIds, ci);
-    if (tariffPrice) {
+    const tariff = await this._getTariffSuggestedPrice(unitIds, ci);
+    if (tariff?.price) {
+      const promoNote = tariff.promoActive
+        ? `<div class="ps-promo-note" style="margin-top:6px;font-size:12.5px;color:#92400e;background:#fffbeb;border:1px solid #fde68a;border-radius:6px;padding:6px 8px">
+             🎁 Promo activa este mes: paga ${tariff.promoPay ?? '?'} noches, ${tariff.promoFree ?? '?'} gratis. El precio de arriba es por noche y no la incluye — recordá aplicarla al calcular el total.
+           </div>`
+        : '';
       tariffHTML = `
         <div class="ps-box" style="margin-bottom:8px">
           <div class="ps-head">
             <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
               <span class="ps-badge">🏷️ Cuadro Tarifario</span>
+              ${tariff.promoActive ? '<span class="ps-badge" style="background:#fde68a;color:#92400e">2+1 activa</span>' : ''}
             </div>
-            <button class="ps-use" data-price="${tariffPrice}">Usar este precio</button>
+            <button class="ps-use" data-price="${tariff.price}">Usar este precio</button>
           </div>
           <div class="ps-main">
-            <span class="ps-price">$${Math.round(tariffPrice).toLocaleString('es-AR')}</span>
+            <span class="ps-price">$${Math.round(tariff.price).toLocaleString('es-AR')}</span>
             <span class="ps-night">/noche</span>
           </div>
+          ${promoNote}
         </div>`;
     }
 

@@ -121,11 +121,12 @@ export class Dashboard {
     window._dashboardInstance = this;
     try {
       const today = toISODate(new Date());
-      const [kpis, extraStats, dineroStats, dollarRates] = await Promise.all([
+      const [kpis, extraStats, dineroStats, dollarRates, occForecast] = await Promise.all([
         this._fetchKPIs(today),
         this._fetchExtraStats(today),
         this._fetchDineroAsegurado(today),
         fetchDollarRates().catch(() => null),
+        this._fetchOccupancyForecast(today),
       ]);
       this._renderKPIs(kpis, today);
       this._renderUpcoming(kpis.upcoming ?? kpis.arrivals ?? []);
@@ -133,7 +134,7 @@ export class Dashboard {
       this._renderReservasMes(extraStats);
       this._renderDineroAsegurado(dineroStats);
       this._renderDollar(dollarRates);
-      this._renderNextEvent(kpis, today);
+      this._renderOccupancyForecast(occForecast, today);
       this._renderRevPAR(extraStats);
       this._renderCobros(extraStats);
       this._renderOccupancyRing(kpis.occupiedUnits ?? 0, this.ctx.units?.length ?? 7);
@@ -1049,53 +1050,103 @@ export class Dashboard {
     if (tkEl) tkEl.textContent = fmt(stats.ticket);
   }
 
-  _renderNextEvent(kpis, today) {
+  // ══════════════════════════════════════════════════
+  // OCUPACIÓN PRÓXIMOS 7/14/28 DÍAS — reemplaza la card
+  // "Próximo evento": un 0% hoy con llegadas a futuro
+  // se entiende mejor con un mini-gráfico que anticipa
+  // la curva de ocupación, no solo el dato puntual de hoy.
+  // ══════════════════════════════════════════════════
+  async _fetchOccupancyForecast(today) {
+    const hotelId    = this.ctx.hotelId;
+    const totalUnits = this.ctx.units?.length || 0;
+    const HORIZON     = 28;
+    const dayMs       = 24 * 60 * 60 * 1000;
+    const start       = new Date(today + 'T12:00:00');
+    const endISO      = toISODate(new Date(start.getTime() + (HORIZON - 1) * dayMs));
+
+    try {
+      const { data: bookings, error } = await this.db
+        .from('bookings')
+        .select('check_in, check_out, booking_units(unit_id)')
+        .eq('hotel_id', hotelId)
+        .not('status', 'in', '(cancelled,blocked)')
+        .lt('check_in', endISO)
+        .gt('check_out', today);
+      if (error) throw error;
+
+      // Por cada uno de los próximos 28 días, contar unidades distintas ocupadas
+      const days = [];
+      for (let i = 0; i < HORIZON; i++) {
+        const d   = toISODate(new Date(start.getTime() + i * dayMs));
+        const occ = new Set();
+        (bookings ?? []).forEach(b => {
+          if (b.check_in <= d && b.check_out > d) {
+            (b.booking_units ?? []).forEach(bu => occ.add(bu.unit_id));
+          }
+        });
+        days.push({ date: d, occupied: occ.size });
+      }
+
+      const pct = (n) => {
+        const slice = days.slice(0, n);
+        if (!slice.length || !totalUnits) return 0;
+        const avg = slice.reduce((s, d) => s + d.occupied, 0) / slice.length;
+        return Math.round((avg / totalUnits) * 100);
+      };
+
+      return { days, totalUnits, pct7: pct(7), pct14: pct(14), pct28: pct(28) };
+    } catch (err) {
+      console.warn('[Dashboard] _fetchOccupancyForecast:', err?.message ?? err);
+      return { days: [], totalUnits, pct7: 0, pct14: 0, pct28: 0 };
+    }
+  }
+
+  _renderOccupancyForecast(data, today) {
     const el = document.getElementById('dash-next-event');
     if (!el) return;
-    const arrivals   = kpis.arrivals   ?? [];
-    const departures = kpis.checkouts  ?? [];
-    const upcoming   = kpis.upcoming   ?? [];
+    const { days, pct7, pct14, pct28 } = data ?? {};
 
-    // Combine today's events + next upcoming
-    const events = [
-      ...arrivals.filter(b => !b.checked_in_at).map(b => ({
-        type: 'arrival', date: today,
-        guest: b.guests ? (b.guests.first_name + ' ' + b.guests.last_name) : '—',
-        unit: b.booking_units?.[0]?.units?.name ?? '—',
-        color: b.booking_units?.[0]?.units?.color ?? 'var(--color-primary)',
-      })),
-      ...departures.filter(b => !b.checked_out_at).map(b => ({
-        type: 'departure', date: today,
-        guest: b.guests ? (b.guests.first_name + ' ' + b.guests.last_name) : '—',
-        unit: b.booking_units?.[0]?.units?.name ?? '—',
-        color: b.booking_units?.[0]?.units?.color ?? '#f59e0b',
-      })),
-      ...upcoming.slice(0, 2).map(b => ({
-        type: 'upcoming', date: b.check_in,
-        guest: b.guests ? (b.guests.first_name + ' ' + b.guests.last_name) : '—',
-        unit: b.booking_units?.[0]?.units?.name ?? '—',
-        color: b.booking_units?.[0]?.units?.color ?? 'var(--color-primary)',
-      })),
-    ].slice(0, 3);
-
-    if (!events.length) {
-      el.innerHTML = '<div style="padding:16px 0;text-align:center;color:var(--color-text-3);font-size:.82rem">📅 No hay eventos registrados</div>';
+    if (!days?.length) {
+      el.innerHTML = '<div style="padding:16px 0;text-align:center;color:var(--color-text-3);font-size:.82rem">📈 Sin datos de ocupación futura</div>';
       return;
     }
 
-    const typeLabel = { arrival: '✅ Llegada', departure: '👋 Salida', upcoming: '📅 Próximo' };
-    const fmtDt = iso => iso === today ? 'hoy' : new Date(iso+'T12:00:00').toLocaleDateString('es-AR',{day:'numeric',month:'short'});
+    const totalUnits = data.totalUnits || 1;
+    const barW   = 5, gap = 1;
+    const chartW = days.length * (barW + gap) - gap;
+    const chartH = 36;
+    const colorFor = pct => pct >= 70 ? '#22c55e' : pct >= 35 ? '#f59e0b' : '#cbd5e1';
 
-    el.innerHTML = events.map(ev =>
-      '<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--color-border)">' +
-        '<div style="width:3px;height:36px;border-radius:2px;background:' + ev.color + ';flex-shrink:0"></div>' +
-        '<div style="flex:1;min-width:0">' +
-          '<div style="font-size:.65rem;color:var(--color-text-3);margin-bottom:1px">' + typeLabel[ev.type] + ' · ' + fmtDt(ev.date) + '</div>' +
-          '<div style="font-size:.8rem;font-weight:700;color:var(--color-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + ev.guest + '</div>' +
-          '<div style="font-size:.68rem;color:var(--color-text-3)">' + ev.unit + '</div>' +
-        '</div>' +
-      '</div>'
-    ).join('');
+    const bars = days.map((d, i) => {
+      const pct = Math.round((d.occupied / totalUnits) * 100);
+      const h   = Math.max(2, Math.round((pct / 100) * chartH));
+      const x   = i * (barW + gap);
+      const y   = chartH - h;
+      const isToday = d.date === today;
+      return `<rect x="${x}" y="${y}" width="${barW}" height="${h}" rx="1" fill="${colorFor(pct)}" opacity="${isToday ? 1 : 0.85}">` +
+             `<title>${new Date(d.date+'T12:00:00').toLocaleDateString('es-AR',{day:'numeric',month:'short'})}: ${pct}% (${d.occupied}/${totalUnits})</title></rect>`;
+    }).join('');
+
+    el.innerHTML = `
+      <div style="display:flex;flex-direction:column;gap:8px;height:100%;justify-content:center">
+        <svg viewBox="0 0 ${chartW} ${chartH}" width="100%" height="${chartH}" style="display:block;overflow:visible">
+          ${bars}
+        </svg>
+        <div style="display:flex;justify-content:space-between;gap:4px">
+          <div style="text-align:center;flex:1">
+            <div style="font-size:.95rem;font-weight:700;color:var(--color-text)">${pct7}%</div>
+            <div style="font-size:.62rem;color:var(--color-text-3)">7 días</div>
+          </div>
+          <div style="text-align:center;flex:1;border-left:1px solid var(--color-border);border-right:1px solid var(--color-border)">
+            <div style="font-size:.95rem;font-weight:700;color:var(--color-text)">${pct14}%</div>
+            <div style="font-size:.62rem;color:var(--color-text-3)">14 días</div>
+          </div>
+          <div style="text-align:center;flex:1">
+            <div style="font-size:.95rem;font-weight:700;color:var(--color-text)">${pct28}%</div>
+            <div style="font-size:.62rem;color:var(--color-text-3)">28 días</div>
+          </div>
+        </div>
+      </div>`;
   }
   // ══════════════════════════════════════════════════
   // DINERO ASEGURADO — reservas futuras confirmadas
