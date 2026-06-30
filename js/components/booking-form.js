@@ -44,6 +44,8 @@ export class BookingForm {
     this._selectedGuestId = null;
     this._selectedUnitIds = new Set();
     this._unitPrices    = {}; // unitId -> precio/noche, solo cuando hay 2+ unidades
+    this._editRequestSeq = 0; // guard contra condición de carrera: si openEdit() se llama
+                               // dos veces rápido (doble clic, reapertura), solo la última gana
     this._datePicker   = null;
     this._payRowCount  = 0;
     this._priceSuggester = null; // lazy init
@@ -250,6 +252,12 @@ export class BookingForm {
 
   // ── Abrir para editar reserva existente ───────────
   async openEdit(bookingId) {
+    // Guard de carrera: si esta función se vuelve a llamar antes de que esta
+    // ejecución termine (doble clic, reapertura rápida), la llamada vieja se
+    // aborta sola en cuanto la nueva toma el control — así nunca conviven
+    // dos cargas escribiendo filas de pago sobre el mismo formulario.
+    const myRequestId = ++this._editRequestSeq;
+
     document.getElementById('booking-modal-title').textContent = 'Editar Reserva';
     this._reset();
     // Setear editingId DESPUÉS de _reset (que lo limpia) y re-llamar
@@ -268,6 +276,10 @@ export class BookingForm {
           .eq('id', bookingId).single(),
         this.db.from('payments').select('*').eq('booking_id', bookingId),
       ]);
+
+      // Si mientras esperábamos la respuesta se abrió OTRA edición (más reciente),
+      // esta ejecución quedó obsoleta — no tocar el DOM para no duplicar filas.
+      if (myRequestId !== this._editRequestSeq) return;
 
       if (error) throw error;
       if (!b) { showToast('No se encontró la reserva', 'error'); return; }
