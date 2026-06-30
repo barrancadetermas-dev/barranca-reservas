@@ -874,12 +874,19 @@
     display: flex !important;
     height: 60px !important;
     padding-bottom: env(safe-area-inset-bottom, 0) !important;
+    gap: 2px !important;
   }
   .bnav-item {
-    font-size: .62rem !important;
+    font-size: .58rem !important;
     padding: 6px 0 8px !important;
+    min-width: 0 !important;
+    flex: 1 !important;
   }
-  .bnav-item span { font-size: .62rem !important; }
+  .bnav-item span { font-size: .58rem !important; }
+  .bnav-item svg { width: 18px !important; height: 18px !important; }
+
+  /* Cuadro tarifario del calendario PC: oculto en mobile (existe el tab abajo) */
+  #cal-tariff-wrap { display: none !important; }
 
   /* ── MAIN CONTENT: ajustar por bottom nav ── */
   .main-content {

@@ -16,6 +16,7 @@ import { getHolidaysForYear, isWeekend } from '../services/arg-holidays.js';
 import { logAction } from '../services/audit-service.js';
 import { cachedQuery, cache } from '../services/supabase-cache.js';
 import { Bus, EVENTS } from '../services/event-bus.js';
+import { fetchMonthlyRates, fetchCustomColumns, monthsInRange, buildTariffGrid } from '../services/tariff-service.js';
 
 const DAY_NAMES   = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
 const MONTH_NAMES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio',
@@ -104,6 +105,9 @@ export class Calendar {
 
       // ── 7. Mini agenda debajo del calendario ──
       this._renderMiniAgenda(bookings);
+
+      // ── 7b. Cuadro tarifario (solo PC) ──
+      if (window.innerWidth > 768) this._renderTariffTable();
 
       // Bindear eventos de drag/resize una vez por sesión de grid
       if (!this._barDragAbort) {
@@ -2499,6 +2503,78 @@ export class Calendar {
   // MINI AGENDA — Ayuda memoria debajo del calendario
   // Lista compacta de próximas reservas
   // ══════════════════════════════════════════════════
+  // ══════════════════════════════════════════════════
+  // CUADRO TARIFARIO — solo lectura, debajo de la agenda (PC)
+  // ══════════════════════════════════════════════════
+  async _renderTariffTable() {
+    const wrap = document.getElementById('cal-tariff-wrap');
+    if (!wrap) return;
+
+    try {
+      const lastIdx = this._dateRange.length - 1;
+      const rangeFrom = this._dateRange[0];
+      const rangeTo   = this._dateRange[lastIdx];
+      const months    = monthsInRange(rangeFrom, rangeTo);
+
+      const [rates, customCols] = await Promise.all([
+        fetchMonthlyRates(this.db, this.ctx.hotelId, months),
+        fetchCustomColumns(this.db, this.ctx.hotelId, rangeFrom, rangeTo),
+      ]);
+
+      const units = (AppContext.units ?? []).slice().sort((a,b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
+      const { monthCols, rows } = buildTariffGrid({ units, rates, customCols, months });
+
+      const fmt = n => n == null ? '—' : '$' + Math.round(n).toLocaleString('es-AR');
+      const totalCols = monthCols.length + customCols.length;
+
+      const headerHTML = `
+        <tr>
+          <th style="text-align:left;padding:6px 10px;font-size:.66rem;color:var(--color-text-3);text-transform:uppercase;letter-spacing:.04em;font-weight:700">Depto</th>
+          ${monthCols.map(mc => `<th style="text-align:right;padding:6px 10px;font-size:.66rem;color:var(--color-text-3);text-transform:uppercase;letter-spacing:.04em;font-weight:700">${mc.label}</th>`).join('')}
+          ${customCols.map(c => `<th style="text-align:right;padding:6px 10px;font-size:.66rem;color:#D97706;text-transform:uppercase;letter-spacing:.04em;font-weight:700" title="${c.note ?? ''}">${c.title}</th>`).join('')}
+        </tr>`;
+
+      const bodyHTML = rows.map((row, i) => {
+        const monthCells = row.cells.map(cell => {
+          const promoTag = cell.promoActive && cell.promoPay && cell.promoFree
+            ? `<span style="font-size:.58rem;background:#FEF3C7;color:#92400E;padding:0 4px;border-radius:3px;margin-left:4px">${cell.promoPay}+${cell.promoFree}</span>`
+            : '';
+          return `<td style="text-align:right;padding:5px 10px;font-size:.74rem;color:var(--color-text);white-space:nowrap">${fmt(cell.price)}${promoTag}</td>`;
+        }).join('');
+        const customCells = row.customCells.map(cc => {
+          const sub = cc.nights ? `<span style="font-size:.6rem;color:var(--color-text-3)"> /${cc.nights}n</span>` : '';
+          return `<td style="text-align:right;padding:5px 10px;font-size:.74rem;font-weight:600;color:var(--color-text);white-space:nowrap">${fmt(cc.price)}${sub}</td>`;
+        }).join('');
+        return `<tr style="background:${i % 2 === 0 ? 'transparent' : 'var(--color-surface-2)'}">
+          <td style="padding:5px 10px;font-size:.74rem;color:var(--color-text);white-space:nowrap">
+            <span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${row.unit.color ?? 'var(--color-primary)'};margin-right:6px"></span>${row.unit.name}
+          </td>
+          ${monthCells}${customCells}
+        </tr>`;
+      }).join('');
+
+      if (!totalCols) {
+        wrap.innerHTML = `<div class="cal-agenda-title">Cuadro tarifario</div>
+          <div style="font-size:.74rem;color:var(--color-text-3);padding:6px 2px">
+            Sin tarifas cargadas. Configurálas en <strong>Configuración → Cuadro Tarifario</strong>.
+          </div>`;
+        return;
+      }
+
+      wrap.innerHTML = `
+        <div class="cal-agenda-title">Cuadro tarifario</div>
+        <div style="max-height:170px;overflow-y:auto;border:1px solid var(--color-border);border-radius:8px">
+          <table style="width:100%;border-collapse:collapse">
+            <thead style="position:sticky;top:0;background:var(--color-surface);z-index:1">${headerHTML}</thead>
+            <tbody>${bodyHTML}</tbody>
+          </table>
+        </div>`;
+    } catch (err) {
+      console.warn('[Calendar] _renderTariffTable:', err.message);
+      wrap.innerHTML = '';
+    }
+  }
+
   _renderMiniAgenda(bookings) {
     const el = document.getElementById('cal-mini-agenda-list');
     if (!el) return;

@@ -8,6 +8,8 @@ import { showToast, AppContext } from '../supabase-config.js';
 import { can } from '../auth/permissions.js';
 import { logAction } from '../services/audit-service.js';
 import { AdminUsers } from '../services/admin-users.js';
+import { fetchMonthlyRates, fetchCustomColumns, upsertMonthlyRate, upsertCustomColumn,
+         deleteCustomColumn, upsertCustomPrice, MONTH_NAMES } from '../services/tariff-service.js';
 
 
 // Definición completa de la configuración
@@ -166,6 +168,20 @@ export class ConfigPanel {
         </div>`;
     }).join('');
 
+    // ── Cuadro Tarifario ───────────────────────────────
+    const tariffHTML = `
+      <div class="config-group" id="cfg-acc-tariffs">
+        <button class="config-acc-header" data-acc="tariffs">
+          <span><span class="config-acc-icon">🏷️</span> Cuadro Tarifario</span>
+          <svg class="config-acc-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="14" height="14"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="config-acc-body" id="cfg-body-tariffs">
+          <div id="cfg-tariff-content" style="padding:4px 2px;font-size:.82rem;color:var(--color-text-3)">
+            Expandí para cargar el cuadro tarifario...
+          </div>
+        </div>
+      </div>`;
+
     return `
       <div class="tabs-bar" style="margin-bottom:20px">
         <button class="tab active" id="cfg-tab-config">⚙️ Configuración</button>
@@ -181,7 +197,7 @@ export class ConfigPanel {
           </p>
           <button class="btn btn-primary" id="btn-save-config">💾 Guardar cambios</button>
         </div>
-        <div class="config-groups">${groupsHTML}${unitsHTML}</div>
+        <div class="config-groups">${groupsHTML}${tariffHTML}${unitsHTML}</div>
       </div>
 
       <!-- Panel de Control tab -->
@@ -573,6 +589,7 @@ export class ConfigPanel {
 
     // Accordion toggle
     const ACC_SESSION_KEY = 'mila_cfg_acc';
+    let _tariffLoaded = false;
     container.querySelectorAll('.config-acc-header').forEach(btn => {
       btn.addEventListener('click', () => {
         const body    = btn.nextElementSibling;
@@ -587,6 +604,11 @@ export class ConfigPanel {
           const saved = JSON.parse(sessionStorage.getItem(ACC_SESSION_KEY) ?? '{}');
           saved[groupName] = !wasOpen;
           sessionStorage.setItem(ACC_SESSION_KEY, JSON.stringify(saved));
+        }
+        // Cuadro Tarifario: cargar datos la primera vez que se expande
+        if (btn.dataset.acc === 'tariffs' && !wasOpen && !_tariffLoaded) {
+          _tariffLoaded = true;
+          this._loadTariffEditor();
         }
       });
     });
@@ -957,5 +979,208 @@ export class ConfigPanel {
       console.error('[StatsPDF]', err);
       showToast('Error: ' + (err.message || err), 'error');
     }
+  }
+
+  // ══════════════════════════════════════════════════
+  // CUADRO TARIFARIO — editor en Configuración
+  // ══════════════════════════════════════════════════
+  async _loadTariffEditor() {
+    const el = document.getElementById('cfg-tariff-content');
+    if (!el) return;
+    el.innerHTML = '<div style="padding:8px 0;color:var(--color-text-3)">⏳ Cargando...</div>';
+
+    const now = new Date();
+    // Próximos 3 meses (incluye el actual) — suficiente para precargar tarifas con anticipación
+    this._tariffMonths = [0,1,2].map(i => {
+      const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
+      return { year: d.getFullYear(), month: d.getMonth() + 1 };
+    });
+
+    await this._renderTariffEditorBody();
+  }
+
+  async _renderTariffEditorBody() {
+    const el = document.getElementById('cfg-tariff-content');
+    if (!el) return;
+
+    const [rates, customCols] = await Promise.all([
+      fetchMonthlyRates(this.db, this.ctx.hotelId, this._tariffMonths),
+      fetchCustomColumns(this.db, this.ctx.hotelId, null, null),
+    ]);
+
+    const units = (this.ctx.units ?? []).slice().sort((a,b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
+    const rateMap = new Map();
+    rates.forEach(r => rateMap.set(`${r.unit_id}|${r.year}|${r.month}`, r));
+
+    const monthHeaders = this._tariffMonths.map(m =>
+      `<th style="text-align:right;padding:6px 8px;font-size:.66rem;color:var(--color-text-3);text-transform:uppercase">${MONTH_NAMES[m.month-1]} ${m.year}</th>`
+    ).join('');
+
+    const rows = units.map(u => {
+      const cells = this._tariffMonths.map(m => {
+        const r = rateMap.get(`${u.id}|${m.year}|${m.month}`);
+        const price = r?.price_per_night ?? '';
+        const promoOn = !!r?.promo_active;
+        const promoPay = r?.promo_pay ?? '';
+        const promoFree = r?.promo_free ?? '';
+        return `
+          <td style="padding:5px 6px;text-align:right">
+            <div style="display:flex;align-items:center;justify-content:flex-end;gap:4px">
+              <input type="number" class="tariff-price-input" data-unit="${u.id}" data-year="${m.year}" data-month="${m.month}"
+                value="${price}" placeholder="—" style="width:78px;padding:4px 6px;font-size:.78rem;text-align:right;border:1px solid var(--color-border);border-radius:6px;background:var(--color-surface)">
+              <button class="tariff-promo-btn" data-unit="${u.id}" data-year="${m.year}" data-month="${m.month}"
+                data-on="${promoOn ? '1':'0'}" data-pay="${promoPay}" data-free="${promoFree}"
+                title="Promo (ej: 2+1)" style="background:none;border:none;cursor:pointer;font-size:.85rem;padding:2px;opacity:${promoOn ? '1':'.35'}">✏️</button>
+            </div>
+            ${promoOn && promoPay && promoFree ? `<div style="font-size:.62rem;color:#D97706;text-align:right;margin-top:2px">${promoPay}+${promoFree} activa</div>` : ''}
+          </td>`;
+      }).join('');
+      return `
+        <tr>
+          <td style="padding:5px 8px;font-size:.78rem;white-space:nowrap">
+            <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${u.color ?? 'var(--color-primary)'};margin-right:6px"></span>${u.name}
+          </td>
+          ${cells}
+        </tr>`;
+    }).join('');
+
+    const customRows = customCols.map(c => {
+      const vig = c.date_from && c.date_to
+        ? `${c.date_from.split('-').reverse().join('/')} → ${c.date_to.split('-').reverse().join('/')}`
+        : 'Siempre visible';
+      return `
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;
+          background:var(--color-surface-2);border:1px solid var(--color-border);border-radius:8px;margin-bottom:6px">
+          <div style="min-width:0">
+            <div style="font-size:.82rem;font-weight:700;color:var(--color-text)">🏷️ ${c.title}</div>
+            <div style="font-size:.68rem;color:var(--color-text-3)">${vig}${c.note ? ' · ' + c.note : ''}</div>
+          </div>
+          <div style="display:flex;gap:4px;flex-shrink:0">
+            <button class="btn btn-ghost btn-xs tariff-custom-edit" data-id="${c.id}">✏️ Precios</button>
+            <button class="btn btn-ghost btn-xs tariff-custom-del" data-id="${c.id}">🗑️</button>
+          </div>
+        </div>`;
+    }).join('');
+
+    el.innerHTML = `
+      <div style="overflow-x:auto;margin-bottom:16px">
+        <table style="border-collapse:collapse;width:100%">
+          <thead><tr>
+            <th style="text-align:left;padding:6px 8px;font-size:.66rem;color:var(--color-text-3);text-transform:uppercase">Departamento</th>
+            ${monthHeaders}
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+      <div style="font-size:.7rem;color:var(--color-text-3);margin-bottom:14px">
+        Los precios se guardan automáticamente al salir del campo. El ✏️ permite activar una promo tipo "2+1" (pagás 2 noches, 1 gratis).
+      </div>
+
+      <div style="border-top:1px solid var(--color-border);padding-top:14px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+          <span style="font-size:.78rem;font-weight:700;color:var(--color-text)">Columnas personalizadas</span>
+          <button class="btn btn-outline btn-sm" id="btn-add-tariff-custom">+ Agregar columna</button>
+        </div>
+        ${customRows || '<div style="font-size:.78rem;color:var(--color-text-3)">Sin columnas personalizadas (ej: "Finde largo").</div>'}
+      </div>`;
+
+    this._bindTariffEditorEvents(units);
+  }
+
+  _bindTariffEditorEvents(units) {
+    const el = document.getElementById('cfg-tariff-content');
+    if (!el) return;
+
+    // Guardar precio al salir del campo
+    el.querySelectorAll('.tariff-price-input').forEach(input => {
+      input.addEventListener('change', async () => {
+        const { unit, year, month } = input.dataset;
+        const price = parseFloat(input.value);
+        if (isNaN(price) || price <= 0) return;
+        const { error } = await upsertMonthlyRate(this.db, this.ctx.hotelId, unit, parseInt(year), parseInt(month), { price_per_night: price });
+        if (error) { showToast('Error al guardar: ' + error.message, 'error'); return; }
+        showToast('Tarifa guardada ✓', 'success');
+        await logAction('UPDATE', 'unit_monthly_rates', unit, `Tarifa ${month}/${year}: $${price}`);
+      });
+    });
+
+    // Promo (✏️ junto al precio)
+    el.querySelectorAll('.tariff-promo-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const { unit, year, month } = btn.dataset;
+        const isOn = btn.dataset.on === '1';
+        if (isOn) {
+          if (!confirm('¿Desactivar la promo para esta unidad/mes?')) return;
+          await upsertMonthlyRate(this.db, this.ctx.hotelId, unit, parseInt(year), parseInt(month), { promo_active: false });
+          showToast('Promo desactivada', 'success');
+        } else {
+          const pay  = prompt('Promo tipo "paga X, gratis Y" — ¿Cuántas noches se pagan? (ej: 2)', '2');
+          if (!pay) return;
+          const free = prompt('¿Cuántas noches son gratis? (ej: 1)', '1');
+          if (!free) return;
+          const { error } = await upsertMonthlyRate(this.db, this.ctx.hotelId, unit, parseInt(year), parseInt(month), {
+            promo_active: true, promo_pay: parseInt(pay), promo_free: parseInt(free),
+          });
+          if (error) { showToast('Error: ' + error.message, 'error'); return; }
+          showToast('Promo activada ✓', 'success');
+        }
+        await this._renderTariffEditorBody();
+      });
+    });
+
+    // Agregar columna personalizada
+    document.getElementById('btn-add-tariff-custom')?.addEventListener('click', async () => {
+      const title = prompt('Título de la columna (ej: "Finde 17/Ago")');
+      if (!title) return;
+      const note = prompt('Nota opcional (ej: "Incluye late check-out")', '') ?? '';
+      const useDates = confirm('¿Querés que esta columna solo aparezca cuando esas fechas estén visibles en el calendario?\n\nAceptar = sí, cargar fechas.\nCancelar = mostrar siempre.');
+      let dateFrom = null, dateTo = null;
+      if (useDates) {
+        dateFrom = prompt('Fecha desde (AAAA-MM-DD)');
+        dateTo   = prompt('Fecha hasta (AAAA-MM-DD)');
+      }
+      const { data, error } = await upsertCustomColumn(this.db, this.ctx.hotelId, {
+        title, note: note || null, date_from: dateFrom || null, date_to: dateTo || null, position: 999, active: true,
+      }).select().single();
+      if (error) { showToast('Error: ' + error.message, 'error'); return; }
+      showToast('Columna creada ✓ — ahora cargá el precio por unidad', 'success');
+      await this._editTariffCustomPrices(data.id, title, units);
+      await this._renderTariffEditorBody();
+    });
+
+    // Editar precios de una columna personalizada existente
+    el.querySelectorAll('.tariff-custom-edit').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const id = btn.dataset.id;
+        const titleEl = btn.closest('div[style*="space-between"]')?.querySelector('div > div');
+        await this._editTariffCustomPrices(id, titleEl?.textContent ?? 'Columna', units);
+        await this._renderTariffEditorBody();
+      });
+    });
+
+    // Eliminar columna personalizada
+    el.querySelectorAll('.tariff-custom-del').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        if (!confirm('¿Eliminar esta columna personalizada? Se borran también sus precios cargados.')) return;
+        const { error } = await deleteCustomColumn(this.db, btn.dataset.id);
+        if (error) { showToast('Error: ' + error.message, 'error'); return; }
+        showToast('Columna eliminada', 'success');
+        await this._renderTariffEditorBody();
+      });
+    });
+  }
+
+  // ── Cargar precio por unidad para una columna personalizada (prompts encadenados) ──
+  async _editTariffCustomPrices(customColumnId, title, units) {
+    for (const u of units) {
+      const val = prompt(`${title} — precio para "${u.name}" (vacío = sin cambios)`, '');
+      if (val === null || val.trim() === '') continue;
+      const price = parseFloat(val);
+      if (isNaN(price)) continue;
+      const nightsStr = prompt(`¿Cuántas noches incluye ese precio? (opcional, ej: 3)`, '') ?? '';
+      const nights = parseInt(nightsStr) || null;
+      await upsertCustomPrice(this.db, customColumnId, u.id, { price, nights });
+    }
+    showToast('Precios de la columna guardados ✓', 'success');
   }
 }

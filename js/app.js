@@ -25,6 +25,7 @@ import { fetchDollarRates, startDollarAutoRefresh, formatDollarBadge, formatDoll
 import { ConfigPanel }    from './components/config-panel.js';
 import { AuditPanel }     from './components/audit-panel.js';
 import { OperationsModule } from './components/operations.js';
+import { fetchMonthlyRates, fetchCustomColumns, monthsInRange, buildTariffGrid, MONTH_NAMES } from './services/tariff-service.js';
 
 let dashboard   = null;
 let calendar    = null;
@@ -466,6 +467,7 @@ const SECTION_META = {
   operations: { title: 'Operaciones',                icon: '🔧', sub: 'Panel Operativo · Limpieza · Mantenimiento' },
   audit:      { title: 'Auditoría',                  icon: '📜', sub: 'Registro del Sistema · Historial de acciones' },
   config:     { title: 'Configuración',              icon: '⚙️', sub: 'Panel de Administración · Comisiones · Tarifas · Departamentos' },
+  tariffs:    { title: 'Cuadro Tarifario',            icon: '🏷️', sub: 'Precios por departamento y mes' },
 };
 const SECTION_TITLES = Object.fromEntries(Object.entries(SECTION_META).map(([k,v]) => [k, v.title]));
 
@@ -514,6 +516,7 @@ export async function navigateTo(section) {
       case 'operations':  await operations?.load(); break;
       case 'audit':       await auditPanel?.load(); break;
       case 'config':      await configPanel?.load(); break;
+      case 'tariffs':     await loadMobileTariffs(); break;
     }
   } catch (err) {
     showErrorBoundary(`section-${section}`, err.message, () => navigateTo(section));
@@ -521,6 +524,106 @@ export async function navigateTo(section) {
 }
 // Exponer globalmente para onclick inline en templates HTML
 if (typeof window !== 'undefined') window.milaNav = navigateTo;
+
+// ══════════════════════════════════════════════════
+// CUADRO TARIFARIO — pantalla completa mobile
+// ══════════════════════════════════════════════════
+let _tariffMobileYM = null; // { year, month } — persiste mientras dure la sesión
+
+async function loadMobileTariffs() {
+  const container = document.getElementById('tariffs-mobile-container');
+  if (!container) return;
+
+  const now = new Date();
+  if (!_tariffMobileYM) _tariffMobileYM = { year: now.getFullYear(), month: now.getMonth() + 1 };
+
+  container.innerHTML = '<div style="padding:20px;text-align:center;color:var(--color-text-3)">⏳ Cargando...</div>';
+
+  const { year, month } = _tariffMobileYM;
+  const monthLabel = `${MONTH_NAMES[month - 1]} ${year}`;
+  const firstDay = `${year}-${String(month).padStart(2,'0')}-01`;
+  const lastDayNum = new Date(year, month, 0).getDate();
+  const lastDay = `${year}-${String(month).padStart(2,'0')}-${String(lastDayNum).padStart(2,'0')}`;
+
+  try {
+    const [rates, customCols] = await Promise.all([
+      fetchMonthlyRates(supabase, AppContext.hotelId, [{ year, month }]),
+      fetchCustomColumns(supabase, AppContext.hotelId, firstDay, lastDay),
+    ]);
+
+    const units = (AppContext.units ?? []).slice().sort((a,b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
+    const { rows } = buildTariffGrid({ units, rates, customCols, months: [{ year, month }] });
+
+    const fmt = n => n == null ? 'Sin cargar' : '$' + Math.round(n).toLocaleString('es-AR');
+
+    const unitCards = rows.map(row => {
+      const cell = row.cells[0] ?? {};
+      const promoTag = cell.promoActive && cell.promoPay && cell.promoFree
+        ? `<span style="font-size:.66rem;background:#FEF3C7;color:#92400E;padding:2px 7px;border-radius:999px;margin-left:6px;font-weight:700">${cell.promoPay}+${cell.promoFree}</span>`
+        : '';
+      return `
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;
+          background:var(--color-surface);border:1px solid var(--color-border);border-radius:10px;margin-bottom:8px">
+          <div style="display:flex;align-items:center;gap:8px;min-width:0">
+            <span style="width:9px;height:9px;border-radius:50%;background:${row.unit.color ?? 'var(--color-primary)'};flex-shrink:0"></span>
+            <span style="font-size:.88rem;font-weight:600;color:var(--color-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${row.unit.name}</span>
+          </div>
+          <div style="display:flex;align-items:center;flex-shrink:0">
+            <span style="font-size:.95rem;font-weight:800;color:var(--color-text)">${fmt(cell.price)}</span>${promoTag}
+          </div>
+        </div>`;
+    }).join('');
+
+    const customHTML = customCols.map(c => {
+      const itemsHTML = units.map(u => {
+        const p = (c.tariff_custom_prices ?? []).find(x => x.unit_id === u.id);
+        if (!p?.price) return '';
+        const nightsTxt = p.nights ? ` / ${p.nights} noches` : '';
+        return `
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--color-border)">
+            <span style="display:flex;align-items:center;gap:7px;font-size:.82rem;color:var(--color-text)">
+              <span style="width:7px;height:7px;border-radius:50%;background:${u.color ?? 'var(--color-primary)'}"></span>${u.name}
+            </span>
+            <span style="font-size:.85rem;font-weight:700;color:var(--color-text)">$${Math.round(p.price).toLocaleString('es-AR')}${nightsTxt}</span>
+          </div>`;
+      }).join('');
+      return `
+        <div style="margin-top:14px;padding:14px;background:#FFFBEB;border:1px solid #FDE68A;border-radius:10px">
+          <div style="font-size:.82rem;font-weight:800;color:#92400E;margin-bottom:2px">🏷️ ${c.title}</div>
+          ${c.note ? `<div style="font-size:.72rem;color:#92400E;margin-bottom:8px">${c.note}</div>` : ''}
+          ${itemsHTML || '<div style="font-size:.78rem;color:#92400E">Sin precios cargados</div>'}
+        </div>`;
+    }).join('');
+
+    container.innerHTML = `
+      <div style="padding:12px 14px 0">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+          <button id="tariff-mob-prev" class="btn btn-outline btn-sm" style="padding:6px 10px">‹</button>
+          <span style="font-size:.95rem;font-weight:700;color:var(--color-text)">${monthLabel}</span>
+          <button id="tariff-mob-next" class="btn btn-outline btn-sm" style="padding:6px 10px">›</button>
+        </div>
+        ${unitCards || '<div style="text-align:center;color:var(--color-text-3);padding:20px;font-size:.85rem">Sin tarifas cargadas para este mes.</div>'}
+        ${customHTML}
+      </div>`;
+
+    document.getElementById('tariff-mob-prev')?.addEventListener('click', () => {
+      let { year: y, month: m } = _tariffMobileYM;
+      m--; if (m < 1) { m = 12; y--; }
+      _tariffMobileYM = { year: y, month: m };
+      loadMobileTariffs();
+    });
+    document.getElementById('tariff-mob-next')?.addEventListener('click', () => {
+      let { year: y, month: m } = _tariffMobileYM;
+      m++; if (m > 12) { m = 1; y++; }
+      _tariffMobileYM = { year: y, month: m };
+      loadMobileTariffs();
+    });
+
+  } catch (err) {
+    console.error('[Tariffs mobile]', err);
+    container.innerHTML = '<div style="padding:20px;text-align:center;color:var(--color-danger)">Error al cargar el cuadro tarifario</div>';
+  }
+}
 
 function updateHeaderDate() {
   // Legacy element (mantener compatibilidad si existe)
