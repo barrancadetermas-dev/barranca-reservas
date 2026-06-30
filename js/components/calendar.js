@@ -2578,7 +2578,7 @@ export class Calendar {
 
       const headerHTML = `
         <tr>
-          <th style="text-align:left;padding:6px 10px;font-size:.66rem;color:var(--color-text-3);text-transform:uppercase;letter-spacing:.04em;font-weight:700;width:${deptColW}px;min-width:${deptColW}px">Depto</th>
+          <th style="text-align:center;padding:6px 10px;font-size:.66rem;color:var(--color-text-3);text-transform:uppercase;letter-spacing:.04em;font-weight:700;width:${deptColW}px;min-width:${deptColW}px">Depto</th>
           ${columns.map(col => col.type === 'month'
             ? `<th style="text-align:right;padding:6px 8px;font-size:.66rem;color:var(--color-text-3);text-transform:uppercase;letter-spacing:.04em;font-weight:700;width:${COL_W}px;min-width:${COL_W}px">${col.label}</th>`
             : `<th style="text-align:right;padding:6px 8px;font-size:.62rem;color:#D97706;text-transform:uppercase;letter-spacing:.03em;font-weight:700;width:${COL_W}px;min-width:${COL_W}px" title="${col.note ?? ''}">📅 ${col.label}</th>`
@@ -2606,7 +2606,7 @@ export class Calendar {
           `<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${u.color ?? 'var(--color-primary)'};margin-right:3px;vertical-align:middle"></span>#${u.sort_order ?? '?'}`
         ).join(' <span style="color:var(--color-text-3)">|</span> ');
         return `<tr style="background:${i % 2 === 0 ? 'transparent' : 'var(--color-surface-2)'}">
-          <td style="padding:5px 10px;font-size:.74rem;font-weight:700;color:var(--color-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${g.units.map(u=>u.name).join(', ')}">
+          <td style="padding:5px 10px;font-size:.74rem;font-weight:700;color:var(--color-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:center" title="${g.units.map(u=>u.name).join(', ')}">
             ${numsLabel}
           </td>
           ${cellsHTML}

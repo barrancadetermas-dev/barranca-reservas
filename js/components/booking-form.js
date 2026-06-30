@@ -777,6 +777,27 @@ export class BookingForm {
     this._suggestTimer = setTimeout(() => this._runPriceSuggestion(), 500);
   }
 
+  // Precio sugerido tomado directo del Cuadro Tarifario (Configuración):
+  // mes de la fecha de check-in × unidad seleccionada. Si hay varias
+  // unidades, suma el precio de cada una. Ignora columnas especiales
+  // (son por paquete de días, no por noche) — siempre usa el precio
+  // mensual "de fondo" del depto.
+  async _getTariffSuggestedPrice(unitIds, checkIn) {
+    if (!unitIds?.length || !checkIn) return null;
+    try {
+      const { fetchMonthlyRates } = await import('../services/tariff-service.js');
+      const [y, mo] = checkIn.split('-').map(Number);
+      const rates = await fetchMonthlyRates(this.db, this.ctx.hotelId, [{ year: y, month: mo }]);
+      let total = 0, found = 0;
+      unitIds.forEach(uid => {
+        const r = rates.find(x => String(x.unit_id) === String(uid) && x.year === y && x.month === mo);
+        if (r?.price_per_night) { total += r.price_per_night; found++; }
+      });
+      if (!found) return null;
+      return total;
+    } catch { return null; }
+  }
+
   async _runPriceSuggestion() {
     const ci       = document.getElementById('f-checkin')?.value;
     const co       = document.getElementById('f-checkout')?.value;
@@ -789,6 +810,25 @@ export class BookingForm {
       return;
     }
 
+    // Sugerencia rápida desde el Cuadro Tarifario (mes + depto)
+    let tariffHTML = '';
+    const tariffPrice = await this._getTariffSuggestedPrice(unitIds, ci);
+    if (tariffPrice) {
+      tariffHTML = `
+        <div class="ps-box" style="margin-bottom:8px">
+          <div class="ps-head">
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+              <span class="ps-badge">🏷️ Cuadro Tarifario</span>
+            </div>
+            <button class="ps-use" data-price="${tariffPrice}">Usar este precio</button>
+          </div>
+          <div class="ps-main">
+            <span class="ps-price">$${Math.round(tariffPrice).toLocaleString('es-AR')}</span>
+            <span class="ps-night">/noche</span>
+          </div>
+        </div>`;
+    }
+
     // Lazy load PriceSuggester
     if (!this._priceSuggester) {
       try {
@@ -798,37 +838,42 @@ export class BookingForm {
           this._PriceSuggesterClass = mod.PriceSuggester;
         }
       } catch(e) {
-        container.innerHTML = '';
+        container.innerHTML = tariffHTML;
+        this._bindPriceSuggestionButtons(container);
         return;
       }
     }
-    if (!this._priceSuggester) return;
+    if (!this._priceSuggester) { container.innerHTML = tariffHTML; this._bindPriceSuggestionButtons(container); return; }
 
-    container.innerHTML = '<div class="ps-loading">⟳ Analizando historial...</div>';
+    container.innerHTML = tariffHTML + '<div class="ps-loading">⟳ Analizando historial...</div>';
 
     try {
       const currentPrice = parseFloat(document.getElementById('f-price')?.value) || 0;
       const result = await this._priceSuggester.suggest(unitIds, ci, co);
-      container.innerHTML = this._PriceSuggesterClass.renderPanel(result, currentPrice);
+      container.innerHTML = tariffHTML + this._PriceSuggesterClass.renderPanel(result, currentPrice);
+      this._bindPriceSuggestionButtons(container);
+    } catch (err) {
+      container.innerHTML = tariffHTML;
+      this._bindPriceSuggestionButtons(container);
+    }
+  }
 
-      // Bind "Usar este precio" button
-      container.querySelector('.ps-use')?.addEventListener('click', (e) => {
+  _bindPriceSuggestionButtons(container) {
+    container.querySelectorAll('.ps-use').forEach(btn => {
+      btn.addEventListener('click', (e) => {
         const price = parseFloat(e.target.dataset.price);
         if (!price) return;
         const priceEl = document.getElementById('f-price');
         if (priceEl) {
           priceEl.value = price;
           priceEl.dispatchEvent(new Event('input'));
-          // Brief highlight
           priceEl.style.borderColor = '#22c55e';
           priceEl.style.boxShadow = '0 0 0 2px #22c55e28';
           setTimeout(() => { priceEl.style.borderColor=''; priceEl.style.boxShadow=''; }, 1800);
         }
         showToast('Precio sugerido aplicado ✓', 'success');
       });
-    } catch (err) {
-      container.innerHTML = '';
-    }
+    });
   }
 
   // ── Calcular fechas bloqueadas para el picker ─────

@@ -1079,7 +1079,6 @@ export class ConfigPanel {
                 data-on="${promo.active ? '1':'0'}" data-pay="${promo.pay}" data-free="${promo.free}"
                 title="${promoTitle}" style="background:none;border:none;cursor:pointer;font-size:.85rem;padding:2px;opacity:${promo.active ? '1':'.35'}">🏷️</button>
             </div>
-            ${promo.active && promo.pay && promo.free ? `<div style="font-size:.62rem;color:#D97706;font-weight:600;margin-top:1px">${promo.pay}+${promo.free} activa</div>` : ''}
           </th>`;
       }
       const c = col.c;
@@ -1111,9 +1110,9 @@ export class ConfigPanel {
         const c = col.c;
         const p = c._priceMap.get(u.id);
         return `
-          <td style="padding:5px 6px;text-align:right;background:rgba(99,102,241,.04)">
+          <td style="padding:5px 6px;text-align:center;background:rgba(99,102,241,.04)">
             <input type="number" class="tariff-custom-price-input" data-col="${c.id}" data-unit="${u.id}"
-              value="${p?.price ?? ''}" placeholder="—" style="width:78px;padding:4px 6px;font-size:.78rem;text-align:right;border:1px solid var(--color-border);border-radius:6px;background:var(--color-surface)">
+              value="${p?.price ?? ''}" placeholder="—" style="width:78px;padding:4px 6px;font-size:.78rem;text-align:center;border:1px solid var(--color-border);border-radius:6px;background:var(--color-surface)">
           </td>`;
       }).join('');
       return `
@@ -1147,15 +1146,34 @@ export class ConfigPanel {
     const el = document.getElementById('cfg-tariff-content');
     if (!el) return;
 
-    // Guardar precio al salir del campo
+    // Guardar precio al salir del campo, y replicarlo automáticamente a las
+    // demás unidades que comparten el mismo "Grupo tarifario" (ver columna
+    // de Departamentos/Unidades), para no tener que cargar el mismo valor
+    // a mano en cada una.
     el.querySelectorAll('.tariff-price-input').forEach(input => {
       input.addEventListener('change', async () => {
         const { unit, year, month } = input.dataset;
         const price = parseFloat(input.value);
         if (isNaN(price) || price <= 0) return;
-        const { error } = await upsertMonthlyRate(this.db, this.ctx.hotelId, unit, parseInt(year), parseInt(month), { price_per_night: price });
-        if (error) { showToast('Error al guardar: ' + error.message, 'error'); return; }
-        showToast('Tarifa guardada ✓', 'success');
+
+        const sourceUnit = units.find(u => String(u.id) === String(unit));
+        const rg = sourceUnit?.rate_group?.trim();
+        const siblings = rg ? units.filter(u => u.id !== sourceUnit.id && u.rate_group?.trim() === rg) : [];
+        const targets = [sourceUnit, ...siblings].filter(Boolean);
+
+        const results = await Promise.all(targets.map(u =>
+          upsertMonthlyRate(this.db, this.ctx.hotelId, u.id, parseInt(year), parseInt(month), { price_per_night: price })
+        ));
+        const err = results.find(r => r.error);
+        if (err) { showToast('Error al guardar: ' + err.error.message, 'error'); return; }
+
+        // Reflejar el valor en los inputs de las unidades hermanas sin recargar toda la tabla
+        siblings.forEach(u => {
+          const sib = el.querySelector(`.tariff-price-input[data-unit="${u.id}"][data-year="${year}"][data-month="${month}"]`);
+          if (sib) sib.value = price;
+        });
+
+        showToast(siblings.length ? `Tarifa guardada ✓ (replicada a ${siblings.length} depto${siblings.length===1?'':'s'} del mismo grupo)` : 'Tarifa guardada ✓', 'success');
         await logAction('UPDATE', 'unit_monthly_rates', unit, `Tarifa ${month}/${year}: $${price}`);
       });
     });

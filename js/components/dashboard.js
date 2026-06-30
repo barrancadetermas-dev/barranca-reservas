@@ -1020,7 +1020,7 @@ export class Dashboard {
     const valEl  = document.getElementById('dash-cobros-val');
     if (valEl) valEl.textContent = fmt(stats.totalBal);
     const badge  = document.getElementById('dash-cobros-badge');
-    if (badge) badge.textContent = stats.bkCount + ' res.';
+    if (badge) badge.textContent = stats.bkCount + (stats.bkCount === 1 ? ' reserva' : ' reservas');
     const cobEl  = document.getElementById('dash-cobrado-val');
     if (cobEl) cobEl.textContent = fmt(stats.totalPaid);
     const totEl  = document.getElementById('dash-total-val');

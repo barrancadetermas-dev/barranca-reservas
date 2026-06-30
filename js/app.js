@@ -290,14 +290,8 @@ async function initApp(user) {
     // ── Nav: mostrar/ocultar secciones por rol ──
     setupNavByRole();
 
-    // Restaurar última sección visitada
-    let _startSection = 'dashboard';
-    try {
-      const _saved = localStorage.getItem('mila_last_section');
-      if (_saved && ['dashboard','calendar','bookings','statistics','guests','reminders','operations','audit','config'].includes(_saved)) {
-        _startSection = _saved;
-      }
-    } catch {}
+    // Al iniciar sesión / abrir la web, siempre arrancar en Calendario.
+    let _startSection = 'calendar';
     await navigateTo(_startSection);
 
     loadDollarBadge();
