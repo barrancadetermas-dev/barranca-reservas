@@ -217,13 +217,13 @@ export class ConfigPanel {
             <div style="display:flex;gap:8px">
               <input type="text" id="cfg-user-nombre" placeholder="Tu nombre..."
                 style="flex:1;border:1px solid rgba(255,255,255,.3);border-radius:var(--r-md);padding:8px 12px;font-size:.85rem;background:rgba(255,255,255,.15);color:#fff;outline:none"
-                onkeydown="if(event.key===\'Enter\')document.getElementById(\'cfg-nombre-save\').click()">
+                onkeydown="if(event.key==='Enter')document.getElementById('cfg-nombre-save').click()">
               <button id="cfg-nombre-save"
                 style="background:#fff;color:#1e4db7;border:none;border-radius:var(--r-md);padding:8px 16px;font-size:.8rem;font-weight:800;cursor:pointer;white-space:nowrap">
                 Guardar
               </button>
             </div>
-            <div style="font-size:.65rem;color:rgba(255,255,255,.5);margin-top:5px">Aparece en el header y en todas las vistas</div>
+            <div id="cfg-nombre-status" style="font-size:.65rem;color:rgba(255,255,255,.5);margin-top:5px">Aparece en el header y en todas las vistas</div>
           </div>
         </div>
 
@@ -324,10 +324,11 @@ export class ConfigPanel {
   _bindSave(container) {
     container.querySelector('#btn-save-config')?.addEventListener('click', () => this._save(container));
 
-    // ── Nombre para mostrar — siempre funciona ──
+    // ── Nombre para mostrar ──
     container.querySelector('#cfg-nombre-save')?.addEventListener('click', async () => {
       const btn    = container.querySelector('#cfg-nombre-save');
       const input  = container.querySelector('#cfg-user-nombre');
+      const status = container.querySelector('#cfg-nombre-status');
       const nombre = input?.value?.trim() ?? '';
       if (btn) { btn.disabled = true; btn.textContent = '⏳'; }
       try {
@@ -335,27 +336,31 @@ export class ConfigPanel {
         const uid = session?.user?.id;
         if (!uid) throw new Error('Sin sesión activa');
 
-        // Upsert directo — maneja tanto INSERT como UPDATE
         const { error } = await this.db.from('user_profiles')
           .upsert({ id: uid, nombre: nombre || null }, { onConflict: 'id' });
 
-        // Si falla el upsert (RLS), intentar UPDATE directo
         if (error) {
           const { error: updErr } = await this.db.from('user_profiles')
             .update({ nombre: nombre || null }).eq('id', uid);
-          if (updErr) throw new Error('No se pudo guardar. Verificá permisos de base de datos.');
+          if (updErr) {
+            if (updErr.message?.includes('nombre') || updErr.code === '42703') {
+              if (status) status.innerHTML = '⚠️ Ejecutá en Supabase SQL Editor: <code style="font-size:.68rem">ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS nombre TEXT; NOTIFY pgrst, \'reload schema\';</code>';
+              showToast('⚠️ Columna "nombre" no existe aún — ver instrucción abajo', 'warning');
+              return;
+            }
+            throw new Error('No se pudo guardar: ' + (updErr.message ?? ''));
+          }
         }
 
-        // Actualizar avatar en el panel
         const avatarEl = container.querySelector('#cfg-user-avatar');
         if (avatarEl) {
           const initial = nombre ? nombre[0].toUpperCase() : (session.user.email?.[0]?.toUpperCase() ?? 'A');
           avatarEl.textContent = initial;
         }
-        // Actualizar toda la app
         if (window._applyUserDisplay) {
           window._applyUserDisplay({ nombre: nombre || null, email: session.user.email });
         }
+        if (status) status.textContent = 'Aparece en el header y en todas las vistas';
         showToast('Nombre guardado ✓', 'success');
       } catch (err) {
         showToast('Error: ' + (err?.message ?? String(err)), 'error');

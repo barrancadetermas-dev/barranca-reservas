@@ -2240,9 +2240,9 @@ select {
 .enc-chip { cursor: pointer; }
 .enc-chip input[type="radio"] { position: absolute; opacity: 0; width: 0; height: 0; }
 .enc-chip span {
-  display: inline-block; padding: 5px 11px; border-radius: 999px;
+  display: inline-block; padding: 4px 9px; border-radius: 999px;
   border: 1.5px solid var(--color-border); background: var(--color-surface);
-  font-size: .74rem; font-weight: 700; color: var(--color-text-2);
+  font-size: .72rem; font-weight: 700; color: var(--color-text-2);
   cursor: pointer; transition: all .15s ease; white-space: nowrap;
 }
 .enc-chip input[type="radio"]:checked + span {

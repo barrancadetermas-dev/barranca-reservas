@@ -144,23 +144,23 @@ function _injectModal() {
           <div class="enc-filter-chips" id="enc-filter-chips">
             <label class="enc-chip">
               <input type="radio" name="enc-filter-type" id="enc-filter-type" value="created_today" checked>
-              <span>🕐 Creadas hoy</span>
+              <span>🕐 Hoy</span>
             </label>
             <label class="enc-chip">
               <input type="radio" name="enc-filter-type" value="created_range">
-              <span>📅 Rango de creación</span>
+              <span>📅 Rango</span>
             </label>
             <label class="enc-chip">
               <input type="radio" name="enc-filter-type" value="checkin_range">
-              <span>🏠 Rango de check-in</span>
+              <span>🏠 Check-in</span>
             </label>
             <label class="enc-chip">
               <input type="radio" name="enc-filter-type" value="checkout_range">
-              <span>🚪 Rango de check-out</span>
+              <span>🚪 Check-out</span>
             </label>
             <label class="enc-chip">
               <input type="radio" name="enc-filter-type" value="all">
-              <span>📦 Todas las cargadas</span>
+              <span>📦 Todas</span>
             </label>
           </div>
 
