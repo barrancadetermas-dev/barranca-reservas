@@ -890,14 +890,29 @@
 
     <!-- Step 3: Pricing -->
     <div class="step-content hidden" id="step-3">
-      <div class="form-grid-2">
+      <div class="form-grid-2" id="f-price-single-wrap">
         <div class="form-group"><label>Precio por noche ($) <span class="req">*</span></label><input type="number" id="f-price" oninput="document.getElementById('price-suggestion-container') && this._runPriceSuggestion?.()" min="0" step="500" placeholder="45000"></div>
         <div id="price-history-hint" style="margin-top:-8px;margin-bottom:4px"></div>
-        <div class="form-group"><label>Noches sin cargo</label><input type="number" id="f-free-nights" min="0" value="0"></div>
+      </div>
+      <!-- Precio por unidad — aparece solo con 2+ departamentos seleccionados -->
+      <div class="form-group hidden" id="f-price-multi-wrap" style="display:none">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+          <label style="margin-bottom:0">Precio por noche, por departamento <span class="req">*</span></label>
+          <button type="button" class="btn btn-outline btn-sm" id="btn-same-price-all" style="font-size:.72rem;padding:3px 9px">
+            Mismo precio para todas
+          </button>
+        </div>
+        <div id="per-unit-price-rows"></div>
+        <div style="font-size:.7rem;color:var(--color-text-3);margin-top:4px">
+          El total por noche se suma automáticamente entre los departamentos elegidos.
+        </div>
       </div>
       <div class="form-grid-2">
+        <div class="form-group"><label>Noches sin cargo</label><input type="number" id="f-free-nights" min="0" value="0"></div>
         <div class="form-group"><label>Descuento (%)</label><input type="number" id="f-discount" min="0" max="100" step="0.5" value="0"></div>
         <div class="form-group"><label>Recargo fijo ($)</label><input type="number" id="f-surcharge" min="0" step="500" value="0"></div>
+      </div>
+      <div class="form-grid-2">
         <div class="form-group">
           <label>Depósito de garantía ($)
             <span class="label-hint">Reembolsable al check-out. No se suma al total de la reserva.</span>

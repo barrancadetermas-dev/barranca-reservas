@@ -150,7 +150,7 @@ export class Statistics {
     try {
       const { data: bookings } = await this.db
         .from('bookings')
-        .select('id, check_in, check_out, price_per_night, total_amount, status, nights, source, booking_units(unit_id)')
+        .select('id, check_in, check_out, price_per_night, total_amount, status, nights, source, booking_units(unit_id, price_per_night)')
         .eq('hotel_id', this.ctx.hotelId)
         .neq('status', 'cancelled').neq('status', 'blocked')
         .lte('check_in', lastDayStr).gt('check_out', firstDay);
@@ -212,7 +212,9 @@ export class Statistics {
     });
 
     bookings.forEach(b => {
-      (b.booking_units ?? []).forEach(({ unit_id }) => {
+      const bUnits = b.booking_units ?? [];
+      const unitCount = bUnits.length || 1;
+      bUnits.forEach(({ unit_id, price_per_night: unitPrice }) => {
         if (!statsMap[unit_id]) return;
         const ciDate  = new Date(Math.max(new Date(b.check_in + 'T00:00:00'),  new Date(firstDay + 'T00:00:00')));
         const coDate  = new Date(Math.min(new Date(b.check_out + 'T00:00:00'), new Date(lastDay  + 'T23:59:59')));
@@ -220,8 +222,17 @@ export class Statistics {
         statsMap[unit_id].nightsOcc       += nights;
         statsMap[unit_id].bookingCount    += 1;
         statsMap[unit_id].totalPriceNights += nights * (b.price_per_night ?? 0);
-        const totalNights = Math.round((new Date(b.check_out + 'T00:00:00') - new Date(b.check_in + 'T00:00:00')) / 86400000);
-        if (totalNights > 0) statsMap[unit_id].revenue += (b.total_amount ?? 0) * (nights / totalNights);
+        // Precio real de ESTA unidad (cargado en el formulario) → cálculo exacto.
+        // Si no existe (reserva vieja o unidad única sin precio propio), repartir
+        // el total de la reserva en partes iguales entre sus unidades (fallback).
+        if (unitPrice != null && unitPrice > 0) {
+          statsMap[unit_id].revenue += unitPrice * nights;
+        } else {
+          const totalNights = Math.round((new Date(b.check_out + 'T00:00:00') - new Date(b.check_in + 'T00:00:00')) / 86400000);
+          if (totalNights > 0) {
+            statsMap[unit_id].revenue += ((b.total_amount ?? 0) / unitCount) * (nights / totalNights);
+          }
+        }
       });
     });
 

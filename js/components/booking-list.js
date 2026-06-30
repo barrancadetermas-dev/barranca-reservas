@@ -740,11 +740,17 @@ export class BookingList {
 
   // ── Detalle ───────────────────────────────────────
   async _openDetail(id) {
-    const { data: booking } = await this.db
-      .from('bookings')
-      .select('*, guests(*), booking_units(unit_id, units(name)), payments(*)')
-      .eq('id', id).single();
-    if (booking) this.bookingForm.openDetail(booking);
+    // booking_units y payments en consultas separadas — combinarlas en un
+    // solo .select() puede duplicar pagos cuando hay varias unidades (bug
+    // de producto cruzado en PostgREST).
+    const [{ data: booking }, { data: paymentsData }] = await Promise.all([
+      this.db.from('bookings').select('*, guests(*), booking_units(unit_id, units(name))').eq('id', id).single(),
+      this.db.from('payments').select('*').eq('booking_id', id),
+    ]);
+    if (booking) {
+      booking.payments = paymentsData ?? [];
+      this.bookingForm.openDetail(booking);
+    }
   }
 
   // ── Eliminar ──────────────────────────────────────

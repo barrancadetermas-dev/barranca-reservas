@@ -458,19 +458,35 @@ export class GuestsCRM {
     overlay.classList.remove('hidden');
 
     try {
+      // booking_units y payments se piden por separado: combinar ambas
+      // relaciones "uno a muchos" en el mismo select puede duplicar pagos
+      // cuando una reserva tiene varias unidades (producto cruzado en PostgREST).
       const [{ data: guest, error: gErr }, { data: guestBookings }] = await Promise.all([
         this.db.from('guests').select('*').eq('id', guestId).single(),
         this.db.from('bookings')
           .select(`id, check_in, check_out, nights, status, source, adults, children,
             total_amount, total_paid, balance, notes, price_per_night,
-            booking_units(units(name, sort_order, color, max_guests)),
-            payments(amount, method, payment_date)`)
+            booking_units(units(name, sort_order, color, max_guests))`)
           .eq('guest_id', guestId)
           .eq('hotel_id', this.ctx.hotelId)
           .order('check_in', { ascending: false }),
       ]);
       if (gErr || !guest) { showToast('Huésped no encontrado', 'error'); return; }
-      guest.bookings = guestBookings ?? [];
+
+      const bookings = guestBookings ?? [];
+      const bookingIds = bookings.map(b => b.id);
+      if (bookingIds.length) {
+        const { data: paymentsData } = await this.db.from('payments')
+          .select('booking_id, amount, method, payment_date')
+          .in('booking_id', bookingIds);
+        const paymentsByBooking = {};
+        (paymentsData ?? []).forEach(p => {
+          (paymentsByBooking[p.booking_id] ??= []).push(p);
+        });
+        bookings.forEach(b => { b.payments = paymentsByBooking[b.id] ?? []; });
+      }
+
+      guest.bookings = bookings;
       this._currentGuest = guest;
       body.innerHTML = this._buildProfileHTML(guest);
       await this._loadGuestNotes(guest.id, body);

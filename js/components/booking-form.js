@@ -43,6 +43,7 @@ export class BookingForm {
     this._editingId   = null;
     this._selectedGuestId = null;
     this._selectedUnitIds = new Set();
+    this._unitPrices    = {}; // unitId -> precio/noche, solo cuando hay 2+ unidades
     this._datePicker   = null;
     this._payRowCount  = 0;
     this._priceSuggester = null; // lazy init
@@ -83,6 +84,16 @@ export class BookingForm {
       }
       if (e.target.closest('#btn-add-payment-row')) {
         this._addPaymentRow();
+        return;
+      }
+      // Precio por unidad: copiar el precio de la primera unidad a todas
+      if (e.target.closest('#btn-same-price-all')) {
+        const unitIds = [...this._selectedUnitIds];
+        if (unitIds.length) {
+          const firstVal = this._unitPrices[unitIds[0]] || 0;
+          unitIds.forEach(uid => { this._unitPrices[uid] = firstVal; });
+          this._renderPerUnitPrices();
+        }
         return;
       }
       // Voucher: confirmar reserva
@@ -170,6 +181,7 @@ export class BookingForm {
     if (prefill.unitId) {
       this._selectedUnitIds.add(String(prefill.unitId));
       this._renderUnitSelector();
+      this._renderPerUnitPrices();
     }
     if (prefill.checkIn || prefill.checkOut) {
       this._datePicker?.setValue(prefill.checkIn ?? null, prefill.checkOut ?? null);
@@ -246,13 +258,20 @@ export class BookingForm {
     this._updateNextBtnText();
 
     try {
-      const { data: b, error } = await this.db
-        .from('bookings')
-        .select('*, guests!bookings_guest_id_fkey(*), booking_units(unit_id), payments(*)')
-        .eq('id', bookingId).single();
+      // IMPORTANTE: booking_units y payments se piden en consultas SEPARADAS.
+      // Combinar dos relaciones "uno a muchos" en el mismo .select() puede hacer
+      // que Postgres devuelva un producto cruzado (ej: 4 unidades × 1 pago =
+      // el pago aparece 4 veces). Separarlas evita ese bug por completo.
+      const [{ data: b, error }, { data: paymentsData }] = await Promise.all([
+        this.db.from('bookings')
+          .select('*, guests!bookings_guest_id_fkey(*), booking_units(unit_id, price_per_night)')
+          .eq('id', bookingId).single(),
+        this.db.from('payments').select('*').eq('booking_id', bookingId),
+      ]);
 
       if (error) throw error;
       if (!b) { showToast('No se encontró la reserva', 'error'); return; }
+      b.payments = paymentsData ?? [];
 
       // Rellenar huésped
       const g = b.guests ?? {};
@@ -272,7 +291,18 @@ export class BookingForm {
 
       // Unidades
       this._selectedUnitIds = new Set((b.booking_units ?? []).map(bu => String(bu.unit_id)));
+      this._unitPrices = {};
+      (b.booking_units ?? []).forEach(bu => {
+        if (bu.price_per_night != null) this._unitPrices[String(bu.unit_id)] = bu.price_per_night;
+      });
+      // Reserva vieja con 2+ unidades pero sin precio individual guardado:
+      // sugerir como punto de partida el precio total repartido en partes iguales
+      if (this._selectedUnitIds.size >= 2 && Object.keys(this._unitPrices).length === 0) {
+        const perUnitGuess = Math.round((b.price_per_night ?? 0) / this._selectedUnitIds.size) || '';
+        this._selectedUnitIds.forEach(uid => { this._unitPrices[uid] = perUnitGuess; });
+      }
       this._renderUnitSelector();
+      this._renderPerUnitPrices();
 
       // Fechas
       if (this._datePicker && b.check_in && b.check_out) {
@@ -452,10 +482,17 @@ export class BookingForm {
     this._editingId       = null;
     this._selectedGuestId = null;
     this._selectedUnitIds = new Set();
+    this._unitPrices      = {};
     this._payRowCount     = 0;
     this._cachedTotal     = 0;
     this._submitting      = false;
     this._removedPaymentIds = []; // pagos existentes que el usuario eliminó del form
+
+    // Volver al modo de precio único (single unit) por defecto
+    const singleWrap = document.getElementById('f-price-single-wrap');
+    const multiWrap  = document.getElementById('f-price-multi-wrap');
+    if (singleWrap) singleWrap.style.display = '';
+    if (multiWrap)  multiWrap.style.display  = 'none';
 
     ['f-firstname','f-lastname','f-dni','f-phone','f-email','f-notes',
      'f-price','f-discount','f-surcharge','f-free-nights','f-deposit',
@@ -545,6 +582,7 @@ export class BookingForm {
         }
         this._updateBlockedDates();
         this._updateBreakdown();
+        this._renderPerUnitPrices();
         this._triggerPriceSuggestion();
         // Update pax cap when unit changes
         this._updatePaxCap?.();
@@ -553,6 +591,79 @@ export class BookingForm {
 
     // Render pax selector si hay contenedor
     this._renderPaxSelector();
+  }
+
+  // ── Precio por unidad — visible solo con 2+ departamentos seleccionados ──
+  // El campo único "f-price" se mantiene como fuente de verdad para toda la
+  // lógica existente (breakdown, validación, total): cuando hay 2+ unidades,
+  // este método ESCRIBE la suma de los precios individuales dentro de f-price,
+  // de modo que el resto del formulario sigue funcionando exactamente igual.
+  _renderPerUnitPrices() {
+    const singleWrap = document.getElementById('f-price-single-wrap');
+    const multiWrap  = document.getElementById('f-price-multi-wrap');
+    const rowsWrap   = document.getElementById('per-unit-price-rows');
+    if (!singleWrap || !multiWrap || !rowsWrap) return;
+
+    const unitIds = [...this._selectedUnitIds];
+
+    if (unitIds.length < 2) {
+      singleWrap.style.display = '';
+      multiWrap.style.display  = 'none';
+      return;
+    }
+
+    singleWrap.style.display = 'none';
+    multiWrap.style.display  = '';
+
+    const priceField   = document.getElementById('f-price');
+    const currentTotal = parseFloat(priceField?.value) || 0;
+
+    // Pre-cargar precio sugerido para unidades nuevas que todavía no tienen valor propio
+    unitIds.forEach(uid => {
+      if (this._unitPrices[uid] == null || this._unitPrices[uid] === '') {
+        this._unitPrices[uid] = currentTotal > 0 ? currentTotal : '';
+      }
+    });
+    // Limpiar precios de unidades que ya no están seleccionadas
+    Object.keys(this._unitPrices).forEach(uid => {
+      if (!this._selectedUnitIds.has(uid)) delete this._unitPrices[uid];
+    });
+
+    rowsWrap.innerHTML = unitIds.map(uid => {
+      const u     = this.ctx.units.find(x => String(x.id) === String(uid));
+      const name  = u?.name  ?? 'Unidad';
+      const color = u?.color ?? '#6366f1';
+      const val   = this._unitPrices[uid] ?? '';
+      return `
+        <div class="form-group per-unit-price-row" data-unit-id="${uid}"
+             style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+          <span style="width:10px;height:10px;border-radius:50%;background:${color};flex-shrink:0"></span>
+          <span style="flex:1;font-size:.82rem;color:var(--color-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0">${name}</span>
+          <input type="number" class="per-unit-price-input" min="0" step="500" placeholder="45000"
+                 style="width:130px;flex-shrink:0" value="${val}">
+        </div>`;
+    }).join('');
+
+    rowsWrap.querySelectorAll('.per-unit-price-input').forEach(input => {
+      input.addEventListener('input', () => {
+        const row = input.closest('.per-unit-price-row');
+        const uid = row?.dataset.unitId;
+        if (!uid) return;
+        this._unitPrices[uid] = parseFloat(input.value) || 0;
+        this._recalcUnitPriceSum();
+      });
+    });
+
+    this._recalcUnitPriceSum();
+  }
+
+  // ── Escribe la suma de precios por unidad en f-price (fuente de verdad) ──
+  _recalcUnitPriceSum() {
+    const priceField = document.getElementById('f-price');
+    if (!priceField) return;
+    const sum = Object.values(this._unitPrices).reduce((s, v) => s + (parseFloat(v) || 0), 0);
+    priceField.value = sum || '';
+    this._updateBreakdown();
   }
 
   // ── Selector de cantidad de personas ─────────────
@@ -816,6 +927,14 @@ export class BookingForm {
       fail('f-date-picker', 2, 'El check-out debe ser posterior al check-in');
     }
     if (!price || price <= 0) fail('f-price', 3, 'Ingresá el precio por noche');
+    if (this._selectedUnitIds.size >= 2) {
+      const missing = [...this._selectedUnitIds].some(uid => !this._unitPrices[uid] || parseFloat(this._unitPrices[uid]) <= 0);
+      if (missing) {
+        const rowsEl = document.getElementById('per-unit-price-rows');
+        if (rowsEl) rowsEl.classList.add('field-error');
+        if (!firstStep || 3 < firstStep.step) firstStep = { step: 3, msg: 'Ingresá el precio de cada departamento' };
+      }
+    }
 
     if (firstStep) {
       this._goToStep(firstStep.step);
@@ -1768,13 +1887,19 @@ ${notes ? `
         );
       } catch { /* columnas opcionales */ }
 
-      // Insertar unidades — upsert para evitar duplicate key en edición
+      // Insertar/actualizar unidades — upsert SIN ignoreDuplicates para que
+      // actualice el precio si el usuario lo cambió en una edición.
+      const isMultiUnit = this._selectedUnitIds.size >= 2;
       const unitRows = [...this._selectedUnitIds].map(uid => ({
-        booking_id: bookingId, unit_id: uid,
+        booking_id: bookingId,
+        unit_id: uid,
+        // Multi-unidad: precio individual cargado por el usuario.
+        // Unidad única: el mismo precio general de la reserva.
+        price_per_night: isMultiUnit ? (parseFloat(this._unitPrices[uid]) || 0) : price,
       }));
       if (unitRows.length) {
         const { error: buErr } = await this._withTimeout(
-          this.db.from('booking_units').upsert(unitRows, { onConflict: 'booking_id,unit_id', ignoreDuplicates: true }),
+          this.db.from('booking_units').upsert(unitRows, { onConflict: 'booking_id,unit_id' }),
           'Asignar unidades'
         );
         if (buErr) throw new Error('Error asignando unidades: ' + buErr.message);

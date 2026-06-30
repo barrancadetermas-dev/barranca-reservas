@@ -64,7 +64,7 @@ export class FinancePanel {
         </div>
       </div>
       <!-- Indicadores adicionales -->
-      <div id="financ-indicators" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(135px,1fr));gap:8px"></div>
+      <div id="financ-indicators" style="display:grid;grid-template-columns:repeat(7,1fr);gap:10px"></div>
     </div>`;
   }
 
@@ -163,7 +163,7 @@ export class FinancePanel {
         // Período seleccionado: todas las reservas que INICIAN en el rango
         // Incluye created_at (anticipación) y booking_units con unit_id (unidad más rentable)
         this.db.from('bookings')
-          .select('id,total_amount,total_paid,balance,nights,price_per_night,check_in,check_out,status,created_at,booking_units(unit_id,units(name,color))')
+          .select('id,total_amount,total_paid,balance,nights,price_per_night,check_in,check_out,status,created_at,booking_units(unit_id,price_per_night,units(name,color))')
           .eq('hotel_id', this.ctx.hotelId)
           .gte('check_in', from)
           .lte('check_in', to)
@@ -220,16 +220,20 @@ export class FinancePanel {
       const asegPct    = asegVend > 0 ? Math.round(asegCobr / asegVend * 100) : 0;
 
       // ── B: Unidad más rentable del período ──
-      // Si una reserva tiene varias unidades, se reparte el monto en partes iguales entre ellas
+      // Usa el precio real cargado por unidad si existe; si no (reservas viejas
+      // o sin precio individual), reparte el monto en partes iguales (fallback).
       const unitRevMap = new Map(); // unit_id -> {name,color,total}
       bks.forEach(b => {
         const units = b.booking_units ?? [];
         if (!units.length) return;
-        const share = (b.total_amount ?? 0) / units.length;
+        const nights = b.nights ?? 0;
+        const share  = (b.total_amount ?? 0) / units.length; // fallback parejo
         units.forEach(bu => {
           if (!bu.unit_id) return;
           const cur = unitRevMap.get(bu.unit_id) ?? { name: bu.units?.name ?? '—', color: bu.units?.color ?? 'var(--color-primary)', total: 0 };
-          cur.total += share;
+          cur.total += (bu.price_per_night != null && bu.price_per_night > 0)
+            ? bu.price_per_night * nights
+            : share;
           unitRevMap.set(bu.unit_id, cur);
         });
       });
@@ -325,11 +329,11 @@ export class FinancePanel {
     const fmt = n => '$' + Math.round(n).toLocaleString('es-AR');
     const maxGuest = maxBk?.guests ? ((maxBk.guests.first_name ?? '') + ' ' + (maxBk.guests.last_name ?? '')).trim() || '—' : '—';
     const ind = (icon, label, val, sub, valColor) =>
-      '<div class="card" style="padding:10px 11px;display:flex;flex-direction:column;gap:2px;min-width:0">' +
-        '<span style="font-size:1rem;margin-bottom:1px">' + icon + '</span>' +
-        '<div style="font-size:.58rem;text-transform:uppercase;letter-spacing:.04em;color:var(--color-text-3);font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + label + '</div>' +
-        '<div style="font-size:.82rem;font-weight:800;color:' + (valColor ?? 'var(--color-text)') + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + val + '</div>' +
-        (sub ? '<div style="font-size:.6rem;color:var(--color-text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + sub + '</div>' : '') +
+      '<div class="card" style="padding:13px 14px;display:flex;flex-direction:column;gap:3px;min-width:0">' +
+        '<span style="font-size:1.15rem;margin-bottom:1px">' + icon + '</span>' +
+        '<div style="font-size:.62rem;text-transform:uppercase;letter-spacing:.04em;color:var(--color-text-3);font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + label + '</div>' +
+        '<div style="font-size:.92rem;font-weight:800;color:' + (valColor ?? 'var(--color-text)') + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + val + '</div>' +
+        (sub ? '<div style="font-size:.65rem;color:var(--color-text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + sub + '</div>' : '') +
       '</div>';
 
     // D: variación vs período anterior — color e ícono según signo

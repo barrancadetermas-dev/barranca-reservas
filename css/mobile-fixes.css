@@ -1798,3 +1798,16 @@
     padding: 3px !important;
   }
 }
+
+/* ── Cards de indicadores financieros: 7 columnas fijas en desktop,
+   pero en mobile/tablet se reacomodan para no quedar ilegibles ── */
+@media (max-width: 900px) {
+  #financ-indicators {
+    grid-template-columns: repeat(3, 1fr) !important;
+  }
+}
+@media (max-width: 480px) {
+  #financ-indicators {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+}

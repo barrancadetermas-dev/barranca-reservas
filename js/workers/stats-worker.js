@@ -30,7 +30,9 @@ function computeUnitStats({ bookings, units, firstDay, lastDay, daysInMonth }) {
   });
 
   bookings.forEach(b => {
-    (b.booking_units ?? []).forEach(({ unit_id }) => {
+    const bUnits = b.booking_units ?? [];
+    const unitCount = bUnits.length || 1;
+    bUnits.forEach(({ unit_id, price_per_night: unitPrice }) => {
       if (!statsMap[unit_id]) return;
       const ciDate  = new Date(Math.max(new Date(b.check_in  + 'T00:00:00'), new Date(firstDay + 'T00:00:00')));
       const coDate  = new Date(Math.min(new Date(b.check_out + 'T00:00:00'), new Date(lastDay  + 'T23:59:59')));
@@ -39,10 +41,15 @@ function computeUnitStats({ bookings, units, firstDay, lastDay, daysInMonth }) {
       s.nightsOcc        += nights;
       s.bookingCount     += 1;
       s.totalPriceNights += nights * (b.price_per_night ?? 0);
-      const totalNights   = Math.round(
-        (new Date(b.check_out + 'T00:00:00') - new Date(b.check_in + 'T00:00:00')) / 86400000
-      );
-      if (totalNights > 0) s.revenue += (b.total_amount ?? 0) * (nights / totalNights);
+      // Precio real de la unidad si existe; si no, repartir el total entre unidades (fallback)
+      if (unitPrice != null && unitPrice > 0) {
+        s.revenue += unitPrice * nights;
+      } else {
+        const totalNights = Math.round(
+          (new Date(b.check_out + 'T00:00:00') - new Date(b.check_in + 'T00:00:00')) / 86400000
+        );
+        if (totalNights > 0) s.revenue += ((b.total_amount ?? 0) / unitCount) * (nights / totalNights);
+      }
     });
   });
 
