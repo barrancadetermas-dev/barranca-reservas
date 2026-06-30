@@ -491,8 +491,8 @@ export class BookingForm {
     // Volver al modo de precio único (single unit) por defecto
     const singleWrap = document.getElementById('f-price-single-wrap');
     const multiWrap  = document.getElementById('f-price-multi-wrap');
-    if (singleWrap) singleWrap.style.display = '';
-    if (multiWrap)  multiWrap.style.display  = 'none';
+    if (singleWrap) { singleWrap.classList.remove('hidden'); singleWrap.style.display = ''; }
+    if (multiWrap)  { multiWrap.classList.add('hidden');     multiWrap.style.display  = 'none'; }
 
     ['f-firstname','f-lastname','f-dni','f-phone','f-email','f-notes',
      'f-price','f-discount','f-surcharge','f-free-nights','f-deposit',
@@ -607,12 +607,16 @@ export class BookingForm {
     const unitIds = [...this._selectedUnitIds];
 
     if (unitIds.length < 2) {
+      singleWrap.classList.remove('hidden');
       singleWrap.style.display = '';
+      multiWrap.classList.add('hidden');
       multiWrap.style.display  = 'none';
       return;
     }
 
+    singleWrap.classList.add('hidden');
     singleWrap.style.display = 'none';
+    multiWrap.classList.remove('hidden');
     multiWrap.style.display  = '';
 
     const priceField   = document.getElementById('f-price');
