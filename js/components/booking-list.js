@@ -127,6 +127,19 @@ export class BookingList {
 
       if (error) throw error;
       this._allBookings = data ?? [];
+
+      // Pagos en consulta separada (evita duplicación + permite desglose real
+      // por unidad en el tooltip al pasar el mouse sobre el huésped).
+      const ids = this._allBookings.map(b => b.id);
+      if (ids.length) {
+        const { data: paymentsData } = await this.db.from('payments')
+          .select('booking_id, amount, unit_id')
+          .in('booking_id', ids);
+        const byBooking = {};
+        (paymentsData ?? []).forEach(p => { (byBooking[p.booking_id] ??= []).push(p); });
+        this._allBookings.forEach(b => { b.payments = byBooking[b.id] ?? []; });
+      }
+
       this._render(localToday());
       this._updateNavBadge(data);
 
@@ -914,22 +927,27 @@ export class BookingList {
     const bUnits      = booking.booking_units ?? [];
 
     // Desglose por departamento cuando hay 2+ unidades con precio individual cargado.
-    // Las señas se prorratean proporcionalmente al precio de cada unidad ya que
-    // los pagos se registran a nivel de toda la reserva, no por unidad.
+    // Usa los pagos REALES etiquetados por unidad (payments.unit_id) cuando
+    // existen; solo la porción "General" se reparte proporcionalmente.
+    const bPayments = booking.payments ?? [];
     const hasPerUnitPrices = bUnits.length >= 2 && bUnits.every(bu => bu.price_per_night != null && bu.price_per_night > 0);
     let perUnitRows = '';
     if (hasPerUnitPrices) {
       const unitTotals = bUnits.map(bu => ({
+        uid:   bu.unit_id,
         name:  bu.units?.name ?? '—',
         color: bu.units?.color ?? '#94A3B8',
         total: (bu.price_per_night ?? 0) * nights,
       }));
-      const sumTotals = unitTotals.reduce((s,u) => s + u.total, 0) || 1;
+      const sumTotals   = unitTotals.reduce((s,u) => s + u.total, 0) || 1;
+      const generalPaid = bPayments.filter(p => !p.unit_id).reduce((s,p) => s + (p.amount ?? 0), 0);
       perUnitRows = `
         <div style="border-top:1px solid rgba(255,255,255,.1);padding-top:9px;margin-top:9px">
           <div style="font-size:.62rem;color:#64748B;text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px">Por departamento</div>
           ${unitTotals.map(u => {
-            const estPaid = totalPaid * (u.total / sumTotals);
+            const directPaid   = bPayments.filter(p => p.unit_id === u.uid).reduce((s,p) => s + (p.amount ?? 0), 0);
+            const generalShare = generalPaid * (u.total / sumTotals);
+            const estPaid = directPaid + generalShare;
             const estBal  = Math.max(0, u.total - estPaid);
             return `
             <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px">
@@ -939,6 +957,7 @@ export class BookingList {
               ${totalPaid > 0 ? `<span style="font-size:.66rem;color:${estBal<=0?'#34D399':'#EAB308'}">${estBal<=0?'✓':formatARS(estBal)}</span>` : ''}
             </div>`;
           }).join('')}
+          ${generalPaid > 0 ? `<div style="font-size:.6rem;color:#64748B;font-style:italic;margin-top:2px">Incluye pagos generales repartidos proporcionalmente</div>` : ''}
         </div>`;
     }
 

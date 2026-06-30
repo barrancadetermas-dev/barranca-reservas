@@ -2017,6 +2017,7 @@ ${notes ? `
       // CRÍTICO: separar filas NUEVAS (sin paymentId) de filas EXISTENTES (con paymentId)
       // para evitar duplicar pagos ya guardados cada vez que se edita la reserva.
       const newPayRows    = [];
+      const newPayRowEls  = []; // referencia paralela a newPayRows (mismo índice) para asignar el ID real después del insert
       const updatePayRows = [];
       document.querySelectorAll('.payment-row').forEach(row => {
         const amt  = parseFloat(row.querySelector('.pay-amount')?.value) || 0;
@@ -2040,6 +2041,7 @@ ${notes ? `
             updatePayRows.push({ id: existingId, ...payload });
           } else {
             newPayRows.push(payload);
+            newPayRowEls.push(row);
           }
         } else if (existingId) {
           // Monto vaciado a 0 en un pago existente → tratarlo como eliminado
@@ -2048,13 +2050,19 @@ ${notes ? `
         }
       });
 
-      // INSERT — solo pagos nuevos
+      // INSERT — solo pagos nuevos. Se pide .select('id') y el ID real se
+      // escribe de inmediato en cada fila del DOM: así, si _submit() se
+      // dispara de nuevo más adelante (doble clic, reapertura, etc.), esa
+      // misma fila ya tiene paymentId y se va a ACTUALIZAR, nunca duplicar.
       if (newPayRows.length) {
-        const { error: pmErr } = await this._withTimeout(
-          this.db.from('payments').insert(newPayRows),
+        const { data: insertedRows, error: pmErr } = await this._withTimeout(
+          this.db.from('payments').insert(newPayRows).select('id'),
           'Registrar pago'
         );
         if (pmErr) throw new Error('Error registrando pago: ' + pmErr.message);
+        (insertedRows ?? []).forEach((rec, i) => {
+          if (newPayRowEls[i] && rec?.id) newPayRowEls[i].dataset.paymentId = rec.id;
+        });
       }
 
       // UPDATE — pagos existentes que el usuario modificó

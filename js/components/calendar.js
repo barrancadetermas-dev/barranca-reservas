@@ -167,7 +167,7 @@ export class Calendar {
   // ══════════════════════════════════════════════════
   async _fetchBookings(firstDay, lastDay) {
     const params = { hotelId: this.ctx.hotelId, firstDay, lastDay };
-    return cachedQuery(this.db, 'bookings', params, () =>
+    const bookings = await cachedQuery(this.db, 'bookings', params, () =>
       this.db.from('bookings').select(`
         id, check_in, check_out, status, source, is_blocked, block_reason,
         total_amount, total_paid, balance, nights, pax, adults, children, notes,
@@ -180,6 +180,21 @@ export class Calendar {
       .lte('check_in', lastDay)
       .gt('check_out', firstDay)
     );
+
+    // Pagos en consulta SEPARADA — evita el bug de duplicación por Cartesian
+    // join (booking_units × payments) y permite el desglose real por unidad.
+    const ids = (bookings ?? []).map(b => b.id);
+    if (ids.length) {
+      const payParams = { hotelId: this.ctx.hotelId, ids: ids.slice().sort().join(',') };
+      const payments = await cachedQuery(this.db, 'payments_for_bookings', payParams, () =>
+        this.db.from('payments').select('booking_id, amount, unit_id').in('booking_id', ids)
+      );
+      const byBooking = {};
+      (payments ?? []).forEach(p => { (byBooking[p.booking_id] ??= []).push(p); });
+      bookings.forEach(b => { b.payments = byBooking[b.id] ?? []; });
+    }
+
+    return bookings;
   }
 
   async _fetchReminders(firstDay, lastDay) {
@@ -698,33 +713,41 @@ export class Calendar {
     const bUnits        = booking.booking_units ?? [];
 
     // Si hay 2+ unidades CON precio individual cargado, mostrar el desglose
-    // por departamento (precio real + seña estimada proporcional al precio,
-    // ya que las señas se registran a nivel de toda la reserva, no por unidad).
+    // por departamento. Usa los pagos REALES etiquetados por unidad
+    // (payments.unit_id) cuando existen; solo la porción "General" (sin
+    // unidad asignada) se reparte proporcionalmente al precio de cada una.
+    const bPayments = booking.payments ?? [];
     const hasPerUnitPrices = bUnits.length >= 2 && bUnits.every(bu => bu.price_per_night != null && bu.price_per_night > 0);
     const nightsCount = booking.nights ?? 0;
 
     let perUnitRows = '';
     if (hasPerUnitPrices) {
       const unitTotals = bUnits.map(bu => ({
+        uid:   bu.unit_id,
         name:  bu.units?.name ?? '—',
         color: bu.units?.color ?? '#94A3B8',
         total: (bu.price_per_night ?? 0) * nightsCount,
       }));
-      const sumTotals = unitTotals.reduce((s,u) => s + u.total, 0) || 1;
+      const sumTotals   = unitTotals.reduce((s,u) => s + u.total, 0) || 1;
+      const generalPaid = bPayments.filter(p => !p.unit_id).reduce((s,p) => s + (p.amount ?? 0), 0);
+      const hasAnyPaid  = totalPaid > 0;
       perUnitRows = `
         <div style="border-top:1px solid rgba(255,255,255,.1);padding-top:9px;margin-top:9px">
           <div style="font-size:.62rem;color:#64748B;text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px">Por departamento</div>
           ${unitTotals.map(u => {
-            const estPaid = totalPaid * (u.total / sumTotals);
+            const directPaid   = bPayments.filter(p => p.unit_id === u.uid).reduce((s,p) => s + (p.amount ?? 0), 0);
+            const generalShare = generalPaid * (u.total / sumTotals);
+            const estPaid = directPaid + generalShare;
             const estBal  = Math.max(0, u.total - estPaid);
             return `
             <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px">
               <span style="width:7px;height:7px;border-radius:50%;background:${u.color};flex-shrink:0"></span>
               <span style="font-size:.72rem;color:#CBD5E1;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${u.name}</span>
               <span style="font-size:.74rem;font-weight:700;color:#F8FAFC">${formatARS(u.total)}</span>
-              ${totalPaid > 0 ? `<span style="font-size:.66rem;color:${estBal<=0?'#34D399':'#EAB308'}">${estBal<=0?'✓':formatARS(estBal)}</span>` : ''}
+              ${hasAnyPaid ? `<span style="font-size:.66rem;color:${estBal<=0?'#34D399':'#EAB308'}">${estBal<=0?'✓':formatARS(estBal)}</span>` : ''}
             </div>`;
           }).join('')}
+          ${generalPaid > 0 ? `<div style="font-size:.6rem;color:#64748B;font-style:italic;margin-top:2px">Incluye pagos generales repartidos proporcionalmente</div>` : ''}
         </div>`;
     }
 
