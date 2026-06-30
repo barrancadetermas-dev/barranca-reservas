@@ -1103,16 +1103,22 @@ export class ConfigPanel {
           const price = r?.price_per_night ?? '';
           return `
             <td style="padding:5px 6px;text-align:right">
-              <input type="number" class="tariff-price-input" data-unit="${u.id}" data-year="${m.year}" data-month="${m.month}"
-                value="${price}" placeholder="—" style="width:90px;padding:4px 6px;font-size:.78rem;text-align:right;border:1px solid var(--color-border);border-radius:6px;background:var(--color-surface)">
+              <div style="position:relative;display:inline-block">
+                <span style="position:absolute;left:7px;top:50%;transform:translateY(-50%);font-size:.74rem;color:var(--color-text-3);pointer-events:none">$</span>
+                <input type="number" class="tariff-price-input" data-unit="${u.id}" data-year="${m.year}" data-month="${m.month}"
+                  value="${price}" placeholder="—" style="width:90px;padding:4px 6px 4px 18px;font-size:.78rem;text-align:right;border:1px solid var(--color-border);border-radius:6px;background:var(--color-surface)">
+              </div>
             </td>`;
         }
         const c = col.c;
         const p = c._priceMap.get(u.id);
         return `
           <td style="padding:5px 6px;text-align:center;background:rgba(99,102,241,.04)">
-            <input type="number" class="tariff-custom-price-input" data-col="${c.id}" data-unit="${u.id}"
-              value="${p?.price ?? ''}" placeholder="—" style="width:78px;padding:4px 6px;font-size:.78rem;text-align:center;border:1px solid var(--color-border);border-radius:6px;background:var(--color-surface)">
+            <div style="position:relative;display:inline-block">
+              <span style="position:absolute;left:7px;top:50%;transform:translateY(-50%);font-size:.74rem;color:var(--color-text-3);pointer-events:none">$</span>
+              <input type="number" class="tariff-custom-price-input" data-col="${c.id}" data-unit="${u.id}"
+                value="${p?.price ?? ''}" placeholder="—" style="width:78px;padding:4px 6px 4px 18px;font-size:.78rem;text-align:center;border:1px solid var(--color-border);border-radius:6px;background:var(--color-surface)">
+            </div>
           </td>`;
       }).join('');
       return `
