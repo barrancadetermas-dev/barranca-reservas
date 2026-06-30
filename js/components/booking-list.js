@@ -502,13 +502,8 @@ export class BookingList {
 
     // Bind botón único EXPORTAR ▾
     document.getElementById('btn-share-encargada')?.addEventListener('click', () => {
-      const from = document.getElementById('_exp-from')?.value ?? '';
-      const to   = document.getElementById('_exp-to')?.value   ?? '';
-      const rangeLabel = from && to
-        ? `${from.split('-').reverse().join('/')} → ${to.split('-').reverse().join('/')}`
-        : '';
       import('../modules/encargada-share/encargada-share.js').then(({ openEncargadaShare }) => {
-        openEncargadaShare(this._allBookings ?? [], rangeLabel);
+        openEncargadaShare(this._allBookings ?? []);
       }).catch(err => console.error('[Encargada]', err));
     });
 

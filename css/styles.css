@@ -2232,6 +2232,27 @@ select {
   background: var(--color-surface-2); border-left: 3px solid #0ea5e9;
   border-radius: 0 8px 8px 0; padding: 10px 12px;
 }
+/* Secciones del modal */
+.enc-section { background: var(--color-surface-2); border-radius: 12px; padding: 12px 14px; }
+.enc-section-title { font-size: .72rem; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; color: var(--color-primary); margin-bottom: 10px; }
+/* Chips de filtro (radio buttons disfrazados) */
+.enc-filter-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.enc-chip { cursor: pointer; }
+.enc-chip input[type="radio"] { position: absolute; opacity: 0; width: 0; height: 0; }
+.enc-chip span {
+  display: inline-block; padding: 5px 11px; border-radius: 999px;
+  border: 1.5px solid var(--color-border); background: var(--color-surface);
+  font-size: .74rem; font-weight: 700; color: var(--color-text-2);
+  cursor: pointer; transition: all .15s ease; white-space: nowrap;
+}
+.enc-chip input[type="radio"]:checked + span {
+  border-color: var(--color-primary); background: var(--color-primary-l);
+  color: var(--color-primary);
+}
+.enc-chip:hover span { border-color: var(--color-primary); }
+/* Badge de conteo resultado */
+.enc-count-row { display: flex; align-items: center; gap: 8px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--color-border); }
+.enc-count-badge { font-weight: 800; font-size: .9rem; color: var(--color-primary); }
 
 #detail-manager-msg {
   display: inline-flex; align-items: center; gap: 5px;
