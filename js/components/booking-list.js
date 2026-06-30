@@ -115,7 +115,7 @@ export class BookingList {
         .select(`
           id, check_in, check_out, nights, status, source,
           total_amount, total_paid, balance, price_per_night,
-          notes, is_blocked, block_reason, created_at,
+          notes, is_blocked, block_reason, created_at, adults, children, pax,
           guests!bookings_guest_id_fkey(
             id, first_name, last_name, dni, phone,
             bad_experience, bad_experience_note, tags
@@ -472,6 +472,10 @@ export class BookingList {
       html += `<button class="btn btn-outline btn-sm" id="btn-export-list" style="gap:5px">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
         Exportar ▾
+      </button>
+      <button class="btn btn-outline btn-sm" id="btn-share-encargada" style="gap:5px;color:#0ea5e9;border-color:#0ea5e9">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+        Encargada
       </button>`;
     }
     html += `</div></div>`;
@@ -497,6 +501,17 @@ export class BookingList {
     });;
 
     // Bind botón único EXPORTAR ▾
+    document.getElementById('btn-share-encargada')?.addEventListener('click', () => {
+      const from = document.getElementById('_exp-from')?.value ?? '';
+      const to   = document.getElementById('_exp-to')?.value   ?? '';
+      const rangeLabel = from && to
+        ? `${from.split('-').reverse().join('/')} → ${to.split('-').reverse().join('/')}`
+        : '';
+      import('../modules/encargada-share/encargada-share.js').then(({ openEncargadaShare }) => {
+        openEncargadaShare(this._allBookings ?? [], rangeLabel);
+      }).catch(err => console.error('[Encargada]', err));
+    });
+
     document.getElementById('btn-export-list')?.addEventListener('click', (e) => {
       const btn = e.currentTarget;
       import('../services/export-service.js').then(({ showExportDropdown, exportBookingsExcel, exportBookingsCSV, exportBookingsPDF }) => {

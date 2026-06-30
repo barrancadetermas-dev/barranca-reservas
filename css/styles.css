@@ -2218,7 +2218,21 @@ select {
 }
 .wa-textarea:focus { outline: none; border-color: var(--color-primary); }
 
-/* ── MANAGER BUTTON IN DETAIL ─────────────────────── */
+/* ── ENCARGADA SHARE MODULE ─────────────────────────── */
+.enc-share-info { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: var(--color-surface-2); border-radius: 10px; }
+.enc-share-count { font-weight: 800; font-size: .9rem; color: var(--color-primary); }
+.enc-share-range { font-size: .8rem; color: var(--color-text-2); }
+.enc-option-row { padding: 10px 12px; background: var(--color-surface-2); border-radius: 10px; }
+.enc-check-label { display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none; }
+.enc-check-text { font-size: .84rem; font-weight: 700; color: var(--color-text); }
+.enc-check-hint { font-size: .72rem; color: var(--color-text-3); margin-top: 5px; padding-left: 22px; }
+.enc-dest-row { display: flex; flex-direction: column; }
+.enc-wa-notice {
+  font-size: .74rem; color: var(--color-text-2); line-height: 1.5;
+  background: var(--color-surface-2); border-left: 3px solid #0ea5e9;
+  border-radius: 0 8px 8px 0; padding: 10px 12px;
+}
+
 #detail-manager-msg {
   display: inline-flex; align-items: center; gap: 5px;
 }

@@ -27,6 +27,7 @@ import { AuditPanel }     from './components/audit-panel.js';
 import { OperationsModule } from './components/operations.js';
 import { fetchMonthlyRates, fetchCustomColumns, monthsInRange, buildTariffGrid, MONTH_NAMES } from './services/tariff-service.js';
 import { initMilaAssistant } from './modules/mila-assistant/mila-assistant.js';
+import { initEncargadaShare } from './modules/encargada-share/encargada-share.js';
 
 let dashboard   = null;
 let calendar    = null;
@@ -293,6 +294,8 @@ async function initApp(user) {
       can, isDemo, showToast,
       getBookingOpener: () => window._bookingFormInstance,
     }));
+    // ── Módulo independiente: "Compartir con Encargada" (modal montado una sola vez) ──
+    tryInit('EncargadaShare', () => initEncargadaShare());
 
     // ── Nav: mostrar/ocultar secciones por rol ──
     setupNavByRole();
