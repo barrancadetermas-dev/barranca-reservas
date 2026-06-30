@@ -81,11 +81,6 @@ export class GuestsCRM {
         ${[10,25,50,100].map(n => `<button onclick="window._guestsCRM?._setLimit(${n})"
           id="bl-limit-${n}" style="font-size:.68rem;padding:2px 9px;border-radius:999px;cursor:pointer;
           border:1px solid var(--color-border);background:var(--color-surface-2);color:var(--color-text-2)">${n}</button>`).join('')}
-        <div style="display:flex;gap:5px;margin:6px 0 4px;align-items:center;flex-wrap:wrap">
-        <span style="font-size:.7rem;color:var(--color-text-3)">Mostrar:</span>
-        ${[10,25,50,100].map(n => `<button onclick="window._guestsCRM?._setLimit(${n})"
-          id="bl-limit-${n}" style="font-size:.68rem;padding:2px 9px;border-radius:999px;cursor:pointer;
-          border:1px solid var(--color-border);background:var(--color-surface-2);color:var(--color-text-2)">${n}</button>`).join('')}
         <span style="font-size:.7rem;color:var(--color-text-3);margin-left:8px" id="bl-total-label"></span>
         <button id="btn-export-guests" class="btn btn-outline btn-sm" style="margin-left:auto;gap:5px;font-size:.72rem">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
@@ -1045,7 +1040,7 @@ export class GuestsCRM {
   async _loadDestacados() {
     const area = document.getElementById('guests-destacados-area');
     if (!area) return;
-    area.innerHTML = '<div style="padding:16px;text-align:center;color:var(--color-text-3)">⟳ Cargando destacados...</div>';
+    area.innerHTML = '<div style="padding:16px;text-align:center;color:var(--color-text-3)">\u23f3 Cargando destacados...</div>';
 
     try {
       const today = new Date().toISOString().slice(0,10);
@@ -1063,31 +1058,47 @@ export class GuestsCRM {
 
       if (!guests?.length) { area.innerHTML = ''; return; }
 
-      // Enriquecer cada huésped
+      // Enriquecer cada huesped
       const enriched = guests.map(g => {
         const bks    = (g.bookings ?? []).filter(b => b.status !== 'blocked' && b.status !== 'cancelled');
         const paid   = bks.reduce((s,b) => s + (b.total_paid ?? 0), 0);
         const nights = bks.reduce((s,b) => s + (b.nights ?? 0), 0);
-        const sorted = [...bks].sort((a,x) => (a.check_in ?? '').localeCompare(x.check_in ?? ''));
-        // Unidad más frecuente
-        const unitCount = {};
+
+        // Unidades distintas usadas por este huesped en TODAS sus reservas (no solo la primera de cada booking)
+        const unitMap = new Map(); // name -> color
         bks.forEach(b => {
-          const u = b.booking_units?.[0]?.units;
-          if (u) unitCount[u.name] = (unitCount[u.name] ?? 0) + 1;
+          (b.booking_units ?? []).forEach(bu => {
+            if (bu.units?.name) unitMap.set(bu.units.name, bu.units.color);
+          });
         });
-        const topUnit = Object.entries(unitCount).sort((a,b) => b[1]-a[1])[0];
-        // Próxima estadía
-        const nextBk = bks.filter(b => b.check_in >= today).sort((a,b) => a.check_in.localeCompare(b.check_in))[0];
-        // Reservas este año
-        const thisYearBks = bks.filter(b => (b.check_in ?? '') >= yearStart);
+        const distinctUnits = [...unitMap.keys()];
+
+        // Proxima estadia (la mas cercana en el futuro)
+        const futureBks = bks.filter(b => b.check_in >= today).sort((a,b) => a.check_in.localeCompare(b.check_in));
+        const nextBk    = futureBks[0] ?? null;
+        // Reserva mas lejana en el futuro (para el card nuevo)
+        const farthestBk = futureBks[futureBks.length - 1] ?? null;
+
+        // Reservas/ingresos de este anio
+        const thisYearBks  = bks.filter(b => (b.check_in ?? '') >= yearStart);
         const thisYearPaid = thisYearBks.reduce((s,b) => s + (b.total_paid ?? 0), 0);
 
-        return { ...g, bks, paid, nights, topUnit: topUnit?.[0] ?? null, topUnitColor: bks.find(b=>b.booking_units?.[0]?.units?.name===topUnit?.[0])?.booking_units?.[0]?.units?.color ?? null, nextBk, thisYearPaid };
+        return {
+          ...g, bks, paid, nights, distinctUnits, nextBk, farthestBk, thisYearPaid,
+        };
       });
 
-      const fmt   = n => '$' + Math.round(n).toLocaleString('es-AR');
-      const fmtDt = iso => iso ? new Date(iso+'T12:00:00').toLocaleDateString('es-AR',{day:'numeric',month:'short'}) : '—';
-      const name  = g => g.first_name + ' ' + g.last_name;
+      const fmt      = n => '$' + Math.round(n).toLocaleString('es-AR');
+      // Fechas check_in/check_out: string "YYYY-MM-DD" (sin hora) -> usar mediodia para evitar timezone shift
+      const fmtDate   = iso => iso ? new Date(iso+'T12:00:00').toLocaleDateString('es-AR',{day:'numeric',month:'short'}) : '\u2014';
+      // created_at: timestamp completo de Supabase -> parsear directo, SIN agregar T12:00:00
+      const fmtTimestamp = iso => {
+        if (!iso) return '\u2014';
+        const d = new Date(iso);
+        if (isNaN(d.getTime())) return '\u2014';
+        return d.toLocaleDateString('es-AR', { day:'numeric', month:'short' });
+      };
+      const name = g => g.first_name + ' ' + g.last_name;
 
       // Calcular destacados
       const byPaid     = [...enriched].sort((a,b) => b.paid - a.paid);
@@ -1096,6 +1107,22 @@ export class GuestsCRM {
       const byYear     = [...enriched].sort((a,b) => b.thisYearPaid - a.thisYearPaid);
       const byRecent   = [...enriched].sort((a,b) => (b.created_at ?? '').localeCompare(a.created_at ?? ''));
       const withNext   = enriched.filter(g => g.nextBk).sort((a,b) => a.nextBk.check_in.localeCompare(b.nextBk.check_in));
+      // Reserva mas lejana entre TODOS los huespedes: tomar el que tenga el farthestBk con check_in mas alto
+      const withFarthest = enriched.filter(g => g.farthestBk).sort((a,b) => a.farthestBk.check_in.localeCompare(b.farthestBk.check_in));
+      const farthestGuest = withFarthest[withFarthest.length - 1] ?? null;
+
+      // Linea de unidades: si tiene mas de 1 unidad distinta, mostrar emojis repetidos + texto;
+      // si tiene exactamente 1, mostrar como antes (casita + nombre)
+      const unitsLine = g => {
+        if (!g || !g.distinctUnits?.length) return '';
+        const n = g.distinctUnits.length;
+        if (n === 1) {
+          return '<div style="font-size:.63rem;color:var(--color-text-3);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">\ud83c\udfe0 ' + g.distinctUnits[0] + '</div>';
+        }
+        const houses = '\ud83c\udfe0'.repeat(Math.min(n, 6));
+        return '<div style="font-size:.63rem;color:var(--color-text-3);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' +
+          houses + ' ' + n + ' unidades reservadas</div>';
+      };
 
       const card = (emoji, title, g, stat, sub) => {
         if (!g) return '';
@@ -1108,25 +1135,26 @@ export class GuestsCRM {
           '<div style="font-size:.78rem;font-weight:700;color:var(--color-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + name(g) + '</div>' +
           '<div style="font-size:.78rem;font-weight:800;color:var(--color-primary);margin-top:2px">' + stat + '</div>' +
           '<div style="font-size:.65rem;color:var(--color-text-3)">' + sub + '</div>' +
-          (g.topUnit ? '<div style="font-size:.63rem;color:var(--color-text-3);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">🏠 ' + g.topUnit + '</div>' : '') +
+          unitsLine(g) +
         '</div>';
       };
 
-      const avg = g => (g && g.bks && g.bks.length) ? fmt(g.paid / g.bks.length) : '—';
+      const avg = g => (g && g.bks && g.bks.length) ? fmt(g.paid / g.bks.length) : '\u2014';
 
       area.innerHTML =
         '<div style="margin-top:28px">' +
           '<h3 style="font-size:.92rem;font-weight:700;color:var(--color-text);margin-bottom:14px;display:flex;align-items:center;gap:6px">' +
-            '🏆 Destacados' +
-            '<span style="font-size:.72rem;font-weight:400;color:var(--color-text-3);margin-left:4px">· basado en historial total</span>' +
+            '\ud83c\udfc6 Destacados' +
+            '<span style="font-size:.72rem;font-weight:400;color:var(--color-text-3);margin-left:4px">\u00b7 basado en historial total</span>' +
           '</h3>' +
-          '<div style="display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px;overflow-x:auto">' +
-            card('💰', 'Mayor gasto histórico',    byPaid[0],     fmt(byPaid[0]?.paid ?? 0),    'Ticket prom: ' + avg(byPaid[0])) +
-            card('📅', 'Más estadías acumuladas', byNights[0],   (byNights[0]?.nights ?? 0) + ' noches', byNights[0]?.bks.length + ' reservas') +
-            card('🔄', 'Más reservas',            byBookings[0], byBookings[0]?.bks.length + ' reservas', fmt(byBookings[0]?.paid ?? 0) + ' total') +
-            card('⭐', 'Mejor cliente del año',   byYear[0],     fmt(byYear[0]?.thisYearPaid ?? 0), 'En ' + thisYear) +
-            card('🆕', 'Último registrado',        byRecent[0],  fmtDt(byRecent[0]?.created_at), byRecent[0]?.bks.length + ' reservas') +
-            (withNext[0] ? card('✈️', 'Próximo en ingresar', withNext[0], fmtDt(withNext[0]?.nextBk?.check_in), (withNext[0]?.nextBk?.booking_units?.[0]?.units?.name ?? '—')) : '') +
+          '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px">' +
+            card('\ud83d\udcb0', 'Mayor ingreso historico',  byPaid[0],     fmt(byPaid[0]?.paid ?? 0),    'Ticket prom: ' + avg(byPaid[0])) +
+            card('\ud83d\udcc5', 'Mas estadias acumuladas', byNights[0],   (byNights[0]?.nights ?? 0) + ' noches', byNights[0]?.bks.length + ' reservas') +
+            card('\ud83d\udd04', 'Mas reservas',            byBookings[0], byBookings[0]?.bks.length + ' reservas', fmt(byBookings[0]?.paid ?? 0) + ' total') +
+            card('\u2b50', 'Mejor cliente del anio',   byYear[0],     fmt(byYear[0]?.thisYearPaid ?? 0), 'Solo en ' + thisYear) +
+            card('\ud83c\udd95', 'Ultimo registrado',        byRecent[0],  fmtTimestamp(byRecent[0]?.created_at), byRecent[0]?.bks.length + ' reservas') +
+            (withNext[0] ? card('\u2708\ufe0f', 'Proximo en ingresar', withNext[0], fmtDate(withNext[0]?.nextBk?.check_in), (withNext[0]?.nextBk?.booking_units?.[0]?.units?.name ?? '\u2014')) : '') +
+            (farthestGuest ? card('\ud83d\udcc6', 'Reserva mas lejana', farthestGuest, fmtDate(farthestGuest?.farthestBk?.check_in), (farthestGuest?.farthestBk?.booking_units?.[0]?.units?.name ?? '\u2014')) : '') +
           '</div>' +
         '</div>';
 

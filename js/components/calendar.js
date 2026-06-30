@@ -2413,9 +2413,8 @@ export class Calendar {
       const fn    = b.guests?.first_name ?? '';
       const ln    = b.guests?.last_name  ?? '';
       const guest = fn ? (fn + (ln ? ' ' + ln[0] + '.' : '')) : '—';
-      const unit  = b.booking_units?.[0]?.units;
-      const color = unit?.color ?? 'var(--color-primary)';
-      const uname = unit?.name  ?? '—';
+      const bUnits = b.booking_units ?? [];
+      const unit   = bUnits[0]?.units;
       const nights = Math.round((new Date(b.check_out+'T12:00:00') - new Date(b.check_in+'T12:00:00')) / 86400000);
       const d     = new Date(b.check_in+'T12:00:00');
       const days  = Math.round((d - new Date(today+'T12:00:00')) / 86400000);
@@ -2423,14 +2422,35 @@ export class Calendar {
       const nStr  = nights + ' noche' + (nights !== 1 ? 's' : '');
       const daysLabel = days === 0 ? 'hoy' : days === 1 ? 'mañana' : 'en ' + days + 'd';
 
+      // ── Barra lateral: 1 color sólido, o segmentada si hay múltiples unidades ──
+      let barHTML;
+      let unitLabel;
+      if (bUnits.length > 1) {
+        const segH = (100 / bUnits.length).toFixed(2);
+        barHTML = '<div class="cal-agenda-slot-bar cal-agenda-slot-bar--multi">' +
+          bUnits.map(bu => `<div style="height:${segH}%;background:${bu.units?.color ?? 'var(--color-primary)'}"></div>`).join('') +
+          '</div>';
+        const numbers = bUnits
+          .map(bu => bu.units?.sort_order)
+          .filter(n => n != null)
+          .sort((a,b) => a-b)
+          .map(n => '#' + n)
+          .join(' ');
+        unitLabel = bUnits.length + ' unidades' + (numbers ? ' (' + numbers + ')' : '') + ' · ' + nStr;
+      } else {
+        const color = unit?.color ?? 'var(--color-primary)';
+        barHTML = '<div class="cal-agenda-slot-bar" style="background:' + color + '"></div>';
+        unitLabel = (unit?.name ?? '—') + ' · ' + nStr;
+      }
+
       cards.push(
         '<div class="cal-agenda-slot">' +
-          '<div class="cal-agenda-slot-bar" style="background:' + color + '"></div>' +
+          barHTML +
           '<div class="cal-agenda-slot-body">' +
             '<div class="cal-agenda-slot-date">' + dStr + '</div>' +
             '<div class="cal-agenda-slot-days">' + daysLabel + '</div>' +
             '<div class="cal-agenda-slot-guest">' + guest + '</div>' +
-            '<div class="cal-agenda-slot-unit">' + uname + ' · ' + nStr + '</div>' +
+            '<div class="cal-agenda-slot-unit">' + unitLabel + '</div>' +
           '</div>' +
         '</div>'
       );

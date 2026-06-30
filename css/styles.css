@@ -5008,7 +5008,7 @@ select.field-error {
 .bl-guest-name { font-size:.83rem; font-weight:600; color:var(--color-text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:220px; }
 .bl-guest-name-hover { cursor: help; text-decoration: underline; text-decoration-style: dotted; text-decoration-color: transparent; transition: text-decoration-color .15s; width: fit-content; }
 .bl-guest-name-hover:hover { text-decoration-color: var(--color-text-3); }
-.bl-guest-meta { display:flex; align-items:center; gap:4px; flex-wrap:nowrap; overflow:hidden; margin-top:3px; }
+.bl-guest-meta { display:flex; align-items:center; gap:4px; flex-wrap:wrap; overflow:visible; margin-top:3px; row-gap:3px; }
 .bl-col-dates { display:flex; flex-direction:column; gap:2px; border-left:1px solid var(--color-border); padding:0 12px; }
 .bl-dates { font-size:.76rem; color:var(--color-text-2); white-space:nowrap; }
 .bl-nights { font-size:.68rem; color:var(--color-text-3); background:var(--color-surface-2); padding:1px 5px; border-radius:4px; width:fit-content; }
@@ -5341,11 +5341,23 @@ html, body {
 
 /* Barra de color lateral */
 .cal-agenda-slot-bar {
-  width: 3px !important;
+  width: 4px !important;
   min-height: 50px !important;
   border-radius: 2px !important;
   flex-shrink: 0 !important;
   align-self: stretch !important;
+}
+
+/* Barra segmentada — reserva con múltiples unidades (Opción E) */
+.cal-agenda-slot-bar--multi {
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+  background: none !important;
+}
+.cal-agenda-slot-bar--multi > div {
+  width: 100% !important;
+  min-height: 2px !important;
 }
 
 /* Contenido del slot */
