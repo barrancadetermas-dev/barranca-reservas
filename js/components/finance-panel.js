@@ -64,7 +64,7 @@ export class FinancePanel {
         </div>
       </div>
       <!-- Indicadores adicionales -->
-      <div id="financ-indicators" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px"></div>
+      <div id="financ-indicators" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(135px,1fr));gap:8px"></div>
     </div>`;
   }
 
@@ -325,13 +325,11 @@ export class FinancePanel {
     const fmt = n => '$' + Math.round(n).toLocaleString('es-AR');
     const maxGuest = maxBk?.guests ? ((maxBk.guests.first_name ?? '') + ' ' + (maxBk.guests.last_name ?? '')).trim() || '—' : '—';
     const ind = (icon, label, val, sub, valColor) =>
-      '<div class="card" style="padding:12px 14px;display:flex;align-items:flex-start;gap:10px">' +
-        '<span style="font-size:1.2rem;flex-shrink:0">' + icon + '</span>' +
-        '<div style="min-width:0">' +
-          '<div style="font-size:.62rem;text-transform:uppercase;letter-spacing:.05em;color:var(--color-text-3);font-weight:700;margin-bottom:2px">' + label + '</div>' +
-          '<div style="font-size:.9rem;font-weight:800;color:' + (valColor ?? 'var(--color-text)') + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + val + '</div>' +
-          (sub ? '<div style="font-size:.65rem;color:var(--color-text-3);margin-top:1px">' + sub + '</div>' : '') +
-        '</div>' +
+      '<div class="card" style="padding:10px 11px;display:flex;flex-direction:column;gap:2px;min-width:0">' +
+        '<span style="font-size:1rem;margin-bottom:1px">' + icon + '</span>' +
+        '<div style="font-size:.58rem;text-transform:uppercase;letter-spacing:.04em;color:var(--color-text-3);font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + label + '</div>' +
+        '<div style="font-size:.82rem;font-weight:800;color:' + (valColor ?? 'var(--color-text)') + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + val + '</div>' +
+        (sub ? '<div style="font-size:.6rem;color:var(--color-text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + sub + '</div>' : '') +
       '</div>';
 
     // D: variación vs período anterior — color e ícono según signo

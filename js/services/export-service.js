@@ -460,7 +460,6 @@ export function exportGuestVoucher(guest, booking) {
   const fmtDate  = s => s ? s.split('-').reverse().join('/') : '—';
   const fmtLong  = s => s ? new Date(s + 'T12:00:00').toLocaleDateString('es-AR', { weekday:'long', day:'numeric', month:'long', year:'numeric' }) : '—';
   const genDate  = new Date().toLocaleDateString('es-AR', { day:'2-digit', month:'long', year:'numeric' });
-  const code     = (booking.id ?? '').slice(0, 8).toUpperCase();
 
   const guestName = `${guest.first_name ?? ''} ${guest.last_name ?? ''}`.trim();
   const units     = (booking.booking_units ?? []).map(bu => bu.units).filter(Boolean);
@@ -469,9 +468,17 @@ export function exportGuestVoucher(guest, booking) {
   const sourceLbl = SOURCE_CONFIG[booking.source ?? 'direct']?.label ?? 'Directo';
   const statusLbl = STATUS_LABELS[booking.status] ?? booking.status;
 
+  // Etiquetas de método de pago (mismo set que booking-form.js)
+  const PAY_METHOD_LABELS = {
+    cash: 'Efectivo', transfer: 'Transferencia', mercadopago: 'MercadoPago',
+    naranjax: 'Naranja X', uala: 'Ualá', credit_card: 'Tarjeta de Crédito',
+    debit_card: 'Tarjeta de Débito', credit_note: 'Nota de Crédito / Voucher',
+  };
+  const payments = (booking.payments ?? []).slice().sort((a,b) => (a.payment_date ?? '').localeCompare(b.payment_date ?? ''));
+
   const unitChips = units.map(u =>
-    `<span style="display:inline-flex;align-items:center;gap:5px;background:${u.color ?? '#1A3A90'}18;border:1.5px solid ${u.color ?? '#1A3A90'};color:${u.color ?? '#1A3A90'};padding:5px 12px;border-radius:8px;font-weight:700;font-size:13px;margin:2px">
-      <span style="width:8px;height:8px;border-radius:50%;background:${u.color ?? '#1A3A90'}"></span>${u.name}
+    `<span style="display:inline-flex;align-items:center;gap:4px;background:${u.color ?? '#1A3A90'}18;border:1.5px solid ${u.color ?? '#1A3A90'};color:${u.color ?? '#1A3A90'};padding:4px 9px;border-radius:7px;font-weight:700;font-size:11px;margin:2px;white-space:nowrap">
+      <span style="width:6px;height:6px;border-radius:50%;background:${u.color ?? '#1A3A90'};flex-shrink:0"></span>${u.name}
     </span>`
   ).join('');
 
@@ -486,12 +493,10 @@ export function exportGuestVoucher(guest, booking) {
       .voucher{max-width:620px;margin:0 auto;background:#fff;border-radius:18px;overflow:hidden;box-shadow:0 10px 40px rgba(26,58,144,.12)}
       .v-header{background:linear-gradient(135deg,#1A3A90,#1E4DB7);padding:28px 32px;color:#fff;display:flex;align-items:center;justify-content:space-between}
       .v-logo{display:flex;align-items:center;gap:12px}
-      .v-logo-box{width:46px;height:46px;border-radius:11px;background:rgba(255,255,255,.18);display:flex;align-items:center;justify-content:center;font-weight:900;font-size:22px}
+      .v-logo-box{width:46px;height:46px;border-radius:11px;background:#fff;display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden}
+      .v-logo-box img{width:100%;height:100%;object-fit:cover;border-radius:11px}
       .v-logo-name{font-size:19px;font-weight:800;letter-spacing:-.02em}
       .v-logo-sub{font-size:10px;color:rgba(255,255,255,.75);margin-top:1px}
-      .v-code{text-align:right}
-      .v-code-label{font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:rgba(255,255,255,.7);margin-bottom:2px}
-      .v-code-val{font-size:18px;font-weight:800;letter-spacing:.04em;font-family:monospace}
       .v-title{text-align:center;padding:20px 32px 4px;font-size:15px;font-weight:700;color:#1A3A90;letter-spacing:.02em}
       .v-sub{text-align:center;font-size:11px;color:#94a3b8;padding-bottom:18px}
       .v-body{padding:0 32px 28px}
@@ -519,8 +524,10 @@ export function exportGuestVoucher(guest, booking) {
       .v-balance.pend .v-balance-val{color:#ea580c}
       .v-balance.ok .v-balance-val{color:#16a34a}
       .v-footer{text-align:center;padding:20px 32px;background:#f8fafc;border-top:1px solid #eef2ff}
-      .v-footer-msg{font-size:13px;font-weight:600;color:#1A3A90;margin-bottom:4px}
-      .v-footer-sub{font-size:10px;color:#94a3b8}
+      .v-footer-msg{font-size:14px;font-weight:700;color:#1A3A90;margin-bottom:8px}
+      .v-footer-addr{font-size:11px;color:#64748b;margin-bottom:6px}
+      .v-footer-social{font-size:11px;color:#475569;font-weight:600;margin-bottom:12px}
+      .v-footer-disclaimer{font-size:10px;font-weight:700;color:#dc2626;text-transform:uppercase;letter-spacing:.03em;padding-top:10px;border-top:1px dashed #fecaca}
       .no-print{text-align:center;margin-top:18px}
       .print-btn{padding:10px 24px;background:#1A3A90;color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer}
       @media print{.no-print{display:none}body{background:#fff;padding:0}.voucher{box-shadow:none;border-radius:0;max-width:100%}}
@@ -529,12 +536,10 @@ export function exportGuestVoucher(guest, booking) {
     <div class="voucher">
       <div class="v-header">
         <div class="v-logo">
-          <div class="v-logo-box">M</div>
+          <div class="v-logo-box">
+            <img src="/icon-192.png" alt="MILA" onerror="this.style.display='none';this.parentElement.innerHTML='<span style=\\'font-weight:900;font-size:22px;color:#1A3A90\\'>M</span>'">
+          </div>
           <div><div class="v-logo-name">MILA</div><div class="v-logo-sub">Barranca de Termas</div></div>
-        </div>
-        <div class="v-code">
-          <div class="v-code-label">Código de reserva</div>
-          <div class="v-code-val">${code}</div>
         </div>
       </div>
 
@@ -579,18 +584,29 @@ export function exportGuestVoucher(guest, booking) {
         <div class="v-section">
           <div class="v-section-title">Resumen de pago</div>
           <div class="v-row"><span class="v-row-label">Total de la estadía</span><span class="v-row-val">${fmtMoney(booking.total_amount)}</span></div>
-          <div class="v-row"><span class="v-row-label">Abonado</span><span class="v-row-val" style="color:#16a34a">${fmtMoney(booking.total_paid)}</span></div>
+          ${payments.length > 0
+            ? payments.map(p =>
+                '<div class="v-row"><span class="v-row-label">Abonado</span><span class="v-row-val" style="color:#16a34a">' +
+                  fmtMoney(p.amount) + ' (' + (PAY_METHOD_LABELS[p.method] ?? p.method ?? '—') + ') · ' + fmtDate(p.payment_date) +
+                '</span></div>'
+              ).join('')
+            : (booking.total_paid > 0
+                ? '<div class="v-row"><span class="v-row-label">Abonado</span><span class="v-row-val" style="color:#16a34a">' + fmtMoney(booking.total_paid) + '</span></div>'
+                : '')
+          }
         </div>
 
         <div class="v-balance ${balance > 0 ? 'pend' : 'ok'}">
           <span class="v-balance-label">${balance > 0 ? 'Saldo a abonar al ingreso' : '✓ Reserva saldada'}</span>
-          <span class="v-balance-val">${balance > 0 ? fmtMoney(balance) : '—'}</span>
+          <span class="v-balance-val">${balance > 0 ? fmtMoney(balance) + ' · ' + fmtDate(booking.check_in) : '—'}</span>
         </div>
       </div>
 
       <div class="v-footer">
         <div class="v-footer-msg">¡Te esperamos! 🏡</div>
-        <div class="v-footer-sub">Barranca de Termas · Este comprobante certifica tu reserva</div>
+        <div class="v-footer-addr">Barranca de Termas | San José (Colón) E.Ríos - Argentina</div>
+        <div class="v-footer-social">📷 @barrancadetermas &nbsp;|&nbsp; 💬 +5492236848043</div>
+        <div class="v-footer-disclaimer">⚠ Documento no válido como factura</div>
       </div>
     </div>
 

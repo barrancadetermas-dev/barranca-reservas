@@ -1713,10 +1713,10 @@ function setupSoundButton() {
 // TEMAS DE COLOR
 // ══════════════════════════════════════════════════
 const THEMES = {
-  // ── Orden cromático: rojo · verde · azul · azul oscuro (MILA oficial) · violeta · rosa ──
+  // ── Orden cromático: rojo · amarillo · verde · azul oscuro (MILA oficial) · violeta · rosa ──
   red:    { primary:'#DC2626', primaryH:'#B91C1C', primaryL:'#FEE2E2', primaryT:'rgba(220,38,38,.12)',    sidebarBg:'#3B0A0A', sidebarActive:'#7F1D1D', sidebarAccent:'#FCA5A5' },
+  yellow: { primary:'#EAB308', primaryH:'#A16207', primaryL:'#FEF9C3', primaryT:'rgba(234,179,8,.12)',    sidebarBg:'#422006', sidebarActive:'#713F12', sidebarAccent:'#FDE047' },
   green:  { primary:'#16A34A', primaryH:'#15803D', primaryL:'#DCFCE7', primaryT:'rgba(22,163,74,.12)',    sidebarBg:'#052E16', sidebarActive:'#14532D', sidebarAccent:'#86EFAC' },
-  blue:   { primary:'#1E4DB7', primaryH:'#1A3A90', primaryL:'#DDEAFF', primaryT:'rgba(30,77,183,.12)',    sidebarBg:'#0D1F42', sidebarActive:'#1A3472', sidebarAccent:'#60A5FA' },
   navy:   { primary:'#1A3A90', primaryH:'#0D2A6E', primaryL:'#DDEAFF', primaryT:'rgba(26,58,144,.12)',    sidebarBg:'#050F24', sidebarActive:'#0D1F42', sidebarAccent:'#60A5FA' },
   violet: { primary:'#7C3AED', primaryH:'#6D28D9', primaryL:'#EDE9FE', primaryT:'rgba(124,58,237,.12)',   sidebarBg:'#1A0B35', sidebarActive:'#2E1065', sidebarAccent:'#C4B5FD' },
   rose:   { primary:'#DB2777', primaryH:'#BE185D', primaryL:'#FCE7F3', primaryT:'rgba(219,39,119,.12)',   sidebarBg:'#350B1F', sidebarActive:'#6B1A3B', sidebarAccent:'#FBCFE8' },
