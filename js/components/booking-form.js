@@ -455,6 +455,7 @@ export class BookingForm {
     this._payRowCount     = 0;
     this._cachedTotal     = 0;
     this._submitting      = false;
+    this._removedPaymentIds = []; // pagos existentes que el usuario eliminó del form
 
     ['f-firstname','f-lastname','f-dni','f-phone','f-email','f-notes',
      'f-price','f-discount','f-surcharge','f-free-nights','f-deposit',
@@ -871,6 +872,8 @@ export class BookingForm {
     const row    = document.createElement('div');
     row.className = 'payment-row';
     row.id = rowId;
+    // CRÍTICO: guardar el ID del pago existente para distinguir UPDATE de INSERT al guardar
+    row.dataset.paymentId = existing?.id ?? '';
     row.innerHTML = `
       <div class="pay-grid">
         <select class="pay-method form-control">
@@ -914,6 +917,11 @@ export class BookingForm {
     row.querySelector('.pay-rate').addEventListener('input', () => this._updateUsdEquiv(row));
 
     row.querySelector('.pay-remove').addEventListener('click', () => {
+      // Si el pago ya existía en la DB, marcarlo para eliminar al guardar
+      if (row.dataset.paymentId) {
+        this._removedPaymentIds = this._removedPaymentIds ?? [];
+        this._removedPaymentIds.push(row.dataset.paymentId);
+      }
       row.remove(); this._updatePaymentSummary();
     });
     row.querySelector('.pay-method').addEventListener('change', () => {
@@ -1772,34 +1780,69 @@ ${notes ? `
         if (buErr) throw new Error('Error asignando unidades: ' + buErr.message);
       }
 
-      // Insertar pagos (incluye notes del nuevo campo)
-      const payRows = [];
+      // Insertar/actualizar pagos (incluye notes del nuevo campo)
+      // CRÍTICO: separar filas NUEVAS (sin paymentId) de filas EXISTENTES (con paymentId)
+      // para evitar duplicar pagos ya guardados cada vez que se edita la reserva.
+      const newPayRows    = [];
+      const updatePayRows = [];
       document.querySelectorAll('.payment-row').forEach(row => {
         const amt  = parseFloat(row.querySelector('.pay-amount')?.value) || 0;
         const meth = row.querySelector('.pay-method')?.value;
         const date = row.querySelector('.pay-date')?.value;
         const note = row.querySelector('.pay-note')?.value?.trim() || null;
+        const existingId = row.dataset.paymentId || null;
         if (amt > 0) {
           const isCc = meth === 'credit_card';
-          payRows.push({
+          const payload = {
             booking_id:   bookingId,
             hotel_id:     this.ctx.hotelId,
             method:       meth,
             amount:       isCc ? amt * 1.10 : amt,
-            // payment_date añadido en migration_complete_v8.sql
-            // Si la columna no existe todavía, se ignora el error de schema
             payment_date: date || toISODate(new Date()),
             notes:        note,
-          });
+          };
+          if (existingId) {
+            updatePayRows.push({ id: existingId, ...payload });
+          } else {
+            newPayRows.push(payload);
+          }
+        } else if (existingId) {
+          // Monto vaciado a 0 en un pago existente → tratarlo como eliminado
+          this._removedPaymentIds = this._removedPaymentIds ?? [];
+          this._removedPaymentIds.push(existingId);
         }
       });
-      if (payRows.length) {
+
+      // INSERT — solo pagos nuevos
+      if (newPayRows.length) {
         const { error: pmErr } = await this._withTimeout(
-          this.db.from('payments').insert(payRows),
+          this.db.from('payments').insert(newPayRows),
           'Registrar pago'
         );
         if (pmErr) throw new Error('Error registrando pago: ' + pmErr.message);
       }
+
+      // UPDATE — pagos existentes que el usuario modificó
+      for (const p of updatePayRows) {
+        const { id, ...fields } = p;
+        const { error: upErr } = await this._withTimeout(
+          this.db.from('payments').update(fields).eq('id', id),
+          'Actualizar pago'
+        );
+        if (upErr) throw new Error('Error actualizando pago: ' + upErr.message);
+      }
+
+      // DELETE — pagos que el usuario quitó del formulario
+      if (this._removedPaymentIds?.length) {
+        const { error: delErr } = await this._withTimeout(
+          this.db.from('payments').delete().in('id', this._removedPaymentIds),
+          'Eliminar pago'
+        );
+        if (delErr) console.warn('[BookingForm] Error eliminando pagos:', delErr.message);
+        this._removedPaymentIds = [];
+      }
+
+      const payRows = [...newPayRows, ...updatePayRows]; // para el cálculo de totales abajo
 
       const persistedPaid = payRows.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
       const persistedBalance = Math.max(0, total - persistedPaid);

@@ -450,6 +450,157 @@ export function exportPaymentsCSV(payments, filename = 'pagos') {
   showToast(`✓ Exportado: ${payments.length} pagos`, 'success');
 }
 
+// ══════════════════════════════════════════════════
+// VOUCHER PDF — comprobante de reserva para el huésped
+// ══════════════════════════════════════════════════
+export function exportGuestVoucher(guest, booking) {
+  if (isDemo()) { showToast('🎭 No disponible en modo demo', 'warning'); return; }
+
+  const fmtMoney = n => '$' + Math.round(n ?? 0).toLocaleString('es-AR');
+  const fmtDate  = s => s ? s.split('-').reverse().join('/') : '—';
+  const fmtLong  = s => s ? new Date(s + 'T12:00:00').toLocaleDateString('es-AR', { weekday:'long', day:'numeric', month:'long', year:'numeric' }) : '—';
+  const genDate  = new Date().toLocaleDateString('es-AR', { day:'2-digit', month:'long', year:'numeric' });
+  const code     = (booking.id ?? '').slice(0, 8).toUpperCase();
+
+  const guestName = `${guest.first_name ?? ''} ${guest.last_name ?? ''}`.trim();
+  const units     = (booking.booking_units ?? []).map(bu => bu.units).filter(Boolean);
+  const pax       = (booking.adults ?? 1) + (booking.children ?? 0);
+  const balance   = booking.balance ?? Math.max(0, (booking.total_amount ?? 0) - (booking.total_paid ?? 0));
+  const sourceLbl = SOURCE_CONFIG[booking.source ?? 'direct']?.label ?? 'Directo';
+  const statusLbl = STATUS_LABELS[booking.status] ?? booking.status;
+
+  const unitChips = units.map(u =>
+    `<span style="display:inline-flex;align-items:center;gap:5px;background:${u.color ?? '#1A3A90'}18;border:1.5px solid ${u.color ?? '#1A3A90'};color:${u.color ?? '#1A3A90'};padding:5px 12px;border-radius:8px;font-weight:700;font-size:13px;margin:2px">
+      <span style="width:8px;height:8px;border-radius:50%;background:${u.color ?? '#1A3A90'}"></span>${u.name}
+    </span>`
+  ).join('');
+
+  const w = window.open('', '_blank');
+  if (!w) { showToast('Permití ventanas emergentes para descargar el voucher', 'warning'); return; }
+
+  w.document.write(`<!DOCTYPE html><html lang="es"><head>
+    <meta charset="utf-8"><title>Voucher · ${guestName}</title>
+    <style>
+      *{box-sizing:border-box;margin:0;padding:0}
+      body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#1e293b;background:#f0f4fa;padding:28px}
+      .voucher{max-width:620px;margin:0 auto;background:#fff;border-radius:18px;overflow:hidden;box-shadow:0 10px 40px rgba(26,58,144,.12)}
+      .v-header{background:linear-gradient(135deg,#1A3A90,#1E4DB7);padding:28px 32px;color:#fff;display:flex;align-items:center;justify-content:space-between}
+      .v-logo{display:flex;align-items:center;gap:12px}
+      .v-logo-box{width:46px;height:46px;border-radius:11px;background:rgba(255,255,255,.18);display:flex;align-items:center;justify-content:center;font-weight:900;font-size:22px}
+      .v-logo-name{font-size:19px;font-weight:800;letter-spacing:-.02em}
+      .v-logo-sub{font-size:10px;color:rgba(255,255,255,.75);margin-top:1px}
+      .v-code{text-align:right}
+      .v-code-label{font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:rgba(255,255,255,.7);margin-bottom:2px}
+      .v-code-val{font-size:18px;font-weight:800;letter-spacing:.04em;font-family:monospace}
+      .v-title{text-align:center;padding:20px 32px 4px;font-size:15px;font-weight:700;color:#1A3A90;letter-spacing:.02em}
+      .v-sub{text-align:center;font-size:11px;color:#94a3b8;padding-bottom:18px}
+      .v-body{padding:0 32px 28px}
+      .v-section{margin-bottom:18px}
+      .v-section-title{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#1A3A90;margin-bottom:10px;padding-bottom:6px;border-bottom:2px solid #eef2ff}
+      .v-row{display:flex;justify-content:space-between;padding:6px 0;font-size:13px;border-bottom:1px dashed #f1f5f9}
+      .v-row:last-child{border-bottom:none}
+      .v-row-label{color:#64748b}
+      .v-row-val{font-weight:700;color:#1e293b}
+      .v-dates{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:14px;background:#f8fafc;border-radius:12px;padding:16px 18px;margin-bottom:14px}
+      .v-date-block{text-align:center}
+      .v-date-label{font-size:9px;text-transform:uppercase;letter-spacing:.06em;color:#94a3b8;margin-bottom:4px}
+      .v-date-val{font-size:14px;font-weight:800;color:#1A3A90}
+      .v-date-sub{font-size:10px;color:#64748b;margin-top:2px;text-transform:capitalize}
+      .v-arrow{color:#cbd5e1;font-size:18px}
+      .v-nights-badge{text-align:center;font-size:11px;font-weight:700;color:#fff;background:#1A3A90;border-radius:999px;padding:3px 12px;display:inline-block;margin:0 auto 14px;width:fit-content}
+      .v-nights-wrap{display:flex;justify-content:center;margin-bottom:14px}
+      .v-balance{border-radius:14px;padding:18px 20px;display:flex;justify-content:space-between;align-items:center;margin-top:8px}
+      .v-balance.pend{background:#fff7ed;border:2px solid #fed7aa}
+      .v-balance.ok{background:#f0fdf4;border:2px solid #bbf7d0}
+      .v-balance-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em}
+      .v-balance.pend .v-balance-label{color:#c2410c}
+      .v-balance.ok .v-balance-label{color:#15803d}
+      .v-balance-val{font-size:22px;font-weight:900}
+      .v-balance.pend .v-balance-val{color:#ea580c}
+      .v-balance.ok .v-balance-val{color:#16a34a}
+      .v-footer{text-align:center;padding:20px 32px;background:#f8fafc;border-top:1px solid #eef2ff}
+      .v-footer-msg{font-size:13px;font-weight:600;color:#1A3A90;margin-bottom:4px}
+      .v-footer-sub{font-size:10px;color:#94a3b8}
+      .no-print{text-align:center;margin-top:18px}
+      .print-btn{padding:10px 24px;background:#1A3A90;color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer}
+      @media print{.no-print{display:none}body{background:#fff;padding:0}.voucher{box-shadow:none;border-radius:0;max-width:100%}}
+    </style>
+  </head><body>
+    <div class="voucher">
+      <div class="v-header">
+        <div class="v-logo">
+          <div class="v-logo-box">M</div>
+          <div><div class="v-logo-name">MILA</div><div class="v-logo-sub">Barranca de Termas</div></div>
+        </div>
+        <div class="v-code">
+          <div class="v-code-label">Código de reserva</div>
+          <div class="v-code-val">${code}</div>
+        </div>
+      </div>
+
+      <div class="v-title">Comprobante de Reserva</div>
+      <div class="v-sub">Generado el ${genDate}</div>
+
+      <div class="v-body">
+        <div class="v-dates">
+          <div class="v-date-block">
+            <div class="v-date-label">Check-in</div>
+            <div class="v-date-val">${fmtDate(booking.check_in)}</div>
+            <div class="v-date-sub">${fmtLong(booking.check_in).split(',')[0]}</div>
+          </div>
+          <div class="v-arrow">→</div>
+          <div class="v-date-block">
+            <div class="v-date-label">Check-out</div>
+            <div class="v-date-val">${fmtDate(booking.check_out)}</div>
+            <div class="v-date-sub">${fmtLong(booking.check_out).split(',')[0]}</div>
+          </div>
+        </div>
+
+        <div class="v-nights-wrap">
+          <span class="v-nights-badge">${booking.nights ?? '—'} noche${(booking.nights ?? 0) !== 1 ? 's' : ''}</span>
+        </div>
+
+        <div class="v-section">
+          <div class="v-section-title">Huésped</div>
+          <div class="v-row"><span class="v-row-label">Nombre</span><span class="v-row-val">${guestName}</span></div>
+          ${guest.dni   ? `<div class="v-row"><span class="v-row-label">DNI</span><span class="v-row-val">${guest.dni}</span></div>` : ''}
+          ${guest.phone ? `<div class="v-row"><span class="v-row-label">Teléfono</span><span class="v-row-val">${guest.phone}</span></div>` : ''}
+          ${guest.email ? `<div class="v-row"><span class="v-row-label">Email</span><span class="v-row-val">${guest.email}</span></div>` : ''}
+          <div class="v-row"><span class="v-row-label">Personas</span><span class="v-row-val">${pax}</span></div>
+        </div>
+
+        <div class="v-section">
+          <div class="v-section-title">Alojamiento</div>
+          <div style="margin-bottom:8px">${unitChips}</div>
+          <div class="v-row"><span class="v-row-label">Canal de reserva</span><span class="v-row-val">${sourceLbl}</span></div>
+          <div class="v-row"><span class="v-row-label">Estado</span><span class="v-row-val">${statusLbl}</span></div>
+        </div>
+
+        <div class="v-section">
+          <div class="v-section-title">Resumen de pago</div>
+          <div class="v-row"><span class="v-row-label">Total de la estadía</span><span class="v-row-val">${fmtMoney(booking.total_amount)}</span></div>
+          <div class="v-row"><span class="v-row-label">Abonado</span><span class="v-row-val" style="color:#16a34a">${fmtMoney(booking.total_paid)}</span></div>
+        </div>
+
+        <div class="v-balance ${balance > 0 ? 'pend' : 'ok'}">
+          <span class="v-balance-label">${balance > 0 ? 'Saldo a abonar al ingreso' : '✓ Reserva saldada'}</span>
+          <span class="v-balance-val">${balance > 0 ? fmtMoney(balance) : '—'}</span>
+        </div>
+      </div>
+
+      <div class="v-footer">
+        <div class="v-footer-msg">¡Te esperamos! 🏡</div>
+        <div class="v-footer-sub">Barranca de Termas · Este comprobante certifica tu reserva</div>
+      </div>
+    </div>
+
+    <div class="no-print">
+      <button class="print-btn" onclick="window.print()">🖨 Imprimir / Guardar PDF</button>
+    </div>
+  </body></html>`);
+  w.document.close();
+}
+
 // ── Internos ─────────────────────────────────────
 async function _loadSheetJS() {
   return new Promise((res, rej) => {

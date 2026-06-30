@@ -207,8 +207,10 @@ export class GuestsCRM {
       const sorted     = bks.sort((a,b) => b.check_in.localeCompare(a.check_in));
       g.last_checkin   = sorted[0]?.check_in ?? null;
       g.last_checkout  = sorted[0]?.check_out ?? null;
-      g.last_unit      = sorted[0]?.booking_units?.[0]?.units ?? null;
-      g.prev_units     = [...new Set(sorted.slice(1,4).map(b => b.booking_units?.[0]?.units?.name).filter(Boolean))];
+      // TODAS las unidades de la última reserva (no solo la primera) — fix bug "1 unidad" cuando son 4
+      g.last_units     = (sorted[0]?.booking_units ?? []).map(bu => bu.units).filter(Boolean);
+      g.last_unit      = g.last_units[0] ?? null; // compat con código que use last_unit singular
+      g.prev_units     = [...new Set(sorted.slice(1,4).flatMap(b => (b.booking_units ?? []).map(bu => bu.units?.name)).filter(Boolean))];
       // Nota más reciente
       const allNotes   = (g.guest_notes ?? []).sort((a,b) => b.created_at.localeCompare(a.created_at));
       g.latest_note    = allNotes[0]?.body ?? null;
@@ -251,8 +253,9 @@ export class GuestsCRM {
       const sorted2    = bks.sort((a,b) => b.check_in.localeCompare(a.check_in));
       g.last_checkin   = sorted2[0]?.check_in ?? null;
       g.last_checkout  = sorted2[0]?.check_out ?? null;
-      g.last_unit      = sorted2[0]?.booking_units?.[0]?.units ?? null;
-      g.prev_units     = [...new Set(sorted2.slice(1,4).map(b => b.booking_units?.[0]?.units?.name).filter(Boolean))];
+      g.last_units     = (sorted2[0]?.booking_units ?? []).map(bu => bu.units).filter(Boolean);
+      g.last_unit      = g.last_units[0] ?? null;
+      g.prev_units     = [...new Set(sorted2.slice(1,4).flatMap(b => (b.booking_units ?? []).map(bu => bu.units?.name)).filter(Boolean))];
       const allNotes   = (g.guest_notes ?? []).sort((a,b) => b.created_at.localeCompare(a.created_at));
       g.latest_note    = allNotes[0]?.body ?? null;
     });
@@ -284,14 +287,13 @@ export class GuestsCRM {
     // ── Datos última visita ──
     const lastCI    = g.last_checkin  ? formatDate(g.last_checkin)  : null;
     const lastCO    = g.last_checkout ? formatDate(g.last_checkout) : null;
-    const unitName  = g.last_unit?.name  ?? null;
-    const unitColor = g.last_unit?.color ?? 'var(--color-primary)';
+    const lastUnits = g.last_units?.length ? g.last_units : (g.last_unit ? [g.last_unit] : []);
 
-    // Chip de depto
-    const unitChip = unitName
-      ? `<span style="display:inline-block;padding:1px 6px;border-radius:3px;font-size:.62rem;
-          font-weight:700;color:#fff;background:${unitColor};">${unitName}</span>`
-      : '';
+    // Chips de depto — TODOS los de la última reserva (fix: antes solo mostraba 1 aunque hubiera 4)
+    const unitChip = lastUnits.map(u =>
+      `<span style="display:inline-block;padding:1px 6px;border-radius:3px;font-size:.62rem;
+          font-weight:700;color:#fff;background:${u.color ?? 'var(--color-primary)'};margin-right:2px">${u.name}</span>`
+    ).join('');
 
     // ── Contacto ──
     const contactLine = [
@@ -315,7 +317,7 @@ export class GuestsCRM {
       // separador antes de estadía (solo si hay datos de estadía)
       lastCI ? '' : null,
       lastCI ? '📅 Última entrada: ' + lastCI + (lastCO ? ' → ' + lastCO : '') : null,
-      unitName      ? '🏠 Depto: ' + unitName   : null,
+      lastUnits.length      ? '🏠 Depto: ' + lastUnits.map(u => u.name).join(', ') : null,
       g.total_bookings > 0 ? '🔢 ' + g.total_bookings + ' estadía' + (g.total_bookings > 1 ? 's' : '') : null,
       g.total_spent  ? '💰 ' + formatARS(g.total_spent) + ' total abonado' : null,
       // separador antes de nota (solo si hay nota)
@@ -425,6 +427,20 @@ export class GuestsCRM {
     }
   }
 
+  // ── Descargar voucher PDF de una estadía específica ──
+  async _downloadVoucher(bookingId) {
+    const guest   = this._currentGuest;
+    const booking = guest?.bookings?.find(b => b.id === bookingId);
+    if (!guest || !booking) { showToast('No se encontró la reserva', 'error'); return; }
+    try {
+      const { exportGuestVoucher } = await import('../services/export-service.js');
+      exportGuestVoucher(guest, booking);
+    } catch (err) {
+      console.error('[Voucher]', err);
+      showToast('Error al generar el voucher', 'error');
+    }
+  }
+
   // ══════════════════════════════════════════════════
   // PERFIL COMPLETO DEL HUÉSPED
   // ══════════════════════════════════════════════════
@@ -445,7 +461,7 @@ export class GuestsCRM {
       const [{ data: guest, error: gErr }, { data: guestBookings }] = await Promise.all([
         this.db.from('guests').select('*').eq('id', guestId).single(),
         this.db.from('bookings')
-          .select(`id, check_in, check_out, nights, status,
+          .select(`id, check_in, check_out, nights, status, source, adults, children,
             total_amount, total_paid, balance, notes, price_per_night,
             booking_units(units(name, sort_order, color, max_guests)),
             payments(amount, method, payment_date)`)
@@ -680,8 +696,15 @@ export class GuestsCRM {
             <span class="stay-dates">📅 ${formatDate(b.check_in)} → ${formatDate(b.check_out)}</span>
             ${isBadExpStay ? `<span class="bad-exp-badge" style="margin-left:8px;font-size:.68rem">⚠️ Mala experiencia</span>` : ''}
           </div>
-          <span style="padding:3px 10px;border-radius:99px;font-size:.72rem;font-weight:600;
-            background:${sbg};color:${stxt}">${STATUS_LABELS[b.status] ?? b.status}</span>
+          <div style="display:flex;align-items:center;gap:6px">
+            <button class="btn btn-outline btn-sm" style="font-size:.68rem;padding:3px 8px;gap:4px"
+              onclick="window._guestsCRM?._downloadVoucher('${b.id}')" title="Descargar voucher PDF">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              Voucher
+            </button>
+            <span style="padding:3px 10px;border-radius:99px;font-size:.72rem;font-weight:600;
+              background:${sbg};color:${stxt}">${STATUS_LABELS[b.status] ?? b.status}</span>
+          </div>
         </div>
         <!-- Identificación de departamento con chips de color -->
         <div style="margin-bottom:10px">${unitChips}</div>
@@ -1052,7 +1075,7 @@ export class GuestsCRM {
         .select(`id, first_name, last_name, created_at,
           bookings!bookings_guest_id_fkey(
             id, total_paid, check_in, check_out, status, nights,
-            booking_units(units(name, color, sort_order))
+            booking_units(unit_id, units(name, color, sort_order))
           )`)
         .eq('hotel_id', this.ctx.hotelId);
 
@@ -1064,14 +1087,17 @@ export class GuestsCRM {
         const paid   = bks.reduce((s,b) => s + (b.total_paid ?? 0), 0);
         const nights = bks.reduce((s,b) => s + (b.nights ?? 0), 0);
 
-        // Unidades distintas usadas por este huesped en TODAS sus reservas (no solo la primera de cada booking)
-        const unitMap = new Map(); // name -> color
+        // Unidades distintas usadas por este huesped en TODAS sus reservas
+        // CRITICO: deduplicar por unit_id, NO por nombre — varias unidades pueden
+        // compartir el mismo nombre (ej: #4 y #5 ambas "2AMB P. Baja") y eso
+        // colapsaba el conteo (mostraba 2 en vez de 4 unidades reales)
+        const unitMap = new Map(); // unit_id -> {name, color}
         bks.forEach(b => {
           (b.booking_units ?? []).forEach(bu => {
-            if (bu.units?.name) unitMap.set(bu.units.name, bu.units.color);
+            if (bu.unit_id) unitMap.set(bu.unit_id, { name: bu.units?.name ?? '—', color: bu.units?.color });
           });
         });
-        const distinctUnits = [...unitMap.keys()];
+        const distinctUnits = [...unitMap.values()]; // array de {name,color}
 
         // Proxima estadia (la mas cercana en el futuro)
         const futureBks = bks.filter(b => b.check_in >= today).sort((a,b) => a.check_in.localeCompare(b.check_in));
@@ -1117,7 +1143,7 @@ export class GuestsCRM {
         if (!g || !g.distinctUnits?.length) return '';
         const n = g.distinctUnits.length;
         if (n === 1) {
-          return '<div style="font-size:.63rem;color:var(--color-text-3);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">\ud83c\udfe0 ' + g.distinctUnits[0] + '</div>';
+          return '<div style="font-size:.63rem;color:var(--color-text-3);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">\ud83c\udfe0 ' + g.distinctUnits[0].name + '</div>';
         }
         const houses = '\ud83c\udfe0'.repeat(Math.min(n, 6));
         return '<div style="font-size:.63rem;color:var(--color-text-3);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' +

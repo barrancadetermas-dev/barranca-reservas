@@ -109,6 +109,42 @@ export class FinancePanel {
     return [today, today];
   }
 
+  // ── Rango equivalente del período INMEDIATO ANTERIOR (para % variación) ──
+  _getPreviousDateRange() {
+    const [from, to] = this._getDateRange();
+    const fromD = new Date(from + 'T12:00:00');
+    const toD   = new Date(to   + 'T12:00:00');
+
+    if (this._period === 'today') {
+      const prev = new Date(fromD); prev.setDate(prev.getDate() - 1);
+      const s = prev.toISOString().slice(0,10);
+      return [s, s];
+    }
+    if (this._period === 'week') {
+      const pf = new Date(fromD); pf.setDate(pf.getDate() - 7);
+      const pt = new Date(toD);   pt.setDate(pt.getDate() - 7);
+      return [pf.toISOString().slice(0,10), pt.toISOString().slice(0,10)];
+    }
+    if (this._period === 'month') {
+      const y = fromD.getFullYear(), m = fromD.getMonth();
+      const prevFirst = new Date(y, m - 1, 1);
+      const prevLast  = new Date(y, m, 0);
+      return [
+        `${prevFirst.getFullYear()}-${String(prevFirst.getMonth()+1).padStart(2,'0')}-01`,
+        prevLast.toISOString().slice(0,10),
+      ];
+    }
+    if (this._period === 'year') {
+      const y = fromD.getFullYear() - 1;
+      return [`${y}-01-01`, `${y}-12-31`];
+    }
+    // custom o fallback: mismo largo de días, inmediatamente antes
+    const lengthDays = Math.round((toD - fromD) / 86400000) + 1;
+    const pt = new Date(fromD); pt.setDate(pt.getDate() - 1);
+    const pf = new Date(pt);    pf.setDate(pf.getDate() - lengthDays + 1);
+    return [pf.toISOString().slice(0,10), pt.toISOString().slice(0,10)];
+  }
+
   async _fetchAndRender(container) {
     const [from, to] = this._getDateRange();
     // Fecha de hoy inline (sin depender del import para robustez)
@@ -123,10 +159,11 @@ export class FinancePanel {
 
     try {
       // Reservas del período + máxima reserva con nombre del huésped
-      const [periodoRes, futuroRes, maxBkRes] = await Promise.all([
+      const [periodoRes, futuroRes, maxBkRes, prevRes] = await Promise.all([
         // Período seleccionado: todas las reservas que INICIAN en el rango
+        // Incluye created_at (anticipación) y booking_units con unit_id (unidad más rentable)
         this.db.from('bookings')
-          .select('id,total_amount,total_paid,balance,nights,price_per_night,check_in,check_out,status')
+          .select('id,total_amount,total_paid,balance,nights,price_per_night,check_in,check_out,status,created_at,booking_units(unit_id,units(name,color))')
           .eq('hotel_id', this.ctx.hotelId)
           .gte('check_in', from)
           .lte('check_in', to)
@@ -146,6 +183,16 @@ export class FinancePanel {
           .not('status','in','(cancelled,blocked)')
           .order('total_amount', { ascending: false })
           .limit(1),
+        // Período anterior equivalente (para % variación)
+        (async () => {
+          const [pf, pt] = this._getPreviousDateRange();
+          return this.db.from('bookings')
+            .select('id,total_amount')
+            .eq('hotel_id', this.ctx.hotelId)
+            .gte('check_in', pf)
+            .lte('check_in', pt)
+            .not('status','in','(cancelled,blocked)');
+        })(),
       ]);
 
       if (periodoRes.error) throw periodoRes.error;
@@ -153,6 +200,7 @@ export class FinancePanel {
       const bks    = periodoRes.data ?? [];
       const futuro = futuroRes.data ?? [];
       const maxBk  = maxBkRes.data?.[0] ?? null;
+      const prevBks = prevRes.data ?? [];
 
       // ── Métricas del período ──
       const totalVend  = bks.reduce((s,b) => s + (b.total_amount ?? 0), 0);
@@ -171,10 +219,41 @@ export class FinancePanel {
       const asegPend   = asegVend - asegCobr;
       const asegPct    = asegVend > 0 ? Math.round(asegCobr / asegVend * 100) : 0;
 
+      // ── B: Unidad más rentable del período ──
+      // Si una reserva tiene varias unidades, se reparte el monto en partes iguales entre ellas
+      const unitRevMap = new Map(); // unit_id -> {name,color,total}
+      bks.forEach(b => {
+        const units = b.booking_units ?? [];
+        if (!units.length) return;
+        const share = (b.total_amount ?? 0) / units.length;
+        units.forEach(bu => {
+          if (!bu.unit_id) return;
+          const cur = unitRevMap.get(bu.unit_id) ?? { name: bu.units?.name ?? '—', color: bu.units?.color ?? 'var(--color-primary)', total: 0 };
+          cur.total += share;
+          unitRevMap.set(bu.unit_id, cur);
+        });
+      });
+      const topUnit = [...unitRevMap.values()].sort((a,b) => b.total - a.total)[0] ?? null;
+
+      // ── D: Variación vs período anterior ──
+      const prevTotal = prevBks.reduce((s,b) => s + (b.total_amount ?? 0), 0);
+      let variacionPct = null;
+      if (prevTotal > 0) variacionPct = Math.round((totalVend - prevTotal) / prevTotal * 100);
+      else if (totalVend > 0) variacionPct = 100; // de 0 a algo = +100% (no hay base para dividir)
+
+      // ── E: Anticipación promedio de reserva ──
+      const anticipaciones = bks
+        .filter(b => b.created_at && b.check_in)
+        .map(b => Math.round((new Date(b.check_in + 'T12:00:00') - new Date(b.created_at)) / 86400000))
+        .filter(d => d >= 0 && d < 730); // descartar outliers/negativos
+      const avgAnticipacion = anticipaciones.length
+        ? Math.round(anticipaciones.reduce((s,d) => s+d, 0) / anticipaciones.length)
+        : null;
+
       this._renderKPIs({ totalVend, totalCobr, totalPend, pctCobr, count: bks.length });
       this._renderChart({ totalVend, totalCobr, totalPend });
       this._renderAsegurado({ asegVend, asegCobr, asegPend, asegPct, count: futuro.length });
-      this._renderIndicators({ maxBk, avgBk, avgNoche, avgPend, totalNoch, count: bks.length });
+      this._renderIndicators({ maxBk, avgBk, avgNoche, avgPend, totalNoch, count: bks.length, topUnit, variacionPct, avgAnticipacion });
 
     } catch (err) {
       console.error('[FinancePanel]', err);
@@ -240,24 +319,41 @@ export class FinancePanel {
       '<div style="font-size:.68rem;color:var(--color-text-3);margin-top:5px">' + asegPct + '% cobrado del dinero comprometido</div>';
   }
 
-  _renderIndicators({ maxBk, avgBk, avgNoche, avgPend, totalNoch, count }) {
+  _renderIndicators({ maxBk, avgBk, avgNoche, avgPend, totalNoch, count, topUnit, variacionPct, avgAnticipacion }) {
     const el = document.getElementById('financ-indicators');
     if (!el) return;
     const fmt = n => '$' + Math.round(n).toLocaleString('es-AR');
     const maxGuest = maxBk?.guests ? ((maxBk.guests.first_name ?? '') + ' ' + (maxBk.guests.last_name ?? '')).trim() || '—' : '—';
-    const ind = (icon, label, val, sub) =>
+    const ind = (icon, label, val, sub, valColor) =>
       '<div class="card" style="padding:12px 14px;display:flex;align-items:flex-start;gap:10px">' +
         '<span style="font-size:1.2rem;flex-shrink:0">' + icon + '</span>' +
         '<div style="min-width:0">' +
           '<div style="font-size:.62rem;text-transform:uppercase;letter-spacing:.05em;color:var(--color-text-3);font-weight:700;margin-bottom:2px">' + label + '</div>' +
-          '<div style="font-size:.9rem;font-weight:800;color:var(--color-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + val + '</div>' +
+          '<div style="font-size:.9rem;font-weight:800;color:' + (valColor ?? 'var(--color-text)') + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + val + '</div>' +
           (sub ? '<div style="font-size:.65rem;color:var(--color-text-3);margin-top:1px">' + sub + '</div>' : '') +
         '</div>' +
       '</div>';
+
+    // D: variación vs período anterior — color e ícono según signo
+    let variacionVal = '—', variacionSub = 'sin datos del período anterior', variacionColor = 'var(--color-text)', variacionIcon = '📈';
+    if (variacionPct !== null) {
+      const positivo = variacionPct >= 0;
+      variacionIcon  = positivo ? '📈' : '📉';
+      variacionColor = positivo ? '#16a34a' : '#ef4444';
+      variacionVal   = (positivo ? '+' : '') + variacionPct + '%';
+      variacionSub   = 'vs. período anterior';
+    }
+
     el.innerHTML =
-      ind('🏆', 'Mayor reserva',       fmt(maxBk?.total_amount ?? 0), maxGuest) +
-      ind('📊', 'Promedio por reserva', fmt(avgBk),   count + ' reservas en el período') +
-      ind('🌙', 'Ingreso/noche',        fmt(avgNoche), totalNoch + ' noches vendidas') +
-      ind('⏳', 'Saldo pend. promedio', fmt(avgPend),  'por reserva del período');
+      ind('🏆', 'Mayor reserva',         fmt(maxBk?.total_amount ?? 0), maxGuest) +
+      ind('📊', 'Promedio por reserva',  fmt(avgBk),    count + ' reservas en el período') +
+      ind('🌙', 'Ingreso/noche',         fmt(avgNoche), totalNoch + ' noches vendidas') +
+      ind('⏳', 'Saldo pend. promedio',  fmt(avgPend),  'por reserva del período') +
+      // ── Nuevas: B, D, E ──
+      (topUnit ? ind('🏠', 'Unidad más rentable', topUnit.name, fmt(topUnit.total) + ' en el período') : '') +
+      ind(variacionIcon, 'Variación vs. anterior', variacionVal, variacionSub, variacionColor) +
+      (avgAnticipacion !== null
+        ? ind('⏱️', 'Anticipación promedio', avgAnticipacion + ' día' + (avgAnticipacion !== 1 ? 's' : ''), 'entre reserva y check-in')
+        : '');
   }
 }
