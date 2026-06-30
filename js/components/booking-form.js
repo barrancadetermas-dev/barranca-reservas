@@ -44,6 +44,7 @@ export class BookingForm {
     this._selectedGuestId = null;
     this._selectedUnitIds = new Set();
     this._unitPrices    = {}; // unitId -> precio/noche, solo cuando hay 2+ unidades
+    this._editingCreatedAt = null; // fecha de creación de la reserva (solo en edición)
     this._editRequestSeq = 0; // guard contra condición de carrera: si openEdit() se llama
                                // dos veces rápido (doble clic, reapertura), solo la última gana
     this._datePicker   = null;
@@ -284,6 +285,7 @@ export class BookingForm {
       if (error) throw error;
       if (!b) { showToast('No se encontró la reserva', 'error'); return; }
       b.payments = paymentsData ?? [];
+      this._editingCreatedAt = b.created_at ?? null;
 
       // Rellenar huésped
       const g = b.guests ?? {};
@@ -495,6 +497,7 @@ export class BookingForm {
     this._selectedGuestId = null;
     this._selectedUnitIds = new Set();
     this._unitPrices      = {};
+    this._editingCreatedAt = null;
     this._payRowCount     = 0;
     this._cachedTotal     = 0;
     this._submitting      = false;
@@ -1478,10 +1481,15 @@ export class BookingForm {
     const statusText = paid <= 0 ? 'Sin seña' : balance <= 0 ? 'Pagado total' : 'Con seña';
     const statusColor = paid <= 0 ? '#f59e0b' : balance <= 0 ? '#16a34a' : '#fb7185';
 
+    const emitidaStr = this._editingCreatedAt
+      ? new Date(this._editingCreatedAt).toLocaleDateString('es-AR', { day:'2-digit', month:'2-digit', year:'numeric' })
+      : '';
+
     el.innerHTML = `
       <div class="voucher-header">
         <div class="voucher-hotel">${this.ctx?.hotel?.name ?? 'Barranca de Termas'}</div>
         <div class="voucher-title">${this._editingId ? 'Actualización de Reserva' : 'Nueva Reserva'}</div>
+        ${emitidaStr ? `<div style="font-size:.68rem;color:var(--color-text-3);margin-top:1px">Emitida ${emitidaStr}</div>` : ''}
         <span class="voucher-status-pill" style="background:${statusColor}20;color:${statusColor};border:1px solid ${statusColor}40">${statusText}</span>
       </div>
 

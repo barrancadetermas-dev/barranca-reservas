@@ -171,7 +171,7 @@ export class Calendar {
       this.db.from('bookings').select(`
         id, check_in, check_out, status, source, is_blocked, block_reason,
         total_amount, total_paid, balance, nights, pax, adults, children, notes,
-        price_per_night,
+        price_per_night, created_at,
         guests!bookings_guest_id_fkey(first_name, last_name, bad_experience, tags),
         booking_units(unit_id, price_per_night, units(name, sort_order, color, max_guests))
       `)
@@ -774,8 +774,12 @@ export class Calendar {
 
     const tip = document.createElement('div');
     tip.className = 'cal-tooltip';
+    const emitidaStr = booking.created_at
+      ? new Date(booking.created_at).toLocaleDateString('es-AR', { day:'2-digit', month:'2-digit', year:'numeric' })
+      : '';
     tip.innerHTML = `
       <div class="ct-guest">${guest}${hasBadExp ? ' <span style="color:#EF4444">⚠️</span>' : ''}</div>
+      ${emitidaStr ? `<div style="font-size:.62rem;color:#64748B;margin-top:1px">Emitida ${emitidaStr}</div>` : ''}
       <div class="ct-unit">🛏️ ${units || '—'}</div>
       <div class="ct-dates" style="margin-top:6px">📅 ${booking.check_in} → ${booking.check_out}</div>
       <div class="ct-nights">🌙 ${booking.nights ?? '?'} noches${booking.pax ? ` · 👥 ${booking.adults ?? booking.pax} adultos${booking.children ? ` + ${booking.children} menores` : ''}` : ''}</div>

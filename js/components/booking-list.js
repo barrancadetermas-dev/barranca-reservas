@@ -980,8 +980,12 @@ export class BookingList {
         ${perUnitRows}
       </div>` : '';
 
+    const emitidaStr = booking.created_at
+      ? new Date(booking.created_at).toLocaleDateString('es-AR', { day:'2-digit', month:'2-digit', year:'numeric' })
+      : '';
     tip.innerHTML = `
       <div class="ct-guest">${guest}${hasBadExp ? ' <span style="color:#EF4444">⚠️</span>' : ''}</div>
+      ${emitidaStr ? `<div style="font-size:.62rem;color:#64748B;margin-top:1px">Emitida ${emitidaStr}</div>` : ''}
       <div class="ct-unit">🛏️ ${units || '—'}</div>
       <div class="ct-dates" style="margin-top:6px">📅 ${booking.check_in} → ${booking.check_out}</div>
       <div class="ct-nights">🌙 ${nights} noches${booking.pax ? ` · 👥 ${booking.adults ?? booking.pax} adultos${booking.children ? ` + ${booking.children} menores` : ''}` : ''}</div>
