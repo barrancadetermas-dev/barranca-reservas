@@ -123,6 +123,14 @@ export class ConfigPanel {
                     <div style="font-size:.63rem;color:var(--color-text-3)">#${u.sort_order ?? '?'} · ${u.max_guests ?? '?'} pers.</div>
                   </div>
                 </div>
+                <div style="margin-top:6px">
+                  <input type="text" class="unit-rategroup-input" data-unit-id="${u.id}"
+                         value="${u.rate_group ?? ''}" placeholder="Grupo tarifario"
+                         title="Unidades con el mismo texto se muestran juntas en el Cuadro Tarifario, aunque no tengan precio cargado. Dejar vacío para que se agrupen solo si comparten un precio real."
+                         style="width:100%;box-sizing:border-box;font-size:.68rem;padding:4px 6px;
+                                border:1px solid var(--color-border);border-radius:5px;
+                                background:var(--color-surface);color:var(--color-text)">
+                </div>
               </div>`).join('') || '<div style="padding:8px;color:var(--color-text-3);font-size:.8rem">Sin unidades configuradas.</div>'}
           </div>
         </div>
@@ -631,6 +639,20 @@ export class ConfigPanel {
           if (unit) unit.color = color;
           showToast('Color actualizado ✓', 'success');
         } catch { showToast('Error al guardar color', 'error'); }
+      });
+    });
+
+    // Grupo tarifario: guardar al perder foco (debounce simple con blur, no input)
+    container.querySelectorAll('.unit-rategroup-input').forEach(input => {
+      input.addEventListener('change', async (e) => {
+        const unitId = input.dataset.unitId;
+        const rate_group = e.target.value.trim() || null;
+        try {
+          await this.db.from('units').update({ rate_group }).eq('id', unitId);
+          const unit = this.ctx.units.find(u => u.id === unitId);
+          if (unit) unit.rate_group = rate_group;
+          showToast('Grupo tarifario actualizado ✓', 'success');
+        } catch { showToast('Error al guardar grupo tarifario', 'error'); }
       });
     });
   }

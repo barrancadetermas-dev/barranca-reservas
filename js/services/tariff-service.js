@@ -72,26 +72,62 @@ export function monthsInRange(fromISO, toISO) {
   return out;
 }
 
-// ── Agrupa filas con precio IDÉNTICO en todas las columnas ──
+// ── Agrupa filas para el Cuadro Tarifario (solo lectura) ──
 // Solo para vistas de solo lectura (calendario PC, mobile). El editor de
 // Configuración mantiene una fila por unidad para poder editar cada una.
-// #2 y #3 con el mismo precio en todos los meses → una sola fila "#2 | #3"
+//
+// Reglas de agrupación (en orden de prioridad):
+// 1) Unidades con el mismo `unit.rate_group` (no nulo/no vacío) SIEMPRE van
+//    juntas en una sola fila, sin importar si el precio coincide o está
+//    vacío. Esto evita que el grupo se "rompa" o se mezcle con otros cuando
+//    todavía no hay tarifas cargadas (todo $0/—).
+// 2) Unidades SIN rate_group asignado solo se agrupan entre sí cuando
+//    comparten un precio REAL (no nulo) idéntico en todas las columnas.
+//    Si no tienen ningún precio cargado, quedan cada una en su propia fila
+//    (nunca se mezclan solo porque ambas están vacías).
 export function groupRowsByPrice(rows) {
   const cellsKey = cells => cells.map(c =>
     `${c.type}|${c.price}|${c.promoActive ?? ''}|${c.promoPay ?? ''}|${c.promoFree ?? ''}|${c.nights ?? ''}`
   ).join('§');
 
+  const hasRealPrice = cells => cells.some(c => c.price != null);
+
   const groups = [];
-  const indexByKey = new Map();
+  const indexByKey = new Map(); // clave -> índice en groups, solo para fallback por precio
+
   rows.forEach(row => {
-    const key = cellsKey(row.cells);
-    if (indexByKey.has(key)) {
-      groups[indexByKey.get(key)].units.push(row.unit);
-    } else {
+    const rg = row.unit?.rate_group?.trim();
+
+    if (rg) {
+      // Agrupación manual fija: todas las unidades con el mismo rate_group
+      // van juntas, independientemente del precio.
+      const key = `rg|${rg}`;
+      if (indexByKey.has(key)) {
+        groups[indexByKey.get(key)].units.push(row.unit);
+      } else {
+        indexByKey.set(key, groups.length);
+        groups.push({ units: [row.unit], cells: row.cells });
+      }
+      return;
+    }
+
+    // Sin rate_group: solo agrupar por precio si hay al menos un precio real.
+    if (hasRealPrice(row.cells)) {
+      const key = `price|${cellsKey(row.cells)}`;
+      if (indexByKey.has(key)) {
+        groups[indexByKey.get(key)].units.push(row.unit);
+        return;
+      }
       indexByKey.set(key, groups.length);
       groups.push({ units: [row.unit], cells: row.cells });
+      return;
     }
+
+    // Sin rate_group y sin ningún precio cargado: fila propia, nunca se
+    // mezcla con otra unidad solo porque ambas están vacías.
+    groups.push({ units: [row.unit], cells: row.cells });
   });
+
   // Ordenar cada grupo por número de unidad, y los grupos entre sí por el primer número
   groups.forEach(g => g.units.sort((a,b) => (a.sort_order ?? 0) - (b.sort_order ?? 0)));
   groups.sort((a,b) => (a.units[0]?.sort_order ?? 0) - (b.units[0]?.sort_order ?? 0));
