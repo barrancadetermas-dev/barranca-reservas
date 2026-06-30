@@ -1005,6 +1005,27 @@ export class BookingForm {
     row.id = rowId;
     // CRÍTICO: guardar el ID del pago existente para distinguir UPDATE de INSERT al guardar
     row.dataset.paymentId = existing?.id ?? '';
+    row.dataset.unitId    = existing?.unit_id ?? ''; // '' = General (toda la reserva)
+
+    // Selector de unidad — solo si la reserva tiene 2+ departamentos
+    const unitIds = [...this._selectedUnitIds];
+    const showUnitSelector = unitIds.length >= 2;
+    const unitChipsHtml = showUnitSelector ? `
+      <div class="pay-unit-selector" style="display:flex;gap:5px;flex-wrap:wrap;margin-top:7px">
+        <button type="button" class="pay-unit-chip ${!existing?.unit_id ? 'active' : ''}" data-unit-id=""
+          style="font-size:.68rem;padding:3px 9px;border-radius:999px;cursor:pointer;border:1px solid var(--color-border);background:var(--color-surface-2);color:var(--color-text-2)">
+          General
+        </button>
+        ${unitIds.map(uid => {
+          const u = this.ctx.units.find(x => String(x.id) === String(uid));
+          const isActive = String(existing?.unit_id ?? '') === String(uid);
+          return `<button type="button" class="pay-unit-chip ${isActive ? 'active' : ''}" data-unit-id="${uid}"
+            style="font-size:.68rem;padding:3px 9px;border-radius:999px;cursor:pointer;border:1px solid ${u?.color ?? 'var(--color-border)'};background:${isActive ? (u?.color ?? 'var(--color-primary)') : 'var(--color-surface-2)'};color:${isActive ? '#fff' : 'var(--color-text-2)'}">
+            ${u?.name ?? ('#' + uid)}
+          </button>`;
+        }).join('')}
+      </div>` : '';
+
     row.innerHTML = `
       <div class="pay-grid">
         <select class="pay-method form-control">
@@ -1027,9 +1048,26 @@ export class BookingForm {
         <input type="date" class="pay-date form-control" value="${existing?.payment_date ?? today}">
         <button class="btn btn-icon btn-danger-icon pay-remove" title="Eliminar">×</button>
       </div>
+      ${unitChipsHtml}
       <div class="credit-surcharge-info" style="display:none;font-size:.75rem;color:var(--color-warning);margin-top:4px">
         +10% recargo tarjeta: <span id="${rowId}-cc-surcharge">$0</span>
       </div>`;
+
+    // Selector de unidad: clic en un chip
+    row.querySelectorAll('.pay-unit-chip').forEach(chip => {
+      chip.addEventListener('click', () => {
+        const uid = chip.dataset.unitId;
+        row.dataset.unitId = uid;
+        row.querySelectorAll('.pay-unit-chip').forEach(c => {
+          const active = c === chip;
+          const u = this.ctx.units.find(x => String(x.id) === String(c.dataset.unitId));
+          c.classList.toggle('active', active);
+          c.style.background = active ? (c.dataset.unitId ? (u?.color ?? 'var(--color-primary)') : 'var(--color-primary)') : 'var(--color-surface-2)';
+          c.style.color      = active ? '#fff' : 'var(--color-text-2)';
+        });
+        this._updatePaymentSummary();
+      });
+    });
 
     // Currency toggle
     row.querySelectorAll('.pay-cur-btn').forEach(btn => {
@@ -1360,20 +1398,58 @@ export class BookingForm {
     const fmt = n => '$' + Math.round(n).toLocaleString('es-AR');
     const fmtDate = d => d ? new Date(d + 'T12:00:00').toLocaleDateString('es-AR', {weekday:'short',day:'numeric',month:'short'}) : '—';
 
-    // Payment rows
+    // Payment rows (con unidad asignada, si corresponde)
     const payRows = [];
     document.querySelectorAll('.payment-row').forEach(row => {
       const amt  = parseFloat(row.querySelector('.pay-amount')?.value) || 0;
       const meth = row.querySelector('.pay-method')?.value;
       const date = row.querySelector('.pay-date')?.value;
       const note = row.querySelector('.pay-note')?.value ?? '';
+      const unitId = row.dataset.unitId || null;
       if (amt > 0) {
         const labels = { cash:'Efectivo', transfer:'Transferencia', mercadopago:'MercadoPago',
           naranjax:'Naranja X', uala:'Ualá', debit_card:'Tarjeta Débito',
           credit_card:'Tarjeta Crédito (+10%)', credit_note:'Nota de Crédito / Voucher' };
-        payRows.push({ label: labels[meth] ?? meth, amount: meth === 'credit_card' ? amt * 1.10 : amt, date, note });
+        payRows.push({ label: labels[meth] ?? meth, amount: meth === 'credit_card' ? amt * 1.10 : amt, date, note, unitId });
       }
     });
+
+    // ── Desglose por departamento (solo si hay 2+ unidades con precio cargado) ──
+    let perUnitHTML = '';
+    const multiUnitIds = [...this._selectedUnitIds];
+    if (multiUnitIds.length >= 2 && Object.keys(this._unitPrices).length >= multiUnitIds.length) {
+      const unitTotals = multiUnitIds.map(uid => {
+        const u = this.ctx.units.find(x => String(x.id) === String(uid));
+        return { uid, name: u?.name ?? '—', color: u?.color ?? 'var(--color-primary)',
+                 total: (parseFloat(this._unitPrices[uid]) || 0) * billable };
+      });
+      const sumTotals   = unitTotals.reduce((s,u) => s + u.total, 0) || 1;
+      const generalPaid = payRows.filter(p => !p.unitId).reduce((s,p) => s + p.amount, 0);
+      const hasGeneral  = generalPaid > 0;
+
+      perUnitHTML = `
+        <div class="voucher-section">
+          <div class="voucher-section-title">🏠 Por departamento</div>
+          ${unitTotals.map(u => {
+            const directPaid = payRows.filter(p => p.unitId === u.uid).reduce((s,p) => s + p.amount, 0);
+            const generalShare = hasGeneral ? generalPaid * (u.total / sumTotals) : 0;
+            const estPaid  = directPaid + generalShare;
+            const estBal   = Math.max(0, u.total - estPaid);
+            return `
+            <div class="voucher-fin-row">
+              <span><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${u.color};margin-right:6px"></span>${u.name}</span>
+              <span>${fmt(u.total)}</span>
+            </div>
+            <div class="voucher-fin-row" style="font-size:.76rem;color:${estBal<=0 ? '#16a34a' : '#f59e0b'};margin-bottom:6px">
+              <span style="padding-left:13px">${estBal<=0 ? '✓ Saldado' : 'Resta abonar'}</span>
+              <span>${estBal<=0 ? '' : fmt(estBal)}</span>
+            </div>`;
+          }).join('')}
+          ${hasGeneral ? `<div class="voucher-row-sm" style="margin-top:4px;font-style:italic">
+            ℹ️ Incluye pagos generales repartidos proporcionalmente entre los departamentos
+          </div>` : ''}
+        </div>`;
+    }
 
     const statusText = paid <= 0 ? 'Sin seña' : balance <= 0 ? 'Pagado total' : 'Con seña';
     const statusColor = paid <= 0 ? '#f59e0b' : balance <= 0 ? '#16a34a' : '#fb7185';
@@ -1406,6 +1482,8 @@ export class BookingForm {
         </div>
         <div class="voucher-row-sm">🏠 ${unitNames || '—'}</div>
       </div>
+
+      ${perUnitHTML}
 
       <div class="voucher-section">
         <div class="voucher-section-title">💰 Finanzas</div>
@@ -1928,6 +2006,7 @@ ${notes ? `
         const date = row.querySelector('.pay-date')?.value;
         const note = row.querySelector('.pay-note')?.value?.trim() || null;
         const existingId = row.dataset.paymentId || null;
+        const unitId = row.dataset.unitId || null; // null = General
         if (amt > 0) {
           const isCc = meth === 'credit_card';
           const payload = {
@@ -1937,6 +2016,7 @@ ${notes ? `
             amount:       isCc ? amt * 1.10 : amt,
             payment_date: date || toISODate(new Date()),
             notes:        note,
+            unit_id:      unitId,
           };
           if (existingId) {
             updatePayRows.push({ id: existingId, ...payload });

@@ -575,6 +575,13 @@ export class Calendar {
       this._openDetailById(booking.id);
     });
 
+    bar.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      this._ctxTarget = { bookingId: booking.id };
+      this._showContextMenu(e.clientX, e.clientY, true);
+    });
+
     cell.appendChild(bar);
   }
 
@@ -594,6 +601,11 @@ export class Calendar {
     left.addEventListener('mousemove',  (e) => this._moveTooltip(e));
     left.addEventListener('mouseleave', ()  => this._hideTooltip());
     left.addEventListener('click', (e) => { e.stopPropagation(); this._openDetailById(coBooking.id); });
+    left.addEventListener('contextmenu', (e) => {
+      e.preventDefault(); e.stopPropagation();
+      this._ctxTarget = { bookingId: coBooking.id };
+      this._showContextMenu(e.clientX, e.clientY, true);
+    });
 
     const right = document.createElement('div');
     right.className = 'bar bar-split-right';
@@ -604,6 +616,11 @@ export class Calendar {
     right.addEventListener('mousemove',  (e) => this._moveTooltip(e));
     right.addEventListener('mouseleave', ()  => this._hideTooltip());
     right.addEventListener('click', (e) => { e.stopPropagation(); this._openDetailById(ciBooking.id); });
+    right.addEventListener('contextmenu', (e) => {
+      e.preventDefault(); e.stopPropagation();
+      this._ctxTarget = { bookingId: ciBooking.id };
+      this._showContextMenu(e.clientX, e.clientY, true);
+    });
 
     cell.appendChild(left);
     cell.appendChild(right);
@@ -918,11 +935,52 @@ export class Calendar {
       await this._blockDay(this._ctxTarget.unitId, this._ctxTarget.dateISO);
       this._hideContextMenu();
     });
+    document.getElementById('ctx-edit-booking')?.addEventListener('click', () => {
+      if (this._ctxTarget.bookingId) this.bookingForm.openEdit(this._ctxTarget.bookingId);
+      this._hideContextMenu();
+    });
+    document.getElementById('ctx-delete-booking')?.addEventListener('click', async () => {
+      const id = this._ctxTarget.bookingId;
+      this._hideContextMenu();
+      if (id) await this._deleteBookingFromCalendar(id);
+    });
   }
 
-  _showContextMenu(x, y) {
+  // ── Eliminar reserva desde el menú contextual del calendario ──
+  async _deleteBookingFromCalendar(id) {
+    if (!can('deleteBooking')) {
+      showToast('🔒 Sin permiso para eliminar reservas', 'warning');
+      return;
+    }
+    const booking = (this._lastRenderedBookings ?? []).find(b => b.id === id);
+    const guest   = booking?.guests ? `${booking.guests.first_name} ${booking.guests.last_name}` : 'esta reserva';
+    const dates   = booking ? ` (${booking.check_in} → ${booking.check_out})` : '';
+
+    if (!confirm(`¿Eliminar la reserva de ${guest}${dates}?\n\nEsta acción no se puede deshacer.`)) return;
+
+    try {
+      const { error } = await this.db.from('bookings').delete().eq('id', id);
+      if (error) throw error;
+      showToast('Reserva eliminada ✓', 'success');
+      await logAction('DELETE', 'booking', id, `Eliminada desde calendario: ${guest}${dates}`);
+      cache.invalidate('bookings');
+      this.load();
+    } catch (err) {
+      console.error('[Calendar] delete error:', err);
+      showToast('Error al eliminar: ' + (err.message ?? err), 'error');
+    }
+  }
+
+  // ── Mostrar el set correcto de opciones: celda vacía vs. reserva existente ──
+  _showContextMenu(x, y, isBooking = false) {
     const m = document.getElementById('ctx-menu');
     if (!m) return;
+
+    document.getElementById('ctx-new-booking')?.classList.toggle('hidden', isBooking);
+    document.getElementById('ctx-block')?.classList.toggle('hidden', isBooking);
+    document.getElementById('ctx-edit-booking')?.classList.toggle('hidden', !isBooking || !can('editBooking'));
+    document.getElementById('ctx-delete-booking')?.classList.toggle('hidden', !isBooking || !can('deleteBooking'));
+
     m.classList.remove('hidden');
     m.style.left = `${x}px`;
     m.style.top  = `${y}px`;
