@@ -72,7 +72,31 @@ export function monthsInRange(fromISO, toISO) {
   return out;
 }
 
-// ── Construye la estructura final lista para pintar la tabla ──
+// ── Agrupa filas con precio IDÉNTICO en todas las columnas ──
+// Solo para vistas de solo lectura (calendario PC, mobile). El editor de
+// Configuración mantiene una fila por unidad para poder editar cada una.
+// #2 y #3 con el mismo precio en todos los meses → una sola fila "#2 | #3"
+export function groupRowsByPrice(rows) {
+  const cellsKey = cells => cells.map(c =>
+    `${c.type}|${c.price}|${c.promoActive ?? ''}|${c.promoPay ?? ''}|${c.promoFree ?? ''}|${c.nights ?? ''}`
+  ).join('§');
+
+  const groups = [];
+  const indexByKey = new Map();
+  rows.forEach(row => {
+    const key = cellsKey(row.cells);
+    if (indexByKey.has(key)) {
+      groups[indexByKey.get(key)].units.push(row.unit);
+    } else {
+      indexByKey.set(key, groups.length);
+      groups.push({ units: [row.unit], cells: row.cells });
+    }
+  });
+  // Ordenar cada grupo por número de unidad, y los grupos entre sí por el primer número
+  groups.forEach(g => g.units.sort((a,b) => (a.sort_order ?? 0) - (b.sort_order ?? 0)));
+  groups.sort((a,b) => (a.units[0]?.sort_order ?? 0) - (b.units[0]?.sort_order ?? 0));
+  return groups;
+}
 // Devuelve { columns: [{type:'month'|'custom', ...}], rows: [{unit, cells:[...]}] }
 // Las columnas de mes y las personalizadas se intercalan en orden cronológico:
 // si "Finde 17/Ago" cae dentro de agosto, queda Agosto | Finde 17/Ago | Septiembre.

@@ -16,7 +16,7 @@ import { getHolidaysForYear, isWeekend } from '../services/arg-holidays.js';
 import { logAction } from '../services/audit-service.js';
 import { cachedQuery, cache } from '../services/supabase-cache.js';
 import { Bus, EVENTS } from '../services/event-bus.js';
-import { fetchMonthlyRates, fetchCustomColumns, monthsInRange, buildTariffGrid } from '../services/tariff-service.js';
+import { fetchMonthlyRates, fetchCustomColumns, monthsInRange, buildTariffGrid, groupRowsByPrice } from '../services/tariff-service.js';
 
 const DAY_NAMES   = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
 const MONTH_NAMES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio',
@@ -2523,6 +2523,7 @@ export class Calendar {
 
       const units = (AppContext.units ?? []).slice().sort((a,b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
       const { columns, rows } = buildTariffGrid({ units, rates, customCols, months });
+      const groups = groupRowsByPrice(rows);
 
       const fmt = n => n == null ? '—' : '$' + Math.round(n).toLocaleString('es-AR');
 
@@ -2534,15 +2535,20 @@ export class Calendar {
         return;
       }
 
-      // Ancho automático de la columna de departamento (mide el nombre más largo)
-      let deptColW = 90;
+      // Ancho de la columna de departamento: ahora muestra solo números (#1, #2 | #3...)
+      // así que un ancho fijo chico alcanza — mucho más compacto que el nombre completo.
+      let deptColW = 70;
       try {
         const canvas = document.createElement('canvas');
         const ctx2   = canvas.getContext('2d');
         ctx2.font    = '700 12px system-ui';
         let maxPx = 0;
-        units.forEach(u => { const w = ctx2.measureText(u.name).width; if (w > maxPx) maxPx = w; });
-        deptColW = Math.max(80, Math.min(180, Math.ceil(maxPx) + 30));
+        groups.forEach(g => {
+          const label = g.units.map(u => '#' + (u.sort_order ?? '?')).join(' | ');
+          const w = ctx2.measureText(label).width;
+          if (w > maxPx) maxPx = w;
+        });
+        deptColW = Math.max(50, Math.min(120, Math.ceil(maxPx) + 24));
       } catch (_) {}
 
       const COL_W = 88; // ancho fijo por columna, similar a una card de agenda
@@ -2556,8 +2562,8 @@ export class Calendar {
           ).join('')}
         </tr>`;
 
-      const bodyHTML = rows.map((row, i) => {
-        const cellsHTML = row.cells.map(cell => {
+      const bodyHTML = groups.map((g, i) => {
+        const cellsHTML = g.cells.map(cell => {
           if (cell.type === 'month') {
             const promoTag = cell.promoActive && cell.promoPay && cell.promoFree
               ? `<span style="font-size:.56rem;background:#FEF3C7;color:#92400E;padding:0 3px;border-radius:3px;margin-left:3px">${cell.promoPay}+${cell.promoFree}</span>`
@@ -2567,9 +2573,12 @@ export class Calendar {
           const sub = cell.nights ? `<span style="font-size:.58rem;color:var(--color-text-3)"> /${cell.nights}n</span>` : '';
           return `<td style="text-align:right;padding:5px 8px;font-size:.74rem;font-weight:600;color:var(--color-text);white-space:nowrap">${fmt(cell.price)}${sub}</td>`;
         }).join('');
+        // Etiqueta compacta: "#1" o "#2 | #3" si comparten precio — con puntos de color de cada unidad
+        const dotsHTML = g.units.map(u => `<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${u.color ?? 'var(--color-primary)'};margin-right:3px"></span>`).join('');
+        const numsLabel = g.units.map(u => '#' + (u.sort_order ?? '?')).join(' <span style="color:var(--color-text-3)">|</span> ');
         return `<tr style="background:${i % 2 === 0 ? 'transparent' : 'var(--color-surface-2)'}">
-          <td style="padding:5px 10px;font-size:.74rem;color:var(--color-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
-            <span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${row.unit.color ?? 'var(--color-primary)'};margin-right:6px"></span>${row.unit.name}
+          <td style="padding:5px 10px;font-size:.74rem;font-weight:700;color:var(--color-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${g.units.map(u=>u.name).join(', ')}">
+            ${dotsHTML}${numsLabel}
           </td>
           ${cellsHTML}
         </tr>`;
