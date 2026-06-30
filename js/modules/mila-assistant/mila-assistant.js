@@ -134,7 +134,7 @@ const colorClass = (c) => `mila-ic-${c}`;
 
 function pillHTML(field, label, value) {
   const text = value ? fmtShort(value) : label;
-  return `<button type="button" class="mila-pill" data-field="${field}">
+  return `<button type="button" class="mila-pill mila-date-pill" data-field="${field}">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="11" height="11"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
     <span>${esc(text)}</span>
     <input type="date" class="mila-pill-input" value="${value || ''}" tabindex="-1">
@@ -192,7 +192,7 @@ function attachRow(rowEl, todayISO) {
   const q = QUERIES.find(x => x.id === queryId);
   const s = fieldState[queryId];
 
-  rowEl.querySelectorAll('.mila-pill[data-field]').forEach(pill => {
+  rowEl.querySelectorAll('.mila-date-pill[data-field]').forEach(pill => {
     const field = pill.dataset.field;
     const input = pill.querySelector('.mila-pill-input');
     pill.addEventListener('click', (e) => {
