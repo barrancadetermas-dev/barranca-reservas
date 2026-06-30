@@ -42,11 +42,12 @@
 .mila-hero {
   position: relative; z-index: 1;
   display: flex; align-items: center; justify-content: space-between; gap: 14px;
-  background: linear-gradient(120deg, #EEF2FF 0%, var(--mila-violet-l) 100%);
-  border: 1px solid var(--color-border);
+  background: linear-gradient(120deg, #DCE6FF 0%, #E4D5FF 55%, #EBDCFF 100%);
+  border: 1px solid #D6C7F7;
   border-radius: 18px;
   padding: 18px 20px;
   margin-bottom: 18px;
+  box-shadow: 0 6px 18px rgba(139,92,246,.12);
   animation: mila-row-in .4s cubic-bezier(.22,1,.36,1) both;
 }
 .mila-hero-greet { font-weight: 800; font-size: 1.05rem; color: var(--color-text); }
@@ -62,12 +63,17 @@
   50%      { box-shadow: 0 4px 18px var(--color-primary-t), 0 0 0 6px var(--color-primary-t); transform: rotate(-3deg); }
 }
 
-.mila-grid { position: relative; z-index: 1; display: grid; grid-template-columns: 380px 28px 1fr; gap: 8px; align-items: stretch; }
+.mila-grid { position: relative; z-index: 1; display: grid; grid-template-columns: 380px 36px 1fr; gap: 18px; align-items: stretch; }
 
 .mila-beta {
   font-size: .58rem; font-weight: 800; letter-spacing: .03em;
   background: var(--color-primary-l); color: var(--color-primary);
   padding: 2px 6px; border-radius: 999px;
+  animation: mila-beta-glow 2.8s ease-in-out infinite;
+}
+@keyframes mila-beta-glow {
+  0%, 100% { box-shadow: 0 0 0 0 var(--color-primary-t); }
+  50%      { box-shadow: 0 0 0 3px var(--color-primary-t); }
 }
 
 .mila-section-label {
@@ -191,6 +197,11 @@ select.mila-pill {
   flex-shrink: 0; width: 26px; height: 26px; border-radius: 8px;
   background: #fff; color: var(--mila-violet, #8B5CF6);
   display: flex; align-items: center; justify-content: center;
+  animation: mila-bulb-glow 2.4s ease-in-out infinite;
+}
+@keyframes mila-bulb-glow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(139,92,246,.25); }
+  50%      { box-shadow: 0 0 0 5px rgba(139,92,246,0); }
 }
 .mila-tip-title { font-weight: 800; font-size: .76rem; color: var(--mila-violet, #8B5CF6); }
 .mila-tip-text { font-size: .72rem; color: var(--color-text-2); margin-top: 2px; line-height: 1.35; }
@@ -252,6 +263,11 @@ select.mila-pill {
   position: relative; z-index: 1; color: var(--color-primary);
   background: var(--color-bg); border-radius: 50%; padding: 3px;
   box-shadow: 0 0 0 4px var(--color-bg);
+  animation: mila-arrow-pulse 2.4s ease-in-out infinite;
+}
+@keyframes mila-arrow-pulse {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.18); }
 }
 
 .mila-right { position: sticky; top: 0; }
@@ -259,7 +275,9 @@ select.mila-pill {
 .mila-quickstats {
   background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 14px;
   padding: 12px 14px; margin-bottom: 10px;
+  transition: box-shadow .22s ease, transform .22s ease;
 }
+.mila-quickstats:hover { box-shadow: 0 6px 16px rgba(15,23,42,.06); transform: translateY(-2px); }
 .mila-qstats-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
 .mila-qstats-title { font-weight: 800; font-size: .8rem; color: var(--color-text); }
 .mila-qstats-pill { font-size: .62rem; font-weight: 700; background: var(--color-surface-2); color: var(--color-text-2); padding: 2px 9px; border-radius: 999px; }
@@ -267,7 +285,10 @@ select.mila-pill {
 .mila-qstat-row {
   display: grid; grid-template-columns: 22px 1fr auto; align-items: center; column-gap: 8px;
   animation: mila-row-in .4s cubic-bezier(.22,1,.36,1) both; animation-delay: calc(var(--i, 0) * 60ms);
+  transition: transform .18s ease;
 }
+.mila-qstat-row:hover { transform: translateX(2px); }
+.mila-qstat-row:hover .mila-qstat-value { transform: scale(1.08); }
 .mila-qstat-row:has(.mila-qstat-bar) { grid-template-columns: 22px 1fr auto; row-gap: 4px; }
 .mila-qstat-icon {
   display: inline-flex; align-items: center; justify-content: center;
@@ -275,7 +296,7 @@ select.mila-pill {
   background: var(--color-primary-l); color: var(--color-primary);
 }
 .mila-qstat-label { font-size: .72rem; color: var(--color-text-2); font-weight: 600; }
-.mila-qstat-value { font-size: .82rem; font-weight: 800; color: var(--color-text); }
+.mila-qstat-value { font-size: .82rem; font-weight: 800; color: var(--color-text); transition: transform .18s ease; display: inline-block; }
 .mila-qstat-loading { opacity: .35; }
 .mila-qstat-bar { grid-column: 2 / -1; height: 5px; border-radius: 999px; background: var(--color-surface-2); overflow: hidden; }
 .mila-qstat-bar-fill {

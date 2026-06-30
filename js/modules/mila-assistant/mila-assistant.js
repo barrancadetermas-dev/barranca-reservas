@@ -40,7 +40,6 @@ const ICON_PATHS = {
 const TIPS = [
   'Podés consultar reservas usando solo una fecha.',
   'Tocá cualquier campo y la respuesta se actualiza sola, sin botones extra.',
-  'En "Disponibilidad" solo necesitás definir el ingreso — la salida se ajusta sola a 1 noche.',
   'Desde el voucher de una reserva podés verla completa con un solo toque.',
   'Podés limpiar una respuesta con la ✕ y volver a las consultas rápidas.',
 ];
