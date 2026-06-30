@@ -1416,39 +1416,51 @@ export class BookingForm {
 
     // ── Desglose por departamento (solo si hay 2+ unidades con precio cargado) ──
     let perUnitHTML = '';
+    let pendingCompactHTML = ''; // línea compacta "#1 (resta $X) | #5 (resta $Y)" bajo Saldo pendiente
     const multiUnitIds = [...this._selectedUnitIds];
     if (multiUnitIds.length >= 2 && Object.keys(this._unitPrices).length >= multiUnitIds.length) {
       const unitTotals = multiUnitIds.map(uid => {
         const u = this.ctx.units.find(x => String(x.id) === String(uid));
-        return { uid, name: u?.name ?? '—', color: u?.color ?? 'var(--color-primary)',
+        return { uid, name: u?.name ?? '—', num: u?.sort_order ?? '?', color: u?.color ?? 'var(--color-primary)',
                  total: (parseFloat(this._unitPrices[uid]) || 0) * billable };
       });
       const sumTotals   = unitTotals.reduce((s,u) => s + u.total, 0) || 1;
       const generalPaid = payRows.filter(p => !p.unitId).reduce((s,p) => s + p.amount, 0);
       const hasGeneral  = generalPaid > 0;
 
+      const unitBalances = unitTotals.map(u => {
+        const directPaid   = payRows.filter(p => p.unitId === u.uid).reduce((s,p) => s + p.amount, 0);
+        const generalShare = hasGeneral ? generalPaid * (u.total / sumTotals) : 0;
+        const estPaid       = directPaid + generalShare;
+        const estBal         = Math.max(0, u.total - estPaid);
+        return { ...u, estBal };
+      });
+
       perUnitHTML = `
         <div class="voucher-section">
           <div class="voucher-section-title">🏠 Por departamento</div>
-          ${unitTotals.map(u => {
-            const directPaid = payRows.filter(p => p.unitId === u.uid).reduce((s,p) => s + p.amount, 0);
-            const generalShare = hasGeneral ? generalPaid * (u.total / sumTotals) : 0;
-            const estPaid  = directPaid + generalShare;
-            const estBal   = Math.max(0, u.total - estPaid);
-            return `
+          ${unitBalances.map(u => `
             <div class="voucher-fin-row">
-              <span><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${u.color};margin-right:6px"></span>${u.name}</span>
+              <span><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${u.color};margin-right:6px"></span>#${u.num} · ${u.name}</span>
               <span>${fmt(u.total)}</span>
             </div>
-            <div class="voucher-fin-row" style="font-size:.76rem;color:${estBal<=0 ? '#16a34a' : '#f59e0b'};margin-bottom:6px">
-              <span style="padding-left:13px">${estBal<=0 ? '✓ Saldado' : 'Resta abonar'}</span>
-              <span>${estBal<=0 ? '' : fmt(estBal)}</span>
-            </div>`;
-          }).join('')}
+            <div class="voucher-fin-row" style="font-size:.76rem;color:${u.estBal<=0 ? '#16a34a' : '#f59e0b'};margin-bottom:6px">
+              <span style="padding-left:13px">${u.estBal<=0 ? '✓ Saldado' : 'Resta abonar'}</span>
+              <span>${u.estBal<=0 ? '' : fmt(u.estBal)}</span>
+            </div>`).join('')}
           ${hasGeneral ? `<div class="voucher-row-sm" style="margin-top:4px;font-style:italic">
             ℹ️ Incluye pagos generales repartidos proporcionalmente entre los departamentos
           </div>` : ''}
         </div>`;
+
+      // Línea compacta para mostrar debajo de "Saldo pendiente"
+      const pendingUnits = unitBalances.filter(u => u.estBal > 0);
+      if (pendingUnits.length) {
+        pendingCompactHTML = `
+          <div class="voucher-row-sm" style="margin-top:4px">
+            ${pendingUnits.map(u => `#${u.num} (resta ${fmt(u.estBal)})`).join(' &nbsp;|&nbsp; ')}
+          </div>`;
+      }
     }
 
     const statusText = paid <= 0 ? 'Sin seña' : balance <= 0 ? 'Pagado total' : 'Con seña';
@@ -1493,11 +1505,16 @@ export class BookingForm {
         ${surcharge > 0 ? `<div class="voucher-fin-row"><span>Recargo</span><span>+${fmt(surcharge)}</span></div>` : ''}
         ${freeNights > 0 ? `<div class="voucher-fin-row voucher-disc"><span>Noches sin cargo (${freeNights})</span><span>✓</span></div>` : ''}
         <div class="voucher-fin-row voucher-total"><span><strong>TOTAL</strong></span><span><strong>${fmt(total)}</strong></span></div>
-        ${payRows.map(p => `
+        ${payRows.map(p => {
+          const dateFmt = p.date ? p.date.split('-').reverse().join('/') : '';
+          const u = p.unitId ? this.ctx.units.find(x => String(x.id) === String(p.unitId)) : null;
+          const unitTag = multiUnitIds.length >= 2 ? (u ? ' · #' + (u.sort_order ?? '?') : ' · General') : '';
+          return `
           <div class="voucher-fin-row" style="font-size:.78rem;color:var(--color-text-2)">
-            <span>↳ ${p.label}${p.date ? ' · ' + p.date : ''}${p.note ? ' · ' + p.note : ''}</span>
+            <span>↳ ${p.label}${dateFmt ? ' · ' + dateFmt : ''}${unitTag}${p.note ? ' · ' + p.note : ''}</span>
             <span>${fmt(p.amount)}</span>
-          </div>`).join('')}
+          </div>`;
+        }).join('')}
         <div class="voucher-fin-row" style="margin-top:6px">
           <span>Abonado</span><span style="color:#16a34a;font-weight:600">${fmt(paid)}</span>
         </div>
@@ -1505,6 +1522,7 @@ export class BookingForm {
           <span><strong>${balance > 0 ? '⚠️ Saldo pendiente' : '✅ Sin saldo'}</strong></span>
           <span><strong>${balance > 0 ? fmt(balance) : '—'}</strong></span>
         </div>
+        ${pendingCompactHTML}
       </div>
 
       ${notes ? `<div class="voucher-section">
