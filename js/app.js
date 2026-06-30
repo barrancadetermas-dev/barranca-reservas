@@ -26,6 +26,7 @@ import { ConfigPanel }    from './components/config-panel.js';
 import { AuditPanel }     from './components/audit-panel.js';
 import { OperationsModule } from './components/operations.js';
 import { fetchMonthlyRates, fetchCustomColumns, monthsInRange, buildTariffGrid, MONTH_NAMES } from './services/tariff-service.js';
+import { initMilaAssistant } from './modules/mila-assistant/mila-assistant.js';
 
 let dashboard   = null;
 let calendar    = null;
@@ -286,6 +287,12 @@ async function initApp(user) {
     window._guestsCRM    = guestsCRM;
     window._statsInstance = statistics;
     window._operations   = operations;
+
+    // ── Módulo independiente: "Preguntale a MILA" (no afecta nada de lo anterior) ──
+    tryInit('MilaAssistant', () => initMilaAssistant({
+      can, isDemo, showToast,
+      getBookingOpener: () => window._bookingFormInstance,
+    }));
 
     // ── Nav: mostrar/ocultar secciones por rol ──
     setupNavByRole();
