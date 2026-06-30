@@ -2551,7 +2551,30 @@ export class Calendar {
         deptColW = Math.max(50, Math.min(120, Math.ceil(maxPx) + 24));
       } catch (_) {}
 
-      const COL_W = 88; // ancho fijo por columna, similar a una card de agenda
+      const COL_W_MIN = 70; // ancho mínimo legible por columna
+
+      // ── Encaje al ancho de N cards de "Próximas reservas" ──
+      // Mide el ancho real de una card de agenda ya renderizada y ajusta el
+      // total de columnas de mes/especiales para que el cuadro termine
+      // alineado con el borde derecho de 2, 3 o 4 cards (lo que más se acerque).
+      let COL_W = 88;
+      const numCols = columns.length;
+      const cardEl = document.querySelector('.cal-agenda-slot');
+      const cardW  = cardEl?.getBoundingClientRect().width;
+      if (cardW && numCols > 0) {
+        const cardGap = 8; // gap real entre cards (.cal-agenda-wrap usa grid gap:8px)
+        const naturalTotal = deptColW + numCols * COL_W_MIN;
+        // Ancho de N cards juntas (incluye los gaps internos entre ellas)
+        const widthForN = n => n * cardW + (n - 1) * cardGap;
+        let bestN = 2;
+        for (let n = 2; n <= 7; n++) {
+          if (widthForN(n) >= naturalTotal) { bestN = n; break; }
+          bestN = n; // si ninguna alcanza, usar la más grande disponible (7)
+        }
+        const targetTotal = widthForN(bestN);
+        const colsAvailable = Math.max(0, targetTotal - deptColW);
+        COL_W = Math.max(COL_W_MIN, Math.min(140, Math.floor(colsAvailable / numCols)));
+      }
 
       const headerHTML = `
         <tr>
