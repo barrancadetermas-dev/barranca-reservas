@@ -2581,7 +2581,7 @@ export class Calendar {
           <th style="text-align:left;padding:6px 10px;font-size:.66rem;color:var(--color-text-3);text-transform:uppercase;letter-spacing:.04em;font-weight:700;width:${deptColW}px;min-width:${deptColW}px">Depto</th>
           ${columns.map(col => col.type === 'month'
             ? `<th style="text-align:right;padding:6px 8px;font-size:.66rem;color:var(--color-text-3);text-transform:uppercase;letter-spacing:.04em;font-weight:700;width:${COL_W}px;min-width:${COL_W}px">${col.label}</th>`
-            : `<th style="text-align:right;padding:6px 8px;font-size:.62rem;color:#D97706;text-transform:uppercase;letter-spacing:.03em;font-weight:700;width:${COL_W}px;min-width:${COL_W}px" title="${col.note ?? ''}">🏷️ ${col.label}</th>`
+            : `<th style="text-align:right;padding:6px 8px;font-size:.62rem;color:#D97706;text-transform:uppercase;letter-spacing:.03em;font-weight:700;width:${COL_W}px;min-width:${COL_W}px" title="${col.note ?? ''}">📅 ${col.label}</th>`
           ).join('')}
         </tr>`;
 

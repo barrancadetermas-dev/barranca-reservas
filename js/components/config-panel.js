@@ -1037,6 +1037,7 @@ export class ConfigPanel {
     customCols.forEach(c => {
       c._priceMap = new Map((c.tariff_custom_prices ?? []).map(p => [p.unit_id, p]));
     });
+    this._tariffCustomColsCache = customCols;
 
     // ── Armar la lista de columnas (meses + personalizadas intercaladas por fecha) ──
     const bucketOf = (c) => {
@@ -1051,19 +1052,45 @@ export class ConfigPanel {
     });
     customCols.filter(c => bucketOf(c) === -1).forEach(c => columns.push({ type: 'custom', c }));
 
+    // ── Estado de promo por mes: la promo siempre aplica a TODOS los deptos juntos ──
+    const promoByMonth = new Map(); // key `${year}-${month}` -> { active, pay, free }
+    this._tariffMonths.forEach(m => {
+      const key = `${m.year}-${m.month}`;
+      let active = false, pay = '', free = '';
+      units.forEach(u => {
+        const r = rateMap.get(`${u.id}|${m.year}|${m.month}`);
+        if (r?.promo_active) { active = true; pay = r.promo_pay ?? ''; free = r.promo_free ?? ''; }
+      });
+      promoByMonth.set(key, { active, pay, free });
+    });
+
     const colHeaders = columns.map(col => {
       if (col.type === 'month') {
         const m = col.m;
-        return `<th style="text-align:center;padding:6px 8px;font-size:.66rem;color:var(--color-text-3);text-transform:uppercase">${MONTH_NAMES[m.month-1]} ${m.year}</th>`;
+        const promo = promoByMonth.get(`${m.year}-${m.month}`);
+        const promoTitle = promo.active && promo.pay && promo.free
+          ? `Promo activa para todos los deptos: ${promo.pay}+${promo.free} (clic para editar o desactivar)`
+          : 'Activar promo tipo "2+1" para todos los deptos de este mes';
+        return `
+          <th style="text-align:center;padding:6px 8px;font-size:.66rem;color:var(--color-text-3);text-transform:uppercase">
+            <div style="display:flex;align-items:center;justify-content:center;gap:4px">
+              <span>${MONTH_NAMES[m.month-1]} ${m.year}</span>
+              <button class="tariff-promo-month-btn" data-year="${m.year}" data-month="${m.month}"
+                data-on="${promo.active ? '1':'0'}" data-pay="${promo.pay}" data-free="${promo.free}"
+                title="${promoTitle}" style="background:none;border:none;cursor:pointer;font-size:.85rem;padding:2px;opacity:${promo.active ? '1':'.35'}">🏷️</button>
+            </div>
+            ${promo.active && promo.pay && promo.free ? `<div style="font-size:.62rem;color:#D97706;font-weight:600;margin-top:1px">${promo.pay}+${promo.free} activa</div>` : ''}
+          </th>`;
       }
       const c = col.c;
       const vig = c.date_from && c.date_to
         ? `${c.date_from.split('-').reverse().join('/')} → ${c.date_to.split('-').reverse().join('/')}`
         : 'Siempre visible';
       return `
-        <th style="text-align:center;padding:6px 8px;font-size:.66rem;color:var(--color-text-3);text-transform:uppercase;background:var(--color-surface-2);border-radius:8px 8px 0 0">
+        <th style="text-align:center;padding:6px 8px;font-size:.66rem;color:var(--color-text-3);text-transform:uppercase;background:rgba(99,102,241,.06);border-radius:8px 8px 0 0">
           <div style="display:flex;align-items:center;justify-content:center;gap:4px;white-space:nowrap">
-            <span title="${vig}${c.note ? ' · ' + c.note : ''}">🏷️ ${c.title}</span>
+            <span title="${vig}${c.note ? ' · ' + c.note : ''}">📅 ${c.title}</span>
+            <button class="tariff-custom-edit" data-id="${c.id}" title="Editar nombre/fechas" style="background:none;border:none;cursor:pointer;font-size:.75rem;padding:0;opacity:.6">✏️</button>
             <button class="tariff-custom-del" data-id="${c.id}" title="Eliminar columna" style="background:none;border:none;cursor:pointer;font-size:.75rem;padding:0;opacity:.6">🗑️</button>
           </div>
         </th>`;
@@ -1075,28 +1102,16 @@ export class ConfigPanel {
           const m = col.m;
           const r = rateMap.get(`${u.id}|${m.year}|${m.month}`);
           const price = r?.price_per_night ?? '';
-          const promoOn = !!r?.promo_active;
-          const promoPay = r?.promo_pay ?? '';
-          const promoFree = r?.promo_free ?? '';
           return `
             <td style="padding:5px 6px;text-align:right">
-              <div style="display:flex;align-items:center;justify-content:flex-end;gap:4px">
-                <input type="number" class="tariff-price-input" data-unit="${u.id}" data-year="${m.year}" data-month="${m.month}"
-                  value="${price}" placeholder="—" style="width:78px;padding:4px 6px;font-size:.78rem;text-align:right;border:1px solid var(--color-border);border-radius:6px;background:var(--color-surface)">
-                <button class="tariff-promo-btn" data-unit="${u.id}" data-year="${m.year}" data-month="${m.month}"
-                  data-on="${promoOn ? '1':'0'}" data-pay="${promoPay}" data-free="${promoFree}"
-                  title="${promoOn && promoPay && promoFree
-                    ? `PROMO ${promoPay}+${promoFree}${price ? ` ($${Number(price).toLocaleString('es-AR')}) = $${(price * promoPay).toLocaleString('es-AR')}` : ''} — pagás ${promoPay}, ${promoFree} gratis (clic para editar o desactivar)`
-                    : 'Activar promo tipo "2+1" (pagás X noches, Y gratis)'}"
-                  style="background:none;border:none;cursor:pointer;font-size:.85rem;padding:2px;opacity:${promoOn ? '1':'.35'}">🏷️</button>
-              </div>
-              ${promoOn && promoPay && promoFree ? `<div style="font-size:.62rem;color:#D97706;text-align:right;margin-top:2px" title="PROMO ${promoPay}+${promoFree}${price ? ` ($${Number(price).toLocaleString('es-AR')}) = $${(price * promoPay).toLocaleString('es-AR')}` : ''} — pagás ${promoPay} noches, ${promoFree} gratis">${promoPay}+${promoFree} activa</div>` : ''}
+              <input type="number" class="tariff-price-input" data-unit="${u.id}" data-year="${m.year}" data-month="${m.month}"
+                value="${price}" placeholder="—" style="width:90px;padding:4px 6px;font-size:.78rem;text-align:right;border:1px solid var(--color-border);border-radius:6px;background:var(--color-surface)">
             </td>`;
         }
         const c = col.c;
         const p = c._priceMap.get(u.id);
         return `
-          <td style="padding:5px 6px;text-align:right;background:var(--color-surface-2)">
+          <td style="padding:5px 6px;text-align:right;background:rgba(99,102,241,.04)">
             <input type="number" class="tariff-custom-price-input" data-col="${c.id}" data-unit="${u.id}"
               value="${p?.price ?? ''}" placeholder="—" style="width:78px;padding:4px 6px;font-size:.78rem;text-align:right;border:1px solid var(--color-border);border-radius:6px;background:var(--color-surface)">
           </td>`;
@@ -1112,7 +1127,7 @@ export class ConfigPanel {
 
     el.innerHTML = `
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-        <span style="font-size:.7rem;color:var(--color-text-3)">Los precios se guardan automáticamente al salir del campo. El 🏷️ permite activar una promo tipo "2+1".</span>
+        <span style="font-size:.7rem;color:var(--color-text-3)">Los precios se guardan automáticamente al salir del campo. El 🏷️ junto a cada mes activa/desactiva una promo tipo "2+1" para todos los departamentos de ese mes.</span>
         <button class="btn btn-outline btn-sm" id="btn-add-tariff-custom" style="flex-shrink:0;margin-left:10px">+ Agregar columna</button>
       </div>
       <div style="overflow-x:auto;margin-bottom:8px">
@@ -1145,25 +1160,30 @@ export class ConfigPanel {
       });
     });
 
-    // Promo (✏️ junto al precio)
-    el.querySelectorAll('.tariff-promo-btn').forEach(btn => {
+    // Promo (🏷️ junto al mes) — aplica/quita a TODOS los deptos de ese mes
+    el.querySelectorAll('.tariff-promo-month-btn').forEach(btn => {
       btn.addEventListener('click', async () => {
-        const { unit, year, month } = btn.dataset;
+        const { year, month } = btn.dataset;
         const isOn = btn.dataset.on === '1';
         if (isOn) {
-          if (!confirm('¿Desactivar la promo para esta unidad/mes?')) return;
-          await upsertMonthlyRate(this.db, this.ctx.hotelId, unit, parseInt(year), parseInt(month), { promo_active: false });
+          if (!confirm('¿Desactivar la promo para todos los deptos en este mes?')) return;
+          await Promise.all(units.map(u =>
+            upsertMonthlyRate(this.db, this.ctx.hotelId, u.id, parseInt(year), parseInt(month), { promo_active: false })
+          ));
           showToast('Promo desactivada', 'success');
         } else {
           const pay  = prompt('Promo tipo "paga X, gratis Y" — ¿Cuántas noches se pagan? (ej: 2)', '2');
           if (!pay) return;
           const free = prompt('¿Cuántas noches son gratis? (ej: 1)', '1');
           if (!free) return;
-          const { error } = await upsertMonthlyRate(this.db, this.ctx.hotelId, unit, parseInt(year), parseInt(month), {
-            promo_active: true, promo_pay: parseInt(pay), promo_free: parseInt(free),
-          });
-          if (error) { showToast('Error: ' + error.message, 'error'); return; }
-          showToast('Promo activada ✓', 'success');
+          const results = await Promise.all(units.map(u =>
+            upsertMonthlyRate(this.db, this.ctx.hotelId, u.id, parseInt(year), parseInt(month), {
+              promo_active: true, promo_pay: parseInt(pay), promo_free: parseInt(free),
+            })
+          ));
+          const err = results.find(r => r.error);
+          if (err) { showToast('Error: ' + err.error.message, 'error'); return; }
+          showToast('Promo activada para todos los deptos ✓', 'success');
         }
         await this._renderTariffEditorBody();
       });
@@ -1172,6 +1192,17 @@ export class ConfigPanel {
     // Agregar columna personalizada
     document.getElementById('btn-add-tariff-custom')?.addEventListener('click', () => {
       this._openTariffCustomModal(units);
+    });
+
+    // Editar columna personalizada (nombre/fechas/nota)
+    el.querySelectorAll('.tariff-custom-edit').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const id = btn.dataset.id;
+        const customCols = this._tariffCustomColsCache ?? [];
+        const col = customCols.find(c => String(c.id) === String(id));
+        this._openTariffCustomModal(units, col);
+      });
     });
 
     // Guardar precio de columna personalizada al salir del campo
@@ -1199,8 +1230,8 @@ export class ConfigPanel {
     });
   }
 
-  // ── Modal: crear columna personalizada con selector de fechas real ──
-  _openTariffCustomModal(units) {
+  // ── Modal: crear/editar columna personalizada con selector de fechas real ──
+  _openTariffCustomModal(units, existingCol = null) {
     const overlay   = document.getElementById('overlay-tariff-custom');
     const titleEl   = document.getElementById('tariff-custom-title');
     const noteEl    = document.getElementById('tariff-custom-note');
@@ -1208,10 +1239,16 @@ export class ConfigPanel {
     const datesWrap = document.getElementById('tariff-custom-dates-wrap');
     if (!overlay) return;
 
-    titleEl.value = '';
-    noteEl.value  = '';
-    useDateEl.checked = true;
-    datesWrap.style.display = '';
+    const isEdit = !!existingCol;
+    const modalTitleEl = document.getElementById('tariff-custom-modal-title');
+    if (modalTitleEl) modalTitleEl.textContent = isEdit ? 'Editar columna' : 'Nueva columna personalizada';
+    const confirmBtn = document.getElementById('tariff-custom-confirm');
+    if (confirmBtn) confirmBtn.textContent = isEdit ? 'Guardar cambios' : 'Crear columna';
+
+    titleEl.value = isEdit ? (existingCol.title ?? '') : '';
+    noteEl.value  = isEdit ? (existingCol.note ?? '') : '';
+    useDateEl.checked = isEdit ? !!(existingCol.date_from && existingCol.date_to) : true;
+    datesWrap.style.display = useDateEl.checked ? '' : 'none';
     overlay.classList.remove('hidden');
 
     let picker = this._tariffDrp;
@@ -1220,6 +1257,9 @@ export class ConfigPanel {
       this._tariffDrp = picker;
     } else {
       picker.clear();
+    }
+    if (isEdit && existingCol.date_from && existingCol.date_to) {
+      picker.setValue?.(existingCol.date_from, existingCol.date_to);
     }
 
     useDateEl.onchange = () => {
@@ -1243,13 +1283,15 @@ export class ConfigPanel {
         dateTo   = checkOut;
       }
 
-      const { data, error } = await upsertCustomColumn(this.db, this.ctx.hotelId, {
-        title, note: note || null, date_from: dateFrom, date_to: dateTo, position: 999, active: true,
-      }).select().single();
+      const payload = isEdit
+        ? { id: existingCol.id, title, note: note || null, date_from: dateFrom, date_to: dateTo, position: existingCol.position ?? 999, active: true }
+        : { title, note: note || null, date_from: dateFrom, date_to: dateTo, position: 999, active: true };
+
+      const { data, error } = await upsertCustomColumn(this.db, this.ctx.hotelId, payload).select().single();
       if (error) { showToast('Error: ' + error.message, 'error'); return; }
 
       close();
-      showToast('Columna creada ✓ — cargá el precio por unidad en la tabla', 'success');
+      showToast(isEdit ? 'Columna actualizada ✓' : 'Columna creada ✓ — cargá el precio por unidad en la tabla', 'success');
       await this._renderTariffEditorBody();
     };
   }
