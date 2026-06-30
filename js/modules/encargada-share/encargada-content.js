@@ -62,19 +62,26 @@ export function generateEncargadaPDF(bookings, rangeLabel, includeAmounts) {
       `<span class="enc-unit">${unitDot(bu)}</span>`
     ).join(' ');
 
+    const isCleaning = !includeAmounts; // modo solo-limpieza
+    const cardLabel  = isCleaning ? 'Limpieza 🧹' : 'Nueva Reserva 🧾';
+
     const amountRow = includeAmounts && balance > 0
       ? `<div class="enc-row"><span class="enc-lbl">Abonan al ingreso:</span><span class="enc-val enc-money">${esc(fmtMoney(balance))}</span></div>`
       : '';
+    const cleaningRow = isCleaning
+      ? `<div class="enc-row enc-cleaning-row"><span class="enc-lbl">🧹 Día de limpieza:</span><span class="enc-val enc-cleaning-date">${esc(fmtDate(b.check_out))}</span></div>`
+      : '';
     const statusBadge = includeAmounts
       ? `<span class="enc-badge enc-badge-${balance <= 0 ? 'paid' : (b.total_paid > 0 ? 'partial' : 'pending')}">${esc(status)}</span>`
-      : '';
+      : `<span class="enc-badge enc-badge-cleaning">Solo limpieza</span>`;
 
     return `
-      <div class="enc-card">
+      <div class="enc-card${isCleaning ? ' enc-card-cleaning' : ''}">
         <div class="enc-card-head">
-          <span class="enc-head-label">Nueva Reserva 🧾</span>
+          <span class="enc-head-label">${cardLabel}</span>
           ${statusBadge}
         </div>
+        ${cleaningRow}
         <div class="enc-row"><span class="enc-lbl">Apellido y Nombre:</span><span class="enc-val enc-bold">${esc(name)}</span></div>
         <div class="enc-row"><span class="enc-lbl">Contacto:</span><span class="enc-val">${esc(phone)}</span></div>
         <div class="enc-row"><span class="enc-lbl">Apart. N°:</span><span class="enc-val">${unitHtml || '—'}</span></div>
@@ -110,6 +117,11 @@ export function generateEncargadaPDF(bookings, rangeLabel, includeAmounts) {
       .enc-badge-paid{background:#dcfce7;color:#15803d}
       .enc-badge-partial{background:#fef3c7;color:#b45309}
       .enc-badge-pending{background:#fee2e2;color:#dc2626}
+      .enc-badge-cleaning{background:#f0f9ff;color:#0284c7;border:1px solid #bae6fd}
+      .enc-card-cleaning{border-color:#bae6fd;background:#f0f9ff}
+      .enc-card-cleaning .enc-card-head{border-bottom-color:#bae6fd}
+      .enc-cleaning-row{background:#e0f2fe;border-radius:8px;margin:-4px -4px 6px;padding:8px 12px!important;border:none!important}
+      .enc-cleaning-date{font-size:16px!important;font-weight:900!important;color:#0369a1!important}
       .enc-row{display:flex;align-items:baseline;gap:8px;padding:5px 0;border-bottom:1px dashed #f1f5f9;font-size:13px}
       .enc-row:last-child{border-bottom:none}
       .enc-lbl{color:#64748b;flex-shrink:0;min-width:148px;font-size:12px}
@@ -138,7 +150,7 @@ export function generateEncargadaPDF(bookings, rangeLabel, includeAmounts) {
         <div class="enc-header-sub">${blocks.length} reserva${blocks.length !== 1 ? 's' : ''} · Generado el ${now}</div>
       </div>
       <div class="enc-meta">
-        <span>Incluye importes: <strong>${includeAmounts ? 'Sí' : 'No'}</strong></span>
+        <span>Modo: <strong>${includeAmounts ? 'Reservas con importes' : '🧹 Solo limpieza (sin importes)'}</strong></span>
         <span>Uso interno · No válido como factura</span>
       </div>
       ${rows || '<p style="text-align:center;color:#94a3b8;padding:40px">Sin reservas en el período.</p>'}
@@ -159,16 +171,25 @@ export function generateEncargadaWhatsApp(bookings, rangeLabel, includeAmounts) 
 
   const header = [
     `🏡 *Barranca de Termas*`,
-    `📋 *Reservas para Encargada*${rangeLabel ? ' · ' + rangeLabel : ''}`,
+    includeAmounts
+      ? `📋 *Reservas para Encargada*${rangeLabel ? ' · ' + rangeLabel : ''}`
+      : `🧹 *Limpiezas programadas*${rangeLabel ? ' · ' + rangeLabel : ''}`,
     `Generado: ${now} · ${blocks.length} reserva${blocks.length !== 1 ? 's' : ''}`,
     `━━━━━━━━━━━━━━━━━━━━━━`,
   ].join('\n');
 
   const cards = blocks.map(({ b, name, phone, units, nights, pax, balance, notes, status }) => {
-    const unitsText = units.map(bu => unitLabel(bu)).join(' / ') || '—';
+    const unitsText  = units.map(bu => unitLabel(bu)).join(' / ') || '—';
+    const isCleaning = !includeAmounts;
     const lines = [
-      `*Nueva Reserva* 🧾`,
+      isCleaning ? `*Limpieza* 🧹` : `*Nueva Reserva* 🧾`,
       ``,
+    ];
+    if (isCleaning) {
+      lines.push(`🧹 *Día de limpieza: ${fmtDate(b.check_out)}*`);
+      lines.push(``);
+    }
+    lines.push(
       `- Apellido y Nombre: *${name}*`,
       `- Contacto: ${phone}`,
       `- Apart. N°: ${unitsText}`,
@@ -176,7 +197,7 @@ export function generateEncargadaWhatsApp(bookings, rangeLabel, includeAmounts) 
       `- Fecha Salida: ${fmtDate(b.check_out)}`,
       `- Noches: ${nights}`,
       `- Cant. de Personas: ${pax !== '' ? String(pax) : '—'}`,
-    ];
+    );
     if (includeAmounts && balance > 0) {
       lines.push(`- Abonan al ingreso: *${fmtMoney(balance)}*`);
     }

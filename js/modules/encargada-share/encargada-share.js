@@ -185,12 +185,15 @@ function _injectModal() {
 
         <!-- 2. Opción importes -->
         <div class="enc-section">
-          <div class="enc-section-title">💰 Importes</div>
+          <div class="enc-section-title">💰 Modo de envío</div>
           <label class="enc-check-label">
             <input type="checkbox" id="enc-include-amounts" checked>
             <span class="enc-check-text">Incluir importe a cobrar al ingreso</span>
           </label>
-          <p class="enc-check-hint">Desactivado → no se muestra ningún dato económico.</p>
+          <p class="enc-check-hint">
+            ✅ <strong>Activado</strong> → la encargada recibe el pago y ve el monto pendiente.<br>
+            🧹 <strong>Desactivado</strong> → modo <em>solo limpieza</em>: muestra el día que tiene que ir a limpiar (check-out), sin ningún dato económico.
+          </p>
         </div>
 
         <!-- 3. Destinatario -->
