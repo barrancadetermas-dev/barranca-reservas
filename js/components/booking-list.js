@@ -464,21 +464,25 @@ export class BookingList {
     html += this._renderSortTabs();
 
     // Header con conteo y exportar
-    html += `<div class="list-header-bar">
-      <span class="list-count">${filtered.length} reserva${filtered.length !== 1 ? 's' : ''}</span>
-      <div style="display:flex;gap:8px;align-items:center;margin-left:auto">`;
+    html += `<div class="list-header-bar" style="display:flex;align-items:center;justify-content:space-between">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span class="list-count">${filtered.length} reserva${filtered.length !== 1 ? 's' : ''}</span>`;
 
     if (can('exportData')) {
       html += `<button class="btn btn-outline btn-sm" id="btn-export-list" style="gap:5px">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
         Exportar ▾
-      </button>
-      <button class="btn btn-sm" id="btn-share-encargada" style="gap:5px;background:#e0f2fe;color:#0284c7;border:1.5px solid #7dd3fc;font-weight:700">
+      </button>`;
+    }
+    html += `</div>`;
+
+    if (can('exportData')) {
+      html += `<button class="btn btn-sm" id="btn-share-encargada" style="gap:5px;background:#e0f2fe;color:#0284c7;border:1.5px solid #7dd3fc;font-weight:700">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
         Encargada
       </button>`;
     }
-    html += `</div></div>`;
+    html += `</div>`;
 
     // Filas
     html += showing.map(b => this._renderRow(b, today)).join('');
