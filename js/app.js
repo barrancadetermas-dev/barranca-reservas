@@ -288,7 +288,7 @@ async function initApp(user) {
     window._statsInstance = statistics;
     window._operations   = operations;
 
-    // ── Módulo independiente: "Preguntale a MILA" (no afecta nada de lo anterior) ──
+    // ── Módulo independiente: "Preguntale a MILA" (tab propio, no afecta nada de lo anterior) ──
     tryInit('MilaAssistant', () => initMilaAssistant({
       can, isDemo, showToast,
       getBookingOpener: () => window._bookingFormInstance,
@@ -469,6 +469,7 @@ const SECTION_META = {
   audit:      { title: 'Auditoría',                  icon: '📜', sub: 'Registro del Sistema · Historial de acciones' },
   config:     { title: 'Configuración',              icon: '⚙️', sub: 'Panel de Administración · Comisiones · Tarifas · Departamentos' },
   tariffs:    { title: 'Cuadro Tarifario',            icon: '🏷️', sub: 'Precios por departamento y mes' },
+  mila:       { title: 'Preguntale a Mila',           icon: '🤖', sub: 'Asistente inteligente · Consultas rápidas' },
 };
 const SECTION_TITLES = Object.fromEntries(Object.entries(SECTION_META).map(([k,v]) => [k, v.title]));
 

@@ -1,245 +1,279 @@
 // ══════════════════════════════════════════════════
 // mila-assistant.js — "🤖 Preguntale a MILA"
-// Módulo 100% independiente. No modifica calendario,
+// Módulo 100% independiente, vive en su propio tab de
+// sidebar (#section-mila). No modifica calendario,
 // reservas, disponibilidad, estadísticas ni navegación
 // existentes. Reutiliza la lógica del sistema a través
 // de mila-data.js (mismas consultas, mismos criterios).
 // ══════════════════════════════════════════════════
-import { AppContext, formatARS, localToday } from '../../supabase-config.js';
+import { AppContext, formatARS, localToday, localDateISO } from '../../supabase-config.js';
 import * as MilaData from './mila-data.js';
 
 let ctx = null;       // { can, isDemo, showToast, getBookingOpener }
-let rootEl = null;
 let bodyEl = null;
-let isMobile = () => window.matchMedia('(max-width: 860px)').matches;
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
-const fmtDate = (iso) => { if (!iso) return '—'; const [y,m,d] = iso.split('-'); return `${d}/${m}/${y}`; };
+const fmtDate  = (iso) => { if (!iso) return '—'; const [y,m,d] = iso.split('-'); return `${d}/${m}/${y}`; };
+const MES_CORTO = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+const fmtShort = (iso) => { if (!iso) return '—'; const [, m, d] = iso.split('-').map(Number); return `${d} ${MES_CORTO[m-1]}`; };
+const addDays = (iso, n) => localDateISO(new Date(new Date(iso + 'T12:00:00').getTime() + n * 86400000));
 
-// ── Definición de las 8 consultas rápidas ──────────
+// type: 'date' (1 fecha) | 'range' (ingreso/salida, 1 noche por defecto) |
+// 'period' (desde/hasta libre) | 'preset' (dropdown de período) |
+// 'unit-range' (depto + rango) | 'none' (sin campos)
 const QUERIES = [
-  { id: 'checkinout',  icon: '🛎️', title: 'Check-ins / Check-outs', sub: 'Ver movimientos en una fecha' },
-  { id: 'reservas',    icon: '📋', title: 'Reservas',                sub: 'Ver reservas activas en una fecha' },
-  { id: 'disponib',    icon: '🏠', title: 'Disponibilidad',          sub: 'Ver departamentos disponibles' },
-  { id: 'facturacion', icon: '💲', title: 'Facturación',             sub: 'Ver facturación en un período' },
-  { id: 'ocupacion',   icon: '📈', title: 'Ocupación',               sub: 'Ver ocupación en un período' },
-  { id: 'precios',     icon: '🏷️', title: 'Precios',                 sub: 'Consultar precios por fecha' },
-  { id: 'pagos',       icon: '💰', title: 'Pagos pendientes',        sub: 'Ver pagos que faltan cobrar' },
-  { id: 'bloqueos',    icon: '🔒', title: 'Bloqueos',                sub: 'Ver bloqueos en un período' },
+  { id: 'checkinout',  icon: '🛎️', color: 'cyan',   title: 'Check-ins / Check-outs', sub: 'Ver movimientos en una fecha', type: 'date' },
+  { id: 'reservas',    icon: '📋', color: 'blue',   title: 'Reservas',                sub: 'Ver reservas en una fecha',    type: 'date' },
+  { id: 'disponib',    icon: '🏠', color: 'green',  title: 'Disponibilidad',          sub: 'Ver departamentos disponibles', type: 'range' },
+  { id: 'facturacion', icon: '💲', color: 'orange', title: 'Facturación',             sub: 'Ver facturación en un período', type: 'period' },
+  { id: 'ocupacion',   icon: '📈', color: 'purple', title: 'Ocupación',               sub: 'Ver ocupación en un período',  type: 'preset' },
+  { id: 'precios',     icon: '🏷️', color: 'pink',   title: 'Precios',                 sub: 'Consultar precios por fecha',  type: 'unit-range' },
+  { id: 'pagos',       icon: '💰', color: 'amber',  title: 'Pagos pendientes',        sub: 'Ver pagos que faltan cobrar',  type: 'none' },
+  { id: 'bloqueos',    icon: '🔒', color: 'indigo', title: 'Bloqueos',                sub: 'Ver bloqueos en una fecha',    type: 'date' },
 ];
+
+const PRESETS = {
+  this_month: () => { const d = new Date(), y = d.getFullYear(), m = d.getMonth(); return { label: 'Este mes',          from: localDateISO(new Date(y, m, 1)),   to: localDateISO(new Date(y, m + 1, 0)) }; },
+  last_month: () => { const d = new Date(), y = d.getFullYear(), m = d.getMonth(); return { label: 'Mes pasado',        from: localDateISO(new Date(y, m - 1, 1)), to: localDateISO(new Date(y, m, 0)) }; },
+  next_30:    () => { const today = localToday(); return { label: 'Próximos 30 días', from: today, to: addDays(today, 30) }; },
+};
+
+// Estado de los campos por fila (en memoria, no persiste entre sesiones)
+const fieldState = {};
 
 export function initMilaAssistant(options = {}) {
   ctx = options;
-  if (rootEl) return; // ya inicializado
-  injectMarkup();
-  bindEvents();
-}
-
-function injectMarkup() {
-  rootEl = document.createElement('div');
-  rootEl.id = 'mila-assist-root';
-  rootEl.innerHTML = `
-    <button id="mila-fab" class="mila-fab" aria-label="Preguntale a MILA" title="Preguntale a MILA">
-      <span class="mila-fab-emoji">🤖</span>
-    </button>
-    <div id="mila-overlay" class="mila-overlay" hidden></div>
-    <div id="mila-panel" class="mila-panel" hidden role="dialog" aria-label="Preguntale a MILA">
-      <header class="mila-header">
-        <div class="mila-header-left">
-          <span class="mila-header-emoji">🤖</span>
-          <div>
-            <div class="mila-header-title">MILA <span class="mila-beta">BETA</span></div>
-            <div class="mila-header-sub">Asistente inteligente</div>
-          </div>
-        </div>
-        <button id="mila-close" class="mila-close-btn" aria-label="Cerrar">✕</button>
-      </header>
-      <div id="mila-body" class="mila-body"></div>
-    </div>
-  `;
-  document.body.appendChild(rootEl);
-  bodyEl = rootEl.querySelector('#mila-body');
+  bodyEl = document.getElementById('mila-container');
+  if (!bodyEl || bodyEl.dataset.milaInit) return; // ya inicializado o sección inexistente
+  bodyEl.dataset.milaInit = '1';
   renderList();
 }
 
-function bindEvents() {
-  rootEl.querySelector('#mila-fab').addEventListener('click', openPanel);
-  rootEl.querySelector('#mila-close').addEventListener('click', closePanel);
-  rootEl.querySelector('#mila-overlay').addEventListener('click', closePanel);
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && !rootEl.querySelector('#mila-panel').hidden) closePanel();
-  });
-}
-
-function openPanel() {
-  rootEl.querySelector('#mila-panel').hidden = false;
-  if (!isMobile()) rootEl.querySelector('#mila-overlay').hidden = false;
-  document.body.classList.add('mila-open');
-  renderList();
-}
-function closePanel() {
-  rootEl.querySelector('#mila-panel').hidden = true;
-  rootEl.querySelector('#mila-overlay').hidden = true;
-  document.body.classList.remove('mila-open');
+function initState(q, todayISO) {
+  if (fieldState[q.id]) return fieldState[q.id];
+  const s = {};
+  if (q.type === 'date')       s.date = todayISO;
+  if (q.type === 'range')      { s.from = todayISO; s.to = addDays(todayISO, 1); s.toEdited = false; }
+  if (q.type === 'period')     { const d = new Date(); s.from = localDateISO(new Date(d.getFullYear(), d.getMonth(), 1)); s.to = todayISO; }
+  if (q.type === 'unit-range') { s.unitId = (AppContext.units ?? [])[0]?.id ?? ''; s.from = todayISO; s.to = addDays(todayISO, 1); s.toEdited = false; }
+  if (q.type === 'preset')     s.preset = 'this_month';
+  fieldState[q.id] = s;
+  return s;
 }
 
 // ── Vista: lista de consultas rápidas ──────────────
 function renderList() {
   const todayISO = localToday();
   bodyEl.innerHTML = `
-    <div class="mila-section-label">Consultas rápidas</div>
-    <div class="mila-rows">
-      ${QUERIES.map(q => rowTemplate(q, todayISO)).join('')}
-    </div>
-    <div class="mila-soon-card">
-      <div class="mila-soon-icon">✨</div>
-      <div>
-        <div class="mila-soon-title">Próximamente</div>
-        <div class="mila-soon-text">Escribí o hablá con MILA AI. Muy pronto vas a poder realizar consultas en lenguaje natural utilizando Inteligencia Artificial.</div>
-        <div class="mila-soon-input-row">
-          <input type="text" class="mila-soon-input" placeholder="Escribí tu consulta..." disabled>
-          <button class="mila-soon-mic" disabled>🎙️</button>
+    <div class="mila-page">
+      <div class="mila-page-header">
+        <span class="mila-page-emoji">🤖</span>
+        <div>
+          <div class="mila-page-title">MILA <span class="mila-beta">BETA</span></div>
+          <div class="mila-page-sub">Asistente inteligente</div>
+        </div>
+      </div>
+
+      <div class="mila-section-label">Consultas rápidas</div>
+      <div class="mila-rows">
+        ${QUERIES.map(q => rowTemplate(q, todayISO)).join('')}
+      </div>
+
+      <div class="mila-soon-card">
+        <span class="mila-soon-bot">🤖</span>
+        <div class="mila-soon-body">
+          <div class="mila-soon-title">✨ Próximamente</div>
+          <div class="mila-soon-text">Escribí o hablá con MILA AI. Muy pronto vas a poder realizar consultas en lenguaje natural utilizando Inteligencia Artificial.</div>
+          <div class="mila-soon-input-row">
+            <input type="text" class="mila-soon-input" placeholder="Escribí tu consulta..." disabled>
+            <button class="mila-soon-mic" disabled>🎙️</button>
+          </div>
         </div>
       </div>
     </div>
   `;
-  wireRowEvents();
+  bodyEl.querySelectorAll('.mila-row').forEach(rowEl => attachRow(rowEl, todayISO));
+}
+
+const colorClass = (c) => `mila-ic-${c}`;
+
+function pillHTML(field, label, value) {
+  const text = value ? fmtShort(value) : label;
+  return `<button type="button" class="mila-pill" data-field="${field}">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+    <span>${esc(text)}</span>
+    <input type="date" class="mila-pill-input" value="${value || ''}" tabindex="-1">
+  </button>`;
 }
 
 function rowTemplate(q, todayISO) {
-  const units = (AppContext.units ?? []).slice().sort((a,b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
+  const s = initState(q, todayISO);
   let controls = '';
-  switch (q.id) {
-    case 'checkinout':
-    case 'reservas':
-    case 'bloqueos':
-      controls = `<input type="date" class="mila-input mila-date" value="${todayISO}">`;
+  switch (q.type) {
+    case 'date':
+      controls = pillHTML('date', 'Elegir fecha', s.date);
       break;
-    case 'disponib':
-    case 'facturacion':
-    case 'ocupacion':
-      controls = `
-        <input type="date" class="mila-input mila-date-from" value="${todayISO}">
-        <input type="date" class="mila-input mila-date-to" value="${todayISO}">`;
+    case 'range':
+      controls = pillHTML('from', 'Ingreso', s.from) + pillHTML('to', 'Salida', s.to);
       break;
-    case 'precios':
+    case 'period':
+      controls = pillHTML('from', 'Desde', s.from) + pillHTML('to', 'Hasta', s.to);
+      break;
+    case 'unit-range': {
+      const units = (AppContext.units ?? []).slice().sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
       controls = `
-        <select class="mila-input mila-unit-select">
-          ${units.map(u => `<option value="${u.id}">${esc(u.name)}</option>`).join('')}
+        <select class="mila-pill mila-select" data-field="unitId">
+          ${units.map(u => `<option value="${u.id}" ${u.id === s.unitId ? 'selected' : ''}>${esc(u.name)}</option>`).join('')}
         </select>
-        <input type="date" class="mila-input mila-date-from" value="${todayISO}">
-        <input type="date" class="mila-input mila-date-to" value="${todayISO}">`;
+        ${pillHTML('from', 'Ingreso', s.from)}${pillHTML('to', 'Salida', s.to)}`;
       break;
-    case 'pagos':
-      controls = '';
+    }
+    case 'preset':
+      controls = `
+        <select class="mila-pill mila-select" data-field="preset">
+          ${Object.entries(PRESETS).map(([k, fn]) => `<option value="${k}" ${k === s.preset ? 'selected' : ''}>${fn().label}</option>`).join('')}
+        </select>`;
+      break;
+    case 'none':
+      controls = `<span class="mila-chevron">›</span>`;
       break;
   }
   return `
-    <div class="mila-row" data-query="${q.id}">
-      <div class="mila-row-main">
-        <span class="mila-row-icon">${q.icon}</span>
-        <div class="mila-row-text">
-          <div class="mila-row-title">${q.title}</div>
-          <div class="mila-row-sub">${q.sub}</div>
-        </div>
+    <div class="mila-row" data-query="${q.id}" tabindex="0" role="button">
+      <span class="mila-row-icon ${colorClass(q.color)}">${q.icon}</span>
+      <div class="mila-row-text">
+        <div class="mila-row-title">${q.title}</div>
+        <div class="mila-row-sub">${q.sub}</div>
       </div>
       <div class="mila-row-controls">${controls}</div>
-      <button class="mila-row-btn" data-action="consultar" data-query="${q.id}">Consultar</button>
     </div>`;
 }
 
-function wireRowEvents() {
-  bodyEl.querySelectorAll('.mila-row-btn').forEach(btn => {
-    btn.addEventListener('click', () => runQuery(btn.dataset.query, btn.closest('.mila-row')));
+// Conecta los eventos de una fila (pills, selects, click general). Se usa
+// tanto en el render inicial como al re-pintar una fila tras elegir fecha.
+function attachRow(rowEl, todayISO) {
+  const queryId = rowEl.dataset.query;
+  const q = QUERIES.find(x => x.id === queryId);
+  const s = fieldState[queryId];
+
+  rowEl.querySelectorAll('.mila-pill[data-field]').forEach(pill => {
+    const field = pill.dataset.field;
+    const input = pill.querySelector('.mila-pill-input');
+    pill.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (input.showPicker) { try { input.showPicker(); return; } catch { /* fallback abajo */ } }
+      input.focus(); input.click();
+    });
+    input.addEventListener('click', (e) => e.stopPropagation());
+    input.addEventListener('change', (e) => {
+      e.stopPropagation();
+      const val = input.value;
+      if (!val) return;
+      s[field] = val;
+      // 1 noche por defecto: si todavía no se tocó "Salida", sigue a "Ingreso"
+      if (field === 'from' && (q.type === 'range' || q.type === 'unit-range') && !s.toEdited) s.to = addDays(val, 1);
+      if (field === 'to') s.toEdited = true;
+      const fresh = document.createElement('div');
+      fresh.innerHTML = rowTemplate(q, todayISO).trim();
+      const newRow = fresh.firstElementChild;
+      rowEl.replaceWith(newRow);
+      attachRow(newRow, todayISO);
+    });
   });
+
+  rowEl.querySelectorAll('.mila-select').forEach(sel => {
+    sel.addEventListener('click', (e) => e.stopPropagation());
+    sel.addEventListener('change', (e) => { e.stopPropagation(); s[sel.dataset.field] = sel.value; });
+  });
+
+  // Click en cualquier otra parte de la fila → ejecutar la consulta (tipo "pregunta")
+  rowEl.addEventListener('click', () => runQuery(queryId));
+  rowEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') runQuery(queryId); });
 }
 
 // ── Ejecutar consulta y mostrar resultados ─────────
-async function runQuery(queryId, rowEl) {
-  const btn = rowEl.querySelector('.mila-row-btn');
-  const prevLabel = btn.textContent;
-  btn.disabled = true; btn.textContent = '...';
+async function runQuery(queryId) {
+  const q = QUERIES.find(x => x.id === queryId);
+  const s = fieldState[queryId];
   try {
-    const date     = rowEl.querySelector('.mila-date')?.value;
-    const dateFrom = rowEl.querySelector('.mila-date-from')?.value;
-    const dateTo   = rowEl.querySelector('.mila-date-to')?.value;
-    const unitId   = rowEl.querySelector('.mila-unit-select')?.value;
-
     switch (queryId) {
       case 'checkinout': {
-        const data = await MilaData.fetchCheckInsOuts(date);
-        renderResults('🛎️ Check-ins / Check-outs', `${fmtDate(date)}`, checkInOutHTML(data));
+        const data = await MilaData.fetchCheckInsOuts(s.date);
+        renderResults(q, fmtDate(s.date), checkInOutHTML(data));
         break;
       }
       case 'reservas': {
-        const data = await MilaData.fetchReservasByDate(date);
-        renderResults('📋 Reservas', `${fmtDate(date)}`, reservasHTML(data));
+        const data = await MilaData.fetchReservasByDate(s.date);
+        renderResults(q, fmtDate(s.date), reservasHTML(data));
         break;
       }
       case 'disponib': {
-        if (dateFrom >= dateTo) { ctx.showToast?.('⚠️ La fecha de salida debe ser posterior al ingreso', 'warning'); break; }
-        const data = await MilaData.fetchDisponibilidad(dateFrom, dateTo);
-        renderResults('🏠 Disponibilidad', `${fmtDate(dateFrom)} → ${fmtDate(dateTo)}`, disponibilidadHTML(data));
+        if (s.from >= s.to) { ctx.showToast?.('⚠️ La fecha de salida debe ser posterior al ingreso', 'warning'); return; }
+        const data = await MilaData.fetchDisponibilidad(s.from, s.to);
+        renderResults(q, `${fmtDate(s.from)} → ${fmtDate(s.to)}`, disponibilidadHTML(data));
         break;
       }
       case 'facturacion': {
-        const data = await MilaData.fetchFacturacion(dateFrom, dateTo);
-        renderResults('💲 Facturación', `${fmtDate(dateFrom)} → ${fmtDate(dateTo)}`, facturacionHTML(data));
+        const data = await MilaData.fetchFacturacion(s.from, s.to);
+        renderResults(q, `${fmtDate(s.from)} → ${fmtDate(s.to)}`, facturacionHTML(data));
         break;
       }
       case 'ocupacion': {
-        const data = await MilaData.fetchOcupacion(dateFrom, dateTo);
-        renderResults('📈 Ocupación', `${fmtDate(dateFrom)} → ${fmtDate(dateTo)}`, ocupacionHTML(data));
+        const { label, from, to } = PRESETS[s.preset]();
+        const data = await MilaData.fetchOcupacion(from, to);
+        renderResults(q, label, ocupacionHTML(data));
         break;
       }
       case 'precios': {
-        if (!unitId) break;
-        if (dateFrom >= dateTo) { ctx.showToast?.('⚠️ La fecha de salida debe ser posterior al ingreso', 'warning'); break; }
-        const data = await MilaData.fetchPrecios(unitId, dateFrom, dateTo);
-        renderResults('🏷️ Precios', `${fmtDate(dateFrom)} → ${fmtDate(dateTo)}`, preciosHTML(data));
+        if (!s.unitId) return;
+        if (s.from >= s.to) { ctx.showToast?.('⚠️ La fecha de salida debe ser posterior al ingreso', 'warning'); return; }
+        const data = await MilaData.fetchPrecios(s.unitId, s.from, s.to);
+        renderResults(q, `${fmtDate(s.from)} → ${fmtDate(s.to)}`, preciosHTML(data));
         break;
       }
       case 'pagos': {
         const data = await MilaData.fetchPagosPendientes();
-        renderResults('💰 Pagos pendientes', '', pagosHTML(data));
+        renderResults(q, '', pagosHTML(data));
         break;
       }
       case 'bloqueos': {
-        const data = await MilaData.fetchBloqueos(date);
-        renderResults('🔒 Bloqueos', `${fmtDate(date)}`, bloqueosHTML(data));
+        const data = await MilaData.fetchBloqueos(s.date);
+        renderResults(q, fmtDate(s.date), bloqueosHTML(data));
         break;
       }
     }
   } catch (err) {
     console.error('[MILA Assistant]', err);
     ctx.showToast?.('Error al consultar', 'error');
-  } finally {
-    btn.disabled = false; btn.textContent = prevLabel;
   }
 }
 
 // ── Vista de resultados ────────────────────────────
-function renderResults(title, subtitle, contentHTML) {
+function renderResults(q, subtitle, contentHTML) {
   bodyEl.innerHTML = `
-    <button class="mila-back-btn" id="mila-back">← Volver a consultas</button>
-    <div class="mila-results-title">${title}</div>
-    ${subtitle ? `<div class="mila-results-sub">${subtitle}</div>` : ''}
-    <div class="mila-results-content">${contentHTML}</div>
+    <div class="mila-page">
+      <button class="mila-back-btn" id="mila-back">← Volver a consultas</button>
+      <div class="mila-results-title">${q.icon} ${q.title}</div>
+      ${subtitle ? `<div class="mila-results-sub">${subtitle}</div>` : ''}
+      <div class="mila-results-content">${contentHTML}</div>
+    </div>
   `;
   bodyEl.querySelector('#mila-back').addEventListener('click', renderList);
   bodyEl.querySelectorAll('[data-open-booking]').forEach(b => {
     b.addEventListener('click', () => {
       const id = b.dataset.openBooking;
       const opener = ctx.getBookingOpener?.();
-      if (opener?.openEdit) { closePanel(); opener.openEdit(id); }
-      else ctx.showToast?.('No se pudo abrir la reserva', 'warning');
+      if (opener?.openEdit) {
+        // Abre directamente el Voucher (paso 5 del formulario), no el formulario de edición
+        opener.openEdit(id).then(() => opener._goToStep?.(5));
+      } else {
+        ctx.showToast?.('No se pudo abrir la reserva', 'warning');
+      }
     });
   });
 }
 
-function emptyState(msg) {
-  return `<div class="mila-empty">✓ ${msg}</div>`;
-}
+function emptyState(msg) { return `<div class="mila-empty">✓ ${msg}</div>`; }
 
 function bookingCard({ id, title, lines, badge }) {
   return `
@@ -249,7 +283,7 @@ function bookingCard({ id, title, lines, badge }) {
         ${badge ? `<span class="mila-badge-pill">${badge}</span>` : ''}
       </div>
       ${lines.map(l => `<div class="mila-card-line">${l}</div>`).join('')}
-      ${id ? `<button class="mila-card-btn" data-open-booking="${id}">Ver Reserva</button>` : ''}
+      ${id ? `<button class="mila-card-btn" data-open-booking="${id}">Ver Voucher</button>` : ''}
     </div>`;
 }
 
