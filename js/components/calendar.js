@@ -2591,7 +2591,10 @@ export class Calendar {
             const promoTag = cell.promoActive && cell.promoPay && cell.promoFree
               ? `<span style="font-size:.56rem;background:#FEF3C7;color:#92400E;padding:0 3px;border-radius:3px;margin-left:3px">${cell.promoPay}+${cell.promoFree}</span>`
               : '';
-            return `<td style="text-align:right;padding:5px 8px;font-size:.74rem;color:var(--color-text);white-space:nowrap">${fmt(cell.price)}${promoTag}</td>`;
+            const promoTitle = cell.promoActive && cell.promoPay && cell.promoFree && cell.price != null
+              ? ` title="PROMO ${cell.promoPay}+${cell.promoFree} (${fmt(cell.price)}) = ${fmt(cell.price * cell.promoPay)} — pagás ${cell.promoPay} noche${cell.promoPay === 1 ? '' : 's'}, ${cell.promoFree} gratis"`
+              : '';
+            return `<td${promoTitle} style="text-align:right;padding:5px 8px;font-size:.74rem;color:var(--color-text);white-space:nowrap;${cell.promoActive ? 'cursor:help' : ''}">${fmt(cell.price)}${promoTag}</td>`;
           }
           const sub = cell.nights ? `<span style="font-size:.58rem;color:var(--color-text-3)"> /${cell.nights}n</span>` : '';
           return `<td style="text-align:right;padding:5px 8px;font-size:.74rem;font-weight:600;color:var(--color-text);white-space:nowrap">${fmt(cell.price)}${sub}</td>`;

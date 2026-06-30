@@ -1085,9 +1085,12 @@ export class ConfigPanel {
                   value="${price}" placeholder="—" style="width:78px;padding:4px 6px;font-size:.78rem;text-align:right;border:1px solid var(--color-border);border-radius:6px;background:var(--color-surface)">
                 <button class="tariff-promo-btn" data-unit="${u.id}" data-year="${m.year}" data-month="${m.month}"
                   data-on="${promoOn ? '1':'0'}" data-pay="${promoPay}" data-free="${promoFree}"
-                  title="Promo (ej: 2+1)" style="background:none;border:none;cursor:pointer;font-size:.85rem;padding:2px;opacity:${promoOn ? '1':'.35'}">✏️</button>
+                  title="${promoOn && promoPay && promoFree
+                    ? `PROMO ${promoPay}+${promoFree}${price ? ` ($${Number(price).toLocaleString('es-AR')}) = $${(price * promoPay).toLocaleString('es-AR')}` : ''} — pagás ${promoPay}, ${promoFree} gratis (clic para editar o desactivar)`
+                    : 'Activar promo tipo "2+1" (pagás X noches, Y gratis)'}"
+                  style="background:none;border:none;cursor:pointer;font-size:.85rem;padding:2px;opacity:${promoOn ? '1':'.35'}">🏷️</button>
               </div>
-              ${promoOn && promoPay && promoFree ? `<div style="font-size:.62rem;color:#D97706;text-align:right;margin-top:2px">${promoPay}+${promoFree} activa</div>` : ''}
+              ${promoOn && promoPay && promoFree ? `<div style="font-size:.62rem;color:#D97706;text-align:right;margin-top:2px" title="PROMO ${promoPay}+${promoFree}${price ? ` ($${Number(price).toLocaleString('es-AR')}) = $${(price * promoPay).toLocaleString('es-AR')}` : ''} — pagás ${promoPay} noches, ${promoFree} gratis">${promoPay}+${promoFree} activa</div>` : ''}
             </td>`;
         }
         const c = col.c;
@@ -1109,7 +1112,7 @@ export class ConfigPanel {
 
     el.innerHTML = `
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-        <span style="font-size:.7rem;color:var(--color-text-3)">Los precios se guardan automáticamente al salir del campo. El ✏️ permite activar una promo tipo "2+1".</span>
+        <span style="font-size:.7rem;color:var(--color-text-3)">Los precios se guardan automáticamente al salir del campo. El 🏷️ permite activar una promo tipo "2+1".</span>
         <button class="btn btn-outline btn-sm" id="btn-add-tariff-custom" style="flex-shrink:0;margin-left:10px">+ Agregar columna</button>
       </div>
       <div style="overflow-x:auto;margin-bottom:8px">
