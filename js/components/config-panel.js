@@ -35,32 +35,6 @@ const CONFIG_SCHEMA = [
       { key: 'surcharge_mercadopago', label: 'MercadoPago',         default: 0,  type: 'number', min: 0, max: 50, step: 0.5 },
     ],
   },
-  {
-    group: 'Impuestos (%)',
-    icon: '📋',
-    fields: [
-      { key: 'tax_iva',     label: 'IVA',              default: 21,  type: 'number', min: 0, max: 100, step: 0.5 },
-      { key: 'tax_turismo', label: 'Tasa turística',   default: 0,   type: 'number', min: 0, max: 100, step: 0.5 },
-    ],
-  },
-  {
-    group: 'Operación',
-    icon: '🏨',
-    fields: [
-      { key: 'checkin_hour',  label: 'Hora estándar de check-in',  default: '14:00', type: 'time' },
-      { key: 'checkout_hour', label: 'Hora estándar de check-out', default: '10:00', type: 'time' },
-      { key: 'wifi_name',     label: 'Nombre de la red WiFi',       default: '',      type: 'text' },
-      { key: 'wifi_pass',     label: 'Contraseña WiFi',             default: '',      type: 'text' },
-    ],
-  },
-  {
-    group: 'Reservas',
-    icon: '📅',
-    fields: [
-      { key: 'min_advance_pct',   label: 'Anticipo mínimo requerido (%)', default: 30, type: 'number', min: 0, max: 100, step: 5 },
-      { key: 'provisional_days',  label: 'Días máximos reserva provisional', default: 7, type: 'number', min: 1, max: 60, step: 1 },
-    ],
-  },
 ];
 
 export class ConfigPanel {
@@ -94,6 +68,19 @@ export class ConfigPanel {
 
     container.innerHTML = this._renderPanel();
     this._bindSave(container);
+  }
+
+  // Formatea un número para mostrar en los inputs del Cuadro Tarifario:
+  // separador de miles con punto y sufijo ".-" al final (ej: 580.000.-)
+  _fmtTariffPrice(n) {
+    if (n === '' || n === null || n === undefined || isNaN(n)) return '';
+    return Math.round(n).toLocaleString('es-AR') + '.-';
+  }
+
+  // Quita el formato para dejar solo los dígitos editables (sin puntos ni .-)
+  _rawTariffPrice(val) {
+    if (!val) return '';
+    return String(val).replace(/\.-$/, '').replace(/\./g, '').trim();
   }
 
   _getValue(key, defaultVal) {
@@ -206,7 +193,7 @@ export class ConfigPanel {
           </p>
           <button class="btn btn-primary" id="btn-save-config">💾 Guardar cambios</button>
         </div>
-        <div class="config-groups">${groupsHTML}${tariffHTML}${unitsHTML}</div>
+        <div class="config-groups">${tariffHTML}${groupsHTML}${unitsHTML}</div>
       </div>
 
       <!-- Panel de Control tab -->
@@ -1105,8 +1092,8 @@ export class ConfigPanel {
             <td style="padding:5px 6px;text-align:right">
               <div style="position:relative;display:inline-block">
                 <span style="position:absolute;left:7px;top:50%;transform:translateY(-50%);font-size:.74rem;color:var(--color-text-3);pointer-events:none">$</span>
-                <input type="number" class="tariff-price-input" data-unit="${u.id}" data-year="${m.year}" data-month="${m.month}"
-                  value="${price}" placeholder="—" style="width:90px;padding:4px 6px 4px 18px;font-size:.78rem;text-align:right;border:1px solid var(--color-border);border-radius:6px;background:var(--color-surface)">
+                <input type="text" inputmode="decimal" class="tariff-price-input" data-unit="${u.id}" data-year="${m.year}" data-month="${m.month}"
+                  value="${this._fmtTariffPrice(price)}" placeholder="—" style="width:104px;padding:4px 6px 4px 18px;font-size:.78rem;text-align:right;border:1px solid var(--color-border);border-radius:6px;background:var(--color-surface)">
               </div>
             </td>`;
         }
@@ -1116,8 +1103,8 @@ export class ConfigPanel {
           <td style="padding:5px 6px;text-align:center;background:rgba(99,102,241,.04)">
             <div style="position:relative;display:inline-block">
               <span style="position:absolute;left:7px;top:50%;transform:translateY(-50%);font-size:.74rem;color:var(--color-text-3);pointer-events:none">$</span>
-              <input type="number" class="tariff-custom-price-input" data-col="${c.id}" data-unit="${u.id}"
-                value="${p?.price ?? ''}" placeholder="—" style="width:78px;padding:4px 6px 4px 18px;font-size:.78rem;text-align:center;border:1px solid var(--color-border);border-radius:6px;background:var(--color-surface)">
+              <input type="text" inputmode="decimal" class="tariff-custom-price-input" data-col="${c.id}" data-unit="${u.id}"
+                value="${this._fmtTariffPrice(p?.price)}" placeholder="—" style="width:96px;padding:4px 6px 4px 18px;font-size:.78rem;text-align:center;border:1px solid var(--color-border);border-radius:6px;background:var(--color-surface)">
             </div>
           </td>`;
       }).join('');
@@ -1157,10 +1144,22 @@ export class ConfigPanel {
     // de Departamentos/Unidades), para no tener que cargar el mismo valor
     // a mano en cada una.
     el.querySelectorAll('.tariff-price-input').forEach(input => {
-      input.addEventListener('change', async () => {
+      // Al enfocar, mostrar el número en crudo (sin puntos ni .-) para editar fácil
+      input.addEventListener('focus', () => {
+        input.value = this._rawTariffPrice(input.value);
+        input.select();
+      });
+
+      input.addEventListener('blur', async () => {
         const { unit, year, month } = input.dataset;
-        const price = parseFloat(input.value);
-        if (isNaN(price) || price <= 0) return;
+        const raw = this._rawTariffPrice(input.value);
+        const price = parseFloat(raw);
+
+        if (raw === '' || isNaN(price) || price <= 0) {
+          input.value = '';
+          return;
+        }
+        input.value = this._fmtTariffPrice(price); // reformatear siempre
 
         const sourceUnit = units.find(u => String(u.id) === String(unit));
         const rg = sourceUnit?.rate_group?.trim();
@@ -1176,7 +1175,7 @@ export class ConfigPanel {
         // Reflejar el valor en los inputs de las unidades hermanas sin recargar toda la tabla
         siblings.forEach(u => {
           const sib = el.querySelector(`.tariff-price-input[data-unit="${u.id}"][data-year="${year}"][data-month="${month}"]`);
-          if (sib) sib.value = price;
+          if (sib) sib.value = this._fmtTariffPrice(price);
         });
 
         showToast(siblings.length ? `Tarifa guardada ✓ (replicada a ${siblings.length} depto${siblings.length===1?'':'s'} del mismo grupo)` : 'Tarifa guardada ✓', 'success');
@@ -1231,10 +1230,22 @@ export class ConfigPanel {
 
     // Guardar precio de columna personalizada al salir del campo
     el.querySelectorAll('.tariff-custom-price-input').forEach(input => {
-      input.addEventListener('change', async () => {
+      input.addEventListener('focus', () => {
+        input.value = this._rawTariffPrice(input.value);
+        input.select();
+      });
+
+      input.addEventListener('blur', async () => {
         const { col, unit } = input.dataset;
-        const price = parseFloat(input.value);
-        if (isNaN(price) || price <= 0) return;
+        const raw = this._rawTariffPrice(input.value);
+        const price = parseFloat(raw);
+
+        if (raw === '' || isNaN(price) || price <= 0) {
+          input.value = '';
+          return;
+        }
+        input.value = this._fmtTariffPrice(price);
+
         const { error } = await upsertCustomPrice(this.db, col, unit, { price });
         if (error) { showToast('Error al guardar: ' + error.message, 'error'); return; }
         showToast('Precio guardado ✓', 'success');
