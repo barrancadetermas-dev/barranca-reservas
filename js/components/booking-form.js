@@ -633,18 +633,26 @@ export class BookingForm {
       if (!this._selectedUnitIds.has(uid)) delete this._unitPrices[uid];
     });
 
+    rowsWrap.style.display = 'grid';
+    rowsWrap.style.gridTemplateColumns = 'repeat(2, 1fr)';
+    rowsWrap.style.gap = '10px 12px';
+
     rowsWrap.innerHTML = unitIds.map(uid => {
       const u     = this.ctx.units.find(x => String(x.id) === String(uid));
       const name  = u?.name  ?? 'Unidad';
       const color = u?.color ?? '#6366f1';
       const val   = this._unitPrices[uid] ?? '';
       return `
-        <div class="form-group per-unit-price-row" data-unit-id="${uid}"
-             style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
-          <span style="width:10px;height:10px;border-radius:50%;background:${color};flex-shrink:0"></span>
-          <span style="flex:1;font-size:.82rem;color:var(--color-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0">${name}</span>
+        <div class="per-unit-price-row" data-unit-id="${uid}"
+             style="display:flex;flex-direction:column;gap:5px;padding:8px 10px;
+                    border:1px solid rgba(255,255,255,.1);border-radius:8px;
+                    background:rgba(255,255,255,.03);min-width:0">
+          <div style="display:flex;align-items:center;gap:6px;min-width:0">
+            <span style="width:8px;height:8px;border-radius:50%;background:${color};flex-shrink:0"></span>
+            <span style="font-size:.78rem;color:var(--color-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0">${name}</span>
+          </div>
           <input type="number" class="per-unit-price-input" min="0" step="500" placeholder="45000"
-                 style="width:130px;flex-shrink:0" value="${val}">
+                 style="width:100%" value="${val}">
         </div>`;
     }).join('');
 

@@ -120,7 +120,7 @@ export class BookingList {
             id, first_name, last_name, dni, phone,
             bad_experience, bad_experience_note, tags
           ),
-          booking_units(unit_id, units(name, sort_order, color))
+          booking_units(unit_id, price_per_night, units(name, sort_order, color))
         `)
         .eq('hotel_id', this.ctx.hotelId)
         .order('check_in', { ascending: true });
@@ -911,6 +911,36 @@ export class BookingList {
     const totalPaid   = booking.total_paid   ?? 0;
     const balance     = booking.balance      ?? (totalAmount - totalPaid);
     const saldado     = balance <= 0;
+    const bUnits      = booking.booking_units ?? [];
+
+    // Desglose por departamento cuando hay 2+ unidades con precio individual cargado.
+    // Las señas se prorratean proporcionalmente al precio de cada unidad ya que
+    // los pagos se registran a nivel de toda la reserva, no por unidad.
+    const hasPerUnitPrices = bUnits.length >= 2 && bUnits.every(bu => bu.price_per_night != null && bu.price_per_night > 0);
+    let perUnitRows = '';
+    if (hasPerUnitPrices) {
+      const unitTotals = bUnits.map(bu => ({
+        name:  bu.units?.name ?? '—',
+        color: bu.units?.color ?? '#94A3B8',
+        total: (bu.price_per_night ?? 0) * nights,
+      }));
+      const sumTotals = unitTotals.reduce((s,u) => s + u.total, 0) || 1;
+      perUnitRows = `
+        <div style="border-top:1px solid rgba(255,255,255,.1);padding-top:9px;margin-top:9px">
+          <div style="font-size:.62rem;color:#64748B;text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px">Por departamento</div>
+          ${unitTotals.map(u => {
+            const estPaid = totalPaid * (u.total / sumTotals);
+            const estBal  = Math.max(0, u.total - estPaid);
+            return `
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px">
+              <span style="width:7px;height:7px;border-radius:50%;background:${u.color};flex-shrink:0"></span>
+              <span style="font-size:.72rem;color:#CBD5E1;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${u.name}</span>
+              <span style="font-size:.74rem;font-weight:700;color:#F8FAFC">${formatARS(u.total)}</span>
+              ${totalPaid > 0 ? `<span style="font-size:.66rem;color:${estBal<=0?'#34D399':'#EAB308'}">${estBal<=0?'✓':formatARS(estBal)}</span>` : ''}
+            </div>`;
+          }).join('')}
+        </div>`;
+    }
 
     const payRow = totalAmount > 0 ? `
       <div style="border-top:1px solid rgba(255,255,255,.1);padding-top:9px;margin-top:9px">
@@ -928,6 +958,7 @@ export class BookingList {
             <div style="font-weight:700;font-size:.88rem;color:${saldado ? '#34D399' : '#EAB308'}">${saldado ? '✓ Saldado' : formatARS(balance)}</div>
           </div>
         </div>
+        ${perUnitRows}
       </div>` : '';
 
     tip.innerHTML = `
