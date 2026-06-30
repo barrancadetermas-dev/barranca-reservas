@@ -2597,11 +2597,14 @@ export class Calendar {
           return `<td style="text-align:right;padding:5px 8px;font-size:.74rem;font-weight:600;color:var(--color-text);white-space:nowrap">${fmt(cell.price)}${sub}</td>`;
         }).join('');
         // Etiqueta compacta: "#1" o "#2 | #3" si comparten precio — con puntos de color de cada unidad
-        const dotsHTML = g.units.map(u => `<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${u.color ?? 'var(--color-primary)'};margin-right:3px"></span>`).join('');
-        const numsLabel = g.units.map(u => '#' + (u.sort_order ?? '?')).join(' <span style="color:var(--color-text-3)">|</span> ');
+        // Cada unidad muestra su propio puntito de color pegado a su número
+        // (ej: "●#2 | ●#3"), en vez de agrupar todos los puntos al inicio.
+        const numsLabel = g.units.map(u =>
+          `<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${u.color ?? 'var(--color-primary)'};margin-right:3px;vertical-align:middle"></span>#${u.sort_order ?? '?'}`
+        ).join(' <span style="color:var(--color-text-3)">|</span> ');
         return `<tr style="background:${i % 2 === 0 ? 'transparent' : 'var(--color-surface-2)'}">
           <td style="padding:5px 10px;font-size:.74rem;font-weight:700;color:var(--color-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${g.units.map(u=>u.name).join(', ')}">
-            ${dotsHTML}${numsLabel}
+            ${numsLabel}
           </td>
           ${cellsHTML}
         </tr>`;
