@@ -36,14 +36,9 @@ const ICON_PATHS = {
   bulb:        '<path d="M9 18h6"/><path d="M10 21h4"/><path d="M12 3a6 6 0 00-3.6 10.8c.5.4.8 1 .8 1.6V16h5.6v-.6c0-.6.3-1.2.8-1.6A6 6 0 0012 3z"/>',
   send:        '<line x1="11" y1="13" x2="21" y2="3"/><path d="M21 3l-7 18-3.5-7.5L3 10z"/>',
   plant:       '<path d="M12 4c-2.2 2-2.2 5.2 0 7.2c2.2-2 2.2-5.2 0-7.2z"/><path d="M12 8.4c-3.2-.4-5.6 1.6-6 4.8c3.2.4 5.6-1.6 6-4.8z"/><path d="M12 8.4c3.2-.4 5.6 1.6 6 4.8c-3.2.4-5.6-1.6-6-4.8z"/><line x1="12" y1="11" x2="12" y2="21"/><path d="M7.5 21h9l-1.2 2.4H8.7z"/>',
+  huesped:     '<circle cx="12" cy="8" r="3.4"/><path d="M5 20c0-3.6 3.1-6 7-6s7 2.4 7 6"/>',
+  search:      '<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>',
 };
-const TIPS = [
-  'Podés consultar reservas usando solo una fecha.',
-  'Tocá cualquier campo y la respuesta se actualiza sola, sin botones extra.',
-  'Desde el voucher de una reserva podés verla completa con un solo toque.',
-  'Podés limpiar una respuesta con la ✕ y volver a las consultas rápidas.',
-];
-const pickTip = () => TIPS[Math.floor(Math.random() * TIPS.length)];
 const iconSVG = (id, size = 16) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="${size}" height="${size}">${ICON_PATHS[id]}</svg>`;
 
 // type: 'date' (1 fecha) | 'range' (ingreso/salida, 1 noche por defecto) |
@@ -58,6 +53,7 @@ const QUERIES = [
   { id: 'precios',     color: 'pink',   title: 'Precios',                 sub: 'Consultar precios por fecha',   type: 'unit-range' },
   { id: 'pagos',       color: 'amber',  title: 'Pagos pendientes',        sub: 'Ver pagos que faltan cobrar',   type: 'none' },
   { id: 'bloqueos',    color: 'indigo', title: 'Bloqueos',                sub: 'Ver bloqueos en una fecha',     type: 'date' },
+  { id: 'huesped',     color: 'teal',   title: 'Huésped',                 sub: 'Buscar reservas por nombre',    type: 'text' },
 ];
 
 const PRESETS = {
@@ -69,6 +65,7 @@ const PRESETS = {
 // Estado de los campos por fila (en memoria, no persiste entre sesiones)
 const fieldState = {};
 let lastQueryId = null;
+const recentQueries = []; // últimas consultas ejecutadas (en memoria, máx. 4)
 
 export function initMilaAssistant(options = {}) {
   ctx = options;
@@ -76,6 +73,22 @@ export function initMilaAssistant(options = {}) {
   if (!bodyEl || bodyEl.dataset.milaInit) return; // ya inicializado o sección inexistente
   bodyEl.dataset.milaInit = '1';
   renderPage();
+  setupShortcut();
+}
+
+// ── Atajo global Ctrl/Cmd+K → ir al tab de Mila y enfocar la búsqueda de huésped ──
+function setupShortcut() {
+  document.addEventListener('keydown', (e) => {
+    const isK = e.key === 'k' || e.key === 'K';
+    if (!isK || !(e.ctrlKey || e.metaKey)) return;
+    e.preventDefault();
+    window.milaNav?.('mila');
+    setTimeout(() => {
+      const input = document.getElementById('mila-guest-input');
+      input?.focus();
+      input?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 80);
+  });
 }
 
 function initState(q, todayISO) {
@@ -86,6 +99,7 @@ function initState(q, todayISO) {
   if (q.type === 'period')     { const d = new Date(); s.from = localDateISO(new Date(d.getFullYear(), d.getMonth(), 1)); s.to = todayISO; }
   if (q.type === 'unit-range') { s.unitId = (AppContext.units ?? [])[0]?.id ?? ''; s.from = todayISO; s.to = addDays(todayISO, 1); s.toEdited = false; }
   if (q.type === 'preset')     s.preset = 'this_month';
+  if (q.type === 'text')       s.query = '';
   fieldState[q.id] = s;
   return s;
 }
@@ -105,7 +119,7 @@ function renderPage() {
 
       <div class="mila-hero">
         <div class="mila-hero-text">
-          <div class="mila-hero-greet">👋 Hola, soy Mila</div>
+          <div class="mila-hero-greet">👋Hola! Soy Mila</div>
           <div class="mila-hero-question">¿Qué te gustaría consultar hoy?</div>
         </div>
         <span class="mila-hero-bot">
@@ -115,26 +129,14 @@ function renderPage() {
 
       <div class="mila-grid">
         <div class="mila-left">
-          <div class="mila-section-label"><span class="mila-live-dot"></span>Consultas rápidas <span class="mila-beta">BETA</span></div>
+          <div class="mila-section-label">
+            <span class="mila-bulb-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="13" height="13">${ICON_PATHS.bulb}</svg></span>
+            <span class="mila-section-label-text">Consultas rápidas</span>
+            <span class="mila-beta">BETA</span>
+          </div>
+          <div class="mila-recent" id="mila-recent"></div>
           <div class="mila-rows">
             ${QUERIES.map((q, i) => rowTemplate(q, todayISO, i)).join('')}
-          </div>
-
-          ${tipCardHTML()}
-
-          <div class="mila-soon-card">
-            <span class="mila-soon-bot">✨</span>
-            <div class="mila-soon-body">
-              <div class="mila-soon-title">Próximamente</div>
-              <div class="mila-soon-text">Escribí o hablá con MILA AI. Muy pronto vas a poder realizar consultas en lenguaje natural utilizando Inteligencia Artificial.</div>
-              <div class="mila-soon-input-row">
-                <input type="text" class="mila-soon-input" placeholder="Escribí tu consulta..." disabled>
-                <button class="mila-soon-mic" disabled title="Próximamente">🎙️</button>
-                <button class="mila-soon-send" disabled title="Próximamente">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="15" height="15">${ICON_PATHS.send}</svg>
-                </button>
-              </div>
-            </div>
           </div>
         </div>
 
@@ -147,26 +149,30 @@ function renderPage() {
 
         <div class="mila-right">
           <div class="mila-quickstats" id="mila-quickstats">${quickStatsSkeleton()}</div>
-          <div class="mila-answer" id="mila-answer">${answerPlaceholder()}</div>
+          <div class="mila-answer" id="mila-answer" role="status" aria-live="polite">${answerPlaceholder()}</div>
+
+          <div class="mila-soon-card">
+            <span class="mila-soon-bot">✨</span>
+            <div class="mila-soon-body">
+              <div class="mila-soon-title">Próximamente</div>
+              <div class="mila-soon-text">Escribí o hablá con MILA AI. Muy pronto vas a poder realizar consultas en lenguaje natural utilizando Inteligencia Artificial.</div>
+              <div class="mila-soon-input-row">
+                <input type="text" class="mila-soon-input" placeholder="Escribí tu consulta..." disabled>
+                <button class="mila-soon-mic" disabled title="Próximamente" aria-label="Hablar con Mila (próximamente)">🎙️</button>
+                <button class="mila-soon-send" disabled title="Próximamente" aria-label="Enviar (próximamente)">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="15" height="15">${ICON_PATHS.send}</svg>
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
   `;
   answerEl = bodyEl.querySelector('#mila-answer');
   bodyEl.querySelectorAll('.mila-row').forEach(rowEl => attachRow(rowEl, todayISO));
+  renderRecent();
   loadQuickStats(todayISO);
-}
-
-// ── Tip de Mila — tarjeta lateral con un consejo aleatorio por apertura ──
-function tipCardHTML() {
-  return `
-    <div class="mila-tip-card">
-      <span class="mila-tip-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="15" height="15">${ICON_PATHS.bulb}</svg></span>
-      <div>
-        <div class="mila-tip-title">Tip de Mila</div>
-        <div class="mila-tip-text">${esc(pickTip())}</div>
-      </div>
-    </div>`;
 }
 
 // ── Resumen del día (lateral derecho) — lista vertical, esqueleto mientras carga ──
@@ -188,19 +194,26 @@ function quickStatsSkeleton() {
         <div class="mila-qstat-row" data-stat="${s.key}" style="--i:${i}">
           <span class="mila-qstat-icon">${iconSVG(s.icon, 13)}</span>
           <span class="mila-qstat-label">${s.label}</span>
-          <span class="mila-qstat-value mila-qstat-loading">···</span>
+          <span class="mila-qstat-value mila-qstat-loading">&nbsp;</span>
           ${s.bar ? `<div class="mila-qstat-bar"><div class="mila-qstat-bar-fill" data-bar="${s.key}"></div></div>` : ''}
         </div>`).join('')}
+    </div>
+    <div class="mila-qstats-trend">
+      <span class="mila-qstats-trend-label">Próximos 7 días</span>
+      <div class="mila-trend-bars" id="mila-trend-bars">
+        ${Array.from({ length: 7 }).map((_, i) => `<span class="mila-trend-bar mila-trend-bar-loading" style="--i:${i}"><span class="mila-trend-bar-fill"></span></span>`).join('')}
+      </div>
     </div>`;
 }
 async function loadQuickStats(todayISO) {
   try {
     const { from, to } = PRESETS.this_month();
-    const [movs, disp, occ, reservas] = await Promise.all([
+    const [movs, disp, occ, reservas, trend] = await Promise.all([
       MilaData.fetchCheckInsOuts(todayISO),
       MilaData.fetchDisponibilidad(todayISO, addDays(todayISO, 1)),
       MilaData.fetchOcupacion(from, to),
       MilaData.fetchReservasByDate(todayISO),
+      MilaData.fetchOccupancyTrend(7),
     ]);
     const values = {
       checkins: movs.checkins.length,
@@ -218,6 +231,18 @@ async function loadQuickStats(todayISO) {
     });
     const bar = wrap.querySelector('[data-bar="ocupacion"]');
     if (bar) requestAnimationFrame(() => { bar.style.width = `${occ.pct}%`; });
+
+    const DIAS_CORTO = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+    const trendWrap = document.getElementById('mila-trend-bars');
+    if (trendWrap) {
+      trendWrap.innerHTML = trend.map((d, i) => {
+        const dow = DIAS_CORTO[new Date(d.date + 'T12:00:00').getDay()];
+        return `<span class="mila-trend-bar" style="--i:${i}" title="${dow} · ${d.pct}%"><span class="mila-trend-bar-fill" data-pct="${d.pct}"></span></span>`;
+      }).join('');
+      requestAnimationFrame(() => {
+        trendWrap.querySelectorAll('.mila-trend-bar-fill').forEach(el => { el.style.height = `${el.dataset.pct}%`; });
+      });
+    }
   } catch (err) {
     console.error('[MILA Assistant] quickstats', err);
   }
@@ -275,12 +300,20 @@ function rowTemplate(q, todayISO, idx = null) {
     case 'none':
       controls = `<span class="mila-chevron">›</span>`;
       break;
+    case 'text':
+      controls = `
+        <div class="mila-search-pill">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12">${ICON_PATHS.search}</svg>
+          <input type="text" class="mila-search-input" id="mila-guest-input" placeholder="Nombre del huésped..." value="${esc(s.query)}" autocomplete="off">
+        </div>`;
+      break;
   }
   const isActive = lastQueryId === q.id ? ' is-active' : '';
   const enterCls = idx !== null ? ' mila-row-enter' : '';
+  const stackCls = q.type === 'text' ? ' mila-row-stack' : '';
   const styleAttr = idx !== null ? ` style="--i:${idx}"` : '';
   return `
-    <div class="mila-row${isActive}${enterCls}" data-query="${q.id}" tabindex="0" role="button"${styleAttr}>
+    <div class="mila-row${isActive}${enterCls}${stackCls}" data-query="${q.id}" tabindex="0" role="button"${styleAttr}>
       <span class="mila-row-icon ${colorClass(q.color)}">${iconSVG(q.id)}</span>
       <div class="mila-row-text">
         <div class="mila-row-title">${q.title}</div>
@@ -334,14 +367,61 @@ function attachRow(rowEl, todayISO) {
     });
   });
 
+  const searchInput = rowEl.querySelector('.mila-search-input');
+  if (searchInput) {
+    searchInput.addEventListener('click', (e) => e.stopPropagation());
+    searchInput.addEventListener('keydown', (e) => {
+      e.stopPropagation();
+      if (e.key === 'Enter') {
+        s.query = searchInput.value;
+        Sound?.click?.();
+        runQuery(queryId);
+      }
+    });
+  }
+
   // Click en cualquier otra parte de la fila → ejecutar la consulta con los valores actuales
-  rowEl.addEventListener('click', () => { Sound?.click?.(); runQuery(queryId); });
-  rowEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') runQuery(queryId); });
+  // (las filas de búsqueda de texto se disparan con Enter, no con click, para no consultar en vacío)
+  if (q.type !== 'text') {
+    rowEl.addEventListener('click', () => { Sound?.click?.(); runQuery(queryId); });
+  }
+  rowEl.addEventListener('keydown', (e) => { if (e.key === 'Enter' && q.type !== 'text') runQuery(queryId); });
 }
 
 function markActiveRow(queryId) {
   lastQueryId = queryId;
   bodyEl.querySelectorAll('.mila-row').forEach(r => r.classList.toggle('is-active', r.dataset.query === queryId));
+  pushRecent(queryId);
+}
+
+// ── Historial de últimas consultas (chips arriba de la lista) ──
+function pushRecent(queryId) {
+  const existing = recentQueries.indexOf(queryId);
+  if (existing !== -1) recentQueries.splice(existing, 1);
+  recentQueries.unshift(queryId);
+  if (recentQueries.length > 4) recentQueries.length = 4;
+  renderRecent();
+}
+function renderRecent() {
+  const wrap = document.getElementById('mila-recent');
+  if (!wrap) return;
+  if (!recentQueries.length) { wrap.innerHTML = ''; wrap.hidden = true; return; }
+  wrap.hidden = false;
+  wrap.innerHTML = `
+    <span class="mila-recent-label">Recientes</span>
+    ${recentQueries.map(id => {
+      const q = QUERIES.find(x => x.id === id);
+      if (!q) return '';
+      return `<button type="button" class="mila-recent-chip" data-recent="${id}">${iconSVG(id, 11)}<span>${q.title}</span></button>`;
+    }).join('')}`;
+  wrap.querySelectorAll('[data-recent]').forEach(chip => {
+    chip.addEventListener('click', () => {
+      Sound?.click?.();
+      const row = bodyEl.querySelector(`.mila-row[data-query="${chip.dataset.recent}"]`);
+      row?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      runQuery(chip.dataset.recent);
+    });
+  });
 }
 
 function showLoading(q) {
@@ -407,6 +487,15 @@ async function runQuery(queryId) {
       case 'bloqueos': {
         const data = await MilaData.fetchBloqueos(s.date);
         renderAnswer(q, fmtDate(s.date), bloqueosHTML(data));
+        break;
+      }
+      case 'huesped': {
+        if (!s.query || s.query.trim().length < 2) {
+          renderAnswer(q, '', emptyState('Escribí al menos 2 letras del nombre.'));
+          return;
+        }
+        const data = await MilaData.fetchGuestSearch(s.query);
+        renderAnswer(q, `"${esc(s.query)}"`, huespedHTML(data));
         break;
       }
     }
@@ -561,11 +650,26 @@ function preciosHTML(d) {
 
 function pagosHTML(list) {
   if (!list.length) return emptyState('✓ No hay pagos pendientes');
-  return list.map(b => bookingCard({
-    id: b.id, title: esc(b.guest),
-    lines: [`🏠 ${esc(b.unit)}`, `📅 ${fmtDate(b.checkIn)} → ${fmtDate(b.checkOut)}`],
-    badge: formatARS(b.balance),
-  })).join('');
+  const today = localToday();
+  return list.map(b => {
+    const overdue = b.checkOut < today;
+    const dueToday = b.checkOut === today;
+    const urgencyTag = overdue
+      ? '<span class="mila-urgency-tag is-overdue">Vencido</span>'
+      : dueToday
+        ? '<span class="mila-urgency-tag is-today">Vence hoy</span>'
+        : '';
+    return `
+      <div class="mila-card${overdue ? ' mila-card-overdue' : ''}">
+        <div class="mila-card-head">
+          <span class="mila-card-title">${esc(b.guest)}</span>
+          <span class="mila-badge-pill">${formatARS(b.balance)}</span>
+        </div>
+        <div class="mila-card-line">🏠 ${esc(b.unit)}</div>
+        <div class="mila-card-line">📅 ${fmtDate(b.checkIn)} → ${fmtDate(b.checkOut)} ${urgencyTag}</div>
+        <button class="mila-card-btn" data-open-booking="${b.id}">Ver Voucher</button>
+      </div>`;
+  }).join('');
 }
 
 function bloqueosHTML(list) {
@@ -574,5 +678,18 @@ function bloqueosHTML(list) {
     id: b.id, title: esc(b.unit),
     lines: [`📅 ${fmtDate(b.checkIn)} → ${fmtDate(b.checkOut)}`, `📝 ${esc(b.reason)}`],
     badge: 'Bloqueado',
+  })).join('');
+}
+
+function huespedHTML(list) {
+  if (!list.length) return emptyState('No encontramos huéspedes con ese nombre.');
+  return list.map(b => bookingCard({
+    id: b.id, title: esc(b.guest),
+    lines: [
+      `🏠 ${esc(b.unit)}`,
+      `📅 ${fmtDate(b.checkIn)} → ${fmtDate(b.checkOut)}`,
+      b.balance > 0 ? `💸 Saldo: ${formatARS(b.balance)}` : `✅ Pagado`,
+    ],
+    badge: b.status,
   })).join('');
 }

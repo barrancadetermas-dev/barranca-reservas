@@ -154,7 +154,7 @@ export async function fetchPagosPendientes() {
     .select(`id, check_in, check_out, total_amount, total_paid, status, ${guestSel}, ${unitsSel}`)
     .eq('hotel_id', hotelId)
     .not('status', 'in', '(cancelled,blocked)')
-    .order('check_in', { ascending: true });
+    .order('check_out', { ascending: true });
 
   return (data ?? [])
     .map(b => ({
@@ -175,4 +175,59 @@ export async function fetchBloqueos(dateISO) {
     .gt('check_out', dateISO);
 
   return (data ?? []).map(b => ({ id: b.id, checkIn: b.check_in, checkOut: b.check_out, unit: unitNames(b), reason: b.block_reason || 'Sin motivo' }));
+}
+
+// 9) Búsqueda de huésped por nombre — misma forma que el autocompletado del buscador rápido (app.js)
+export async function fetchGuestSearch(query) {
+  const hotelId = AppContext.hotelId;
+  const q = query.trim();
+  if (q.length < 2) return [];
+  const { data } = await supabase.from('bookings')
+    .select(`id, check_in, check_out, status, total_amount, total_paid, ${guestSel}, ${unitsSel}`)
+    .eq('hotel_id', hotelId)
+    .neq('status', 'cancelled')
+    .or(`guests.first_name.ilike.%${q}%,guests.last_name.ilike.%${q}%`)
+    .order('check_in', { ascending: false })
+    .limit(10);
+
+  return (data ?? []).map(b => ({
+    id: b.id, checkIn: b.check_in, checkOut: b.check_out, guest: guestName(b), unit: unitNames(b),
+    status: b.status, balance: Math.max(0, (b.total_amount ?? 0) - (b.total_paid ?? 0)),
+  }));
+}
+
+// 10) Tendencia de ocupación de los próximos N días — mismo criterio de solapamiento que fetchOcupacion(),
+// pero acumulado por día para alimentar el mini-gráfico del Resumen del día.
+export async function fetchOccupancyTrend(days = 7) {
+  const hotelId = AppContext.hotelId;
+  const units = AppContext.units ?? [];
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const startISO = localDateISOFromDate(today);
+  const endISO = localDateISOFromDate(new Date(today.getTime() + (days - 1) * 86400000));
+
+  const { data } = await supabase.from('bookings')
+    .select('check_in, check_out, status, booking_units(unit_id)')
+    .eq('hotel_id', hotelId)
+    .neq('status', 'cancelled')
+    .lte('check_in', endISO)
+    .gt('check_out', startISO);
+
+  const bookings = data ?? [];
+  const totalUnits = units.length || 1;
+  const out = [];
+  for (let i = 0; i < days; i++) {
+    const dayDate = new Date(today.getTime() + i * 86400000);
+    const dayISO = localDateISOFromDate(dayDate);
+    const occupiedUnitIds = new Set();
+    bookings.forEach(b => {
+      if (b.check_in <= dayISO && b.check_out > dayISO) {
+        (b.booking_units ?? []).forEach(bu => occupiedUnitIds.add(bu.unit_id));
+      }
+    });
+    out.push({ date: dayISO, pct: Math.min(100, Math.round((occupiedUnitIds.size / totalUnits) * 100)) });
+  }
+  return out;
+}
+function localDateISOFromDate(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }

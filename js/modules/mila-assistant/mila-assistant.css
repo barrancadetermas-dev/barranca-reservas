@@ -50,7 +50,7 @@
   box-shadow: 0 6px 18px rgba(139,92,246,.12);
   animation: mila-row-in .4s cubic-bezier(.22,1,.36,1) both;
 }
-.mila-hero-greet { font-weight: 800; font-size: 1.05rem; color: var(--color-text); }
+.mila-hero-greet { font-weight: 800; font-size: 1.05rem; color: var(--color-text); font-style: italic; }
 .mila-hero-question { font-size: .8rem; color: var(--color-text-2); font-style: italic; margin-top: 2px; }
 .mila-hero-bot {
   flex-shrink: 0; width: 52px; height: 52px; border-radius: 16px;
@@ -78,18 +78,30 @@
 
 .mila-section-label {
   font-size: .66rem; font-weight: 800; letter-spacing: .04em; text-transform: uppercase;
+  color: var(--color-primary); margin-bottom: 10px;
+  display: flex; align-items: center; gap: 8px;
+}
+.mila-bulb-icon {
+  display: inline-flex; margin-right: 2px; color: #CBB400;
+  animation: mila-bulb-onoff 2.6s ease-in-out infinite;
+}
+@keyframes mila-bulb-onoff {
+  0%, 38%, 100% { color: #CBB400; opacity: .35; filter: none; }
+  19%           { color: #FFC83D; opacity: 1; filter: drop-shadow(0 0 3px rgba(255,200,61,.7)); }
+}
+.mila-section-label-text { margin-right: auto; }
 
-  color: var(--color-primary); margin-bottom: 6px;
-  display: flex; align-items: center; gap: 6px;
+.mila-recent { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 10px; }
+.mila-recent[hidden] { display: none; }
+.mila-recent-label { font-size: .62rem; font-weight: 800; color: var(--color-text-3); text-transform: uppercase; letter-spacing: .03em; margin-right: 2px; }
+.mila-recent-chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  border: 1px solid var(--color-border); background: var(--color-surface);
+  color: var(--color-text-2); border-radius: 999px; padding: 4px 10px;
+  font-size: .68rem; font-weight: 700; cursor: pointer;
+  transition: border-color .18s ease, transform .18s ease;
 }
-.mila-live-dot {
-  width: 6px; height: 6px; border-radius: 50%; background: var(--color-success);
-  animation: mila-pulse-dot 1.8s ease-in-out infinite;
-}
-@keyframes mila-pulse-dot {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(34,197,94,.5); opacity: 1; }
-  50%      { box-shadow: 0 0 0 4px rgba(34,197,94,0); opacity: .7; }
-}
+.mila-recent-chip:hover { border-color: var(--color-primary); color: var(--color-primary); transform: translateY(-1px); }
 
 .mila-rows { display: flex; flex-direction: column; gap: 8px; }
 
@@ -143,6 +155,7 @@
 .mila-ic-pink   { background: #FFE3F0; color: #DB2777; }
 .mila-ic-amber  { background: #FFF4D6; color: #D97706; }
 .mila-ic-indigo { background: #E5E4FF; color: #4F46E5; }
+.mila-ic-teal   { background: #DAF5F0; color: #0D9488; }
 
 .mila-row-text { min-width: 0; }
 .mila-row-title { font-size: .8rem; font-weight: 700; color: var(--color-text); line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -183,39 +196,34 @@ select.mila-pill {
 
 .mila-chevron { font-size: 1.1rem; color: var(--color-text-3); font-weight: 800; padding: 0 4px; }
 
-/* ── Tip de Mila ── */
-.mila-tip-card {
-  margin-top: 12px;
-  display: flex; gap: 9px; align-items: flex-start;
-  background: var(--mila-violet-l, #F1ECFF);
-  border: 1px solid #DCC9FF;
-  border-radius: 13px;
-  padding: 11px 12px;
-  animation: mila-row-in .4s cubic-bezier(.22,1,.36,1) both;
+/* ── Búsqueda de huésped (fila tipo 'text', stack vertical) ── */
+.mila-row-stack { grid-template-rows: auto auto; cursor: default; }
+.mila-row-stack:hover { transform: none; box-shadow: 0 1px 3px rgba(15,23,42,.05); }
+.mila-row-stack .mila-row-controls { grid-column: 1 / -1; width: 100%; margin-top: 8px; }
+.mila-search-pill {
+  display: flex; align-items: center; gap: 7px;
+  border: 1px solid var(--color-border); background: var(--color-bg);
+  border-radius: 10px; padding: 7px 10px; color: var(--color-text-3);
+  transition: border-color .2s ease;
 }
-.mila-tip-icon {
-  flex-shrink: 0; width: 26px; height: 26px; border-radius: 8px;
-  background: #fff; color: var(--mila-violet, #8B5CF6);
-  display: flex; align-items: center; justify-content: center;
-  animation: mila-bulb-glow 2.4s ease-in-out infinite;
+.mila-search-pill:focus-within { border-color: var(--color-primary); color: var(--color-primary); }
+.mila-search-input {
+  border: none; background: transparent; outline: none; flex: 1;
+  font-size: .76rem; font-family: inherit; color: var(--color-text);
 }
-@keyframes mila-bulb-glow {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(139,92,246,.25); }
-  50%      { box-shadow: 0 0 0 5px rgba(139,92,246,0); }
-}
-.mila-tip-title { font-weight: 800; font-size: .76rem; color: var(--mila-violet, #8B5CF6); }
-.mila-tip-text { font-size: .72rem; color: var(--color-text-2); margin-top: 2px; line-height: 1.35; }
 
 /* ── Bloque "Próximamente" (deshabilitado) — apariencia tipo chat ── */
 .mila-soon-card {
-  margin-top: 12px;
+  margin-top: 14px;
   display: flex; gap: 9px;
   background: linear-gradient(135deg, var(--color-primary-l), var(--color-primary-t));
   border: 1px solid var(--color-primary);
   border-radius: 13px;
   padding: 11px 12px;
+  animation: mila-soon-float 4s ease-in-out infinite;
 }
-.mila-soon-bot { font-size: 16px; flex-shrink: 0; line-height: 1.3; }
+@keyframes mila-soon-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+.mila-soon-bot { font-size: 16px; flex-shrink: 0; line-height: 1.3; animation: mila-twinkle 2.6s ease-in-out infinite; }
 .mila-soon-title { font-weight: 800; font-size: .78rem; color: var(--color-primary); font-style: italic; }
 .mila-soon-text { font-size: .7rem; color: var(--color-text-2); margin-top: 2px; line-height: 1.35; }
 .mila-soon-input-row { display: flex; gap: 7px; margin-top: 9px; align-items: center; }
@@ -297,7 +305,37 @@ select.mila-pill {
 }
 .mila-qstat-label { font-size: .72rem; color: var(--color-text-2); font-weight: 600; }
 .mila-qstat-value { font-size: .82rem; font-weight: 800; color: var(--color-text); transition: transform .18s ease; display: inline-block; }
-.mila-qstat-loading { opacity: .35; }
+.mila-qstat-loading {
+  width: 22px; height: 11px; border-radius: 5px; background: var(--color-surface-2);
+  background-image: linear-gradient(90deg, transparent, rgba(255,255,255,.7), transparent);
+  background-size: 60px 100%; background-repeat: no-repeat;
+  animation: mila-shimmer 1.3s ease-in-out infinite;
+}
+@keyframes mila-shimmer { 0% { background-position: -60px 0; } 100% { background-position: 80px 0; } }
+[data-theme="dark"] .mila-qstat-loading { background-image: linear-gradient(90deg, transparent, rgba(255,255,255,.12), transparent); }
+
+.mila-qstats-trend { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--color-border); }
+.mila-qstats-trend-label { font-size: .64rem; color: var(--color-text-3); font-weight: 700; text-transform: uppercase; }
+.mila-trend-bars { display: flex; align-items: flex-end; gap: 5px; height: 34px; margin-top: 6px; }
+.mila-trend-bar {
+  flex: 1; height: 100%; display: flex; align-items: flex-end;
+  animation: mila-row-in .35s cubic-bezier(.22,1,.36,1) both; animation-delay: calc(var(--i, 0) * 60ms);
+}
+.mila-trend-bar-fill {
+  width: 100%; height: 6%; border-radius: 4px 4px 0 0; min-height: 3px;
+  background: linear-gradient(180deg, var(--mila-violet, #8B5CF6), var(--color-primary));
+  transition: height .7s cubic-bezier(.22,1,.36,1);
+}
+.mila-trend-bar-loading .mila-trend-bar-fill { background: var(--color-surface-2); animation: mila-shimmer-v 1.3s ease-in-out infinite; height: 30%; }
+@keyframes mila-shimmer-v { 0%, 100% { opacity: .4; } 50% { opacity: .8; } }
+
+.mila-urgency-tag {
+  display: inline-block; font-size: .62rem; font-weight: 800; padding: 1px 7px; border-radius: 999px; margin-left: 4px;
+}
+.mila-urgency-tag.is-overdue { background: rgba(239,68,68,.12); color: var(--color-danger); }
+.mila-urgency-tag.is-today   { background: rgba(217,119,6,.14); color: #B45309; }
+.mila-card-overdue { border-color: rgba(239,68,68,.4); }
+
 .mila-qstat-bar { grid-column: 2 / -1; height: 5px; border-radius: 999px; background: var(--color-surface-2); overflow: hidden; }
 .mila-qstat-bar-fill {
   height: 100%; width: 0%; border-radius: 999px;
@@ -436,6 +474,17 @@ select.mila-pill {
 .mila-occ-label { font-size: .74rem; color: var(--color-text-3); font-weight: 700; }
 
 .mila-warn-note { font-size: .72rem; color: var(--color-text-2); background: var(--color-surface-2); border-radius: 8px; padding: 7px 10px; }
+
+/* ── Dark mode: el hero usa hex fijos pensados para fondo claro, los adaptamos ── */
+[data-theme="dark"] .mila-hero {
+  background: linear-gradient(120deg, #1E2A4A 0%, #2A2147 55%, #2E1F47 100%);
+  border-color: #3A2F5C;
+}
+[data-theme="dark"] .mila-hero-question,
+[data-theme="dark"] .mila-soon-input,
+[data-theme="dark"] .mila-answer-empty-title { color: var(--color-text-2); }
+[data-theme="dark"] .mila-empty-illust,
+[data-theme="dark"] .mila-bulb-icon { filter: brightness(1.15); }
 
 /* ── Mobile: 1 columna, respuesta debajo de las preguntas ── */
 @media (max-width: 900px) {
