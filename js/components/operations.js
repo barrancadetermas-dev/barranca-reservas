@@ -1036,7 +1036,7 @@ export class OperationsModule {
         const { data: exps } = await this.db.from('expenses').select('*')
           .eq('hotel_id', this.ctx.hotelId)
           .or(`due_date.is.null,and(due_date.gte.${first},due_date.lte.${last})`)
-          .order('due_date', { ascending: true, nullsFirst: false });
+          .order('description', { ascending: true });
 
         const finalExps = await this._ensureRecurringExpenses(month, year, exps ?? []);
         this._renderExpensesInOps(panel, finalExps);
@@ -1115,7 +1115,8 @@ export class OperationsModule {
 
       const { data: inserted, error } = await this.db.from('expenses').insert(toInsert).select('*');
       if (error) { console.warn('[Operations] recurring carry-forward:', error); return currentExps; }
-      return [...currentExps, ...(inserted ?? [])].sort((a, b) => (a.due_date ?? '').localeCompare(b.due_date ?? ''));
+      return [...currentExps, ...(inserted ?? [])]
+        .sort((a, b) => a.description.localeCompare(b.description, 'es', { sensitivity: 'base' }));
     } catch (err) {
       console.warn('[Operations] recurring carry-forward failed:', err);
       return currentExps;
