@@ -819,14 +819,42 @@ function huespedHTML(list) {
 function expenseRowLine(e) {
   const pending = e.amount == null;
   return `
-    <div class="mila-card">
-      <div class="mila-card-head">
-        <span class="mila-card-title">${esc(e.description)}</span>
-        <span class="mila-badge-pill" style="${pending ? 'opacity:.6' : ''}">${pending ? 'Sin monto' : formatARS(e.amount)}</span>
-      </div>
-      <div class="mila-card-line">🏷️ ${esc(e.category)}${e.due_date ? ` · Vence: ${fmtDate(e.due_date)}` : ''}</div>
-      <div class="mila-card-line">${e.paid ? `✅ Pagado${e.paid_at ? ` (${fmtDate(e.paid_at.slice(0,10))})` : ''}` : '🕓 Pendiente'}</div>
+    <div class="mila-exp-row ${e.paid ? 'is-paid' : ''}">
+      <span class="mila-exp-status" title="${e.paid ? 'Pagado' : 'Pendiente'}">${e.paid ? '✅' : '🕓'}</span>
+      <span class="mila-exp-desc">${esc(e.description)}</span>
+      <span class="mila-exp-cat">${esc(e.category)}${e.due_date ? ` · ${fmtDate(e.due_date)}` : ''}</span>
+      <strong class="mila-exp-amount" style="${pending ? 'opacity:.55;font-weight:600' : ''}">${pending ? 'Sin monto' : formatARS(e.amount)}</strong>
     </div>`;
+}
+
+const MES_LARGO_LOWER = MES_LARGO.map(m => m);
+function monthGroupLabel(dueDate) {
+  if (!dueDate) return 'Sin fecha';
+  const [y, m] = dueDate.split('-').map(Number);
+  return `${MES_LARGO_LOWER[m - 1]} ${y}`;
+}
+
+// Agrupa una lista de gastos por mes de vencimiento (más reciente primero)
+// y devuelve el HTML con un separador por mes — necesario cuando la
+// búsqueda trae resultados de varios meses juntos (ej: "Monotributo").
+function gastosPorMesHTML(items) {
+  const groups = new Map(); // key "YYYY-MM" -> { label, items[] }
+  items.forEach(e => {
+    const key = e.due_date ? e.due_date.slice(0, 7) : 'sin-fecha';
+    if (!groups.has(key)) groups.set(key, { label: monthGroupLabel(e.due_date), items: [] });
+    groups.get(key).items.push(e);
+  });
+  const orderedKeys = [...groups.keys()].sort((a, b) => b.localeCompare(a)); // desc, "sin-fecha" al final
+  return orderedKeys.map(key => {
+    const g = groups.get(key);
+    const subtotal = g.items.reduce((s, e) => s + (e.amount ?? 0), 0);
+    return `
+      <div class="mila-exp-month-header">
+        <span>${g.label}</span>
+        <span class="mila-exp-month-subtotal">${formatARS(subtotal)}</span>
+      </div>
+      ${g.items.map(expenseRowLine).join('')}`;
+  }).join('');
 }
 
 function gastosMesHTML(d) {
@@ -838,7 +866,7 @@ function gastosMesHTML(d) {
       <div class="mila-stat" data-type="count"><div class="mila-stat-label">Gastos</div><div class="mila-stat-value">${d.count}</div></div>
       <div class="mila-stat" data-type="avg"><div class="mila-stat-label">Pendiente</div><div class="mila-stat-value">${formatARS(d.total - d.pagado)}</div></div>
     </div>
-    ${d.items.map(expenseRowLine).join('')}`;
+    <div class="mila-exp-list">${d.items.map(expenseRowLine).join('')}</div>`;
 }
 
 function gastosBuscaHTML(d) {
@@ -848,5 +876,5 @@ function gastosBuscaHTML(d) {
       <div class="mila-stat" data-type="money"><div class="mila-stat-label">Total</div><div class="mila-stat-value">${formatARS(d.total)}</div></div>
       <div class="mila-stat" data-type="count"><div class="mila-stat-label">Gastos encontrados</div><div class="mila-stat-value">${d.count}</div></div>
     </div>
-    ${d.items.map(expenseRowLine).join('')}`;
+    <div class="mila-exp-list">${gastosPorMesHTML(d.items)}</div>`;
 }

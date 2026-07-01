@@ -267,17 +267,22 @@ export async function fetchGastosPorMes(monthISO) {
 
 // 12) Búsqueda de gastos por concepto/proveedor/categoría — mismo criterio .or() ilike
 // que ya usa fetchGuestSearch() para huéspedes, aplicado a la tabla expenses.
+// Sólo trae meses actuales y anteriores (no gastos ya cargados a futuro).
 export async function fetchGastosBusqueda(query) {
   const hotelId = AppContext.hotelId;
   const q = query.trim();
   if (q.length < 2) return { items: [], total: 0, count: 0 };
 
+  const now = new Date();
+  const endOfThisMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().slice(0, 10);
+
   const { data } = await supabase.from('expenses')
     .select('id, description, category, amount, due_date, paid, paid_at')
     .eq('hotel_id', hotelId)
     .or(`description.ilike.%${q}%,category.ilike.%${q}%`)
+    .lte('due_date', endOfThisMonth)
     .order('due_date', { ascending: false, nullsFirst: false })
-    .limit(30);
+    .limit(60);
 
   const items = data ?? [];
   const total = items.reduce((s, e) => s + (e.amount ?? 0), 0);

@@ -519,6 +519,35 @@ select.mila-pill {
 
 .mila-group-label { font-size: .68rem; font-weight: 800; color: var(--color-text-3); text-transform: uppercase; margin: 4px 0 0; }
 
+.mila-exp-list { display: flex; flex-direction: column; }
+.mila-exp-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 4px; border-bottom: 1px solid var(--color-border);
+  font-size: .78rem; white-space: nowrap; overflow: hidden;
+}
+.mila-exp-list > .mila-exp-row:last-child { border-bottom: none; }
+.mila-exp-row.is-paid { opacity: .58; }
+.mila-exp-status { flex-shrink: 0; font-size: .78rem; line-height: 1; }
+.mila-exp-desc {
+  font-weight: 700; color: var(--color-text); flex-shrink: 0;
+  max-width: 44%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.mila-exp-cat {
+  color: var(--color-text-3); font-size: .7rem; flex: 1;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.mila-exp-amount { flex-shrink: 0; font-weight: 800; font-size: .8rem; color: var(--color-text); margin-left: auto; }
+.mila-exp-row.is-paid .mila-exp-amount { color: var(--color-success); }
+
+.mila-exp-month-header {
+  display: flex; align-items: baseline; justify-content: space-between;
+  font-size: .72rem; font-weight: 800; text-transform: uppercase; letter-spacing: .03em;
+  color: var(--mila-violet); margin: 14px 0 4px; padding-bottom: 4px;
+  border-bottom: 2px solid var(--mila-violet); border-color: color-mix(in srgb, var(--mila-violet) 35%, transparent);
+}
+.mila-exp-list > .mila-exp-month-header:first-child { margin-top: 0; }
+.mila-exp-month-subtotal { font-weight: 700; color: var(--color-text-2); text-transform: none; letter-spacing: 0; }
+
 .mila-card {
   background: var(--color-surface); border: 1px solid var(--color-border);
   border-radius: 13px; padding: 12px 14px;
