@@ -88,7 +88,7 @@ async function boot() {
     if (event === 'SIGNED_IN' && session) {
       if (_initializedUserId === session.user.id) return; // evento SIGNED_IN duplicado — ya inicializado
       _initializedUserId = session.user.id;
-      await initApp(session.user);
+      await initApp(session.user); // si falla, initApp resetea _initializedUserId para permitir reintentar
     }
     if (event === 'SIGNED_OUT') {
       _initializedUserId = null;
@@ -418,7 +418,25 @@ async function initApp(user) {
 
   } catch (err) {
     console.error('[App] initApp error:', err);
-    showErrorBoundary('app', err.message, boot);
+    _initializedUserId = null; // permite reintentar sin recargar la página
+    showLoginError(`No se pudo cargar la aplicación: ${err.message}`);
+    showLogin(); // asegura que se vea el login (por si algo ya había ocultado el shell)
+  }
+}
+
+// Muestra un error visible en la pantalla de login, sin importar en qué
+// punto haya fallado initApp(). Antes esto se intentaba mostrar en un
+// contenedor con id="app" que no existe en el HTML, así que el error
+// quedaba tragado en silencio y la app se quedaba trabada en el login.
+function showLoginError(message) {
+  const errEl = document.getElementById('login-error');
+  if (errEl) {
+    errEl.textContent = message;
+    errEl.classList.remove('hidden');
+    errEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  } else {
+    // Fallback extremo si ni siquiera existiera login-error
+    alert(message);
   }
 }
 
