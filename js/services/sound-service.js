@@ -174,6 +174,32 @@ class SoundService {
       [0.20, 880, 'square', 0.12, 0.4],
     ]);
   }
+
+  /** Preguntale a Mila — apertura "IA", swoosh digital ascendente + brillo */
+  mila() {
+    if (this._muted || !this._ctx) return;
+    if (this._ctx.state === 'suspended') this._ctx.resume();
+    const ctx = this._ctx, now = ctx.currentTime;
+
+    // Swoosh: barrido de frecuencia ascendente (glissando), como un "despertar" digital
+    const sweep = ctx.createOscillator();
+    const sweepEnv = ctx.createGain();
+    sweep.type = 'sine';
+    sweep.frequency.setValueAtTime(280, now);
+    sweep.frequency.exponentialRampToValueAtTime(1400, now + 0.32);
+    sweepEnv.gain.setValueAtTime(0, now);
+    sweepEnv.gain.linearRampToValueAtTime(0.28 * this._volume, now + 0.05);
+    sweepEnv.gain.exponentialRampToValueAtTime(0.001, now + 0.34);
+    sweep.connect(sweepEnv); sweepEnv.connect(ctx.destination);
+    sweep.start(now); sweep.stop(now + 0.36);
+
+    // Chispas armónicas cristalinas por encima, tipo "asistente de IA"
+    this._play([
+      [0.16, 1318, 'sine', 0.16, 0.35],
+      [0.24, 1568, 'sine', 0.18, 0.4],
+      [0.32, 2093, 'sine', 0.30, 0.45],
+    ]);
+  }
 }
 
 export const Sound = new SoundService();

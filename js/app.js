@@ -476,6 +476,19 @@ const SECTION_META = {
 };
 const SECTION_TITLES = Object.fromEntries(Object.entries(SECTION_META).map(([k,v]) => [k, v.title]));
 
+// Retriggerea el efecto "materializar" del saludo de Mila cada vez que
+// se entra a la sección (el módulo sólo renderiza el HTML una vez, así
+// que reiniciamos la animación CSS a mano quitando/poniendo la clase).
+function triggerMilaAppearEffect() {
+  requestAnimationFrame(() => {
+    const hero = document.querySelector('#section-mila .mila-hero');
+    if (!hero) return;
+    hero.classList.remove('mila-appear');
+    void hero.offsetWidth; // fuerza reflow para poder re-lanzar la animación
+    hero.classList.add('mila-appear');
+  });
+}
+
 function setupNavigation() {
   document.querySelectorAll('.nav-item[data-section]').forEach(link => {
     link.addEventListener('click', async (e) => {
@@ -507,7 +520,12 @@ export async function navigateTo(section) {
   const subEl = document.getElementById('header-sub');
   if (subEl) subEl.textContent = SECTION_META[section]?.sub ?? '';
 
-  Sound?.click();
+  if (section === 'mila') {
+    Sound?.mila();
+    triggerMilaAppearEffect();
+  } else {
+    Sound?.click();
+  }
   updateHeaderDate();
 
   try {
