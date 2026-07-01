@@ -896,6 +896,7 @@ select { appearance: auto; cursor: pointer; }
   transition: opacity var(--t-fast);
 }
 .expense-row.paid { opacity: .6; }
+.expense-row.needs-amount { border-color: var(--color-warning); background: color-mix(in srgb, var(--color-warning) 6%, var(--color-surface)); }
 .expense-category-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; background: var(--color-primary); }
 .expense-info {
   flex: 1; min-width: 0; display: flex; align-items: baseline; gap: var(--sp-8);

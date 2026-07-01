@@ -1104,7 +1104,7 @@ export class OperationsModule {
             hotel_id: this.ctx.hotelId,
             category: e.category,
             description: e.description,
-            amount: e.amount,
+            amount: null,
             due_date: due,
             paid: false,
             is_recurring: true,
@@ -1127,6 +1127,7 @@ export class OperationsModule {
     const CATEGORY_COLORS = {
       servicios:'#3B82F6', mantenimiento:'#F59E0B', limpieza:'#34D399',
       impuestos:'#F43F5E', personal:'#A855F7', compras:'#0EA5E9', otros:'#94A3B8',
+      honorarios:'#6366F1', marketing:'#EC4899', bancarios:'#14B8A6',
     };
     const summary = panel.querySelector('#ops-expenses-summary');
     const list    = panel.querySelector('#ops-expenses-list');
@@ -1151,13 +1152,13 @@ export class OperationsModule {
     }
 
     list.innerHTML = expenses.map(e => `
-      <div class="expense-row ${e.paid ? 'paid' : ''}" id="ops-exp-${e.id}">
+      <div class="expense-row ${e.paid ? 'paid' : ''} ${e.amount == null ? 'needs-amount' : ''}" id="ops-exp-${e.id}">
         <div class="expense-category-dot" style="background:${CATEGORY_COLORS[e.category] ?? '#94A3B8'}"></div>
         <div class="expense-info">
           <span class="expense-desc">${e.description}</span>
           <span class="expense-meta">· ${e.category}${e.due_date ? ` · Vence: ${e.due_date}` : ''}${e.paid && e.paid_at ? ` · Pagado: ${e.paid_at.slice(0,10)}` : ''}</span>
         </div>
-        <strong class="expense-amount" style="color:${e.paid ? 'var(--color-success)' : 'var(--color-text)'}">${formatARS(e.amount)}</strong>
+        <strong class="expense-amount" style="color:${e.amount == null ? 'var(--color-warning)' : (e.paid ? 'var(--color-success)' : 'var(--color-text)')}">${e.amount == null ? 'Cargar monto' : formatARS(e.amount)}</strong>
         <button type="button" class="expense-paid-pill ${e.paid ? 'is-paid' : ''}" data-exp-id="${e.id}" title="${e.paid ? 'Marcar pendiente' : 'Marcar pagado'}">
           ${e.paid ? '✓ Pagado' : 'Pendiente'}
         </button>
@@ -1231,7 +1232,7 @@ export class OperationsModule {
     if (existing) existing.remove();
 
     const isEdit = !!expense;
-    const CATEGORIES = ['servicios','mantenimiento','limpieza','impuestos','personal','compras','otros'];
+    const CATEGORIES = ['servicios','mantenimiento','limpieza','impuestos','personal','compras','otros','honorarios','marketing','bancarios'];
 
     const modal = document.createElement('div');
     modal.className = 'modal-overlay';
@@ -1294,7 +1295,7 @@ export class OperationsModule {
     modal.querySelector('#oe-save').addEventListener('click', async () => {
       const desc   = modal.querySelector('#oe-desc').value.trim();
       const amount = parseFloat(modal.querySelector('#oe-amount').value);
-      if (!desc || isNaN(amount) || amount <= 0) {
+      if (!desc || isNaN(amount) || amount < 0) {
         showToast('Descripción y monto son requeridos', 'warning');
         return;
       }
