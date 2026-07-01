@@ -897,6 +897,14 @@ select { appearance: auto; cursor: pointer; }
 }
 .expense-row.paid { opacity: .6; }
 .expense-row.needs-amount { border-color: var(--color-warning); background: color-mix(in srgb, var(--color-warning) 6%, var(--color-surface)); }
+
+/* Badge unificado "sin monto todavía" — usado en Gastos (Operaciones) y en Mila */
+.badge-no-amount {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: .68rem; font-weight: 700; text-transform: uppercase; letter-spacing: .02em;
+  color: var(--color-warning); background: color-mix(in srgb, var(--color-warning) 14%, transparent);
+  padding: 2px 8px; border-radius: var(--r-full); white-space: nowrap;
+}
 .expense-category-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; background: var(--color-primary); }
 .expense-info {
   flex: 1; min-width: 0; display: flex; align-items: baseline; gap: var(--sp-8);
@@ -930,7 +938,8 @@ select { appearance: auto; cursor: pointer; }
 }
 .expense-action-btn:hover { opacity: 1; background: var(--color-surface-2); }
 .expense-action-btn.ops-exp-recurring.active { opacity: 1; }
-.expense-action-btn.ops-exp-del:hover { color: var(--color-danger); background: rgba(244,63,94,.1); }
+.expense-action-btn.ops-exp-del { color: var(--color-danger); opacity: .55; }
+.expense-action-btn.ops-exp-del:hover { opacity: 1; background: rgba(244,63,94,.12); }
 
 .ops-expenses-header { display: flex; align-items: center; gap: var(--sp-12); margin-bottom: var(--sp-16); flex-wrap: wrap; }
 .ops-month-nav {

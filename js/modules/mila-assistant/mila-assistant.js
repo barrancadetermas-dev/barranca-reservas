@@ -8,6 +8,7 @@
 // ══════════════════════════════════════════════════
 import { AppContext, formatARS, localToday, localDateISO } from '../../supabase-config.js';
 import { Sound } from '../../services/sound-service.js';
+import { categoryColor } from '../../services/expense-categories.js';
 import * as MilaData from './mila-data.js';
 
 let ctx = null;       // { can, isDemo, showToast, getBookingOpener }
@@ -571,7 +572,8 @@ async function runQuery(queryId) {
       case 'gastosmes': {
         const data = await MilaData.fetchGastosPorMes(s.month);
         const [y, m] = s.month.split('-').map(Number);
-        guardedRender(`${MES_LARGO[m - 1]} ${y}`, gastosMesHTML(data));
+        const label = `${MES_LARGO[m - 1]} ${y}`;
+        guardedRender(label, gastosMesHTML(data, label));
         break;
       }
       case 'gastosbusca': {
@@ -656,12 +658,21 @@ function renderAnswer(q, subtitle, contentHTML) {
     b.addEventListener('click', () => {
       Sound?.click?.();
       const row = bodyEl.querySelector(`.mila-row[data-query="${b.dataset.pickDate}"]`);
-      const pill = row?.querySelector('.mila-date-pill');
       row?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      pill?.classList.add('mila-pill-flash');
-      setTimeout(() => pill?.classList.remove('mila-pill-flash'), 900);
-      const input = pill?.querySelector('.mila-pill-input');
-      if (input?.showPicker) { try { input.showPicker(); } catch { /* noop */ } }
+      const pill = row?.querySelector('.mila-date-pill');
+      if (pill) {
+        pill.classList.add('mila-pill-flash');
+        setTimeout(() => pill.classList.remove('mila-pill-flash'), 900);
+        const input = pill.querySelector('.mila-pill-input');
+        if (input?.showPicker) { try { input.showPicker(); } catch { /* noop */ } }
+        return;
+      }
+      const select = row?.querySelector('.mila-select');
+      if (select) {
+        select.classList.add('mila-pill-flash');
+        setTimeout(() => select.classList.remove('mila-pill-flash'), 900);
+        select.focus();
+      }
     });
   });
   answerEl.querySelectorAll('[data-open-booking]').forEach(b => {
@@ -681,14 +692,15 @@ function renderAnswer(q, subtitle, contentHTML) {
 
 function emptyState(msg) { return `<div class="mila-empty">${msg}</div>`; }
 
-function richEmptyState(queryId, title, text) {
+function richEmptyState(queryId, title, text, opts = {}) {
+  const { icon = 'suitcase', btnLabel = 'Elegir otra fecha' } = opts;
   return `
     <div class="mila-empty-rich">
       <span class="mila-empty-rich-plant" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" width="30" height="30">${ICON_PATHS.plant}</svg></span>
-      <span class="mila-empty-illust"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" width="46" height="46">${ICON_PATHS.suitcase}</svg></span>
+      <span class="mila-empty-illust"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" width="46" height="46">${ICON_PATHS[icon]}</svg></span>
       <div class="mila-empty-rich-title">${esc(title)}</div>
       <div class="mila-empty-rich-text">${esc(text)}</div>
-      <button class="mila-empty-rich-btn" data-pick-date="${queryId}">Elegir otra fecha</button>
+      <button class="mila-empty-rich-btn" data-pick-date="${queryId}">${esc(btnLabel)}</button>
     </div>`;
 }
 
@@ -820,10 +832,11 @@ function expenseRowLine(e) {
   const pending = e.amount == null;
   return `
     <div class="mila-exp-row ${e.paid ? 'is-paid' : ''}">
+      <span class="mila-exp-cat-dot" style="background:${categoryColor(e.category)}" title="${esc(e.category)}"></span>
       <span class="mila-exp-status" title="${e.paid ? 'Pagado' : 'Pendiente'}">${e.paid ? '✅' : '🕓'}</span>
       <span class="mila-exp-desc">${esc(e.description)}</span>
       <span class="mila-exp-cat">${esc(e.category)}${e.due_date ? ` · ${fmtDate(e.due_date)}` : ''}</span>
-      <strong class="mila-exp-amount" style="${pending ? 'opacity:.55;font-weight:600' : ''}">${pending ? 'Sin monto' : formatARS(e.amount)}</strong>
+      <strong class="mila-exp-amount">${pending ? '<span class="badge-no-amount">Sin cargar</span>' : formatARS(e.amount)}</strong>
     </div>`;
 }
 
@@ -845,20 +858,21 @@ function gastosPorMesHTML(items) {
     groups.get(key).items.push(e);
   });
   const orderedKeys = [...groups.keys()].sort((a, b) => b.localeCompare(a)); // desc, "sin-fecha" al final
+  const calIcon = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="11" height="11"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>`;
   return orderedKeys.map(key => {
     const g = groups.get(key);
     const subtotal = g.items.reduce((s, e) => s + (e.amount ?? 0), 0);
     return `
       <div class="mila-exp-month-header">
-        <span>${g.label}</span>
+        <span class="mila-exp-month-label">${calIcon}${g.label}</span>
         <span class="mila-exp-month-subtotal">${formatARS(subtotal)}</span>
       </div>
       ${g.items.map(expenseRowLine).join('')}`;
   }).join('');
 }
 
-function gastosMesHTML(d) {
-  if (!d.count) return emptyState('No hay gastos cargados para ese mes.');
+function gastosMesHTML(d, monthLabel) {
+  if (!d.count) return richEmptyState('gastosmes', 'Nada cargado todavía', `No hay gastos registrados en ${monthLabel}.`, { icon: 'wallet', btnLabel: 'Elegir otro mes' });
   return `
     <div class="mila-stat-grid">
       <div class="mila-stat" data-type="money"><div class="mila-stat-label">Total gastado</div><div class="mila-stat-value">${formatARS(d.total)}</div></div>

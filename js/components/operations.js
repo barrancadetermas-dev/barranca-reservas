@@ -8,6 +8,7 @@
 import { showToast, toISODate, formatDate, formatARS, getUnitColor, getUnitChipHTML, localToday } from '../supabase-config.js';
 import { can } from '../auth/permissions.js';
 import { logAction } from '../services/audit-service.js';
+import { CATEGORIES as EXPENSE_CATEGORIES, categoryColor } from '../services/expense-categories.js';
 
 const PRIORITY_CONFIG = {
   low:    { label: 'Baja',    color: '#94a3b8', bg: '#f1f5f9' },
@@ -1124,11 +1125,6 @@ export class OperationsModule {
   }
 
   _renderExpensesInOps(panel, expenses) {
-    const CATEGORY_COLORS = {
-      servicios:'#3B82F6', mantenimiento:'#F59E0B', limpieza:'#34D399',
-      impuestos:'#F43F5E', personal:'#A855F7', compras:'#0EA5E9', otros:'#94A3B8',
-      honorarios:'#6366F1', marketing:'#EC4899', bancarios:'#14B8A6',
-    };
     const summary = panel.querySelector('#ops-expenses-summary');
     const list    = panel.querySelector('#ops-expenses-list');
     if (!list) return;
@@ -1153,12 +1149,12 @@ export class OperationsModule {
 
     list.innerHTML = expenses.map(e => `
       <div class="expense-row ${e.paid ? 'paid' : ''} ${e.amount == null ? 'needs-amount' : ''}" id="ops-exp-${e.id}">
-        <div class="expense-category-dot" style="background:${CATEGORY_COLORS[e.category] ?? '#94A3B8'}"></div>
+        <div class="expense-category-dot" style="background:${categoryColor(e.category)}"></div>
         <div class="expense-info">
           <span class="expense-desc">${e.description}</span>
           <span class="expense-meta">· ${e.category}${e.due_date ? ` · Vence: ${e.due_date}` : ''}${e.paid && e.paid_at ? ` · Pagado: ${e.paid_at.slice(0,10)}` : ''}</span>
         </div>
-        <strong class="expense-amount" style="color:${e.amount == null ? 'var(--color-warning)' : (e.paid ? 'var(--color-success)' : 'var(--color-text)')}">${e.amount == null ? 'Cargar monto' : formatARS(e.amount)}</strong>
+        <strong class="expense-amount" style="color:${e.paid ? 'var(--color-success)' : 'var(--color-text)'}">${e.amount == null ? '<span class="badge-no-amount">Sin cargar</span>' : formatARS(e.amount)}</strong>
         <button type="button" class="expense-paid-pill ${e.paid ? 'is-paid' : ''}" data-exp-id="${e.id}" title="${e.paid ? 'Marcar pendiente' : 'Marcar pagado'}">
           ${e.paid ? '✓ Pagado' : 'Pendiente'}
         </button>
@@ -1232,7 +1228,7 @@ export class OperationsModule {
     if (existing) existing.remove();
 
     const isEdit = !!expense;
-    const CATEGORIES = ['servicios','mantenimiento','limpieza','impuestos','personal','compras','otros','honorarios','marketing','bancarios'];
+    const CATEGORIES = EXPENSE_CATEGORIES;
 
     const modal = document.createElement('div');
     modal.className = 'modal-overlay';

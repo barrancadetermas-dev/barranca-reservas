@@ -2,6 +2,7 @@ import { isDemo, can } from '../auth/permissions.js';
 import { formatARS, showToast, getUnitLabel, getUnitColor, getUnitChipHTML, AppContext, localToday, localDateISO } from '../supabase-config.js';
 import { RevenuePanel } from './revenue-panel.js';
 import { FinancePanel } from './finance-panel.js';
+import { CATEGORY_COLORS } from '../services/expense-categories.js';
 
 // ══════════════════════════════════════════════════
 // statistics.js v5.1 — MILA
@@ -14,14 +15,6 @@ import { FinancePanel } from './finance-panel.js';
 
 const MONTH_NAMES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio',
                      'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
-
-const CATEGORY_COLORS = {
-  servicios:    '#3B82F6', mantenimiento:'#F59E0B',
-  limpieza:     '#34D399', impuestos:    '#F43F5E',
-  personal:     '#A855F7', compras:      '#0EA5E9',
-  otros:        '#94A3B8', honorarios:   '#6366F1',
-  marketing:    '#EC4899', bancarios:    '#14B8A6',
-};
 
 const SOURCE_LABELS = {
   direct:'Directo', booking:'Booking', airbnb:'Airbnb',
