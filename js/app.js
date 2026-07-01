@@ -61,10 +61,15 @@ if ('serviceWorker' in navigator) {
       });
     })
     .catch(e => console.warn('[PWA] SW error:', e));
-  // Recargar cuando el nuevo SW tome control
-  let refreshing = false;
+  // Aviso NO intrusivo cuando hay una versión nueva — antes esto recargaba la
+  // página automáticamente (window.location.reload()), lo que interrumpía al
+  // usuario en medio de lo que estuviera haciendo (ej. escribiendo el email
+  // en el login, el campo se vaciaba de la nada porque la página se recargaba
+  // sola). Como el SW ya usa "network first" para HTML/JS/CSS, el código
+  // actualizado igual se sirve solo con recargar manualmente — no hace falta
+  // forzar nada.
   navigator.serviceWorker.addEventListener('controllerchange', () => {
-    if (!refreshing) { refreshing = true; window.location.reload(); }
+    showToast?.('Hay una versión nueva disponible. Recargá cuando quieras.', 'info');
   });
   navigator.serviceWorker.addEventListener('message', (e) => {
     if (e.data?.type === 'SYNC_COMPLETE') showToast(e.data.message, 'success');
