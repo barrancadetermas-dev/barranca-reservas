@@ -236,6 +236,7 @@ window._navToPanel = () => {
 // INIT APP
 // ══════════════════════════════════════════════════
 async function initApp(user) {
+  let loginWasHidden = false;
   try {
     await loadHotelContext();
     AppContext.user = user;
@@ -252,6 +253,7 @@ async function initApp(user) {
     AppContext.IS_DEMO = AppContext.role === 'demo';
 
     hideLogin();
+    loginWasHidden = true;
     updateHeaderDate();
     startArgentinaClock(); // reloj Argentina en tiempo real
 
@@ -418,9 +420,17 @@ async function initApp(user) {
 
   } catch (err) {
     console.error('[App] initApp error:', err);
-    _initializedUserId = null; // permite reintentar sin recargar la página
-    showLoginError(`No se pudo cargar la aplicación: ${err.message}`);
-    showLogin(); // asegura que se vea el login (por si algo ya había ocultado el shell)
+    if (!loginWasHidden) {
+      // Falló ANTES de mostrar la app — ahí sí tiene sentido volver al login con el error
+      _initializedUserId = null; // permite reintentar sin recargar la página
+      showLoginError(`No se pudo cargar la aplicación: ${err.message}`);
+      showLogin();
+    } else {
+      // Falló DESPUÉS de que la app ya se mostró — no la tapamos de nuevo con el login,
+      // solo avisamos. Antes esto forzaba showLogin() sin condición y te devolvía a la
+      // pantalla de login aunque la app ya hubiera arrancado (bug reportado en mobile).
+      showToast(`Ocurrió un error al terminar de cargar: ${err.message}`, 'error');
+    }
   }
 }
 
