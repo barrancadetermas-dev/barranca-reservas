@@ -243,7 +243,12 @@ async function loadQuickStats(todayISO) {
         return `<span class="mila-trend-bar" style="--i:${i}" title="${dow} · ${d.pct}%"><span class="mila-trend-bar-fill" data-pct="${d.pct}"></span></span>`;
       }).join('');
       requestAnimationFrame(() => {
-        trendWrap.querySelectorAll('.mila-trend-bar-fill').forEach(el => { el.style.height = `${el.dataset.pct}%`; });
+        // Double rAF: primer frame pinta la barra en 0, segundo frame dispara la transición al valor real
+        requestAnimationFrame(() => {
+          trendWrap.querySelectorAll('.mila-trend-bar-fill').forEach(el => {
+            el.style.height = `${el.dataset.pct}%`;
+          });
+        });
       });
     }
   } catch (err) {
@@ -641,10 +646,10 @@ function disponibilidadHTML(list) {
 function facturacionHTML(d) {
   return `
     <div class="mila-stat-grid">
-      <div class="mila-stat"><div class="mila-stat-label">Monto Total</div><div class="mila-stat-value">${formatARS(d.total)}</div></div>
-      <div class="mila-stat"><div class="mila-stat-label">Cobrado</div><div class="mila-stat-value">${formatARS(d.cobrado)}</div></div>
-      <div class="mila-stat"><div class="mila-stat-label">Reservas</div><div class="mila-stat-value">${d.count}</div></div>
-      <div class="mila-stat"><div class="mila-stat-label">Promedio</div><div class="mila-stat-value">${formatARS(d.promedio)}</div></div>
+      <div class="mila-stat" data-type="money"><div class="mila-stat-label">Monto Total</div><div class="mila-stat-value">${formatARS(d.total)}</div></div>
+      <div class="mila-stat" data-type="cobrado"><div class="mila-stat-label">Cobrado</div><div class="mila-stat-value">${formatARS(d.cobrado)}</div></div>
+      <div class="mila-stat" data-type="count"><div class="mila-stat-label">Reservas</div><div class="mila-stat-value">${d.count}</div></div>
+      <div class="mila-stat" data-type="avg"><div class="mila-stat-label">Promedio</div><div class="mila-stat-value">${formatARS(d.promedio)}</div></div>
     </div>`;
 }
 
@@ -664,9 +669,9 @@ function preciosHTML(d) {
   if (!d) return emptyState('Departamento no encontrado');
   return `
     <div class="mila-stat-grid">
-      <div class="mila-stat"><div class="mila-stat-label">Departamento</div><div class="mila-stat-value">${esc(d.unitName)}</div></div>
-      <div class="mila-stat"><div class="mila-stat-label">Noches</div><div class="mila-stat-value">${d.nights}</div></div>
-      <div class="mila-stat mila-stat-wide"><div class="mila-stat-label">Total estimado</div><div class="mila-stat-value">${formatARS(d.total)}</div></div>
+      <div class="mila-stat" data-type="count"><div class="mila-stat-label">Departamento</div><div class="mila-stat-value">${esc(d.unitName)}</div></div>
+      <div class="mila-stat" data-type="count"><div class="mila-stat-label">Noches</div><div class="mila-stat-value">${d.nights}</div></div>
+      <div class="mila-stat mila-stat-wide" data-type="money"><div class="mila-stat-label">Total estimado</div><div class="mila-stat-value">${formatARS(d.total)}</div></div>
     </div>
     ${d.missing ? `<div class="mila-warn-note">⚠️ Algunos días del período no tienen tarifa cargada en el Cuadro Tarifario.</div>` : ''}
   `;

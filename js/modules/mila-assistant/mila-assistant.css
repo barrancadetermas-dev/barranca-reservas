@@ -78,11 +78,11 @@
 
 .mila-section-label {
   font-size: .66rem; font-weight: 800; letter-spacing: .04em; text-transform: uppercase;
-  color: var(--color-primary); margin-bottom: 10px;
-  display: flex; align-items: center; gap: 8px;
+  color: var(--color-primary); margin-bottom: 8px; margin-top: 0;
+  display: flex; align-items: center; gap: 6px;
 }
 .mila-bulb-icon {
-  display: inline-flex; margin-right: 2px; color: #CBB400;
+  display: inline-flex; color: #CBB400; flex-shrink: 0;
   animation: mila-bulb-onoff 2.6s ease-in-out infinite;
 }
 @keyframes mila-bulb-onoff {
@@ -91,17 +91,18 @@
 }
 .mila-section-label-text { margin-right: auto; }
 
-.mila-recent { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 10px; }
+.mila-recent { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; margin-bottom: 8px; padding: 0; }
 .mila-recent[hidden] { display: none; }
-.mila-recent-label { font-size: .62rem; font-weight: 800; color: var(--color-text-3); text-transform: uppercase; letter-spacing: .03em; margin-right: 2px; }
+.mila-recent-label { font-size: .6rem; font-weight: 800; color: var(--color-text-3); text-transform: uppercase; letter-spacing: .04em; }
 .mila-recent-chip {
-  display: inline-flex; align-items: center; gap: 5px;
-  border: 1px solid var(--color-border); background: var(--color-surface);
-  color: var(--color-text-2); border-radius: 999px; padding: 4px 10px;
-  font-size: .68rem; font-weight: 700; cursor: pointer;
-  transition: border-color .18s ease, transform .18s ease;
+  display: inline-flex; align-items: center; gap: 4px;
+  border: 1px solid var(--color-border); background: var(--color-surface-2);
+  color: var(--color-text-2); border-radius: 999px; padding: 3px 9px;
+  font-size: .66rem; font-weight: 700; cursor: pointer;
+  transition: border-color .18s ease, transform .18s ease, background .18s ease;
 }
-.mila-recent-chip:hover { border-color: var(--color-primary); color: var(--color-primary); transform: translateY(-1px); }
+.mila-recent-chip:hover { border-color: var(--color-primary); color: var(--color-primary); background: var(--color-primary-l); transform: translateY(-1px); }
+.mila-recent-chip svg { opacity: .6; flex-shrink: 0; }
 
 .mila-rows { display: flex; flex-direction: column; gap: 8px; }
 
@@ -320,18 +321,24 @@ select.mila-pill {
 [data-theme="dark"] .mila-qstat-loading { background-image: linear-gradient(90deg, transparent, rgba(255,255,255,.12), transparent); }
 
 .mila-qstats-trend { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--color-border); }
-.mila-qstats-trend-label { font-size: .64rem; color: var(--color-text-3); font-weight: 700; text-transform: uppercase; }
-.mila-trend-bars { display: flex; align-items: flex-end; gap: 5px; height: 34px; margin-top: 6px; }
+.mila-qstats-trend-label { font-size: .64rem; color: var(--color-text-3); font-weight: 700; text-transform: uppercase; margin-bottom: 6px; display: block; }
+.mila-trend-bars { display: flex; align-items: flex-end; gap: 4px; height: 40px; }
 .mila-trend-bar {
   flex: 1; height: 100%; display: flex; align-items: flex-end;
-  animation: mila-row-in .35s cubic-bezier(.22,1,.36,1) both; animation-delay: calc(var(--i, 0) * 60ms);
+  position: relative;
+  animation: mila-row-in .35s cubic-bezier(.22,1,.36,1) both;
+  animation-delay: calc(var(--i, 0) * 80ms);
 }
 .mila-trend-bar-fill {
-  width: 100%; height: 6%; border-radius: 4px 4px 0 0; min-height: 3px;
-  background: linear-gradient(180deg, var(--mila-violet, #8B5CF6), var(--color-primary));
-  transition: height .7s cubic-bezier(.22,1,.36,1);
+  width: 100%; height: 0; border-radius: 4px 4px 0 0; min-height: 3px;
+  background: linear-gradient(180deg, var(--mila-violet, #8B5CF6) 0%, var(--color-primary) 100%);
+  transition: height .8s cubic-bezier(.22,1,.36,1);
 }
-.mila-trend-bar-loading .mila-trend-bar-fill { background: var(--color-surface-2); animation: mila-shimmer-v 1.3s ease-in-out infinite; height: 30%; }
+.mila-trend-bar:hover .mila-trend-bar-fill { opacity: .75; }
+.mila-trend-bar-loading .mila-trend-bar-fill {
+  background: var(--color-surface-2); height: 30% !important;
+  animation: mila-shimmer-v 1.3s ease-in-out infinite;
+}
 @keyframes mila-shimmer-v { 0%, 100% { opacity: .4; } 50% { opacity: .8; } }
 
 .mila-urgency-tag {
@@ -376,17 +383,46 @@ select.mila-pill {
 .mila-answer-empty-title { font-weight: 700; font-size: .9rem; color: var(--color-text-2); font-style: italic; }
 .mila-answer-empty-text { font-size: .76rem; max-width: 260px; margin-top: 4px; line-height: 1.4; }
 
-.mila-answer-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding-bottom: 12px; border-bottom: 1px solid var(--color-border); margin-bottom: 12px; }
+.mila-stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.mila-stat {
+  background: var(--color-surface); border: 1px solid var(--color-border);
+  border-radius: 11px; padding: 10px 13px;
+  border-left: 3px solid var(--color-border);
+  transition: transform .2s ease, box-shadow .2s ease;
+}
+.mila-stat:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(15,23,42,.06); }
+.mila-stat-wide { grid-column: 1 / -1; }
+.mila-stat-label { font-size: .62rem; color: var(--color-text-3); font-weight: 700; text-transform: uppercase; letter-spacing: .03em; }
+.mila-stat-value { font-size: .98rem; font-weight: 800; color: var(--color-text); margin-top: 3px; }
+/* Acento por tipo — se aplica con data-stat-type en el HTML */
+.mila-stat[data-type="money"]   { border-left-color: var(--color-primary); }
+.mila-stat[data-type="money"] .mila-stat-value { color: var(--color-primary); }
+.mila-stat[data-type="cobrado"] { border-left-color: var(--color-success); }
+.mila-stat[data-type="cobrado"] .mila-stat-value { color: var(--color-success); }
+.mila-stat[data-type="count"]   { border-left-color: var(--mila-violet, #8B5CF6); }
+.mila-stat[data-type="count"] .mila-stat-value { color: var(--mila-violet, #8B5CF6); }
+.mila-stat[data-type="avg"]     { border-left-color: #f59e0b; }
+.mila-stat[data-type="avg"] .mila-stat-value { color: #f59e0b; }
+
+/* Answer head más expresivo */
+.mila-answer-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 10px 12px 10px; margin: -14px -14px 12px;
+  border-radius: 14px 14px 0 0;
+  background: linear-gradient(135deg, var(--color-primary-l), var(--mila-violet-l, #F1ECFF));
+  border-bottom: 1px solid var(--color-border);
+}
 .mila-answer-head-left { display: flex; align-items: center; gap: 10px; }
 .mila-answer-icon { width: 34px; height: 34px; border-radius: 10px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
 .mila-answer-icon svg { width: 17px; height: 17px; }
-.mila-answer-title { font-weight: 800; font-size: .9rem; color: var(--color-text); }
-.mila-answer-sub { font-size: .76rem; color: var(--color-text-3); margin-top: 1px; }
+.mila-answer-title { font-weight: 800; font-size: .88rem; color: var(--color-text); }
+.mila-answer-sub { font-size: .72rem; color: var(--color-text-3); margin-top: 1px; }
 .mila-answer-clear {
-  border: none; background: var(--color-surface-2); color: var(--color-text-3);
-  width: 26px; height: 26px; border-radius: 50%; cursor: pointer; font-size: .8rem; flex-shrink: 0;
+  border: none; background: rgba(255,255,255,.6); color: var(--color-text-3);
+  width: 24px; height: 24px; border-radius: 50%; cursor: pointer; font-size: .76rem; flex-shrink: 0;
+  transition: background .15s, color .15s;
 }
-.mila-answer-clear:hover { background: var(--color-border); color: var(--color-text); }
+.mila-answer-clear:hover { background: var(--color-surface); color: var(--color-text); }
 
 .mila-answer-body { display: flex; flex-direction: column; gap: 8px; }
 
