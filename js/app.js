@@ -116,6 +116,7 @@ async function boot() {
 function resetToLoginScreen() {
   document.getElementById('app-shell')?.classList.add('hidden');
   document.getElementById('login-screen')?.classList.remove('hidden');
+  document.getElementById('bottom-nav')?.classList.add('hidden');
 }
 
 // ══════════════════════════════════════════════════
@@ -164,10 +165,12 @@ function applyDarkMode(theme) {
 function showLogin() {
   document.getElementById('login-screen').classList.remove('hidden');
   document.getElementById('app-shell').classList.add('hidden');
+  document.getElementById('bottom-nav')?.classList.add('hidden');
 }
 function hideLogin() {
   document.getElementById('login-screen').classList.add('hidden');
   document.getElementById('app-shell').classList.remove('hidden');
+  document.getElementById('bottom-nav')?.classList.remove('hidden');
 }
 
 document.getElementById('login-form').addEventListener('submit', async (e) => {

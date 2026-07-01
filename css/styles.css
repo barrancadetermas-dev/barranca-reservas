@@ -2846,6 +2846,15 @@ select {
 .bnav-fab:active { transform: scale(.94); }
 [data-theme="dark"] .bottom-nav { background: #1e293b; border-color: #334155; }
 
+/* FIX: #bottom-nav vivía FUERA de #app-shell en el HTML (era hermano, no
+   hijo), así que nunca se ocultaba al mostrar el login — se veía flotando
+   arriba de la pantalla de login en mobile (z-index 150 > login 100).
+   mobile-fixes.css tiene ".bottom-nav{display:flex!important}" y carga
+   después de este archivo, así que una regla ".hidden" normal no le
+   ganaba. Uso ID+clase para asegurar mayor especificidad sin importar
+   el orden de las hojas de estilo. */
+#bottom-nav.hidden { display: none !important; }
+
 /* ── TIMELINE EN DETALLE DE RESERVA ──────────────── */
 .detail-timeline { margin-top: 16px; }
 .tl-list { position: relative; padding-left: 16px; }
