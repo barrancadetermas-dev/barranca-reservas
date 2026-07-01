@@ -38,6 +38,7 @@ const ICON_PATHS = {
   plant:       '<path d="M12 4c-2.2 2-2.2 5.2 0 7.2c2.2-2 2.2-5.2 0-7.2z"/><path d="M12 8.4c-3.2-.4-5.6 1.6-6 4.8c3.2.4 5.6-1.6 6-4.8z"/><path d="M12 8.4c3.2-.4 5.6 1.6 6 4.8c-3.2.4-5.6-1.6-6-4.8z"/><line x1="12" y1="11" x2="12" y2="21"/><path d="M7.5 21h9l-1.2 2.4H8.7z"/>',
   huesped:     '<circle cx="12" cy="8" r="3.4"/><path d="M5 20c0-3.6 3.1-6 7-6s7 2.4 7 6"/>',
   search:      '<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>',
+  copy:        '<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>',
 };
 const iconSVG = (id, size = 16) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="${size}" height="${size}">${ICON_PATHS[id]}</svg>`;
 
@@ -230,7 +231,13 @@ async function loadQuickStats(todayISO) {
     if (!wrap) return;
     Object.entries(values).forEach(([key, val]) => {
       const el = wrap.querySelector(`[data-stat="${key}"] .mila-qstat-value`);
-      if (el) { el.textContent = val; el.classList.remove('mila-qstat-loading'); }
+      if (el) {
+        el.textContent = val;
+        el.classList.remove('mila-qstat-loading');
+        // Dimear los ceros para que los valores reales destaquen visualmente
+        const isZero = val === 0 || val === '0' || val === '0%';
+        el.classList.toggle('mila-qstat-zero', isZero);
+      }
     });
     const bar = wrap.querySelector('[data-bar="ocupacion"]');
     if (bar) requestAnimationFrame(() => { bar.style.width = `${occ.pct}%`; });
@@ -377,10 +384,23 @@ function attachRow(rowEl, todayISO) {
 
   const searchInput = rowEl.querySelector('.mila-search-input');
   if (searchInput) {
+    let _debounceTimer = null;
     searchInput.addEventListener('click', (e) => e.stopPropagation());
+    searchInput.addEventListener('input', (e) => {
+      e.stopPropagation();
+      clearTimeout(_debounceTimer);
+      const val = searchInput.value;
+      if (val.length < 2) return; // esperar al menos 2 caracteres
+      _debounceTimer = setTimeout(() => {
+        s.query = val;
+        Sound?.click?.();
+        runQuery(queryId);
+      }, 400); // 400ms de debounce
+    });
     searchInput.addEventListener('keydown', (e) => {
       e.stopPropagation();
       if (e.key === 'Enter') {
+        clearTimeout(_debounceTimer); // Enter dispara inmediato, cancela debounce pendiente
         s.query = searchInput.value;
         Sound?.click?.();
         runQuery(queryId);
@@ -438,16 +458,21 @@ function renderRecent() {
 }
 
 function showLoading(q) {
-  answerEl.innerHTML = `
-    <div class="mila-answer-head">
-      <div class="mila-answer-head-left">
-        <span class="mila-answer-icon ${colorClass(q.color)}">${iconSVG(q.id)}</span>
-        <div class="mila-answer-title">${esc(q.title)}</div>
+  // Fade out el contenido anterior antes de mostrar los puntitos
+  answerEl.classList.add('mila-answer-fade-out');
+  setTimeout(() => {
+    answerEl.classList.remove('mila-answer-fade-out');
+    answerEl.innerHTML = `
+      <div class="mila-answer-head">
+        <div class="mila-answer-head-left">
+          <span class="mila-answer-icon ${colorClass(q.color)}">${iconSVG(q.id)}</span>
+          <div class="mila-answer-title">${esc(q.title)}</div>
+        </div>
       </div>
-    </div>
-    <div class="mila-answer-loading">
-      <span class="mila-dot"></span><span class="mila-dot"></span><span class="mila-dot"></span>
-    </div>`;
+      <div class="mila-answer-loading">
+        <span class="mila-dot"></span><span class="mila-dot"></span><span class="mila-dot"></span>
+      </div>`;
+  }, 120);
 }
 
 // ── Ejecutar consulta y actualizar la respuesta (misma pantalla, sin navegar) ──
@@ -542,12 +567,44 @@ function renderAnswer(q, subtitle, contentHTML) {
           ${subtitle ? `<div class="mila-answer-sub">${subtitle}</div>` : ''}
         </div>
       </div>
-      <button class="mila-answer-clear" id="mila-answer-clear" aria-label="Cerrar respuesta">✕</button>
+      <div style="display:flex;align-items:center;gap:6px">
+        <button class="mila-copy-result-btn" id="mila-copy-result" title="Copiar resultado" aria-label="Copiar">
+          ${iconSVG('copy', 13)}
+        </button>
+        <button class="mila-answer-clear" id="mila-answer-clear" aria-label="Cerrar respuesta">✕</button>
+      </div>
     </div>
     <div class="mila-answer-body">${contentHTML}</div>
   `;
   void answerEl.offsetWidth; // forzar reflow para reiniciar la animación
   answerEl.classList.add('mila-answer-pop');
+  answerEl.querySelector('#mila-copy-result')?.addEventListener('click', () => {
+    const body = answerEl.querySelector('.mila-answer-body');
+    if (!body) return;
+    // Extrae el texto visible limpio de las cards
+    const lines = [];
+    body.querySelectorAll('.mila-card, .mila-avail-item, .mila-stat, .mila-occ-circle, .mila-empty, .mila-empty-rich').forEach(el => {
+      const text = el.innerText?.replace(/\s*\n\s*/g, '\n').trim();
+      if (text) lines.push(text);
+    });
+    if (!lines.length) {
+      const allText = body.innerText?.trim();
+      if (allText) lines.push(allText);
+    }
+    const title = `${answerEl.querySelector('.mila-answer-title')?.innerText ?? ''} · ${answerEl.querySelector('.mila-answer-sub')?.innerText ?? ''}`.trim();
+    const copyText = [title, '─'.repeat(28), ...lines].join('\n\n');
+    const btn = answerEl.querySelector('#mila-copy-result');
+    navigator.clipboard?.writeText(copyText)
+      .then(() => {
+        Sound?.success?.();
+        if (btn) { const orig = btn.innerHTML; btn.innerHTML = '✓'; btn.style.color = 'var(--color-success)'; setTimeout(() => { btn.innerHTML = orig; btn.style.color = ''; }, 1500); }
+      })
+      .catch(() => {
+        const ta = document.createElement('textarea'); ta.value = copyText; ta.style.position = 'fixed'; ta.style.opacity = '0';
+        document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
+        Sound?.success?.();
+      });
+  });
   answerEl.querySelector('#mila-answer-clear').addEventListener('click', () => {
     Sound?.click?.();
     if (lastQueryId === 'huesped') {

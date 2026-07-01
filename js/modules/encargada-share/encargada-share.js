@@ -37,6 +37,9 @@ export function openEncargadaShare(bookings) {
   _modalEl.querySelector('#enc-preview-section').style.display = 'none';
   _updateFilterUI();
   _updateCount();
+  // Mostrar el último envío registrado
+  const lastSend = localStorage.getItem('mila_encargada_last_send') ?? '';
+  _updateLastSendBadge(lastSend);
   _modalEl.classList.remove('hidden');
 }
 
@@ -222,7 +225,9 @@ function _injectModal() {
 
       </div>
 
-      <div class="modal-footer" style="justify-content:flex-end;gap:8px;flex-wrap:wrap">
+      <div class="modal-footer" style="justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:center">
+        <div id="enc-last-send" style="font-size:.7rem;color:var(--color-text-3);display:none"></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn btn-outline" id="enc-close-btn">Cerrar</button>
         <button class="btn btn-outline" id="enc-gen-pdf-btn">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
@@ -236,6 +241,7 @@ function _injectModal() {
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
           Abrir WhatsApp
         </button>
+        </div>
       </div>
     </div>
   `;
@@ -329,9 +335,23 @@ function _bindEvents() {
       _modalEl.querySelector('#enc-wa-text').value = text;
       _modalEl.querySelector('#enc-preview-section').style.display = 'block';
     }
-    const phone   = _modalEl.querySelector('#enc-wa-phone').value.trim().replace(/\D/g, '');
+    const phone = _modalEl.querySelector('#enc-wa-phone').value.trim().replace(/\D/g, '');
     const url = `https://wa.me/${phone}?text=${encodeURIComponent(text)}`;
     window.open(url, '_blank', 'noopener,noreferrer');
+
+    // Registrar el último envío en localStorage para no mandar dos veces sin querer
+    const now = new Date();
+    const label = now.toLocaleDateString('es-AR', { weekday:'short', day:'2-digit', month:'2-digit' })
+      + ' ' + now.toLocaleTimeString('es-AR', { hour:'2-digit', minute:'2-digit' });
+    localStorage.setItem('mila_encargada_last_send', label);
+    _updateLastSendBadge(label);
     showToast('✓ Abriendo WhatsApp…', 'success');
   });
+}
+
+function _updateLastSendBadge(label) {
+  const badge = _modalEl?.querySelector('#enc-last-send');
+  if (!badge) return;
+  badge.textContent = label ? `Último envío: ${label}` : '';
+  badge.style.display = label ? 'block' : 'none';
 }

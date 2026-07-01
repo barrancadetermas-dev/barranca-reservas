@@ -45,8 +45,8 @@
   background: linear-gradient(120deg, #DCE6FF 0%, #E4D5FF 55%, #EBDCFF 100%);
   border: 1px solid #D6C7F7;
   border-radius: 18px;
-  padding: 18px 20px;
-  margin-bottom: 18px;
+  padding: 14px 18px;
+  margin-bottom: 12px;
   box-shadow: 0 6px 18px rgba(139,92,246,.12);
   animation: mila-row-in .4s cubic-bezier(.22,1,.36,1) both;
 }
@@ -77,9 +77,10 @@
 }
 
 .mila-section-label {
-  font-size: .66rem; font-weight: 800; letter-spacing: .04em; text-transform: uppercase;
-  color: var(--color-primary); margin-bottom: 8px; margin-top: 0;
+  font-size: .64rem; font-weight: 800; letter-spacing: .05em; text-transform: uppercase;
+  color: var(--color-primary); margin-bottom: 6px; margin-top: 0;
   display: flex; align-items: center; gap: 6px;
+  padding-left: 18px; /* aligns bulb under the "¿" of the hero text */
 }
 .mila-bulb-icon {
   display: inline-flex; color: #CBB400; flex-shrink: 0;
@@ -91,7 +92,7 @@
 }
 .mila-section-label-text { margin-right: auto; }
 
-.mila-recent { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; margin-bottom: 8px; padding: 0; }
+.mila-recent { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; margin-bottom: 8px; padding-left: 18px; }
 .mila-recent[hidden] { display: none; }
 .mila-recent-label { font-size: .6rem; font-weight: 800; color: var(--color-text-3); text-transform: uppercase; letter-spacing: .04em; }
 .mila-recent-chip {
@@ -99,55 +100,71 @@
   border: 1px solid var(--color-border); background: var(--color-surface-2);
   color: var(--color-text-2); border-radius: 999px; padding: 3px 9px;
   font-size: .66rem; font-weight: 700; cursor: pointer;
-  transition: border-color .18s ease, transform .18s ease, background .18s ease;
+  transition: border-color .18s ease, transform .18s ease, background .18s ease, color .18s ease;
 }
 .mila-recent-chip:hover { border-color: var(--color-primary); color: var(--color-primary); background: var(--color-primary-l); transform: translateY(-1px); }
 .mila-recent-chip svg { opacity: .6; flex-shrink: 0; }
 
-.mila-rows { display: flex; flex-direction: column; gap: 8px; }
+.mila-rows { display: flex; flex-direction: column; gap: 7px; }
 
-/* ── Fila tipo "chip de pregunta" — compacta, alineada con grid interno ── */
+/* ── Cards de consulta — diseño con acento de color izquierdo ── */
 .mila-row {
   background: var(--color-surface);
   border: 1px solid var(--color-border);
+  border-left: 3px solid transparent;
   border-radius: 14px;
-  padding: 11px 13px;
+  padding: 10px 12px;
   display: grid;
-  grid-template-columns: 30px 1fr auto;
+  grid-template-columns: 28px 1fr auto;
   align-items: center;
   column-gap: 11px;
   cursor: pointer;
-  box-shadow: 0 1px 3px rgba(15,23,42,.05);
-  transition: border-color .22s ease, box-shadow .22s ease, transform .22s ease;
+  box-shadow: 0 1px 3px rgba(15,23,42,.04);
+  transition: border-color .2s ease, border-left-color .2s ease, box-shadow .2s ease, transform .2s ease, background .2s ease;
 }
+/* El acento de color izquierdo hereda el color del ícono al hacer hover */
+.mila-row:has(.mila-ic-cyan):hover, .mila-row:has(.mila-ic-cyan).is-active    { border-left-color: #0891B2; }
+.mila-row:has(.mila-ic-blue):hover, .mila-row:has(.mila-ic-blue).is-active    { border-left-color: #2563EB; }
+.mila-row:has(.mila-ic-green):hover, .mila-row:has(.mila-ic-green).is-active  { border-left-color: #16A34A; }
+.mila-row:has(.mila-ic-orange):hover, .mila-row:has(.mila-ic-orange).is-active{ border-left-color: #EA580C; }
+.mila-row:has(.mila-ic-purple):hover, .mila-row:has(.mila-ic-purple).is-active{ border-left-color: #7C3AED; }
+.mila-row:has(.mila-ic-pink):hover, .mila-row:has(.mila-ic-pink).is-active    { border-left-color: #DB2777; }
+.mila-row:has(.mila-ic-amber):hover, .mila-row:has(.mila-ic-amber).is-active  { border-left-color: #D97706; }
+.mila-row:has(.mila-ic-indigo):hover,.mila-row:has(.mila-ic-indigo).is-active { border-left-color: #4F46E5; }
+.mila-row:has(.mila-ic-teal):hover, .mila-row:has(.mila-ic-teal).is-active    { border-left-color: #0D9488; }
 .mila-row:hover {
-  border-color: var(--color-primary);
-  box-shadow: 0 10px 22px rgba(30,77,183,.14);
-  transform: translateY(-4px) scale(1.02);
+  border-color: var(--color-border);
+  box-shadow: 0 6px 18px rgba(15,23,42,.1);
+  transform: translateY(-3px);
+  background: var(--color-surface);
 }
-.mila-row:hover .mila-row-icon { animation: mila-icon-bounce .5s ease; }
-.mila-row:active { transform: translateY(-1px) scale(.99); }
-.mila-row.is-active { border-color: var(--color-primary); background: var(--color-primary-t); box-shadow: 0 6px 16px rgba(30,77,183,.12); }
-
+.mila-row:hover .mila-row-icon { animation: mila-icon-bounce .45s ease; }
+.mila-row:active { transform: translateY(-1px) scale(.99); box-shadow: 0 2px 6px rgba(15,23,42,.06); }
+.mila-row.is-active {
+  background: var(--color-primary-t);
+  border-color: var(--color-border);
+  box-shadow: 0 4px 14px rgba(30,77,183,.1);
+}
 @keyframes mila-icon-bounce {
   0%   { transform: rotate(0deg) scale(1); }
-  35%  { transform: rotate(-10deg) scale(1.12); }
-  65%  { transform: rotate(8deg) scale(1.08); }
+  35%  { transform: rotate(-10deg) scale(1.15); }
+  65%  { transform: rotate(7deg) scale(1.1); }
   100% { transform: rotate(0deg) scale(1); }
 }
 
-.mila-row-enter { opacity: 0; animation: mila-row-in .4s cubic-bezier(.22,1,.36,1) forwards; animation-delay: calc(var(--i, 0) * 100ms); }
+.mila-row-enter { opacity: 0; animation: mila-row-in .4s cubic-bezier(.22,1,.36,1) forwards; animation-delay: calc(var(--i, 0) * 90ms); }
 @keyframes mila-row-in {
-  from { opacity: 0; transform: translateY(8px) scale(.98); }
+  from { opacity: 0; transform: translateY(10px) scale(.97); }
   to   { opacity: 1; transform: translateY(0) scale(1); }
 }
 
 .mila-row-icon {
-  width: 30px; height: 30px; border-radius: 9px;
+  width: 28px; height: 28px; border-radius: 8px;
   display: flex; align-items: center; justify-content: center;
-  transition: transform .22s ease;
+  flex-shrink: 0;
+  transition: transform .2s ease;
 }
-.mila-row-icon svg { width: 15px; height: 15px; }
+.mila-row-icon svg { width: 14px; height: 14px; }
 .mila-ic-cyan   { background: #E0F7FA; color: #0891B2; }
 .mila-ic-blue   { background: #E0EAFF; color: #2563EB; }
 .mila-ic-green  { background: #E3F9E5; color: #16A34A; }
@@ -159,8 +176,8 @@
 .mila-ic-teal   { background: #DAF5F0; color: #0D9488; }
 
 .mila-row-text { min-width: 0; }
-.mila-row-title { font-size: .8rem; font-weight: 700; color: var(--color-text); line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.mila-row-sub { font-size: .67rem; color: var(--color-text-3); line-height: 1.25; margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mila-row-title { font-size: .79rem; font-weight: 700; color: var(--color-text); line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mila-row-sub { font-size: .65rem; color: var(--color-text-3); line-height: 1.2; margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 .mila-row-controls { display: flex; gap: 5px; align-items: center; justify-self: end; }
 
@@ -380,6 +397,22 @@ select.mila-pill {
   from { opacity: .4; transform: translateY(6px); }
   to   { opacity: 1; transform: translateY(0); }
 }
+
+/* Fade-out suave cuando cambia la consulta */
+.mila-answer-fade-out { animation: mila-fade-out .12s ease both; pointer-events: none; }
+@keyframes mila-fade-out { from { opacity: 1; transform: translateY(0); } to { opacity: 0; transform: translateY(-4px); } }
+
+/* Botón copiar resultado */
+.mila-copy-result-btn {
+  border: 1px solid rgba(255,255,255,.6); background: rgba(255,255,255,.45);
+  color: var(--color-text-3); width: 26px; height: 26px; border-radius: 8px;
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+  transition: background .15s, color .15s, border-color .15s;
+}
+.mila-copy-result-btn:hover { background: #fff; color: var(--color-primary); border-color: var(--color-primary); }
+
+/* Cero atenuado en Resumen del día */
+.mila-qstat-zero { color: var(--color-text-3) !important; font-weight: 500 !important; opacity: .55; }
 .mila-answer-empty-title { font-weight: 700; font-size: .9rem; color: var(--color-text-2); font-style: italic; }
 .mila-answer-empty-text { font-size: .76rem; max-width: 260px; margin-top: 4px; line-height: 1.4; }
 
