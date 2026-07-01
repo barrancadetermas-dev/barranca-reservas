@@ -1,9 +1,13 @@
 // ═══════════════════════════════════════════════════
-// MILA PMS — Service Worker v3
+// MILA PMS — Service Worker v7
 // Estrategia: Network First con fallback offline
+// FIX: clone() debe llamarse SÍNCRONAMENTE al recibir
+// la respuesta, nunca dentro de un .then() posterior,
+// porque para entonces el body ya puede estar consumido
+// (causaba "Response body is already used").
 // ═══════════════════════════════════════════════════
 
-const CACHE_NAME  = 'mila-v6';
+const CACHE_NAME  = 'mila-v7';
 const OFFLINE_URL = '/offline.html';
 
 const STATIC_ASSETS = [
@@ -25,6 +29,7 @@ self.addEventListener('install', (e) => {
     caches.open(CACHE_NAME)
       .then(cache => cache.addAll(STATIC_ASSETS))
       .then(() => self.skipWaiting())
+      .catch(err => console.error('[SW] install error:', err))
   );
 });
 
@@ -39,7 +44,15 @@ self.addEventListener('activate', (e) => {
   );
 });
 
-// ── Fetch ──
+// Guarda una respuesta en cache de forma segura, sin romper
+// el flujo principal si algo falla (cuota llena, etc.)
+function safePut(request, response) {
+  caches.open(CACHE_NAME)
+    .then(c => c.put(request, response))
+    .catch(err => console.warn('[SW] cache put failed:', err));
+}
+
+// ── Fetch: Network First para todo ──
 self.addEventListener('fetch', (e) => {
   const { request } = e;
   const url = new URL(request.url);
@@ -53,7 +66,9 @@ self.addEventListener('fetch', (e) => {
     e.respondWith(
       fetch(request)
         .then(res => {
-          caches.open(CACHE_NAME).then(c => c.put(request, res.clone()));
+          // Clonar INMEDIATAMENTE, antes de devolver la respuesta original
+          const toCache = res.clone();
+          safePut(request, toCache);
           return res;
         })
         .catch(() => caches.match(OFFLINE_URL))
@@ -66,7 +81,10 @@ self.addEventListener('fetch', (e) => {
     e.respondWith(
       fetch(request)
         .then(res => {
-          if (res.ok) caches.open(CACHE_NAME).then(c => c.put(request, res.clone()));
+          if (res.ok) {
+            const toCache = res.clone();
+            safePut(request, toCache);
+          }
           return res;
         })
         .catch(() => caches.match(request))
@@ -74,12 +92,15 @@ self.addEventListener('fetch', (e) => {
     return;
   }
 
-  // Imágenes/íconos: Cache First
+  // Imágenes / iconos: Cache First (no cambian)
   e.respondWith(
     caches.match(request).then(cached => {
       if (cached) return cached;
       return fetch(request).then(res => {
-        if (res.ok) caches.open(CACHE_NAME).then(c => c.put(request, res.clone()));
+        if (res.ok) {
+          const toCache = res.clone();
+          safePut(request, toCache);
+        }
         return res;
       });
     })
