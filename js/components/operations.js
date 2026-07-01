@@ -1153,27 +1153,34 @@ export class OperationsModule {
       <div class="expense-row ${e.paid ? 'paid' : ''}" id="ops-exp-${e.id}">
         <div class="expense-category-dot" style="background:${CATEGORY_COLORS[e.category] ?? '#94A3B8'}"></div>
         <div class="expense-info">
-          <div class="expense-desc">${e.description}</div>
-          <div class="expense-meta">${e.category}${e.due_date ? ` · Vence: ${e.due_date}` : ''}${e.paid && e.paid_at ? ` · Pagado: ${e.paid_at.slice(0,10)}` : ''}</div>
+          <span class="expense-desc">${e.description}</span>
+          <span class="expense-meta">· ${e.category}${e.due_date ? ` · Vence: ${e.due_date}` : ''}${e.paid && e.paid_at ? ` · Pagado: ${e.paid_at.slice(0,10)}` : ''}</span>
         </div>
         <strong class="expense-amount" style="color:${e.paid ? 'var(--color-success)' : 'var(--color-text)'}">${formatARS(e.amount)}</strong>
-        <label class="expense-paid-toggle" title="${e.paid ? 'Marcar pendiente' : 'Marcar pagado'}">
-          <input type="checkbox" ${e.paid ? 'checked' : ''} data-exp-id="${e.id}" class="ops-exp-toggle">
-        </label>
-        <button class="btn btn-ghost btn-xs ops-exp-recurring ${e.is_recurring ? 'active' : ''}" data-exp-id="${e.id}" data-recurring="${e.is_recurring ? '1' : '0'}" title="${e.is_recurring ? 'Repetición mensual activada (se va a cargar solo el mes que viene)' : 'Repetir todos los meses'}">🔁</button>
-        <button class="btn btn-ghost btn-xs ops-exp-edit" data-exp-id="${e.id}" title="Editar">✏️</button>
-        <button class="btn btn-ghost btn-xs ops-exp-del" data-exp-id="${e.id}" title="Eliminar" style="color:var(--color-danger)">🗑️</button>
+        <button type="button" class="expense-paid-pill ${e.paid ? 'is-paid' : ''}" data-exp-id="${e.id}" title="${e.paid ? 'Marcar pendiente' : 'Marcar pagado'}">
+          ${e.paid ? '✓ Pagado' : 'Pendiente'}
+        </button>
+        <div class="expense-actions">
+          <button class="expense-action-btn ops-exp-recurring ${e.is_recurring ? 'active' : ''}" data-exp-id="${e.id}" data-recurring="${e.is_recurring ? '1' : '0'}" title="${e.is_recurring ? 'Repetición mensual activada (se va a cargar solo el mes que viene)' : 'Repetir todos los meses'}">🔁</button>
+          <button class="expense-action-btn ops-exp-edit" data-exp-id="${e.id}" title="Editar">✏️</button>
+          <button class="expense-action-btn ops-exp-del" data-exp-id="${e.id}" title="Eliminar">🗑️</button>
+        </div>
       </div>
     `).join('');
 
     // Bind actions
-    list.querySelectorAll('.ops-exp-toggle').forEach(cb => {
-      cb.addEventListener('change', async () => {
-        const id   = cb.dataset.expId;
-        const paid = cb.checked;
+    list.querySelectorAll('.expense-paid-pill').forEach(pill => {
+      pill.addEventListener('click', async () => {
+        const id   = pill.dataset.expId;
+        const paid = !pill.classList.contains('is-paid');
+        pill.disabled = true;
         const { error } = await this.db.from('expenses')
           .update({ paid, paid_at: paid ? new Date().toISOString() : null }).eq('id', id);
-        if (error) { showToast('Error', 'error'); cb.checked = !paid; return; }
+        pill.disabled = false;
+        if (error) { showToast('Error', 'error'); return; }
+        pill.classList.toggle('is-paid', paid);
+        pill.textContent = paid ? '✓ Pagado' : 'Pendiente';
+        pill.title = paid ? 'Marcar pendiente' : 'Marcar pagado';
         document.getElementById(`ops-exp-${id}`)?.classList.toggle('paid', paid);
         showToast(paid ? 'Marcado como pagado ✓' : 'Marcado como pendiente', 'success');
       });

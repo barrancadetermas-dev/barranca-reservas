@@ -890,19 +890,46 @@ select { appearance: auto; cursor: pointer; }
 .expense-summary-item strong { font-size: 1rem; font-weight: 700; }
 
 .expense-row {
-  display: flex; align-items: center; gap: var(--sp-16); padding: 12px 16px;
+  display: flex; align-items: center; gap: var(--sp-12); padding: 8px 12px;
   background: var(--color-surface); border: 1px solid var(--color-border);
-  border-radius: var(--r-lg); box-shadow: var(--sh-xs); margin-bottom: var(--sp-8);
+  border-radius: var(--r-md); box-shadow: var(--sh-xs); margin-bottom: 6px;
   transition: opacity var(--t-fast);
 }
-.expense-row.paid { opacity: .65; }
-.expense-category-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; background: var(--color-primary); }
-.expense-info { flex: 1; }
-.expense-desc { font-size: .875rem; font-weight: 500; color: var(--color-text); }
-.expense-meta { font-size: .75rem; color: var(--color-text-2); margin-top: 2px; }
-.expense-amount { font-size: .92rem; font-weight: 700; }
-.expense-paid-toggle { margin-left: var(--sp-12); }
-.expense-paid-toggle input { accent-color: var(--color-success); width: 16px; height: 16px; cursor: pointer; }
+.expense-row.paid { opacity: .6; }
+.expense-category-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; background: var(--color-primary); }
+.expense-info {
+  flex: 1; min-width: 0; display: flex; align-items: baseline; gap: var(--sp-8);
+  white-space: nowrap; overflow: hidden;
+}
+.expense-desc { font-size: .85rem; font-weight: 600; color: var(--color-text); flex-shrink: 0; }
+.expense-meta { font-size: .72rem; color: var(--color-text-3); overflow: hidden; text-overflow: ellipsis; }
+.expense-amount { font-size: .88rem; font-weight: 700; flex-shrink: 0; white-space: nowrap; }
+
+.expense-paid-pill {
+  flex-shrink: 0; border: 1px solid var(--color-border); background: transparent;
+  color: var(--color-text-2); font-size: .72rem; font-weight: 600;
+  padding: 4px 10px; border-radius: var(--r-full); cursor: pointer;
+  white-space: nowrap; transition: all var(--t-fast);
+}
+.expense-paid-pill:hover { background: var(--color-surface-2); color: var(--color-text); }
+.expense-paid-pill.is-paid {
+  background: rgba(22,163,74,.12); border-color: transparent; color: var(--color-success);
+}
+.expense-paid-pill.is-paid:hover { background: rgba(22,163,74,.2); }
+
+.expense-actions {
+  display: flex; align-items: center; gap: 2px; flex-shrink: 0;
+  border-left: 1px solid var(--color-border); padding-left: var(--sp-8); margin-left: 2px;
+}
+.expense-action-btn {
+  border: none; background: transparent; cursor: pointer;
+  width: 26px; height: 26px; border-radius: var(--r-md);
+  display: flex; align-items: center; justify-content: center;
+  font-size: .85rem; opacity: .55; transition: all var(--t-fast);
+}
+.expense-action-btn:hover { opacity: 1; background: var(--color-surface-2); }
+.expense-action-btn.ops-exp-recurring.active { opacity: 1; }
+.expense-action-btn.ops-exp-del:hover { color: var(--color-danger); background: rgba(244,63,94,.1); }
 
 .ops-expenses-header { display: flex; align-items: center; gap: var(--sp-12); margin-bottom: var(--sp-16); flex-wrap: wrap; }
 .ops-month-nav {
