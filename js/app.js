@@ -98,9 +98,24 @@ async function boot() {
     if (event === 'SIGNED_OUT') {
       _initializedUserId = null;
       destroyApp();
-      showLogin();
+      resetToLoginScreen();
     }
   });
+}
+
+// ══════════════════════════════════════════════════
+// FIX (mobile stuck-on-login bug): fuerza un estado
+// consistente cuando la sesión muere (ej. refresh_token
+// inválido al volver del background en el celular).
+// Antes solo se tocaban las clases hidden/no-hidden, lo
+// que podía quedar pisado por un initApp() todavía en
+// vuelo. Esto además limpia cualquier sesión zombie del
+// localStorage para que el próximo intento de login no
+// vuelva a chocar con el mismo refresh_token muerto.
+// ══════════════════════════════════════════════════
+function resetToLoginScreen() {
+  document.getElementById('app-shell')?.classList.add('hidden');
+  document.getElementById('login-screen')?.classList.remove('hidden');
 }
 
 // ══════════════════════════════════════════════════
@@ -428,8 +443,20 @@ async function initApp(user) {
     if (!loginWasHidden) {
       // Falló ANTES de mostrar la app — ahí sí tiene sentido volver al login con el error
       _initializedUserId = null; // permite reintentar sin recargar la página
+
+      // FIX: si el fallo es por sesión inválida (típico en mobile: el
+      // refresh_token guardado quedó muerto y las queries devuelven 401),
+      // la sesión vieja sigue en localStorage y el próximo getSession()
+      // la vuelve a traer, intenta refrescarla, vuelve a fallar (400) y
+      // te deja en un loop trabado en el login. signOut() la limpia para
+      // que el próximo intento arranque de cero.
+      const authErr = err?.status === 401 || /jwt|token|auth/i.test(err?.message ?? '');
+      if (authErr) {
+        supabase.auth.signOut().catch(() => {});
+      }
+
       showLoginError(`No se pudo cargar la aplicación: ${err.message}`);
-      showLogin();
+      resetToLoginScreen();
     } else {
       // Falló DESPUÉS de que la app ya se mostró — no la tapamos de nuevo con el login,
       // solo avisamos. Antes esto forzaba showLogin() sin condición y te devolvía a la

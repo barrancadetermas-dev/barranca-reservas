@@ -7,7 +7,7 @@
 // (causaba "Response body is already used").
 // ═══════════════════════════════════════════════════
 
-const CACHE_NAME  = 'mila-v7';
+const CACHE_NAME  = 'mila-v8';
 const OFFLINE_URL = '/offline.html';
 
 const STATIC_ASSETS = [
@@ -96,13 +96,18 @@ self.addEventListener('fetch', (e) => {
   e.respondWith(
     caches.match(request).then(cached => {
       if (cached) return cached;
-      return fetch(request).then(res => {
-        if (res.ok) {
-          const toCache = res.clone();
-          safePut(request, toCache);
-        }
-        return res;
-      });
+      return fetch(request)
+        .then(res => {
+          if (res.ok) {
+            const toCache = res.clone();
+            safePut(request, toCache);
+          }
+          return res;
+        })
+        // FIX: sin este catch, un fetch fallido (offline, red inestable en
+        // mobile) quedaba como unhandled promise rejection en consola.
+        // No es grave, pero ensuciaba el debugging de otros errores reales.
+        .catch(() => cached || new Response('', { status: 504, statusText: 'Offline' }));
     })
   );
 });
