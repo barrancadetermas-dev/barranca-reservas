@@ -244,3 +244,42 @@ export async function fetchOccupancyTrend(days = 7) {
 function localDateISOFromDate(d) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
+
+// 11) Gastos de un mes — misma tabla/criterio que la pestaña "Gastos" de Operaciones
+export async function fetchGastosPorMes(monthISO) {
+  const hotelId = AppContext.hotelId;
+  const [year, month] = monthISO.split('-').map(Number);
+  const first = `${year}-${String(month).padStart(2, '0')}-01`;
+  const last  = new Date(year, month, 0).toISOString().slice(0, 10);
+
+  const { data } = await supabase.from('expenses')
+    .select('id, description, category, amount, due_date, paid, paid_at')
+    .eq('hotel_id', hotelId)
+    .gte('due_date', first)
+    .lte('due_date', last)
+    .order('description', { ascending: true });
+
+  const items = data ?? [];
+  const total = items.reduce((s, e) => s + (e.amount ?? 0), 0);
+  const pagado = items.filter(e => e.paid).reduce((s, e) => s + (e.amount ?? 0), 0);
+  return { items, total, pagado, count: items.length };
+}
+
+// 12) Búsqueda de gastos por concepto/proveedor/categoría — mismo criterio .or() ilike
+// que ya usa fetchGuestSearch() para huéspedes, aplicado a la tabla expenses.
+export async function fetchGastosBusqueda(query) {
+  const hotelId = AppContext.hotelId;
+  const q = query.trim();
+  if (q.length < 2) return { items: [], total: 0, count: 0 };
+
+  const { data } = await supabase.from('expenses')
+    .select('id, description, category, amount, due_date, paid, paid_at')
+    .eq('hotel_id', hotelId)
+    .or(`description.ilike.%${q}%,category.ilike.%${q}%`)
+    .order('due_date', { ascending: false, nullsFirst: false })
+    .limit(30);
+
+  const items = data ?? [];
+  const total = items.reduce((s, e) => s + (e.amount ?? 0), 0);
+  return { items, total, count: items.length };
+}

@@ -17,6 +17,7 @@ let answerEl = null;
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
 const fmtDate  = (iso) => { if (!iso) return '—'; const [y,m,d] = iso.split('-'); return `${d}/${m}/${y}`; };
 const MES_CORTO = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+const MES_LARGO = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 const fmtShort = (iso) => { if (!iso) return '—'; const [, m, d] = iso.split('-').map(Number); return `${d} ${MES_CORTO[m-1]}`; };
 const addDays = (iso, n) => localDateISO(new Date(new Date(iso + 'T12:00:00').getTime() + n * 86400000));
 const isMobile = () => window.matchMedia('(max-width: 900px)').matches;
@@ -39,7 +40,10 @@ const ICON_PATHS = {
   huesped:     '<circle cx="12" cy="8" r="3.4"/><path d="M5 20c0-3.6 3.1-6 7-6s7 2.4 7 6"/>',
   search:      '<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>',
   copy:        '<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>',
+  wallet:      '<path d="M21 12V7H5a2 2 0 010-4h14v4"/><path d="M3 5v14a2 2 0 002 2h16v-5"/><path d="M18 12a2 2 0 000 4h4v-4z"/>',
 };
+ICON_PATHS.gastosmes   = ICON_PATHS.wallet;
+ICON_PATHS.gastosbusca = ICON_PATHS.search;
 const iconSVG = (id, size = 16) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="${size}" height="${size}">${ICON_PATHS[id]}</svg>`;
 
 // type: 'date' (1 fecha) | 'range' (ingreso/salida, 1 noche por defecto) |
@@ -53,6 +57,8 @@ const QUERIES = [
   { id: 'ocupacion',   color: 'purple', title: 'Ocupación',               sub: 'Ver ocupación en un período',   type: 'preset' },
   { id: 'precios',     color: 'pink',   title: 'Precios',                 sub: 'Consultar precios por fecha',   type: 'unit-range' },
   { id: 'pagos',       color: 'amber',  title: 'Pagos pendientes',        sub: 'Ver pagos que faltan cobrar',   type: 'none' },
+  { id: 'gastosmes',   color: 'rose',   title: 'Gastos del mes',          sub: '¿Cuánto gastaste y en qué?',    type: 'month' },
+  { id: 'gastosbusca', color: 'cyan',   title: 'Buscar gasto',            sub: 'Por proveedor o concepto (ej: Turismoentrerios)', type: 'text' },
   { id: 'bloqueos',    color: 'indigo', title: 'Bloqueos',                sub: 'Ver bloqueos en una fecha',     type: 'date' },
   { id: 'huesped',     color: 'teal',   title: 'Huésped',                 sub: 'Buscar reservas por nombre',    type: 'text' },
 ];
@@ -88,7 +94,7 @@ function setupShortcut() {
     e.preventDefault();
     window.milaNav?.('mila');
     setTimeout(() => {
-      const input = document.getElementById('mila-guest-input');
+      const input = document.getElementById('mila-search-huesped');
       input?.focus();
       input?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }, 80);
@@ -104,6 +110,7 @@ function initState(q, todayISO) {
   if (q.type === 'unit-range') { s.unitId = (AppContext.units ?? [])[0]?.id ?? ''; s.from = todayISO; s.to = addDays(todayISO, 1); s.toEdited = false; }
   if (q.type === 'preset')     s.preset = 'this_month';
   if (q.type === 'text')       s.query = '';
+  if (q.type === 'month')      { const d = new Date(); s.month = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; }
   fieldState[q.id] = s;
   return s;
 }
@@ -312,16 +319,30 @@ function rowTemplate(q, todayISO, idx = null) {
           ${Object.entries(PRESETS).map(([k, fn]) => `<option value="${k}" ${k === s.preset ? 'selected' : ''}>${fn().label}</option>`).join('')}
         </select>`;
       break;
+    case 'month': {
+      const opts = [];
+      const cur = new Date();
+      for (let i = 0; i < 12; i++) {
+        const d = new Date(cur.getFullYear(), cur.getMonth() - i, 1);
+        const val = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+        const label = `${MES_LARGO[d.getMonth()]} ${d.getFullYear()}`;
+        opts.push(`<option value="${val}" ${val === s.month ? 'selected' : ''}>${label}</option>`);
+      }
+      controls = `<select class="mila-pill mila-select" data-field="month">${opts.join('')}</select>`;
+      break;
+    }
     case 'none':
       controls = `<span class="mila-chevron">›</span>`;
       break;
-    case 'text':
+    case 'text': {
+      const placeholder = q.id === 'gastosbusca' ? 'Ej: Turismoentrerios...' : 'Nombre del huésped...';
       controls = `
         <div class="mila-search-pill">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12">${ICON_PATHS.search}</svg>
-          <input type="text" class="mila-search-input" id="mila-guest-input" placeholder="Nombre del huésped..." value="${esc(s.query)}" autocomplete="off">
+          <input type="text" class="mila-search-input" id="mila-search-${q.id}" placeholder="${placeholder}" value="${esc(s.query)}" autocomplete="off">
         </div>`;
       break;
+    }
   }
   const isActive = lastQueryId === q.id ? ' is-active' : '';
   const enterCls = idx !== null ? ' mila-row-enter' : '';
@@ -547,6 +568,21 @@ async function runQuery(queryId) {
         guardedRender(`"${esc(s.query)}"`, huespedHTML(data));
         break;
       }
+      case 'gastosmes': {
+        const data = await MilaData.fetchGastosPorMes(s.month);
+        const [y, m] = s.month.split('-').map(Number);
+        guardedRender(`${MES_LARGO[m - 1]} ${y}`, gastosMesHTML(data));
+        break;
+      }
+      case 'gastosbusca': {
+        if (!s.query || s.query.trim().length < 2) {
+          if (myRequestId === requestSeq) renderAnswer(q, '', emptyState('Escribí al menos 2 letras del concepto o proveedor.'));
+          return;
+        }
+        const data = await MilaData.fetchGastosBusqueda(s.query);
+        guardedRender(`"${esc(s.query)}"`, gastosBuscaHTML(data));
+        break;
+      }
     }
   } catch (err) {
     console.error('[MILA Assistant]', err);
@@ -607,9 +643,9 @@ function renderAnswer(q, subtitle, contentHTML) {
   });
   answerEl.querySelector('#mila-answer-clear').addEventListener('click', () => {
     Sound?.click?.();
-    if (lastQueryId === 'huesped') {
-      fieldState.huesped.query = '';
-      const input = bodyEl.querySelector('#mila-guest-input');
+    if (lastQueryId && QUERIES.find(x => x.id === lastQueryId)?.type === 'text') {
+      fieldState[lastQueryId].query = '';
+      const input = bodyEl.querySelector(`#mila-search-${lastQueryId}`);
       if (input) input.value = '';
     }
     lastQueryId = null;
@@ -778,4 +814,39 @@ function huespedHTML(list) {
     ],
     badge: b.status,
   })).join('');
+}
+
+function expenseRowLine(e) {
+  const pending = e.amount == null;
+  return `
+    <div class="mila-card">
+      <div class="mila-card-head">
+        <span class="mila-card-title">${esc(e.description)}</span>
+        <span class="mila-badge-pill" style="${pending ? 'opacity:.6' : ''}">${pending ? 'Sin monto' : formatARS(e.amount)}</span>
+      </div>
+      <div class="mila-card-line">🏷️ ${esc(e.category)}${e.due_date ? ` · Vence: ${fmtDate(e.due_date)}` : ''}</div>
+      <div class="mila-card-line">${e.paid ? `✅ Pagado${e.paid_at ? ` (${fmtDate(e.paid_at.slice(0,10))})` : ''}` : '🕓 Pendiente'}</div>
+    </div>`;
+}
+
+function gastosMesHTML(d) {
+  if (!d.count) return emptyState('No hay gastos cargados para ese mes.');
+  return `
+    <div class="mila-stat-grid">
+      <div class="mila-stat" data-type="money"><div class="mila-stat-label">Total gastado</div><div class="mila-stat-value">${formatARS(d.total)}</div></div>
+      <div class="mila-stat" data-type="cobrado"><div class="mila-stat-label">Pagado</div><div class="mila-stat-value">${formatARS(d.pagado)}</div></div>
+      <div class="mila-stat" data-type="count"><div class="mila-stat-label">Gastos</div><div class="mila-stat-value">${d.count}</div></div>
+      <div class="mila-stat" data-type="avg"><div class="mila-stat-label">Pendiente</div><div class="mila-stat-value">${formatARS(d.total - d.pagado)}</div></div>
+    </div>
+    ${d.items.map(expenseRowLine).join('')}`;
+}
+
+function gastosBuscaHTML(d) {
+  if (!d.count) return emptyState('No encontramos gastos con ese concepto o proveedor.');
+  return `
+    <div class="mila-stat-grid">
+      <div class="mila-stat" data-type="money"><div class="mila-stat-label">Total</div><div class="mila-stat-value">${formatARS(d.total)}</div></div>
+      <div class="mila-stat" data-type="count"><div class="mila-stat-label">Gastos encontrados</div><div class="mila-stat-value">${d.count}</div></div>
+    </div>
+    ${d.items.map(expenseRowLine).join('')}`;
 }
