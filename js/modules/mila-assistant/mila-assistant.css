@@ -339,7 +339,7 @@ select.mila-pill {
 
 .mila-qstats-trend { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--color-border); }
 .mila-qstats-trend-label { font-size: .64rem; color: var(--color-text-3); font-weight: 700; text-transform: uppercase; margin-bottom: 6px; display: block; }
-.mila-trend-bars { display: flex; align-items: flex-end; gap: 4px; height: 40px; }
+.mila-trend-bars { display: flex; align-items: flex-end; gap: 4px; height: 52px; }
 .mila-trend-bar {
   flex: 1; height: 100%; display: flex; align-items: flex-end;
   position: relative;
@@ -385,10 +385,7 @@ select.mila-pill {
   display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center;
   color: var(--color-text-3);
 }
-.mila-answer-empty-plant {
-  position: absolute; bottom: 14%; right: 18%; color: var(--mila-violet, #8B5CF6); opacity: .18;
-  animation: mila-float 4s ease-in-out infinite; animation-delay: -1.5s;
-}
+.mila-answer-empty-plant { display: none; } /* removed — was showing as stray icon outside the panel */
 .mila-answer-empty-icon { margin-bottom: 8px; opacity: .55; color: var(--color-primary); animation: mila-float 3s ease-in-out infinite; }
 @keyframes mila-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
 

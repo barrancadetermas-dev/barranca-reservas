@@ -267,8 +267,9 @@ svg { flex-shrink: 0; }
 }
 .nav-item:hover { background: var(--sidebar-hover); color: #E2E8F0; }
 .nav-item.active {
-  background: var(--sidebar-active); color: var(--sidebar-text-a);
+  background: var(--sidebar-active); color: #fff;
   box-shadow: inset 3px 0 0 var(--sidebar-accent);
+  font-weight: 700;
 }
 .nav-item.active .nav-icon { color: var(--sidebar-accent); }
 .nav-icon { display: flex; align-items: center; color: #64748B; transition: color var(--t-fast); }
@@ -325,17 +326,22 @@ svg { flex-shrink: 0; }
 .header-date  { font-size: .78rem; color: var(--color-text-3); }
 
 .dollar-badge {
-  display: flex; align-items: center; gap: var(--sp-6);
-  padding: 5px 12px; border-radius: var(--r-full);
+  display: flex; align-items: center; gap: 5px;
+  padding: 4px 10px; border-radius: var(--r-full);
   background: var(--kpi-green-bg); color: var(--kpi-green-txt);
-  font-size: .78rem; font-weight: 600; border: 1px solid rgba(34,197,94,.2);
+  font-size: .74rem; font-weight: 600; border: 1px solid rgba(34,197,94,.2);
+  cursor: default;
 }
-.dollar-badge-label { font-size: .68rem; font-weight: 600; opacity: .85; white-space: nowrap; }
-.dollar-badge-detail { display: flex; gap: 8px; font-size: .76rem; white-space: nowrap; }
-.dollar-badge-detail strong { font-weight: 700; }
-@media (max-width: 1100px) {
+.dollar-badge-label { font-size: .65rem; font-weight: 700; opacity: .7; white-space: nowrap; letter-spacing: .01em; }
+.dollar-badge-detail { display: flex; gap: 6px; font-size: .74rem; white-space: nowrap; }
+.dollar-badge-detail strong { font-weight: 800; }
+@media (max-width: 1200px) {
   .dollar-badge-label { display: none; }
 }
+@media (max-width: 960px) {
+  .dollar-badge-detail { font-size: .7rem; gap: 4px; }
+}
+
 
 /* ── 9. MAIN CONTENT & SECTIONS ──────────────────── */
 .main-content { flex: 1; overflow-y: auto; padding: var(--sp-24); }
@@ -2562,23 +2568,24 @@ select {
 .status-badge {
   display: inline-flex;
   align-items: center;
-  padding: 3px 10px;
+  padding: 2px 8px;
   border-radius: var(--r-full);
-  font-size: .7rem;
+  font-size: .66rem;
   font-weight: 700;
   white-space: nowrap;
+  letter-spacing: .02em;
 }
-.status-pending  { background: rgba(245,158,11,.12); color: #92400e; }
-.status-partial  { background: rgba(244,63,94,.1);   color: #9f1239; }
-.status-paid     { background: rgba(34,197,94,.1);   color: #14532d; }
-.status-blocked  { background: rgba(148,163,184,.1); color: #475569; }
-.status-cancelled{ background: rgba(148,163,184,.1); color: #475569; }
+.status-pending  { background: rgba(245,158,11,.1);  color: #92400e; border: 1px solid rgba(245,158,11,.2); }
+.status-partial  { background: rgba(244,63,94,.08);  color: #9f1239; border: 1px solid rgba(244,63,94,.15); }
+.status-paid     { background: rgba(34,197,94,.1);   color: #14532d; border: 1px solid rgba(34,197,94,.2); }
+.status-blocked  { background: rgba(148,163,184,.1); color: #475569; border: 1px solid rgba(148,163,184,.2); }
+.status-cancelled{ background: rgba(148,163,184,.1); color: #475569; border: 1px solid rgba(148,163,184,.2); }
 
-[data-theme="dark"] .status-pending  { background: rgba(245,158,11,.15); color: #fde68a; }
-[data-theme="dark"] .status-partial  { background: rgba(244,63,94,.15);  color: #fda4af; }
-[data-theme="dark"] .status-paid     { background: rgba(34,197,94,.15);  color: #86efac; }
-[data-theme="dark"] .status-blocked  { background: rgba(148,163,184,.15);color: #94a3b8; }
-[data-theme="dark"] .status-cancelled{ background: rgba(148,163,184,.15);color: #94a3b8; }
+[data-theme="dark"] .status-pending  { background: rgba(245,158,11,.15); color: #fde68a; border-color: rgba(245,158,11,.2); }
+[data-theme="dark"] .status-partial  { background: rgba(244,63,94,.15);  color: #fda4af; border-color: rgba(244,63,94,.2); }
+[data-theme="dark"] .status-paid     { background: rgba(34,197,94,.15);  color: #86efac; border-color: rgba(34,197,94,.2); }
+[data-theme="dark"] .status-blocked  { background: rgba(148,163,184,.15);color: #94a3b8; border-color: rgba(148,163,184,.2); }
+[data-theme="dark"] .status-cancelled{ background: rgba(148,163,184,.15);color: #94a3b8; border-color: rgba(148,163,184,.2); }
 
 /* ══════════════════════════════════════════════════
    MILA v6.4 — 8 FUNCIONALIDADES
@@ -5034,30 +5041,36 @@ select.field-error {
 .guest-profile-header { overflow:visible !important; min-height:110px !important; }
 
 /* 6. BOOKING LIST — Rediseño tabla */
-.booking-row { border-bottom:1px solid var(--color-border); transition:background .1s; }
-.booking-row:last-child { border-bottom:none; }
-.booking-row:hover { background:var(--color-surface-2); }
-.bl-row-main { display:grid; grid-template-columns:2fr 160px 155px 120px auto; align-items:center; padding:8px 12px; min-height:52px; }
+.booking-row {
+  border-bottom: 1px solid var(--color-border);
+  transition: background .15s, box-shadow .15s;
+  border-radius: 0;
+}
+.booking-row:last-child { border-bottom: none; }
+.booking-row:hover { background: var(--color-surface-2); box-shadow: inset 0 0 0 1px var(--color-border); }
+.bl-row-main { display:grid; grid-template-columns:2fr 160px 155px 120px auto; align-items:center; padding:10px 14px; min-height:54px; }
 .bl-col-guest { display:flex; align-items:center; gap:10px; min-width:0; padding-right:8px; }
 .bl-guest-info { min-width:0; }
-.bl-guest-name { font-size:.83rem; font-weight:600; color:var(--color-text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:220px; }
+.bl-guest-name { font-size:.84rem; font-weight:700; color:var(--color-text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:220px; }
 .bl-guest-name-hover { cursor: help; text-decoration: underline; text-decoration-style: dotted; text-decoration-color: transparent; transition: text-decoration-color .15s; width: fit-content; }
 .bl-guest-name-hover:hover { text-decoration-color: var(--color-text-3); }
 .bl-guest-meta { display:flex; align-items:center; gap:4px; flex-wrap:wrap; overflow:visible; margin-top:3px; row-gap:3px; }
-.bl-col-dates { display:flex; flex-direction:column; gap:2px; border-left:1px solid var(--color-border); padding:0 12px; }
+/* Separadores como espacio en vez de línea, más limpio */
+.bl-col-dates { display:flex; flex-direction:column; gap:2px; padding:0 14px; }
 .bl-dates { font-size:.76rem; color:var(--color-text-2); white-space:nowrap; }
-.bl-nights { font-size:.68rem; color:var(--color-text-3); background:var(--color-surface-2); padding:1px 5px; border-radius:4px; width:fit-content; }
-.bl-col-amount { display:flex; flex-direction:column; gap:3px; border-left:1px solid var(--color-border); padding:0 12px; align-items:flex-end; }
-.bl-amount-total { font-size:.85rem; font-weight:700; color:var(--color-text); }
-.bl-amount-breakdown { display:flex; align-items:center; gap:4px; font-size:.72rem; font-weight:600; }
+.bl-nights { font-size:.67rem; color:var(--color-text-3); background:var(--color-surface-2); padding:1px 6px; border-radius:4px; width:fit-content; }
+.bl-col-amount { display:flex; flex-direction:column; gap:3px; padding:0 14px; align-items:flex-end; }
+.bl-amount-total { font-size:.86rem; font-weight:800; color:var(--color-text); }
+.bl-amount-breakdown { display:flex; align-items:center; gap:4px; font-size:.71rem; font-weight:600; }
 .bl-paid    { color:var(--color-warning); }
 .bl-sep     { color:var(--color-text-3); }
-.bl-balance { color:#ef4444; }
+.bl-balance { color:#ef4444; font-weight:800; }
 .bl-amount-paid { font-size:.72rem; color:var(--color-success); font-weight:700; }
-.bl-col-status { display:flex; flex-direction:column; align-items:center; gap:5px; border-left:1px solid var(--color-border); padding:0 10px; }
-.booking-actions-cell { display:flex; align-items:center; gap:3px; border-left:1px solid var(--color-border); padding-left:8px; flex-shrink:0; }
+/* Status: más suave, sin competir con Cobrar */
+.bl-col-status { display:flex; flex-direction:column; align-items:center; gap:5px; padding:0 10px; }
+.booking-actions-cell { display:flex; align-items:center; gap:3px; padding-left:10px; flex-shrink:0; }
 .booking-actions-cell .bl-action-btn { width:28px !important; height:28px !important; }
-.bl-notes-row { padding:3px 12px 8px 56px; font-size:.72rem; color:var(--color-text-3); display:flex; align-items:flex-start; gap:5px; line-height:1.4; border-top:1px solid var(--color-border); }
+.bl-notes-row { padding:3px 14px 9px 56px; font-size:.72rem; color:var(--color-text-3); display:flex; align-items:flex-start; gap:5px; line-height:1.4; border-top:1px dashed var(--color-border); }
 .bl-sort-select { min-width:140px; }
 
 /* 7. Calculadora normal — botones */
