@@ -999,25 +999,37 @@ export class OperationsModule {
       });
     }
 
-    // Selector de mes
+    // Selector de mes (con flechas, sin ocupar todo el ancho)
     const now = new Date();
     const months = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+    // Estado del período actualmente visible (vive en el dataset del header para sobrevivir a re-renders)
+    this._opsExpCursor = this._opsExpCursor ?? { month: now.getMonth(), year: now.getFullYear() };
+
     panel.innerHTML = `
       <div class="ops-expenses-header">
-        <select id="ops-exp-month" class="form-input form-input--sm">
-          ${months.map((m, i) => `<option value="${i}" ${i === now.getMonth() ? 'selected' : ''}>${m}</option>`).join('')}
-        </select>
-        <select id="ops-exp-year" class="form-input form-input--sm">
-          ${[now.getFullYear()-1, now.getFullYear()].map(y => `<option value="${y}" ${y === now.getFullYear() ? 'selected' : ''}>${y}</option>`).join('')}
-        </select>
+        <div class="ops-month-nav">
+          <button type="button" class="ops-month-nav-btn" id="ops-exp-prev" title="Mes anterior">‹</button>
+          <span class="ops-month-nav-label" id="ops-exp-month-label"></span>
+          <button type="button" class="ops-month-nav-btn" id="ops-exp-next" title="Mes siguiente">›</button>
+        </div>
+        <div class="ops-month-nav ops-month-nav--year">
+          <button type="button" class="ops-month-nav-btn" id="ops-exp-prev-year" title="Año anterior">‹</button>
+          <span class="ops-month-nav-label" id="ops-exp-year-label"></span>
+          <button type="button" class="ops-month-nav-btn" id="ops-exp-next-year" title="Año siguiente">›</button>
+        </div>
       </div>
       <div id="ops-expenses-summary"></div>
       <div id="ops-expenses-list"><div class="loading-state">Cargando...</div></div>
     `;
 
+    const monthLabel = panel.querySelector('#ops-exp-month-label');
+    const yearLabel  = panel.querySelector('#ops-exp-year-label');
+
     const reload = async () => {
-      const month = parseInt(document.getElementById('ops-exp-month')?.value ?? now.getMonth());
-      const year  = parseInt(document.getElementById('ops-exp-year')?.value  ?? now.getFullYear());
+      const { month, year } = this._opsExpCursor;
+      if (monthLabel) monthLabel.textContent = months[month];
+      if (yearLabel)  yearLabel.textContent  = String(year);
+
       const first = `${year}-${String(month+1).padStart(2,'0')}-01`;
       const last  = new Date(year, month+1, 0).toISOString().slice(0,10);
       try {
@@ -1025,15 +1037,33 @@ export class OperationsModule {
           .eq('hotel_id', this.ctx.hotelId)
           .or(`due_date.is.null,and(due_date.gte.${first},due_date.lte.${last})`)
           .order('due_date', { ascending: true, nullsFirst: false });
-        this._renderExpensesInOps(panel, exps ?? []);
+
+        const finalExps = await this._ensureRecurringExpenses(month, year, exps ?? []);
+        this._renderExpensesInOps(panel, finalExps);
       } catch (err) {
         panel.querySelector('#ops-expenses-list').innerHTML =
           `<div class="error-state"><p>Error al cargar gastos: ${err.message}</p></div>`;
       }
     };
 
-    panel.querySelector('#ops-exp-month')?.addEventListener('change', reload);
-    panel.querySelector('#ops-exp-year')?.addEventListener('change',  reload);
+    const shiftMonth = (delta) => {
+      let { month, year } = this._opsExpCursor;
+      month += delta;
+      if (month < 0)  { month = 11; year--; }
+      if (month > 11) { month = 0;  year++; }
+      this._opsExpCursor = { month, year };
+      reload();
+    };
+    const shiftYear = (delta) => {
+      this._opsExpCursor = { ...this._opsExpCursor, year: this._opsExpCursor.year + delta };
+      reload();
+    };
+
+    panel.querySelector('#ops-exp-prev')?.addEventListener('click', () => shiftMonth(-1));
+    panel.querySelector('#ops-exp-next')?.addEventListener('click', () => shiftMonth(1));
+    panel.querySelector('#ops-exp-prev-year')?.addEventListener('click', () => shiftYear(-1));
+    panel.querySelector('#ops-exp-next-year')?.addEventListener('click', () => shiftYear(1));
+
     await reload();
 
     // ── FIX: remover listener anterior antes de agregar el nuevo ──
@@ -1043,6 +1073,53 @@ export class OperationsModule {
     }
     this._expenseChangedHandler = reload;
     document.addEventListener('expense:changed', reload);
+  }
+
+  // Copia hacia el mes visible los gastos marcados como "recurrentes" (🔁)
+  // del mes calendario inmediatamente anterior, si todavía no existen acá.
+  // El usuario sólo tiene que ajustar monto/vencimiento; no vuelve a tipear la descripción.
+  async _ensureRecurringExpenses(month, year, currentExps) {
+    let prevMonth = month - 1, prevYear = year;
+    if (prevMonth < 0) { prevMonth = 11; prevYear--; }
+    const prevFirst = `${prevYear}-${String(prevMonth+1).padStart(2,'0')}-01`;
+    const prevLast  = new Date(prevYear, prevMonth+1, 0).toISOString().slice(0,10);
+
+    try {
+      const { data: recurring } = await this.db.from('expenses').select('*')
+        .eq('hotel_id', this.ctx.hotelId)
+        .eq('is_recurring', true)
+        .gte('due_date', prevFirst)
+        .lte('due_date', prevLast);
+
+      if (!recurring?.length) return currentExps;
+
+      const existingKey = (e) => `${e.category}::${e.description}`.toLowerCase();
+      const already = new Set(currentExps.map(existingKey));
+      const toInsert = recurring
+        .filter(e => !already.has(existingKey(e)))
+        .map(e => {
+          const day = Math.min(new Date(e.due_date).getUTCDate(), new Date(year, month+1, 0).getDate());
+          const due = `${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+          return {
+            hotel_id: this.ctx.hotelId,
+            category: e.category,
+            description: e.description,
+            amount: e.amount,
+            due_date: due,
+            paid: false,
+            is_recurring: true,
+          };
+        });
+
+      if (!toInsert.length) return currentExps;
+
+      const { data: inserted, error } = await this.db.from('expenses').insert(toInsert).select('*');
+      if (error) { console.warn('[Operations] recurring carry-forward:', error); return currentExps; }
+      return [...currentExps, ...(inserted ?? [])].sort((a, b) => (a.due_date ?? '').localeCompare(b.due_date ?? ''));
+    } catch (err) {
+      console.warn('[Operations] recurring carry-forward failed:', err);
+      return currentExps;
+    }
   }
 
   _renderExpensesInOps(panel, expenses) {
@@ -1083,6 +1160,7 @@ export class OperationsModule {
         <label class="expense-paid-toggle" title="${e.paid ? 'Marcar pendiente' : 'Marcar pagado'}">
           <input type="checkbox" ${e.paid ? 'checked' : ''} data-exp-id="${e.id}" class="ops-exp-toggle">
         </label>
+        <button class="btn btn-ghost btn-xs ops-exp-recurring ${e.is_recurring ? 'active' : ''}" data-exp-id="${e.id}" data-recurring="${e.is_recurring ? '1' : '0'}" title="${e.is_recurring ? 'Repetición mensual activada (se va a cargar solo el mes que viene)' : 'Repetir todos los meses'}">🔁</button>
         <button class="btn btn-ghost btn-xs ops-exp-edit" data-exp-id="${e.id}" title="Editar">✏️</button>
         <button class="btn btn-ghost btn-xs ops-exp-del" data-exp-id="${e.id}" title="Eliminar" style="color:var(--color-danger)">🗑️</button>
       </div>
@@ -1098,6 +1176,18 @@ export class OperationsModule {
         if (error) { showToast('Error', 'error'); cb.checked = !paid; return; }
         document.getElementById(`ops-exp-${id}`)?.classList.toggle('paid', paid);
         showToast(paid ? 'Marcado como pagado ✓' : 'Marcado como pendiente', 'success');
+      });
+    });
+    list.querySelectorAll('.ops-exp-recurring').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const id = btn.dataset.expId;
+        const next = btn.dataset.recurring !== '1';
+        const { error } = await this.db.from('expenses').update({ is_recurring: next }).eq('id', id);
+        if (error) { showToast('Error', 'error'); return; }
+        btn.dataset.recurring = next ? '1' : '0';
+        btn.classList.toggle('active', next);
+        btn.title = next ? 'Repetición mensual activada (se va a cargar solo el mes que viene)' : 'Repetir todos los meses';
+        showToast(next ? 'Se va a repetir todos los meses 🔁' : 'Repetición mensual desactivada', 'success');
       });
     });
     list.querySelectorAll('.ops-exp-edit').forEach(btn => {

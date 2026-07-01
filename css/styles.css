@@ -904,6 +904,29 @@ select { appearance: auto; cursor: pointer; }
 .expense-paid-toggle { margin-left: var(--sp-12); }
 .expense-paid-toggle input { accent-color: var(--color-success); width: 16px; height: 16px; cursor: pointer; }
 
+.ops-expenses-header { display: flex; align-items: center; gap: var(--sp-12); margin-bottom: var(--sp-16); flex-wrap: wrap; }
+.ops-month-nav {
+  display: inline-flex; align-items: center; gap: 2px;
+  border: 1px solid var(--color-border); border-radius: var(--r-lg);
+  background: var(--color-surface); padding: 2px; width: fit-content;
+}
+.ops-month-nav-label {
+  font-size: .85rem; font-weight: 700; color: var(--color-text);
+  padding: 0 var(--sp-8); min-width: 5.5em; text-align: center; text-transform: capitalize;
+}
+.ops-month-nav--year .ops-month-nav-label { min-width: 3em; }
+.ops-month-nav-btn {
+  border: none; background: transparent; color: var(--color-text-2);
+  width: 26px; height: 26px; border-radius: var(--r-md);
+  font-size: 1rem; line-height: 1; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: background var(--t-fast), color var(--t-fast);
+}
+.ops-month-nav-btn:hover { background: var(--color-surface-2); color: var(--color-text); }
+
+.ops-exp-recurring { opacity: .4; }
+.ops-exp-recurring.active { opacity: 1; }
+
 /* ── 21. TOAST NOTIFICATIONS ─────────────────────── */
 .toast-container {
   position: fixed; bottom: var(--sp-24); right: var(--sp-24);
