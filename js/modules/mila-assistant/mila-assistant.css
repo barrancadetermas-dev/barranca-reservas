@@ -17,6 +17,38 @@
   24% { transform: rotate(0deg); }
 }
 
+/* ── Bottom nav mobile: tab "Mila" destacado, primero en la fila ──
+   Insignia circular con gradiente violeta detrás del ícono para que
+   se distinga del resto de las secciones (es un módulo aparte, no
+   una sección más del PMS). Reutiliza el mismo bot animado del
+   sidebar de escritorio para dar continuidad visual. ── */
+.bnav-item-mila { position: relative; }
+.bnav-mila-badge {
+  display: flex; align-items: center; justify-content: center;
+  width: 26px; height: 26px; border-radius: 50%;
+  background: linear-gradient(135deg, var(--mila-violet, #8B5CF6), var(--color-primary, #6366F1));
+  color: #fff; box-shadow: 0 2px 8px rgba(139,92,246,.45);
+  transition: transform .15s;
+}
+.bnav-mila-badge svg { animation: mila-nav-wiggle 3.2s ease-in-out infinite; transform-origin: 50% 85%; }
+.bnav-item-mila span:last-child {
+  font-style: italic; font-weight: 700;
+  color: var(--mila-violet, #8B5CF6);
+}
+.bnav-item-mila:hover .bnav-mila-badge,
+.bnav-item-mila.active .bnav-mila-badge { transform: scale(1.1); }
+.bnav-item-mila.active span:last-child { color: var(--mila-violet, #8B5CF6); }
+/* En mila.active no aplicamos el scale genérico de ícono (ya tiene el suyo) */
+.bnav-item-mila.active svg { transform: none; }
+
+/* Con el tab de Mila se suman 6 botones + FAB — angostamos un poco
+   el resto para que entre cómodo incluso en pantallas chicas (~360px) */
+@media (max-width: 400px) {
+  .bnav-item { padding: 6px 5px; min-width: 38px; }
+  .bnav-item span { font-size: .54rem; }
+  .bnav-mila-badge { width: 24px; height: 24px; }
+}
+
 .mila-page {
   max-width: 980px; margin: 0 auto; position: relative;
   --mila-violet: #8B5CF6;
