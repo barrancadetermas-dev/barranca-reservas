@@ -74,6 +74,7 @@ export class BookingList {
       if (action === 'flag')      this._openFlagModal(id, row);
       if (action === 'duplicate') this._duplicateBooking(id);
       if (action === 'pay-full')  this._payFull(id);
+      if (action === 'reprogram') this._reprogramBooking(id);
     }, true); // ← capture phase: recibe el evento ANTES de que los hijos llamen stopPropagation
 
     document.addEventListener('booking:changed', () => {
@@ -602,6 +603,7 @@ export class BookingList {
             </div>
             <div class="bl-col-status">
               <span class="status-badge ${statusCls}">${statusLbl}</span>
+              ${b.notes?.includes('🔄') ? `<span class="status-badge" style="background:rgba(124,58,237,.1);color:#7c3aed;border:1px solid rgba(124,58,237,.2)" title="${(b.notes.match(/🔄[^·]*/) || [''])[0].trim()}">🔄 Reprogramación</span>` : ''}
               ${b.balance > 0 ? `<button data-action="pay-full" class="bl-action-btn bl-payfull-btn"
                 onclick="event.stopPropagation()">✅ Cobrar</button>` : ''}
             </div>
@@ -628,6 +630,13 @@ export class BookingList {
                   <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/>
                 </svg>
               </button>
+              ${b.status !== 'cancelled' ? `<button data-action="reprogram" class="bl-action-btn" title="Reprogramar — cancela esta reserva y abre una nueva con nota de crédito"
+                  style="color:#7c3aed;border-color:rgba(124,58,237,.35);background:rgba(124,58,237,.06)">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                    <polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 014-4h14"/>
+                    <polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 01-4 4H3"/>
+                  </svg>
+                </button>` : ''}
               ${b.check_out === today && b.status !== 'cancelled'
                 ? `<button data-action="checkout" class="bl-action-btn" title="Registrar check-out"
                      style="color:#22c55e;border-color:#22c55e;background:rgba(34,197,94,.08)">
@@ -777,6 +786,69 @@ export class BookingList {
     if (booking) {
       booking.payments = paymentsData ?? [];
       this.bookingForm.openDetail(booking);
+    }
+  }
+
+  // ── Reprogramación ──────────────────────────────────
+  // Cancela la reserva actual con nota de crédito. Si ya se sabe la fecha
+  // nueva, abre la reserva nueva de una con todo precargado. Si no —caso
+  // frecuente: el huésped todavía no decidió cuándo vuelve— la nota de
+  // crédito queda "abierta" (tag 🔄NC: en las notas) y se ofrece sola la
+  // próxima vez que se busque a ese huésped para cualquier reserva nueva.
+  async _reprogramBooking(id) {
+    const b = this._allBookings?.find(x => x.id === id);
+    if (!b) return;
+    const guest  = b.guests ? `${b.guests.first_name} ${b.guests.last_name}` : 'este huésped';
+    const dates  = `${b.check_in} → ${b.check_out}`;
+    const credit = Math.round(b.total_paid ?? 0);
+
+    const msg = credit > 0
+      ? `¿Reprogramar la reserva de ${guest} (${dates})?\n\nSe cancela esta reserva y queda una Nota de Crédito por ${formatARS(credit)} (lo que ya tenía pagado).`
+      : `¿Reprogramar la reserva de ${guest} (${dates})?\n\nSe cancela esta reserva. No tenía pagos, así que no hay nota de crédito que generar.`;
+    if (!confirm(msg)) return;
+
+    // Si hay plata de por medio, preguntamos si ya hay fecha nueva o si la
+    // NC queda pendiente para cuando el huésped decida. Sin plata no hace
+    // falta preguntar — no hay nada que trasladar, se cancela y listo.
+    const openNow = credit > 0
+      ? confirm(`¿Ya tenés la fecha nueva para reprogramar ahora?\n\nAceptar → abre la reserva nueva ya mismo con la Nota de Crédito cargada.\nCancelar → la Nota de Crédito queda abierta y se va a ofrecer sola la próxima vez que busques a ${guest} para una reserva nueva.`)
+      : false;
+
+    const today = new Date().toLocaleDateString('es-AR');
+    // Tag machine-readable 🔄NC:<monto> — permite detectar después notas de
+    // crédito abiertas sin tener que parsear texto en español.
+    const cancelNote = credit > 0
+      ? `🔄NC:${credit} — Reprogramada, nota de crédito por ${formatARS(credit)} (${today})`
+      : `🔄 Reprogramada (${today})`;
+
+    try {
+      const { error } = await this.db.from('bookings')
+        .update({ status: 'cancelled', notes: [b.notes, cancelNote].filter(Boolean).join(' · ') })
+        .eq('id', id);
+      if (error) throw error;
+
+      await logAction('CANCEL', 'booking', id, `Reprogramada: ${guest} (${dates})${credit > 0 ? ` — NC ${formatARS(credit)}` : ''}`);
+      await this.load();
+
+      if (!openNow) {
+        showToast(credit > 0
+          ? `Reserva cancelada — NC de ${formatARS(credit)} queda abierta para ${guest}`
+          : 'Reserva cancelada', 'info');
+        return;
+      }
+
+      const shortId = id.slice(0, 8);
+      showToast('Reserva cancelada — completá las fechas nuevas', 'info');
+      this.bookingForm.open({
+        prefillGuestId: b.guests?.id,
+        // No paso prefillGuest: la lista no trae 'email' — que lo vuelva a
+        // buscar completo por ID en _prefillGuestAsync().
+        notes:          `🔄 Nota de crédito por reprogramación de reserva anterior (#${shortId}) — cancelada y reprogramada`,
+        creditNote:     { amount: credit, sourceBookingId: id },
+      });
+    } catch (err) {
+      console.error('[BookingList] reprogram error:', err);
+      showToast('Error al reprogramar: ' + (err?.message ?? err), 'error');
     }
   }
 

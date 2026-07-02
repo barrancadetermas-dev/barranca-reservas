@@ -216,9 +216,39 @@ export class BookingForm {
       if (discEl) discEl.value = prefill.discountPct;
     }
 
+    // Aclaración en notas (ej: reprogramación con nota de crédito) — el
+    // equipo tiene que poder ver de un vistazo que esta reserva viene de
+    // una reprogramación, sin tener que abrir el pago para saber.
+    if (prefill.notes) {
+      const notesEl = document.getElementById('f-notes');
+      if (notesEl) {
+        notesEl.value = prefill.notes;
+        document.getElementById('notes-count').textContent = String(prefill.notes.length);
+      }
+    }
+
+    // Nota de crédito precargada (reprogramación de una reserva cancelada) —
+    // agrega directamente la fila de pago en paso 4 con método "Nota de
+    // Crédito / Voucher" y el monto ya cargado.
+    if (prefill.creditNote?.amount) {
+      this._addPaymentRow({
+        method:       'credit_note',
+        amount:       prefill.creditNote.amount,
+        payment_date: toISODate(new Date()),
+      });
+      this._updatePaymentSummary();
+      // Si esta NC viene de una reprogramación inmediata, marcarla como
+      // usada en la reserva de origen para que no se vuelva a ofrecer.
+      if (prefill.creditNote.sourceBookingId) this._markCreditNoteUsed(prefill.creditNote.sourceBookingId);
+    }
+
     // Precargar datos de huésped si viene desde la ficha
     if (prefill.prefillGuestId) {
-      this._prefillGuestAsync(prefill.prefillGuestId, prefill.prefillGuest);
+      // Si ya se aplicó una NC en este mismo open() (reprogramación
+      // inmediata), no volver a chequear/ofrecer NC abiertas — evita
+      // duplicar la aplicación por una condición de carrera con el UPDATE
+      // que la marca como usada.
+      this._prefillGuestAsync(prefill.prefillGuestId, prefill.prefillGuest, !!prefill.creditNote?.amount);
     }
 
     document.getElementById('overlay-booking').classList.remove('hidden');
@@ -228,7 +258,7 @@ export class BookingForm {
   }
 
   // Precarga datos del huésped en los campos del formulario (step 2)
-  async _prefillGuestAsync(guestId, guestData = null) {
+  async _prefillGuestAsync(guestId, guestData = null, skipCreditCheck = false) {
     let g = guestData;
     if (!g) {
       const { data } = await this.db.from('guests')
@@ -250,6 +280,9 @@ export class BookingForm {
 
     // Ir al paso 2 directamente para que el usuario vea los datos pre-cargados
     this._goToStep(2);
+
+    // Nota de crédito abierta de una reprogramación anterior
+    if (!skipCreditCheck) this._checkOpenCreditNote(g.id).then(info => this._renderOpenCreditNoteAlert(info));
   }
 
   // ── Abrir para editar reserva existente ───────────
@@ -1275,6 +1308,56 @@ export class BookingForm {
     set('ps-balance', formatARS(Math.max(0, balance)));
   }
 
+  // ── Notas de crédito abiertas (reprogramaciones sin fecha nueva aún) ──
+  // Busca reservas canceladas de este huésped con el tag 🔄NC:<monto> en
+  // notas que todavía no se marcaron como usadas (✅NCUSED).
+  async _checkOpenCreditNote(guestId) {
+    if (!guestId) return null;
+    try {
+      const { data } = await this.db.from('bookings')
+        .select('id, notes, check_in, check_out')
+        .eq('guest_id', guestId)
+        .eq('status', 'cancelled')
+        .like('notes', '%🔄NC:%')
+        .order('created_at', { ascending: false });
+      const open = (data ?? []).find(b => !b.notes?.includes('✅NCUSED'));
+      if (!open) return null;
+      const m = open.notes.match(/🔄NC:(\d+)/);
+      if (!m) return null;
+      return { bookingId: open.id, amount: parseInt(m[1], 10), dates: `${open.check_in} → ${open.check_out}` };
+    } catch { return null; }
+  }
+
+  _renderOpenCreditNoteAlert(info) {
+    const container = document.getElementById('bad-exp-booking-alert-container');
+    if (!container || !info) return;
+    document.getElementById('nc-open-alert')?.remove();
+    container.insertAdjacentHTML('beforeend', `
+      <div class="alert alert-info" id="nc-open-alert" style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
+        <span>🔄 <strong>Nota de crédito abierta</strong> por ${formatARS(info.amount)} (reserva ${info.dates} reprogramada).</span>
+        <button type="button" class="btn btn-primary btn-sm" id="nc-open-apply-btn">Aplicar a esta reserva</button>
+      </div>`);
+    document.getElementById('nc-open-apply-btn')?.addEventListener('click', () => this._applyOpenCreditNote(info));
+  }
+
+  async _applyOpenCreditNote(info) {
+    this._addPaymentRow({ method: 'credit_note', amount: info.amount, payment_date: toISODate(new Date()) });
+    this._updatePaymentSummary();
+    await this._markCreditNoteUsed(info.bookingId);
+    document.getElementById('nc-open-alert')?.remove();
+    showToast('Nota de crédito aplicada ✓', 'success');
+  }
+
+  async _markCreditNoteUsed(sourceBookingId) {
+    try {
+      const { data: orig } = await this.db.from('bookings').select('notes').eq('id', sourceBookingId).single();
+      if (!orig || orig.notes?.includes('✅NCUSED')) return;
+      await this.db.from('bookings')
+        .update({ notes: [orig.notes, '✅NCUSED'].filter(Boolean).join(' · ') })
+        .eq('id', sourceBookingId);
+    } catch (_) { /* no crítico */ }
+  }
+
   // ── Búsqueda de huéspedes ─────────────────────────
   async _searchGuests(q) {
     const container = document.getElementById('guest-results');
@@ -1322,6 +1405,8 @@ export class BookingForm {
             alertContainer.innerHTML = '';
           }
         }
+        // Nota de crédito abierta de una reprogramación anterior
+        this._checkOpenCreditNote(item.dataset.id).then(info => this._renderOpenCreditNoteAlert(info));
 
         // ── Historial del huésped — badge + panel detallado ──
         const guestBadge = document.getElementById('guest-booking-history-badge');
