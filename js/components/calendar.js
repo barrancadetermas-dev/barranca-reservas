@@ -323,7 +323,11 @@ export class Calendar {
       const isToday   = iso === today;
       const isPast    = iso < today;
       const isWknd    = dow === 0 || dow === 6;
-      const hasRem    = !!reminderMap[iso];
+      // Notas generales (sin depto) del día — se marcan UNA sola vez acá
+      // arriba, con el emoji elegido, en vez de repetirse en cada fila de
+      // unidad (eso queda solo para tareas operativas generales).
+      const generalNotes = (reminderMap[iso] ?? []).filter(r => r.is_note && !(r.unit_ids?.length));
+      const hasTaskRem = (reminderMap[iso] ?? []).some(r => !(r.is_note && !(r.unit_ids?.length)));
       const holMap    = nextYHols && date.getFullYear() === lastDate.getFullYear() ? nextYHols : holidays;
       const holiday   = holMap?.get ? holMap.get(iso) : null;
       const isHoliday = !!holiday && holiday.type !== 'vacation';
@@ -347,7 +351,12 @@ export class Calendar {
       dh.innerHTML = (showMonth ? '<span class="dh-month' + (dayOfMon === 1 && colIdx !== 0 ? ' dh-month-new' : '') + '">' + MONTH_SHORT[date.getMonth()] + '</span>' : '') +
         '<span class="dh-num">' + dayOfMon + '</span>' +
         (isToday ? '<span class="dh-hoy">HOY</span>' : '<span class="day-name">' + DAY_NAMES[dow] + '</span>') +
-        (hasRem  ? '<div class="dh-rem-dot"></div>' : '') +
+        (generalNotes.length
+          ? '<div class="dh-note-icons" title="' + generalNotes.map(n => n.title).join(', ').replace(/"/g,'&quot;') + '">' +
+              generalNotes.slice(0, 3).map(n => '<span>' + (n.icon || '📌') + '</span>').join('') +
+            '</div>'
+          : '') +
+        (hasTaskRem ? '<div class="dh-rem-dot"></div>' : '') +
         (isToday ? '<div class="dh-today-dot"></div>' : '');
       grid.appendChild(dh);
     });
@@ -443,6 +452,9 @@ export class Calendar {
           // deja como fallback por si hay recordatorios de antes de la
           // migración que todavía no se migraron.
           const ids = (r.unit_ids?.length ? r.unit_ids : (r.unit_id ? [r.unit_id] : [])).map(String);
+          // Nota general (sin depto): ya se marcó una vez en el encabezado
+          // del día — no repetir en cada fila.
+          if (r.is_note && !ids.length) return;
           if (ids.length && !ids.includes(String(unit.id))) return;
           const dot = document.createElement('div');
           dot.className = 'cal-reminder-dot';

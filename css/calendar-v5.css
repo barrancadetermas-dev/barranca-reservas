@@ -68,6 +68,10 @@
   background: var(--color-warning, #f59e0b);
   margin: 2px auto 0;
 }
+.cal-day-header .dh-note-icons {
+  display: flex; justify-content: center; gap: 1px;
+  font-size: .68rem; line-height: 1; margin-top: 2px; cursor: help;
+}
 .cal-day-header .dh-today-dot {
   width: 4px; height: 4px;
   border-radius: 50%;

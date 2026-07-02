@@ -149,7 +149,7 @@ export class OperationsModule {
       // porque una nota no "se atrasa" como sí lo hace una tarea operativa.
       if (r.is_note) {
         return `<div class="reminder-card" data-id="${r.id}">
-          <div class="reminder-dot" style="background:transparent;display:flex;align-items:center;justify-content:center;font-size:.85rem">📌</div>
+          <div class="reminder-dot" style="background:transparent;display:flex;align-items:center;justify-content:center;font-size:.85rem">${r.icon || '📌'}</div>
           <div class="reminder-body">
             <div class="reminder-title">${r.title}</div>
             <div class="reminder-meta">
@@ -161,7 +161,7 @@ export class OperationsModule {
             <button class="btn btn-ghost btn-xs reminder-edit-btn"
               data-id="${r.id}" data-title="${r.title.replace(/"/g,'&quot;')}"
               data-date="${r.scheduled_date}" data-desc="${(r.description??'').replace(/"/g,'&quot;')}"
-              data-units="${(r.unit_ids ?? []).join(',')}" data-is-note="1" title="Editar">✏️</button>
+              data-units="${(r.unit_ids ?? []).join(',')}" data-is-note="1" data-icon="${r.icon ?? '📌'}" title="Editar">✏️</button>
             <button class="btn btn-ghost btn-xs reminder-del-ops-btn" data-id="${r.id}" title="Eliminar">🗑️</button>
           </div>
         </div>`;
@@ -206,6 +206,8 @@ export class OperationsModule {
           if (dateEl)  dateEl.value  = editBtn.dataset.date;
           if (descEl)  descEl.value  = editBtn.dataset.desc;
           if (noteEl)  noteEl.checked = editBtn.dataset.isNote === '1';
+          window.setReminderIcon?.(editBtn.dataset.icon || '📌');
+          document.getElementById('r-icon-container')?.classList.toggle('hidden', editBtn.dataset.isNote !== '1');
           window.populateReminderUnitSelect?.();
           setTimeout(() => window.setReminderCheckedUnitIds?.((editBtn.dataset.units ?? '').split(',').filter(Boolean)), 60);
           const overlay    = document.getElementById('overlay-reminder');
@@ -218,7 +220,7 @@ export class OperationsModule {
             const date  = dateEl?.value;
             if (!title || !date) { showToast('Título y fecha obligatorios','warning'); return; }
             const { error } = await this.db.from('reminders')
-              .update({ title, description: descEl?.value.trim()||null, scheduled_date: date, unit_ids: window.getReminderCheckedUnitIds?.() ?? [], is_note: noteEl?.checked||false })
+              .update({ title, description: descEl?.value.trim()||null, scheduled_date: date, unit_ids: window.getReminderCheckedUnitIds?.() ?? [], is_note: noteEl?.checked||false, icon: document.getElementById('r-icon-value')?.value || null })
               .eq('id', editBtn.dataset.id);
             if (error) { showToast('Error: '+error.message,'error'); return; }
             showToast('Recordatorio actualizado ✓','success');

@@ -1610,7 +1610,7 @@ async function loadRemindersSection() {
     if (r.is_note) {
       return `
         <div class="reminder-card" data-id="${r.id}">
-          <div class="reminder-dot" style="background:transparent;display:flex;align-items:center;justify-content:center;font-size:.85rem">📌</div>
+          <div class="reminder-dot" style="background:transparent;display:flex;align-items:center;justify-content:center;font-size:.85rem">${r.icon || '📌'}</div>
           <div class="reminder-body">
             <div class="reminder-title">${r.title}</div>
             <div class="reminder-meta">
@@ -1625,6 +1625,7 @@ async function loadRemindersSection() {
                     data-desc="${(r.description ?? '').replace(/"/g,'&quot;')}"
                     data-units="${(r.unit_ids ?? []).join(',')}"
                     data-is-note="1"
+                    data-icon="${r.icon ?? '📌'}"
                     title="Editar">✏️</button>
             <button class="btn btn-ghost btn-xs reminder-del-btn" data-id="${r.id}" title="Eliminar">🗑️</button>
           </div>
@@ -1675,6 +1676,8 @@ async function loadRemindersSection() {
         if (dateEl)  dateEl.value  = editBtn.dataset.date;
         if (descEl)  descEl.value  = editBtn.dataset.desc;
         if (noteEl)  noteEl.checked = editBtn.dataset.isNote === '1';
+        _setReminderIcon(editBtn.dataset.icon || '📌');
+        document.getElementById('r-icon-container')?.classList.toggle('hidden', editBtn.dataset.isNote !== '1');
         populateReminderUnitSelect();
         setTimeout(() => setReminderCheckedUnitIds((editBtn.dataset.units ?? '').split(',').filter(Boolean)), 60);
 
@@ -1689,7 +1692,7 @@ async function loadRemindersSection() {
           const date  = dateEl?.value;
           if (!title || !date) { showToast('Título y fecha obligatorios', 'warning'); return; }
           const { error } = await supabase.from('reminders')
-            .update({ title, description: descEl?.value.trim() || null, scheduled_date: date, unit_ids: getReminderCheckedUnitIds(), is_note: noteEl?.checked || false })
+            .update({ title, description: descEl?.value.trim() || null, scheduled_date: date, unit_ids: getReminderCheckedUnitIds(), is_note: noteEl?.checked || false, icon: document.getElementById('r-icon-value')?.value || null })
             .eq('id', id);
           if (error) { showToast('Error: ' + error.message, 'error'); return; }
           showToast('Recordatorio actualizado ✓', 'success');
@@ -1738,7 +1741,31 @@ window.toggleReminder = async (id, completed) => {
 // ══════════════════════════════════════════════════
 // MODALES (reminders, expenses, guest profile, season)
 // ══════════════════════════════════════════════════
+// Selecciona visualmente un emoji en el picker y guarda el valor.
+function _setReminderIcon(icon) {
+  const hidden = document.getElementById('r-icon-value');
+  if (hidden) hidden.value = icon;
+  document.querySelectorAll('.r-icon-opt').forEach(b => b.classList.toggle('selected', b.dataset.icon === icon));
+  const custom = document.getElementById('r-icon-custom');
+  if (custom && ![...document.querySelectorAll('.r-icon-opt')].some(b => b.dataset.icon === icon)) custom.value = icon;
+}
+
 function setupReminderModal() {
+  // Picker de emoji — bind una sola vez (los botones son estáticos en el HTML)
+  if (!window._reminderIconPickerBound) {
+    window._reminderIconPickerBound = true;
+    document.querySelectorAll('.r-icon-opt').forEach(btn => {
+      btn.addEventListener('click', () => _setReminderIcon(btn.dataset.icon));
+    });
+    document.getElementById('r-icon-custom')?.addEventListener('input', (e) => {
+      const val = e.target.value.trim();
+      if (val) _setReminderIcon(val);
+    });
+    document.getElementById('r-is-note')?.addEventListener('change', (e) => {
+      document.getElementById('r-icon-container')?.classList.toggle('hidden', !e.target.checked);
+    });
+  }
+
   const open=()=>{
     // Reset form
     const titleEl = document.getElementById('r-title');
@@ -1749,6 +1776,8 @@ function setupReminderModal() {
     if (descEl)  descEl.value  = '';
     if (dateEl)  dateEl.value  = localToday();
     if (noteEl)  noteEl.checked = false;
+    _setReminderIcon('📌');
+    document.getElementById('r-icon-container')?.classList.add('hidden');
     populateReminderUnitSelect();
     document.getElementById('overlay-reminder').classList.remove('hidden');
     // Focus the title field for better UX
@@ -1764,11 +1793,13 @@ function setupReminderModal() {
     const title=document.getElementById('r-title').value.trim(),date=document.getElementById('r-date').value;
     if(!title||!date){showToast('Título y fecha obligatorios','warning');return;}
     if(isDemo()){showDemoAction(null);close();return;}
-    const{error}=await supabase.from('reminders').insert({hotel_id:AppContext.hotelId,title,description:document.getElementById('r-desc').value.trim()||null,scheduled_date:date,unit_ids:getReminderCheckedUnitIds(),is_note:document.getElementById('r-is-note')?.checked||false});
+    const{error}=await supabase.from('reminders').insert({hotel_id:AppContext.hotelId,title,description:document.getElementById('r-desc').value.trim()||null,scheduled_date:date,unit_ids:getReminderCheckedUnitIds(),is_note:document.getElementById('r-is-note')?.checked||false,icon:document.getElementById('r-icon-value')?.value||null});
     if(error){showToast('Error al guardar','error');return;}
     showToast('Recordatorio guardado ✓','success');close();
     ['r-title','r-desc','r-date'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
     if(document.getElementById('r-is-note'))document.getElementById('r-is-note').checked=false;
+    _setReminderIcon('📌');
+    document.getElementById('r-icon-container')?.classList.add('hidden');
     if(currentSection==='reminders')await loadRemindersSection();
     if(currentSection==='dashboard')await dashboard?.load();
   });
@@ -1835,6 +1866,7 @@ window.populateReminderUnitSelect  = populateReminderUnitSelect;
 window.getReminderCheckedUnitIds   = getReminderCheckedUnitIds;
 window.setReminderCheckedUnitIds   = setReminderCheckedUnitIds;
 window.reminderUnitsLabel          = reminderUnitsLabel;
+window.setReminderIcon             = _setReminderIcon;
 
 function setupExpenseModal() {
   const close=()=>document.getElementById('overlay-expense').classList.add('hidden');

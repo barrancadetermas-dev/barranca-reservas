@@ -1131,6 +1131,26 @@
         <input type="checkbox" id="r-is-note">
         <label for="r-is-note">📌 Es una nota <span>(no una tarea — ej: cumpleaños, Mundial. No suma al contador de pendientes)</span></label>
       </div>
+      <div class="form-group hidden" id="r-icon-container">
+        <label>Emoji <span class="label-hint">Si es general (sin depto), se marca una sola vez en el día del calendario</span></label>
+        <div id="r-icon-picker" class="r-icon-picker">
+          <button type="button" class="r-icon-opt selected" data-icon="📌">📌</button>
+          <button type="button" class="r-icon-opt" data-icon="🎂">🎂</button>
+          <button type="button" class="r-icon-opt" data-icon="🎉">🎉</button>
+          <button type="button" class="r-icon-opt" data-icon="⚽">⚽</button>
+          <button type="button" class="r-icon-opt" data-icon="🏀">🏀</button>
+          <button type="button" class="r-icon-opt" data-icon="🏈">🏈</button>
+          <button type="button" class="r-icon-opt" data-icon="🎾">🎾</button>
+          <button type="button" class="r-icon-opt" data-icon="🎄">🎄</button>
+          <button type="button" class="r-icon-opt" data-icon="🎈">🎈</button>
+          <button type="button" class="r-icon-opt" data-icon="✈️">✈️</button>
+          <button type="button" class="r-icon-opt" data-icon="🎓">🎓</button>
+          <button type="button" class="r-icon-opt" data-icon="❤️">❤️</button>
+          <button type="button" class="r-icon-opt" data-icon="⭐">⭐</button>
+          <input type="text" id="r-icon-custom" maxlength="2" placeholder="✏️" title="Escribí tu propio emoji">
+        </div>
+        <input type="hidden" id="r-icon-value" value="📌">
+      </div>
       <div class="form-group"><label>Descripción</label><textarea id="r-desc" rows="2" placeholder="Detalles adicionales..."></textarea></div>
       <div class="form-group"><label>Fecha <span class="req">*</span></label><input type="date" id="r-date" style="max-width:200px"></div>
       <div class="form-group" id="r-unit-container">
