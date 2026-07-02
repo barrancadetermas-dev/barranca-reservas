@@ -689,18 +689,24 @@ select.mila-pill {
   .mila-row-icon svg { width: 13px; height: 13px; }
   .mila-row-title { font-size: .78rem; }
 
-  /* al tocar una card que necesita fecha/rango/búsqueda, se abre debajo
-     del título (dentro de la misma card) para mostrar sus controles */
+  /* FIX v3: pedido — al tocar una card (fecha/rango), los controles
+     quedan en la MISMA línea que el título (no se agrega subtítulo
+     ni una fila nueva abajo). El título se acorta con ellipsis y los
+     pills no se envuelven, para que la card se mantenga en 1 línea. */
   .mila-row.is-active {
-    grid-template-columns: 24px 1fr auto;
+    grid-template-columns: 24px minmax(0, 1fr) auto;
   }
-  .mila-row.is-active .mila-row-sub { display: block; }
+  .mila-row.is-active .mila-row-title { font-size: .72rem; }
   .mila-row.is-active .mila-row-controls {
     display: flex;
-    grid-column: 1 / -1;
-    flex-wrap: wrap;
-    justify-content: flex-start;
+    flex-wrap: nowrap;
+    justify-content: flex-end;
+    gap: 4px;
+    flex-shrink: 0;
   }
+  .mila-row.is-active .mila-pill { padding: 3px 6px; font-size: .62rem; }
+  .mila-row.is-active .mila-pill span { max-width: 34px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .mila-row.is-active select.mila-pill { max-width: 76px; }
 
   /* búsqueda de huésped/gasto: no dispara con un tap (solo con Enter), así
      que no puede depender de .is-active para mostrar el input — queda
