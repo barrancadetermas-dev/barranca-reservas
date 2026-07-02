@@ -428,7 +428,10 @@ export class Dashboard {
     this._applyKpiState('kpi-guests',    kpis.occupiedUnits,    { total: _totalUnits });
     this._renderRevenueCard(kpis.revenue ?? {});
     this._renderUpcoming(kpis.upcoming  ?? []);
-    this._renderPendingOps(kpis.pendingClean ?? 0);
+    // (El aviso de limpiezas pendientes ahora lo muestra la card
+    // "Limpieza de hoy" — ver _renderCleaningWidget. Este badge suelto
+    // quedaba flotando fuera de cualquier card y su link confundía con
+    // Recordatorios, así que se dejó de usar.)
   }
 
   // ── Tooltip on-hover para tarjetas KPI ─────────────
@@ -961,15 +964,18 @@ export class Dashboard {
 
     // Sin tareas de limpieza hoy -> vuelve a mostrarse la card de RevPAR/ADR.
     if (!tasks.length) {
-      el.style.display = 'none';
-      if (revparCard) revparCard.style.display = '';
+      el.style.setProperty('display', 'none', 'important');
+      if (revparCard) revparCard.style.removeProperty('display');
       return;
     }
 
     // Con tareas hoy -> la card de Limpieza ocupa el mismo lugar/tamaño
     // que RevPAR/ADR, y esta última se oculta.
-    if (revparCard) revparCard.style.display = 'none';
-    el.style.display = 'flex';
+    // (.dash-card-uniform tiene "display:flex !important", por eso hay
+    // que pisarlo también con !important — si no, quedaban las dos cards
+    // visibles al mismo tiempo en vez de reemplazarse.)
+    if (revparCard) revparCard.style.setProperty('display', 'none', 'important');
+    el.style.setProperty('display', 'flex', 'important');
 
     const pending = tasks.filter(t => t.status !== 'completed');
     const state   = pending.length ? 'yellow' : 'green';
