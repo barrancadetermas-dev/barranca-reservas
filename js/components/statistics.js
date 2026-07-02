@@ -978,9 +978,13 @@ export class Statistics {
   // ── Card 4: Área ADR 12 meses ────────────────────
   _sdcAreaADR(adrData, fmt) {
     const maxADR = Math.max(...adrData.map(d => d.adr), 1);
+    const minADR = Math.min(...adrData.map(d => d.adr));
     const curADR = adrData[11].adr;
     const n = adrData.length;
     const W = 240, H = 90, pad = 10;
+    const curPct = maxADR > 0 ? (curADR / maxADR) * 100 : 0;
+    const curColor = this._perfColor(curPct).bottom;
+    const face = curADR >= maxADR ? ' 😊' : (curADR <= minADR && curADR > 0 ? ' 😢' : '');
     const pts = adrData.map((d, i) => {
       const x = pad + (i / (adrData.length-1)) * (W-pad*2);
       const y = H - pad - (d.adr / maxADR) * (H-pad*2);
@@ -993,27 +997,28 @@ export class Statistics {
         return `L${x.toFixed(1)},${y.toFixed(1)}`;
       }).join(' ') + ` L${W-pad},${H-pad} Z`;
 
-    return `<div class="stats-dashboard-card" style="--accent:#f59e0b">
+    return `<div class="stats-dashboard-card" style="--accent:${curColor}">
       <div class="sdc-header"><div>
         <div class="sdc-title">💵 ADR — Tarifa Diaria</div>
-        <div class="sdc-value">${fmt(curADR)}</div>
+        <div class="sdc-value" style="color:${curColor}">${fmt(curADR)}${face}</div>
         <div class="sdc-sub">por noche ocupada</div>
       </div></div>
       <div style="flex:1;display:flex;align-items:flex-end">
         <svg class="sdc-area-chart" viewBox="0 0 ${W} ${H+10}" style="overflow:visible">
           <defs><linearGradient id="adrGrad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stop-color="#f59e0b" stop-opacity=".4"/>
-            <stop offset="100%" stop-color="#f59e0b" stop-opacity=".02"/>
+            <stop offset="0%" stop-color="${curColor}" stop-opacity=".4"/>
+            <stop offset="100%" stop-color="${curColor}" stop-opacity=".02"/>
           </linearGradient></defs>
           <path d="${areaPath}" fill="url(#adrGrad)"/>
-          <polyline points="${pts}" fill="none" stroke="#f59e0b" stroke-width="2" stroke-linejoin="round"/>
+          <polyline points="${pts}" fill="none" stroke="${curColor}" stroke-width="2" stroke-linejoin="round"/>
           ${adrData.map((d, i) => {
             if (i !== n-1 && i % 3 !== 0) return '';
             const x = pad + (i/(adrData.length-1))*(W-pad*2);
             const y = H - pad - (d.adr/maxADR)*(H-pad*2);
             const isLast = i === n-1;
-            return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${isLast?4:2.5}" fill="#f59e0b"/>
-              <text x="${x.toFixed(1)}" y="${(y-6).toFixed(1)}" text-anchor="middle" font-size="7.5" font-weight="700" fill="#f59e0b">${fmt(d.adr)}</text>
+            const ptColor = this._perfColor(maxADR > 0 ? (d.adr/maxADR)*100 : 0).bottom;
+            return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${isLast?4:2.5}" fill="${isLast?curColor:ptColor}"/>
+              <text x="${x.toFixed(1)}" y="${(y-6).toFixed(1)}" text-anchor="middle" font-size="7.5" font-weight="700" fill="${isLast?curColor:ptColor}">${fmt(d.adr)}</text>
               <text x="${x.toFixed(1)}" y="${H+9}" text-anchor="middle" font-size="7" fill="var(--color-text-3)">${d.label}</text>`;
           }).join('')}
         </svg>
@@ -1024,14 +1029,17 @@ export class Statistics {
   // ── Card 5: Barras de cantidad de reservas ───────
   _sdcBarCountBookings(data) {
     const maxVal = Math.max(...data.map(d => d.count), 1);
+    const minVal = Math.min(...data.map(d => d.count));
     const total  = data.reduce((s,d) => s+d.count, 0);
-    const avgMonth = Math.round(total / data.length);
     const n = data.length;
+    const curVal = data[n-1].count;
+    const curColor = this._perfColor(maxVal > 0 ? (curVal/maxVal)*100 : 0).bottom;
+    const face = curVal >= maxVal ? ' 😊' : (curVal <= minVal && curVal > 0 ? ' 😢' : '');
     const bars = data.map((d, i) => {
       const h     = Math.max(3, Math.round((d.count / maxVal) * 100));
       const isLast = i === n - 1;
       const showLabel = isLast || i % 3 === 0;
-      const color  = d.count >= avgMonth ? '#22c55e' : '#94a3b8';
+      const color  = this._perfColor(maxVal > 0 ? (d.count/maxVal)*100 : 0).bottom;
       return `<div class="sdc-bar" style="height:${h}%;background:${isLast ? color : color + '80'}">
         ${showLabel ? `<span class="sdc-bar-value${isLast?' is-current':''}">${d.count}</span>` : ''}
         <div class="sdc-bar-tooltip">${d.fullLabel ?? d.label}: ${d.count} reservas</div>
@@ -1042,10 +1050,10 @@ export class Statistics {
       const show = isLast || i % 3 === 0;
       return `<span class="sdc-chart-axis-label${isLast?' is-current':''}">${show ? d.label : ''}</span>`;
     }).join('');
-    return `<div class="stats-dashboard-card" style="--accent:#22c55e">
+    return `<div class="stats-dashboard-card" style="--accent:${curColor}">
       <div class="sdc-header"><div>
         <div class="sdc-title">📋 Reservas</div>
-        <div class="sdc-value">${data[11].count}</div>
+        <div class="sdc-value" style="color:${curColor}">${curVal}${face}</div>
         <div class="sdc-sub">este mes · ${total} en 12 meses</div>
       </div></div>
       <div class="sdc-chart">${bars}</div>
@@ -1124,39 +1132,43 @@ export class Statistics {
   // ── Card 7: RevPAR 12 meses ──────────────────────
   _sdcRevPAR(data, fmtK, totalUnits) {
     const maxVal = Math.max(...data.map(d => d.revpar), 1);
+    const minVal = Math.min(...data.map(d => d.revpar));
     const curVal = data[11].revpar;
     const n = data.length;
     const W = 240, H = 70, pad = 8;
+    const curColor = this._perfColor(maxVal > 0 ? (curVal/maxVal)*100 : 0).bottom;
+    const face = curVal >= maxVal ? ' 😊' : (curVal <= minVal && curVal > 0 ? ' 😢' : '');
     const pts = data.map((d, i) => {
       const x = pad + (i/(data.length-1))*(W-pad*2);
       const y = H - pad - (d.revpar/maxVal)*(H-pad*2);
       return `${x.toFixed(1)},${y.toFixed(1)}`;
     }).join(' ');
-    return `<div class="stats-dashboard-card" style="--accent:#8b5cf6">
+    return `<div class="stats-dashboard-card" style="--accent:${curColor}">
       <div class="sdc-header"><div>
         <div class="sdc-title">📈 RevPAR</div>
-        <div class="sdc-value">${fmtK(curVal)}</div>
+        <div class="sdc-value" style="color:${curColor}">${fmtK(curVal)}${face}</div>
         <div class="sdc-sub">ingreso por hab. disp. · ${totalUnits} deptos.</div>
       </div></div>
       <div style="flex:1;display:flex;align-items:flex-end">
         <svg class="sdc-area-chart" viewBox="0 0 ${W} ${H+16}" style="height:86px;overflow:visible">
           <defs><linearGradient id="rpGrad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stop-color="#8b5cf6" stop-opacity=".4"/>
-            <stop offset="100%" stop-color="#8b5cf6" stop-opacity=".02"/>
+            <stop offset="0%" stop-color="${curColor}" stop-opacity=".4"/>
+            <stop offset="100%" stop-color="${curColor}" stop-opacity=".02"/>
           </linearGradient></defs>
           <path d="M${pad},${H-pad} ${data.map((d,i) => {
             const x = pad+(i/(data.length-1))*(W-pad*2);
             const y = H-pad-(d.revpar/maxVal)*(H-pad*2);
             return `L${x.toFixed(1)},${y.toFixed(1)}`;
           }).join(' ')} L${W-pad},${H-pad} Z" fill="url(#rpGrad)"/>
-          <polyline points="${pts}" fill="none" stroke="#8b5cf6" stroke-width="2" stroke-linejoin="round"/>
+          <polyline points="${pts}" fill="none" stroke="${curColor}" stroke-width="2" stroke-linejoin="round"/>
           ${data.map((d, i) => {
             if (i !== n-1 && i % 3 !== 0) return '';
             const x = pad + (i/(data.length-1))*(W-pad*2);
             const y = H - pad - (d.revpar/maxVal)*(H-pad*2);
             const isLast = i === n-1;
-            return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${isLast?4:2.5}" fill="#8b5cf6"/>
-              <text x="${x.toFixed(1)}" y="${(y-6).toFixed(1)}" text-anchor="middle" font-size="7.5" font-weight="700" fill="#8b5cf6">${fmtK(d.revpar)}</text>
+            const ptColor = this._perfColor(maxVal > 0 ? (d.revpar/maxVal)*100 : 0).bottom;
+            return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${isLast?4:2.5}" fill="${isLast?curColor:ptColor}"/>
+              <text x="${x.toFixed(1)}" y="${(y-6).toFixed(1)}" text-anchor="middle" font-size="7.5" font-weight="700" fill="${isLast?curColor:ptColor}">${fmtK(d.revpar)}</text>
               <text x="${x.toFixed(1)}" y="${H+11}" text-anchor="middle" font-size="7" fill="var(--color-text-3)">${d.label}</text>`;
           }).join('')}
         </svg>
@@ -1187,6 +1199,8 @@ export class Statistics {
   _sdcAreaRevPARTrend(data, fmtK) {
     const maxVal = Math.max(...data.map(d => d.revpar), 1);
     const total  = data.reduce((s,d) => s+d.revpar, 0);
+    const avgVal = total / 12;
+    const avgColor = this._perfColor(maxVal > 0 ? (avgVal/maxVal)*100 : 0).bottom;
     const W = 240, H = 90, pad = 10;
     const areaPath = `M${pad},${H-pad} ` +
       data.map((d,i) => {
@@ -1199,28 +1213,28 @@ export class Statistics {
       const y = H-pad-(d.revpar/maxVal)*(H-pad*2);
       return `${x.toFixed(1)},${y.toFixed(1)}`;
     }).join(' ');
-    const labels = data.filter((_,i) => i % 3 === 0 || i === data.length-1);
-    return `<div class="stats-dashboard-card" style="--accent:#06b6d4">
+    return `<div class="stats-dashboard-card" style="--accent:${avgColor}">
       <div class="sdc-header"><div>
         <div class="sdc-title">📉 Evolución RevPAR</div>
-        <div class="sdc-value">${fmtK(Math.round(total/12))}</div>
+        <div class="sdc-value" style="color:${avgColor}">${fmtK(Math.round(avgVal))}</div>
         <div class="sdc-sub">promedio mensual 12 meses</div>
       </div></div>
       <div style="flex:1;display:flex;align-items:flex-end">
         <svg class="sdc-area-chart" viewBox="0 0 ${W} ${H}" style="overflow:visible">
           <defs><linearGradient id="rpEvGrad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stop-color="#06b6d4" stop-opacity=".4"/>
-            <stop offset="100%" stop-color="#06b6d4" stop-opacity=".02"/>
+            <stop offset="0%" stop-color="${avgColor}" stop-opacity=".4"/>
+            <stop offset="100%" stop-color="${avgColor}" stop-opacity=".02"/>
           </linearGradient></defs>
           <path d="${areaPath}" fill="url(#rpEvGrad)"/>
-          <polyline points="${pts}" fill="none" stroke="#06b6d4" stroke-width="2.5" stroke-linejoin="round"/>
+          <polyline points="${pts}" fill="none" stroke="${avgColor}" stroke-width="2.5" stroke-linejoin="round"/>
           ${data.map((d,i) => {
             if (i !== data.length-1 && i % 3 !== 0) return '';
             const x = pad+(i/(data.length-1))*(W-pad*2);
             const y = H-pad-(d.revpar/maxVal)*(H-pad*2);
             const isLast = i === data.length-1;
-            return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${isLast?4:2}" fill="#06b6d4"/>
-              <text x="${x.toFixed(1)}" y="${(y-6).toFixed(1)}" text-anchor="middle" font-size="7.5" font-weight="700" fill="#06b6d4">${fmtK(d.revpar)}</text>
+            const ptColor = this._perfColor(maxVal > 0 ? (d.revpar/maxVal)*100 : 0).bottom;
+            return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${isLast?4:2}" fill="${ptColor}"/>
+              <text x="${x.toFixed(1)}" y="${(y-6).toFixed(1)}" text-anchor="middle" font-size="7.5" font-weight="700" fill="${ptColor}">${fmtK(d.revpar)}</text>
               <text x="${x.toFixed(1)}" y="${H}" text-anchor="middle" font-size="7" fill="var(--color-text-3)">${d.label}</text>`;
           }).join('')}
         </svg>

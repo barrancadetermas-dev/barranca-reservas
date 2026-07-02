@@ -25,10 +25,10 @@
   --sidebar-w:       232px;
 
   /* Brand / Primary — azul MILA */
-  --color-primary:   #1E4DB7;
-  --color-primary-h: #1A3A90;
+  --color-primary:   #183F96;
+  --color-primary-h: #152F76;
   --color-primary-l: #DDEAFF;
-  --color-primary-t: rgba(30,77,183,.12);
+  --color-primary-t: rgba(24,63,150,.12);
 
   /* KPI cards — 5 colores: 1 pizarra + 4 azules del logo */
   /* Pizarra */
@@ -52,9 +52,9 @@
      Rojo = malo/poca actividad · Amarillo = medio · Verde = bueno.
      Usar SIEMPRE estos 3 tonos para representar estado/rendimiento;
      no mezclar con otros verdes/amarillos/rojos ni con azul. */
-  --state-red:     #EF4444; --state-red-bg:    #EF444422; --state-red-txt:    #B91C1C;
-  --state-yellow:  #FACC15; --state-yellow-bg: #FACC1522; --state-yellow-txt: #92730A;
-  --state-green:   #22C55E; --state-green-bg:  #22C55E22; --state-green-txt:  #15803D;
+  --state-red:     #EF4444; --state-red-bg:    #EF44440F; --state-red-txt:    #B91C1C;
+  --state-yellow:  #FACC15; --state-yellow-bg: #FACC150F; --state-yellow-txt: #8A6D0A;
+  --state-green:   #22C55E; --state-green-bg:  #22C55E12; --state-green-txt:  #15803D;
 
   /* Booking status × time — paleta azul MILA */
   --booking-pending-f: #1E4DB7;   /* futuro sin seña */
@@ -497,9 +497,9 @@ svg { flex-shrink: 0; }
 /* ── Estado único (rojo/amarillo/verde) — reemplaza los 4 colores fijos
    de arriba en los KPIs que representan actividad (Check-in, Check-out,
    Alojadas, Recambios) y en la card de Ocupación. ── */
-.kpi-state-red    { background: var(--state-red-bg);    border-color: rgba(239,68,68,.3); }
-.kpi-state-yellow { background: var(--state-yellow-bg); border-color: rgba(250,204,21,.35); }
-.kpi-state-green  { background: var(--state-green-bg);  border-color: rgba(34,197,94,.3); }
+.kpi-state-red    { background: var(--state-red-bg);    border-color: rgba(239,68,68,.16); }
+.kpi-state-yellow { background: var(--state-yellow-bg); border-color: rgba(250,204,21,.2); }
+.kpi-state-green  { background: var(--state-green-bg);  border-color: rgba(34,197,94,.16); }
 .kpi-state-red    .kpi-icon-wrap, .kpi-state-red    .kpi-value { color: var(--state-red-txt); }
 .kpi-state-yellow .kpi-icon-wrap, .kpi-state-yellow .kpi-value { color: var(--state-yellow-txt); }
 .kpi-state-green  .kpi-icon-wrap, .kpi-state-green  .kpi-value { color: var(--state-green-txt); }
@@ -521,7 +521,8 @@ svg { flex-shrink: 0; }
 .kpi-green .kpi-icon-wrap { color: var(--kpi-green-acc); }
 
 .kpi-label { display: block; font-size: .78rem; font-weight: 500; color: var(--color-text-2); margin-bottom: 4px; }
-.kpi-value { display: block; font-size: 2rem; font-weight: 800; line-height: 1; }
+.kpi-value { display: inline-block; font-size: 2rem; font-weight: 800; line-height: 1; }
+.kpi-emoji { font-size: 1.15rem; vertical-align: middle; }
 .kpi-blue  .kpi-value { color: var(--kpi-blue-txt); }
 .kpi-amber .kpi-value { color: var(--kpi-navy-txt); }
 .kpi-rose  .kpi-value { color: var(--kpi-sky-txt); }
@@ -1972,9 +1973,9 @@ select { appearance: auto; cursor: pointer; }
   --kpi-navy-bg:  #1A2A6422; --kpi-navy-acc:  #818CF8; --kpi-navy-txt: #A5B4FC;
   --kpi-sky-bg:   #0C406422; --kpi-sky-acc:   #38BDF8; --kpi-sky-txt:  #7DD3FC;
   --kpi-green-bg: #14532D18; --kpi-green-acc: #4ADE80; --kpi-green-txt:#86EFAC;
-  --state-red-bg:    #EF444433; --state-red-txt:    #FCA5A5;
-  --state-yellow-bg: #FACC1533; --state-yellow-txt: #FDE68A;
-  --state-green-bg:  #22C55E33; --state-green-txt:  #86EFAC;
+  --state-red-bg:    #EF44441F; --state-red-txt:    #FCA5A5;
+  --state-yellow-bg: #FACC151F; --state-yellow-txt: #FDE68A;
+  --state-green-bg:  #22C55E1F; --state-green-txt:  #86EFAC;
   --booking-pending-f: #3B82F6;
   --booking-partial-f: #0284C7;
   --booking-paid-f:    #22C55E;

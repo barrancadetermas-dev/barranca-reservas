@@ -361,7 +361,7 @@ export class Dashboard {
     } else if (kpis.checkins.length > 1) {
       setSec('kpi-checkins', '<span style="font-size:.68rem;color:var(--color-text-3)">' + kpis.checkins.map(b => uName(b) ?? '—').join(' · ') + '</span>');
     } else {
-      setSec('kpi-checkins', '<span style="font-size:.68rem;color:var(--color-text-3)">Sin llegadas hoy</span>');
+      setSec('kpi-checkins', '<span style="font-size:.68rem;color:var(--color-text-3)">Sin llegadas hoy 😢</span>');
     }
     this._bindKpiTooltip('kpi-checkins', { emptyText: 'No hay ingresos para hoy.',
       lines: kpis.checkins.map(b => (uName(b) ?? '—') + ' — ' + (gName(b) || '—')) });
@@ -381,7 +381,7 @@ export class Dashboard {
     } else if (kpis.checkouts.length > 1) {
       setSec('kpi-checkouts', '<span style="font-size:.68rem;color:var(--color-text-3)">' + kpis.checkouts.map(b => uName(b) ?? '—').join(' · ') + '</span>');
     } else {
-      setSec('kpi-checkouts', '<span style="font-size:.68rem;color:var(--color-text-3)">Sin salidas hoy</span>');
+      setSec('kpi-checkouts', '<span style="font-size:.68rem;color:var(--color-text-3)">Sin salidas hoy 😢</span>');
     }
     this._bindKpiTooltip('kpi-checkouts', { emptyText: 'No hay egresos para hoy.',
       lines: kpis.checkouts.map(b => (uName(b) ?? '—') + ' — ' + (gName(b) || '—')) });
@@ -396,7 +396,7 @@ export class Dashboard {
         '<span style="font-size:.66rem;color:var(--color-text-2)">' + r.unitName + '</span>' +
         '<br><span style="font-size:.63rem;color:var(--color-text-3)">' + r.outGuest + ' → ' + r.inGuest + '</span>');
     } else {
-      setSec('kpi-recambios', '<span style="font-size:.68rem;color:var(--color-text-3)">Sin recambios</span>');
+      setSec('kpi-recambios', '<span style="font-size:.68rem;color:var(--color-text-3)">Sin recambios 😢</span>');
     }
     this._bindKpiTooltip('kpi-recambios', { emptyText: 'No hay recambios para hoy.',
       blocks: kpis.recambios.map(r => ({ title: r.unitName, rows: ['Sale: ' + r.outGuest, '↓', 'Entra: ' + r.inGuest] })) });
@@ -413,16 +413,17 @@ export class Dashboard {
     } else if (occ.length > 1) {
       setSec('kpi-guests', '<span style="font-size:.68rem;color:var(--color-text-3)">' + occ.slice(0,3).map(o => o.unitName).join(' · ') + (occ.length > 3 ? '...' : '') + '</span>');
     } else {
-      setSec('kpi-guests', '<span style="font-size:.68rem;color:var(--color-text-3)">Complejo libre</span>');
+      setSec('kpi-guests', '<span style="font-size:.68rem;color:var(--color-text-3)">Complejo libre 😢</span>');
     }
     this._bindKpiTooltip('kpi-guests', { emptyText: 'No hay unidades ocupadas.',
       lines: occ.map(o => o.unitName + ' — ' + o.guestName) });
 
     // Nuevos widgets
-    this._applyKpiState('kpi-checkins',  kpis.checkins.length);
-    this._applyKpiState('kpi-checkouts', kpis.checkouts.length);
-    this._applyKpiState('kpi-recambios', kpis.recambios.length);
-    this._applyKpiState('kpi-guests',    kpis.occupiedUnits);
+    const _totalUnits = this.ctx.units?.length || 7;
+    this._applyKpiState('kpi-checkins',  kpis.checkins.length,  { total: _totalUnits });
+    this._applyKpiState('kpi-checkouts', kpis.checkouts.length, { total: _totalUnits });
+    this._applyKpiState('kpi-recambios', kpis.recambios.length, { total: _totalUnits });
+    this._applyKpiState('kpi-guests',    kpis.occupiedUnits,    { total: _totalUnits });
     this._renderRevenueCard(kpis.revenue ?? {});
     this._renderUpcoming(kpis.upcoming  ?? []);
     this._renderPendingOps(kpis.pendingClean ?? 0);
@@ -620,13 +621,21 @@ export class Dashboard {
   // 0 = malo · 1 a 3 = medio · 4 a 7 (o más) = bueno.
   // Reemplaza los colores fijos kpi-blue/amber/rose/green por el
   // estado real de actividad de cada card.
-  _applyKpiState(cardId, value) {
+  _applyKpiState(cardId, value, opts = {}) {
     const card = document.getElementById(cardId);
     if (!card) return;
+    const total = opts.total ?? 7;
     const state = value <= 0 ? 'red' : value <= 3 ? 'yellow' : 'green';
     card.classList.remove('kpi-blue', 'kpi-amber', 'kpi-rose', 'kpi-green',
       'kpi-state-red', 'kpi-state-yellow', 'kpi-state-green');
     card.classList.add(`kpi-state-${state}`);
+
+    // Carita según el estado: 😊 cuando llega al tope (100%/lleno),
+    // 😢 cuando está en el peor caso (0).
+    const emojiEl = card.querySelector('.kpi-emoji');
+    if (emojiEl) {
+      emojiEl.textContent = value <= 0 ? ' 😢' : value >= total ? ' 😊' : '';
+    }
   }
 
   // ── Render Occupancy Ring ─────────────────────────
@@ -636,24 +645,29 @@ export class Dashboard {
     const radius = 50;
     const circum = 2 * Math.PI * radius; // ≈ 314
     const offset = circum - (pct / 100) * circum;
+    const stateColor = occupied <= 0 ? 'var(--state-red)' : occupied <= 3 ? 'var(--state-yellow)' : 'var(--state-green)';
+    const stateTxt   = occupied <= 0 ? 'var(--state-red)' : occupied <= 3 ? 'var(--state-yellow-txt)' : 'var(--state-green-txt)';
 
     const circle = document.getElementById('occ-ring');
     if (circle) {
       circle.style.strokeDashoffset = offset;
       // Color según la escala única de estado (mismo criterio que los KPIs):
       // 0 ocupadas = rojo · 1 a 3 = amarillo · 4 a 7+ = verde.
-      if (occupied <= 0)      circle.style.stroke = 'var(--state-red)';
-      else if (occupied <= 3) circle.style.stroke = 'var(--state-yellow)';
-      else                    circle.style.stroke = 'var(--state-green)';
+      circle.style.stroke = stateColor;
     }
+    // El "riel" de fondo también toma un tinte del mismo estado, en vez de
+    // quedar siempre celeste/gris sin relación con la ocupación real.
+    const track = document.getElementById('occ-ring-track');
+    if (track) { track.style.stroke = stateColor; track.style.opacity = '.16'; }
 
     const pctEl = document.getElementById('occ-pct');
     const subEl = document.getElementById('occ-sub');
+    const face  = occupied <= 0 ? ' 😢' : occupied >= total ? ' 😊' : '';
     if (pctEl) {
       pctEl.textContent = `${pct}%`;
-      pctEl.style.fill = occupied <= 0 ? 'var(--state-red)' : occupied <= 3 ? 'var(--state-yellow-txt)' : 'var(--state-green-txt)';
+      pctEl.style.fill = stateTxt;
     }
-    if (subEl) subEl.textContent = `${occupied}/${total} uds`;
+    if (subEl) subEl.textContent = `${occupied}/${total} uds${face}`;
   }
 
   // ── Render Dollar Widget — dólar oficial 3 fuentes ──
