@@ -419,6 +419,10 @@ export class Dashboard {
       lines: occ.map(o => o.unitName + ' — ' + o.guestName) });
 
     // Nuevos widgets
+    this._applyKpiState('kpi-checkins',  kpis.checkins.length);
+    this._applyKpiState('kpi-checkouts', kpis.checkouts.length);
+    this._applyKpiState('kpi-recambios', kpis.recambios.length);
+    this._applyKpiState('kpi-guests',    kpis.occupiedUnits);
     this._renderRevenueCard(kpis.revenue ?? {});
     this._renderUpcoming(kpis.upcoming  ?? []);
     this._renderPendingOps(kpis.pendingClean ?? 0);
@@ -612,6 +616,19 @@ export class Dashboard {
     if (el) el.textContent = value;
   }
 
+  // ── Escala única de estado (rojo/amarillo/verde) ──────────────
+  // 0 = malo · 1 a 3 = medio · 4 a 7 (o más) = bueno.
+  // Reemplaza los colores fijos kpi-blue/amber/rose/green por el
+  // estado real de actividad de cada card.
+  _applyKpiState(cardId, value) {
+    const card = document.getElementById(cardId);
+    if (!card) return;
+    const state = value <= 0 ? 'red' : value <= 3 ? 'yellow' : 'green';
+    card.classList.remove('kpi-blue', 'kpi-amber', 'kpi-rose', 'kpi-green',
+      'kpi-state-red', 'kpi-state-yellow', 'kpi-state-green');
+    card.classList.add(`kpi-state-${state}`);
+  }
+
   // ── Render Occupancy Ring ─────────────────────────
   _renderOccupancyRing(occupied, total) {
     if (!total) return;
@@ -623,15 +640,19 @@ export class Dashboard {
     const circle = document.getElementById('occ-ring');
     if (circle) {
       circle.style.strokeDashoffset = offset;
-      // Color dinámico según ocupación
-      if (pct >= 80)      circle.style.stroke = 'var(--color-success)';
-      else if (pct >= 50) circle.style.stroke = 'var(--color-primary)';
-      else                circle.style.stroke = 'var(--color-warning)';
+      // Color según la escala única de estado (mismo criterio que los KPIs):
+      // 0 ocupadas = rojo · 1 a 3 = amarillo · 4 a 7+ = verde.
+      if (occupied <= 0)      circle.style.stroke = 'var(--state-red)';
+      else if (occupied <= 3) circle.style.stroke = 'var(--state-yellow)';
+      else                    circle.style.stroke = 'var(--state-green)';
     }
 
     const pctEl = document.getElementById('occ-pct');
     const subEl = document.getElementById('occ-sub');
-    if (pctEl) pctEl.textContent = `${pct}%`;
+    if (pctEl) {
+      pctEl.textContent = `${pct}%`;
+      pctEl.style.fill = occupied <= 0 ? 'var(--state-red)' : occupied <= 3 ? 'var(--state-yellow-txt)' : 'var(--state-green-txt)';
+    }
     if (subEl) subEl.textContent = `${occupied}/${total} uds`;
   }
 
@@ -1028,7 +1049,12 @@ export class Dashboard {
     if (totEl) totEl.textContent = fmt(stats.totalRev);
     const fill   = document.getElementById('dash-cobros-bar-fill');
     if (fill && stats.totalRev > 0) {
-      fill.style.width = Math.min(100, Math.round(stats.totalPaid / stats.totalRev * 100)) + '%';
+      const cobPct = Math.min(100, Math.round(stats.totalPaid / stats.totalRev * 100));
+      fill.style.width = cobPct + '%';
+      // Estado financiero según % cobrado — misma escala roja/amarilla/verde
+      const stateColor = cobPct < 30 ? 'var(--state-red)' : cobPct < 70 ? 'var(--state-yellow)' : 'var(--state-green)';
+      fill.style.background = stateColor;
+      if (cobEl) cobEl.style.color = stateColor;
     }
   }
 
@@ -1122,8 +1148,8 @@ export class Dashboard {
     const mix = (c1, c2, t) => rgbToHex(hexToRgb(c1).map((v,i) => v + (hexToRgb(c2)[i]-v)*t));
     const shade = (hex, amt) => rgbToHex(hexToRgb(hex).map(v => v + amt));
     const colorFor = pct => pct >= 50
-      ? mix('#F59E0B', '#22C55E', Math.min(1, (pct - 50) / 50))
-      : mix('#EF4444', '#F59E0B', Math.min(1, Math.max(0, pct) / 50));
+      ? mix('#FACC15', '#22C55E', Math.min(1, (pct - 50) / 50))
+      : mix('#EF4444', '#FACC15', Math.min(1, Math.max(0, pct) / 50));
     const refY = chartH - Math.round(chartH * 0.5); // línea de referencia al 50%
 
     let todayX = 0, todayPct = 0;
@@ -1228,6 +1254,9 @@ export class Dashboard {
     set('dash-dinero-count',    s.count + ' reserva' + (s.count !== 1 ? 's' : ''));
     set('dash-dinero-pct',      pct + '% cobrado');
     const fill = document.getElementById('dash-dinero-bar-fill');
-    if (fill) fill.style.width = pct + '%';
+    const stateColor = pct < 30 ? 'var(--state-red)' : pct < 70 ? 'var(--state-yellow)' : 'var(--state-green)';
+    if (fill) { fill.style.width = pct + '%'; fill.style.background = stateColor; }
+    const cobradoEl = document.getElementById('dash-dinero-cobrado');
+    if (cobradoEl) cobradoEl.style.color = stateColor;
   }
 }

@@ -24,10 +24,21 @@ const SOURCE_LABELS = {
 
 export class Statistics {
   // Color de desempeño relativo: 0% del máximo = rojo, 100% del máximo = verde
+  // Usa exactamente la misma paleta de 3 tonos que el resto de la app
+  // (rojo #EF4444 → amarillo #FACC15 → verde #22C55E), no HSL genérico.
   _perfColor(pct) {
     const p = Math.max(0, Math.min(100, pct));
-    const hue = (p / 100) * 120; // 0=rojo, 60=ámbar, 120=verde
-    return { top: `hsl(${hue}, 72%, 56%)`, bottom: `hsl(${hue}, 72%, 44%)` };
+    const hexToRgb = h => [1,3,5].map(i => parseInt(h.slice(i,i+2),16));
+    const mix = (c1, c2, t) => '#' + hexToRgb(c1).map((v,i) => {
+      const n = Math.round(v + (hexToRgb(c2)[i]-v) * t);
+      return Math.max(0,Math.min(255,n)).toString(16).padStart(2,'0');
+    }).join('');
+    const base = p >= 50
+      ? mix('#FACC15', '#22C55E', (p - 50) / 50)
+      : mix('#EF4444', '#FACC15', p / 50);
+    const shade = (hex, amt) => '#' + hexToRgb(hex).map(v =>
+      Math.max(0,Math.min(255, v + amt)).toString(16).padStart(2,'0')).join('');
+    return { top: shade(base, 22), bottom: shade(base, -18) };
   }
 
   constructor(supabase, ctx) {
@@ -878,11 +889,12 @@ export class Statistics {
       }).join(' ') +
       ` L${W-pad},${H-pad} Z`;
     const deltaClass = delta >= 0 ? '' : 'down';
-    return `<div class="stats-dashboard-card" style="--accent:var(--color-primary)">
+    const curColor = this._perfColor(cur).bottom;
+    return `<div class="stats-dashboard-card" style="--accent:${curColor}">
       <div class="sdc-header">
         <div>
           <div class="sdc-title">📊 Ocupación</div>
-          <div class="sdc-value">${cur}%</div>
+          <div class="sdc-value" style="color:${curColor}">${cur}%</div>
           <div class="sdc-sub">mes actual · prom. ${avg}%</div>
         </div>
         <span class="sdc-delta ${deltaClass}">${delta >= 0 ? '+' : ''}${delta}%</span>
@@ -890,89 +902,76 @@ export class Statistics {
       <div style="flex:1;display:flex;align-items:flex-end">
         <svg class="sdc-area-chart" viewBox="0 0 ${W} ${H+10}" style="overflow:visible">
           <defs><linearGradient id="occGrad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stop-color="var(--color-primary)" stop-opacity=".3"/>
-            <stop offset="100%" stop-color="var(--color-primary)" stop-opacity=".02"/>
+            <stop offset="0%" stop-color="${curColor}" stop-opacity=".3"/>
+            <stop offset="100%" stop-color="${curColor}" stop-opacity=".02"/>
           </linearGradient></defs>
           <!-- Meta 80% -->
           <line x1="${pad}" y1="${H-pad-(0.8*(H-pad*2)).toFixed(0)}" x2="${W-pad}" y2="${H-pad-(0.8*(H-pad*2)).toFixed(0)}"
                 stroke="rgba(34,197,94,.3)" stroke-width="1" stroke-dasharray="3,2"/>
           <path d="${areaPath}" fill="url(#occGrad)"/>
-          <polyline points="${pts}" fill="none" stroke="var(--color-primary)" stroke-width="2" stroke-linejoin="round"/>
+          <polyline points="${pts}" fill="none" stroke="${curColor}" stroke-width="2" stroke-linejoin="round"/>
           ${occPct.map((v, i) => {
             if (i !== n-1 && i % 3 !== 0) return '';
             const x = pad + (i/(occPct.length-1))*(W-pad*2);
             const y = H - pad - (v/100)*(H-pad*2);
             const isLast = i === n-1;
-            return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${isLast?4:2.5}" fill="${isLast?'var(--color-primary)':'rgba(99,102,241,.5)'}"/>
-              <text x="${x.toFixed(1)}" y="${(y-6).toFixed(1)}" text-anchor="middle" font-size="7.5" font-weight="700" fill="${isLast?'var(--color-primary)':'var(--color-text-3)'}">${v}%</text>
-              <text x="${x.toFixed(1)}" y="${H+9}" text-anchor="middle" font-size="7" fill="${isLast?'var(--color-primary)':'var(--color-text-3)'}">${monthlyData[i].label}</text>`;
+            const ptColor = this._perfColor(v).bottom;
+            return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${isLast?4:2.5}" fill="${isLast?curColor:ptColor}" opacity="${isLast?1:.6}"/>
+              <text x="${x.toFixed(1)}" y="${(y-6).toFixed(1)}" text-anchor="middle" font-size="7.5" font-weight="700" fill="${isLast?curColor:'var(--color-text-3)'}">${v}%</text>
+              <text x="${x.toFixed(1)}" y="${H+9}" text-anchor="middle" font-size="7" fill="${isLast?curColor:'var(--color-text-3)'}">${monthlyData[i].label}</text>`;
           }).join('')}
         </svg>
       </div>
     </div>`;
   }
 
-  // ── Card 3: Dona de canales ──────────────────────
+  // ── Card 3: Canales (top 5 por ventas) ───────────
   _sdcDonutChannels(cur, fmt) {
-    const COLORS = {
-      direct:'#6366f1',walkin:'#0891b2',booking:'#1d4ed8',
-      airbnb:'#ea580c',family:'#7c3aed',company:'#0f766e',
-      referral:'#b45309',despegar:'#059669',expedia:'#dc2626',
-    };
     const NAMES = {
       direct:'Directo',walkin:'Espontáneo',booking:'Booking',
       airbnb:'Airbnb',family:'Familia',company:'Empresa',
       referral:'Referido',despegar:'Despegar',expedia:'Expedia',
     };
+    // Top 5 canales con mayor cantidad de ventas
     const entries = Object.entries(cur?.bySource ?? {})
       .filter(([,v]) => v > 0)
-      .sort(([,a],[,b]) => b - a).slice(0, 6);
+      .sort(([,a],[,b]) => b - a)
+      .slice(0, 5);
     const total = entries.reduce((s,[,v]) => s+v, 0) || 1;
+    const maxVal = entries.length ? entries[0][1] : 1;
 
-    // SVG donut
-    const R = 36, r = 22, cx = 45, cy = 45;
-    let startAngle = -Math.PI/2;
-    const segments = entries.map(([src, val]) => {
-      const frac  = val / total;
-      const sweep = frac * 2 * Math.PI;
-      const x1 = cx + R * Math.cos(startAngle);
-      const y1 = cy + R * Math.sin(startAngle);
-      const x2 = cx + R * Math.cos(startAngle + sweep);
-      const y2 = cy + R * Math.sin(startAngle + sweep);
-      const x3 = cx + r * Math.cos(startAngle + sweep);
-      const y3 = cy + r * Math.sin(startAngle + sweep);
-      const x4 = cx + r * Math.cos(startAngle);
-      const y4 = cy + r * Math.sin(startAngle);
-      const large = sweep > Math.PI ? 1 : 0;
-      const path = `M${x1.toFixed(1)},${y1.toFixed(1)} A${R},${R} 0 ${large},1 ${x2.toFixed(1)},${y2.toFixed(1)} L${x3.toFixed(1)},${y3.toFixed(1)} A${r},${r} 0 ${large},0 ${x4.toFixed(1)},${y4.toFixed(1)} Z`;
-      const seg = `<path d="${path}" fill="${COLORS[src]??'#94a3b8'}" opacity=".85">
-        <title>${NAMES[src]??src}: ${fmt(val)}</title></path>`;
-      startAngle += sweep;
-      return { seg, src, val };
-    });
+    // Color por rendimiento relativo al canal líder de la lista:
+    // ≥60% del líder = verde · 25-60% = amarillo · <25% = rojo.
+    const stateColor = (val) => {
+      const ratio = val / maxVal;
+      if (ratio >= 0.6) return { c: 'var(--state-green)',  t: 'var(--state-green-txt)',  bg: 'var(--state-green-bg)'  };
+      if (ratio >= 0.25) return { c: 'var(--state-yellow)', t: 'var(--state-yellow-txt)', bg: 'var(--state-yellow-bg)' };
+      return { c: 'var(--state-red)', t: 'var(--state-red-txt)', bg: 'var(--state-red-bg)' };
+    };
 
-    const donut = `<svg viewBox="0 0 90 90" width="90" height="90">
-      ${segments.map(s => s.seg).join('')}
-      <text x="${cx}" y="${cy+3}" text-anchor="middle" font-size="9" font-weight="700" fill="var(--color-text)">${fmt(total).replace('$','$')}</text>
-    </svg>`;
-
-    const legend = segments.slice(0, 4).map(({src, val}) =>
-      `<div class="sdc-legend-item">
-        <div class="sdc-legend-dot" style="background:${COLORS[src]??'#94a3b8'}"></div>
-        <span style="flex:1">${NAMES[src]??src}</span>
-        <strong>${Math.round((val/total)*100)}%</strong>
-      </div>`
-    ).join('');
+    const rows = entries.map(([src, val]) => {
+      const pct = Math.round((val / total) * 100);
+      const barPct = Math.max(4, Math.round((val / maxVal) * 100));
+      const s = stateColor(val);
+      return `
+        <div class="chan-row">
+          <div class="chan-row-top">
+            <span class="chan-name">${NAMES[src] ?? src}</span>
+            <span class="chan-badge" style="background:${s.bg};color:${s.t}">${pct}%</span>
+          </div>
+          <div class="chan-bar-track">
+            <div class="chan-bar-fill" style="width:${barPct}%;background:${s.c}"></div>
+          </div>
+          <div class="chan-row-bottom">${fmt(val)}</div>
+        </div>`;
+    }).join('');
 
     return `<div class="stats-dashboard-card" style="--accent:#64748b">
       <div class="sdc-header"><div>
         <div class="sdc-title">🔗 Canales</div>
-        <div class="sdc-sub">mes actual</div>
+        <div class="sdc-sub">top 5 · mes actual</div>
       </div></div>
-      <div class="sdc-donut-wrap">
-        ${total > 0 ? donut : '<div style="color:var(--color-text-3);font-size:.8rem;padding:16px">Sin datos</div>'}
-        <div class="sdc-donut-legend">${legend}</div>
-      </div>
+      ${entries.length ? `<div class="chan-list">${rows}</div>` : '<div style="color:var(--color-text-3);font-size:.8rem;padding:16px">Sin datos</div>'}
     </div>`;
   }
 
