@@ -71,7 +71,6 @@ export class GuestsCRM {
               <option value="bookings_desc">📅 Más reservas</option>
               <option value="next_stay">✈️ Próxima estadía</option>
               <option value="last_stay">📆 Última estadía</option>
-              <option value="credit_note">🔄 Nota de crédito abierta</option>
             </select>
           </div>
         </div>
@@ -158,19 +157,6 @@ export class GuestsCRM {
   }
 
   // ── Ordenar array de huéspedes según selector ──
-  // Nota de crédito abierta (reprogramación sin fecha nueva todavía) —
-  // usa el mismo tag 🔄NC:<monto>:<fecha ISO> que booking-list.js.
-  _attachOpenCreditNote(g) {
-    const ncBooking = (g.bookings ?? []).find(b =>
-      b.status === 'cancelled' && b.notes?.includes('🔄NC:') &&
-      !b.notes?.includes('✅NCUSED') && !b.notes?.includes('❌NCVOID'));
-    if (!ncBooking) return;
-    const m = ncBooking.notes.match(/🔄NC:(\d+):(\d{4}-\d{2}-\d{2})/);
-    if (!m) return;
-    const ageDays = Math.round((Date.now() - new Date(m[2] + 'T00:00:00')) / 86400000);
-    g.open_credit_note = { amount: parseInt(m[1], 10), ageDays, stale: ageDays >= 90, bookingId: ncBooking.id };
-  }
-
   _sortGuests(guests) {
     const sort = localStorage.getItem('mila_guest_sort') ?? 'recent';
     const today = new Date().toISOString().slice(0,10);
@@ -191,10 +177,6 @@ export class GuestsCRM {
         return fa.localeCompare(fb);
       },
       last_stay:    (a,b) => (b.last_checkin ?? '').localeCompare(a.last_checkin ?? ''),
-      credit_note:  (a,b) => {
-        if (!!b.open_credit_note - !!a.open_credit_note !== 0) return !!b.open_credit_note - !!a.open_credit_note;
-        return (b.open_credit_note?.ageDays ?? 0) - (a.open_credit_note?.ageDays ?? 0);
-      },
     };
     return copy.sort(cmp[sort] ?? cmp.recent);
   }
@@ -207,7 +189,7 @@ export class GuestsCRM {
     const { data: guests } = await this.db
       .from('guests')
       .select(`id, first_name, last_name, phone, email, dni, nationality, tags, bad_experience, created_at,
-        bookings!bookings_guest_id_fkey(id, total_paid, check_in, check_out, status, notes,
+        bookings!bookings_guest_id_fkey(id, total_paid, check_in, check_out, status,
           booking_units(units(name, color))),
         guest_notes!guest_notes_guest_id_fkey(body, category, created_at)`)
       .eq('hotel_id', this.ctx.hotelId)
@@ -232,7 +214,6 @@ export class GuestsCRM {
       // Nota más reciente
       const allNotes   = (g.guest_notes ?? []).sort((a,b) => b.created_at.localeCompare(a.created_at));
       g.latest_note    = allNotes[0]?.body ?? null;
-      this._attachOpenCreditNote(g);
     });
     const sorted = this._sortGuests(guests);
     area.innerHTML = sorted.map(g => this._renderGuestCard(g)).join('');
@@ -258,7 +239,7 @@ export class GuestsCRM {
     const { data: guests, error } = await this.db
       .from('guests')
       .select(`id, first_name, last_name, phone, email, dni, nationality, tags, bad_experience, created_at,
-        bookings!bookings_guest_id_fkey(id, total_paid, check_in, check_out, status, notes,
+        bookings!bookings_guest_id_fkey(id, total_paid, check_in, check_out, status,
           booking_units(units(name, color))),
         guest_notes!guest_notes_guest_id_fkey(body, category, created_at)`)
       .eq('hotel_id', this.ctx.hotelId)
@@ -277,7 +258,6 @@ export class GuestsCRM {
       g.prev_units     = [...new Set(sorted2.slice(1,4).flatMap(b => (b.booking_units ?? []).map(bu => bu.units?.name)).filter(Boolean))];
       const allNotes   = (g.guest_notes ?? []).sort((a,b) => b.created_at.localeCompare(a.created_at));
       g.latest_note    = allNotes[0]?.body ?? null;
-      this._attachOpenCreditNote(g);
     });
 
     if (error) { showToast('Error al buscar huéspedes', 'error'); return; }
@@ -374,10 +354,6 @@ export class GuestsCRM {
                 ${g.first_name} ${g.last_name}</span>
               ${g.bad_experience ? '<span style="font-size:.6rem;color:#EF4444" title="Mala experiencia">⚠️</span>' : ''}
               ${tagsBadge ? `<span style="font-size:.68rem">${tagsBadge}</span>` : ''}
-              ${g.open_credit_note ? (g.open_credit_note.stale
-                  ? `<span style="font-size:.62rem;font-weight:700;padding:1px 7px;border-radius:999px;background:var(--state-red-bg);color:var(--state-red-txt)" title="Nota de crédito de ${formatARS(g.open_credit_note.amount)} sin usar hace ${g.open_credit_note.ageDays} días">⚠️ NC vieja</span>`
-                  : `<span style="font-size:.62rem;font-weight:700;padding:1px 7px;border-radius:999px;background:rgba(124,58,237,.1);color:#7c3aed" title="Nota de crédito abierta de ${formatARS(g.open_credit_note.amount)}">🔄 NC ${formatARS(g.open_credit_note.amount)}</span>`
-                ) : ''}
             </div>
             <!-- Contacto -->
             ${contactLine ? `<div style="font-size:.71rem;color:var(--color-text-3);

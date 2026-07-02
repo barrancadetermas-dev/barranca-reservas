@@ -7,14 +7,13 @@
 // ══════════════════════════════════════════════════
 
 import { can, isDemo } from '../auth/permissions.js';
-import { formatARS, toISODate, showToast, getUnitLabel, getUnitColor, getUnitChipHTML, SOURCE_CONFIG, AppContext } from '../supabase-config.js';
+import { formatARS, toISODate, showToast, getUnitLabel, getUnitColor, getUnitChipHTML, SOURCE_CONFIG } from '../supabase-config.js';
 import { logAction } from '../services/audit-service.js';
 import { DateRangePicker } from './date-range-picker.js';
 import { Bus, EVENTS } from '../services/event-bus.js';
 import { cache } from '../services/supabase-cache.js';
 import { Sound } from '../services/sound-service.js';
 import { fetchDisponibilidad } from '../modules/mila-assistant/mila-data.js';
-import { getUsdConversionRate } from '../services/usd-rate-history.js';
 // PriceSuggester se carga lazy en _runPriceSuggestion()
 
 const PAYMENT_METHODS = [
@@ -1230,19 +1229,11 @@ export class BookingForm {
 
     // Currency toggle
     row.querySelectorAll('.pay-cur-btn').forEach(btn => {
-      btn.addEventListener('click', async () => {
+      btn.addEventListener('click', () => {
         const cur = btn.dataset.cur;
         row.querySelectorAll('.pay-cur-btn').forEach(b => b.classList.toggle('active', b.dataset.cur === cur));
         row.querySelector('.pay-usd-rate').classList.toggle('hidden', cur !== 'USD');
         row.dataset.currency = cur;
-        // Sugerir cotización (promedio 5 días + margen configurado) solo si
-        // el usuario todavía no cargó una a mano en esta fila.
-        const rateInput = row.querySelector('.pay-rate');
-        if (cur === 'USD' && rateInput && !rateInput.value) {
-          const marginPct = parseFloat(AppContext.config?.usd_margin_pct ?? 0) || 0;
-          const conv = await getUsdConversionRate(this.db, this.ctx.hotelId, marginPct, 5);
-          if (conv.margined) { rateInput.value = conv.margined; rateInput.placeholder = `${conv.margined} (sugerido)`; }
-        }
         this._updateUsdEquiv(row);
         this._updatePaymentSummary();
       });
@@ -1329,9 +1320,9 @@ export class BookingForm {
         .eq('status', 'cancelled')
         .like('notes', '%🔄NC:%')
         .order('created_at', { ascending: false });
-      const open = (data ?? []).find(b => !b.notes?.includes('✅NCUSED') && !b.notes?.includes('❌NCVOID'));
+      const open = (data ?? []).find(b => !b.notes?.includes('✅NCUSED'));
       if (!open) return null;
-      const m = open.notes.match(/🔄NC:(\d+):(\d{4}-\d{2}-\d{2})/);
+      const m = open.notes.match(/🔄NC:(\d+)/);
       if (!m) return null;
       return { bookingId: open.id, amount: parseInt(m[1], 10), dates: `${open.check_in} → ${open.check_out}` };
     } catch { return null; }
@@ -1909,10 +1900,6 @@ export class BookingForm {
     <div class="status-label">Emitido</div>
     <div class="status-date">${now}</div>
   </div>
-</div>
-<div style="display:flex;gap:16px;font-size:11px;color:#64748b;margin-bottom:16px">
-  <span>🕒 Check-in desde las <strong>${AppContext.config?.checkin_time ?? '14:00'}</strong></span>
-  <span>🕒 Check-out hasta las <strong>${AppContext.config?.checkout_time ?? '10:00'}</strong></span>
 </div>
 
 <!-- Datos del Huésped + Unidad -->

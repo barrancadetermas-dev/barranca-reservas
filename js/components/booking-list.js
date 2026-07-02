@@ -6,7 +6,7 @@ import { can, isDemo } from "../auth/permissions.js";
 // + Exportar PDF y Excel desde la lista
 // ═══════════════════════════════════════════════════
 
-import { formatARS, formatDate, showToast, getUnitChipHTML, getSourceBadgeHTML, getBookingBarColor, getUnitLabel, getUnitColor, SOURCE_CONFIG, localToday, localDateISO, AppContext } from '../supabase-config.js';
+import { formatARS, formatDate, showToast, getUnitChipHTML, getSourceBadgeHTML, getBookingBarColor, getUnitLabel, getUnitColor, SOURCE_CONFIG, localToday, localDateISO } from '../supabase-config.js';
 import { logAction } from '../services/audit-service.js';
 
 const STATUS_LABELS = {
@@ -75,7 +75,6 @@ export class BookingList {
       if (action === 'duplicate') this._duplicateBooking(id);
       if (action === 'pay-full')  this._payFull(id);
       if (action === 'reprogram') this._reprogramBooking(id);
-      if (action === 'void-credit-note') this._voidCreditNote(btn.dataset.id);
     }, true); // ← capture phase: recibe el evento ANTES de que los hijos llamen stopPropagation
 
     document.addEventListener('booking:changed', () => {
@@ -604,19 +603,7 @@ export class BookingList {
             </div>
             <div class="bl-col-status">
               <span class="status-badge ${statusCls}">${statusLbl}</span>
-              ${(() => {
-                const m = b.notes?.match(/🔄NC:(\d+):(\d{4}-\d{2}-\d{2})/);
-                if (!m || b.notes?.includes('✅NCUSED') || b.notes?.includes('❌NCVOID')) return '';
-                const amount = parseInt(m[1], 10);
-                const ageDays = Math.round((Date.now() - new Date(m[2] + 'T00:00:00')) / 86400000);
-                const stale = ageDays >= 90; // ~3 meses
-                return stale
-                  ? `<span class="status-badge" data-action="void-credit-note" data-id="${b.id}"
-                       style="background:var(--state-red-bg);color:var(--state-red-txt);border:1px solid rgba(239,68,68,.25);cursor:pointer"
-                       title="Nota de crédito de ${formatARS(amount)} sin usar hace ${ageDays} días — click para anularla">
-                       ⚠️ NC vieja (${ageDays}d) · anular</span>`
-                  : `<span class="status-badge" style="background:rgba(124,58,237,.1);color:#7c3aed;border:1px solid rgba(124,58,237,.2)" title="Nota de crédito abierta de ${formatARS(amount)}">🔄 NC abierta</span>`;
-              })()}
+              ${b.notes?.includes('🔄') ? `<span class="status-badge" style="background:rgba(124,58,237,.1);color:#7c3aed;border:1px solid rgba(124,58,237,.2)" title="${(b.notes.match(/🔄[^·]*/) || [''])[0].trim()}">🔄 Reprogramación</span>` : ''}
               ${b.balance > 0 ? `<button data-action="pay-full" class="bl-action-btn bl-payfull-btn"
                 onclick="event.stopPropagation()">✅ Cobrar</button>` : ''}
             </div>
@@ -643,7 +630,8 @@ export class BookingList {
                   <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/>
                 </svg>
               </button>
-              ${b.status !== 'cancelled' ? `<button data-action="reprogram" class="bl-action-btn" title="Reprogramar — cancela esta reserva y abre una nueva con nota de crédito">
+              ${b.status !== 'cancelled' ? `<button data-action="reprogram" class="bl-action-btn" title="Reprogramar — cancela esta reserva y abre una nueva con nota de crédito"
+                  style="color:#7c3aed;border-color:rgba(124,58,237,.35);background:rgba(124,58,237,.06)">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
                     <polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 014-4h14"/>
                     <polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 01-4 4H3"/>
@@ -812,23 +800,11 @@ export class BookingList {
     if (!b) return;
     const guest  = b.guests ? `${b.guests.first_name} ${b.guests.last_name}` : 'este huésped';
     const dates  = `${b.check_in} → ${b.check_out}`;
-    const paid   = Math.round(b.total_paid ?? 0);
+    const credit = Math.round(b.total_paid ?? 0);
 
-    // Política de cancelación configurada (Configuración → Política de
-    // cancelación): si falta menos de X días para el check-in, se retiene
-    // un % en vez de trasladar el pago completo a la nota de crédito.
-    const freeDays   = parseFloat(AppContext.config?.cancel_free_days   ?? 3)  || 0;
-    const penaltyPct = parseFloat(AppContext.config?.cancel_penalty_pct ?? 30) || 0;
-    const daysToGo   = Math.round((new Date(b.check_in + 'T00:00:00') - new Date()) / 86400000);
-    const inPenaltyWindow = paid > 0 && daysToGo < freeDays;
-    const credit = inPenaltyWindow ? Math.round(paid * (1 - penaltyPct / 100)) : paid;
-    const retained = paid - credit;
-
-    const msg = paid <= 0
-      ? `¿Reprogramar la reserva de ${guest} (${dates})?\n\nSe cancela esta reserva. No tenía pagos, así que no hay nota de crédito que generar.`
-      : inPenaltyWindow
-        ? `¿Reprogramar la reserva de ${guest} (${dates})?\n\nFaltan ${daysToGo} día${daysToGo === 1 ? '' : 's'} para el check-in — según la política de cancelación configurada (menos de ${freeDays} días), se retiene ${penaltyPct}%.\n\nNota de crédito: ${formatARS(credit)} (de ${formatARS(paid)} pagados, se retienen ${formatARS(retained)}).`
-        : `¿Reprogramar la reserva de ${guest} (${dates})?\n\nSe cancela esta reserva y queda una Nota de Crédito por ${formatARS(credit)} (lo que ya tenía pagado — está dentro del plazo sin cargo).`;
+    const msg = credit > 0
+      ? `¿Reprogramar la reserva de ${guest} (${dates})?\n\nSe cancela esta reserva y queda una Nota de Crédito por ${formatARS(credit)} (lo que ya tenía pagado).`
+      : `¿Reprogramar la reserva de ${guest} (${dates})?\n\nSe cancela esta reserva. No tenía pagos, así que no hay nota de crédito que generar.`;
     if (!confirm(msg)) return;
 
     // Si hay plata de por medio, preguntamos si ya hay fecha nueva o si la
@@ -839,12 +815,10 @@ export class BookingList {
       : false;
 
     const today = new Date().toLocaleDateString('es-AR');
-    const todayISO = new Date().toISOString().slice(0, 10);
-    // Tag machine-readable 🔄NC:<monto>:<fecha ISO> — permite detectar
-    // después notas de crédito abiertas y calcular su antigüedad sin tener
-    // que parsear texto en español.
+    // Tag machine-readable 🔄NC:<monto> — permite detectar después notas de
+    // crédito abiertas sin tener que parsear texto en español.
     const cancelNote = credit > 0
-      ? `🔄NC:${credit}:${todayISO} — Reprogramada, nota de crédito por ${formatARS(credit)} (${today})`
+      ? `🔄NC:${credit} — Reprogramada, nota de crédito por ${formatARS(credit)} (${today})`
       : `🔄 Reprogramada (${today})`;
 
     try {
@@ -875,29 +849,6 @@ export class BookingList {
     } catch (err) {
       console.error('[BookingList] reprogram error:', err);
       showToast('Error al reprogramar: ' + (err?.message ?? err), 'error');
-    }
-  }
-
-  // ── Anular una nota de crédito vieja sin usar ──────
-  async _voidCreditNote(id) {
-    const b = this._allBookings?.find(x => x.id === id);
-    if (!b) return;
-    const m = b.notes?.match(/🔄NC:(\d+):(\d{4}-\d{2}-\d{2})/);
-    const amount = m ? parseInt(m[1], 10) : 0;
-    const guest = b.guests ? `${b.guests.first_name} ${b.guests.last_name}` : 'este huésped';
-
-    if (!confirm(`¿Anular la Nota de Crédito de ${formatARS(amount)} de ${guest}?\n\nQueda registrada como anulada — no se va a poder aplicar a ninguna reserva nueva. Esta acción no se puede deshacer.`)) return;
-
-    try {
-      const { error } = await this.db.from('bookings')
-        .update({ notes: [b.notes, '❌NCVOID'].filter(Boolean).join(' · ') })
-        .eq('id', id);
-      if (error) throw error;
-      await logAction('UPDATE', 'booking', id, `Nota de crédito anulada manualmente: ${guest} — ${formatARS(amount)}`);
-      showToast('Nota de crédito anulada', 'info');
-      await this.load();
-    } catch (err) {
-      showToast('Error al anular: ' + (err?.message ?? err), 'error');
     }
   }
 

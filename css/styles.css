@@ -5615,8 +5615,6 @@ html, body {
 
 /* Card "Ocupación próx. días" — el gráfico necesita más alto que el resto */
 [data-card-id="next-event"] { min-height: 220px; }
-/* Card "Ocupación hoy" — la dona se agrandó, necesita un poco más de alto */
-[data-card-id="occ"] { min-height: 200px; }
 
 /* Grid dashboard: 5 col fijas desktop */
 #dashboard-cards {

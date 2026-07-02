@@ -137,8 +137,8 @@ export function renderPaymentModal(containerId, booking, supabase, onSuccess) {
         </div>
 
         <div class="modal-footer">
-          <button type="button" class="btn btn-outline" id="btn-cancel-payment">Cancelar</button>
-          <button type="button" class="btn btn-primary" id="btn-submit-payment">
+          <button type="button" class="btn btn--secondary" id="btn-cancel-payment">Cancelar</button>
+          <button type="button" class="btn btn--primary" id="btn-submit-payment">
             <span id="btn-submit-text">Registrar pago</span>
             <span id="btn-submit-spinner" style="display:none">⏳ Guardando…</span>
           </button>
