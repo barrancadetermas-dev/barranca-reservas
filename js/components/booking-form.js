@@ -648,7 +648,8 @@ export class BookingForm {
       } else if (info.available && !isSelected) {
         tagHTML = `<span class="unit-avail-tag unit-avail-free">Disponible</span>`;
       }
-      if (tagHTML) chip.insertAdjacentHTML('beforeend', tagHTML);
+      const row2 = chip.querySelector('.unit-option-row2');
+      if (tagHTML && row2) row2.insertAdjacentHTML('beforeend', tagHTML);
     });
   }
 
@@ -666,11 +667,15 @@ export class BookingForm {
       return `
         <label class="unit-option ${selected ? 'selected' : ''}"
                data-unit-id="${u.id}" style="cursor:pointer">
-          <span style="width:12px;height:12px;border-radius:50%;
-            background:${color};flex-shrink:0;display:inline-block"></span>
-          <span class="unit-option-name">${u.name}</span>
-          ${u.max_guests ? `<span class="unit-option-detail">hasta ${u.max_guests} huéspedes</span>` : ''}
-          <input type="checkbox" ${selected ? 'checked' : ''} style="accent-color:${color};margin-left:auto">
+          <div class="unit-option-row1">
+            <span style="width:12px;height:12px;border-radius:50%;
+              background:${color};flex-shrink:0;display:inline-block"></span>
+            <span class="unit-option-name">${u.name}</span>
+            <input type="checkbox" ${selected ? 'checked' : ''} style="accent-color:${color};margin-left:auto">
+          </div>
+          <div class="unit-option-row2">
+            ${u.max_guests ? `<span class="unit-option-detail">hasta ${u.max_guests} huéspedes</span>` : ''}
+          </div>
         </label>`;
     }).join('');
 

@@ -922,16 +922,18 @@ select { appearance: auto; cursor: pointer; }
   }
 }
 .unit-option {
-  display: flex; align-items: center; gap: var(--sp-12); padding: 10px 14px;
+  display: flex; flex-direction: column; gap: 4px; padding: 10px 14px;
   border: 1px solid var(--color-border); border-radius: var(--r-md);
   cursor: pointer; transition: all var(--t-fast);
 }
 .unit-option:hover { border-color: var(--color-primary); background: var(--color-primary-l); }
 .unit-option.selected { border-color: var(--color-primary); background: var(--color-primary-l); }
 .unit-option.blocked-dates { opacity: .5; cursor: not-allowed; pointer-events: none; }
-.unit-option input[type="checkbox"] { accent-color: var(--color-primary); width: 16px; height: 16px; }
+.unit-option input[type="checkbox"] { accent-color: var(--color-primary); width: 16px; height: 16px; flex-shrink: 0; }
+.unit-option-row1 { display: flex; align-items: center; gap: var(--sp-12); }
+.unit-option-row2 { display: flex; align-items: center; gap: 8px; padding-left: 24px; min-height: 16px; }
 .unit-option-name { font-weight: 600; font-size: .875rem; color: var(--color-text); }
-.unit-option-detail { font-size: .75rem; color: var(--color-text-2); }
+.unit-option-detail { font-size: .75rem; color: var(--color-text-2); white-space: nowrap; }
 .unit-option-availability {
   margin-left: auto; font-size: .72rem; font-weight: 600;
 }
@@ -942,7 +944,7 @@ select { appearance: auto; cursor: pointer; }
    verde = libre todo el rango, amarillo = libre parcial (con sugerencia
    de sub-rango), rojo = ocupado todo el rango pedido. */
 .unit-avail-tag {
-  margin-left: 8px; flex-shrink: 0;
+  margin-left: auto; flex-shrink: 0;
   font-size: .66rem; font-weight: 700; padding: 2px 9px; border-radius: var(--r-full);
   white-space: nowrap;
 }
@@ -2272,8 +2274,8 @@ select { appearance: auto; cursor: pointer; }
 /* ── UNIT-OPTION — fix selector en booking form ─── */
 .unit-option {
   display: flex !important;
-  align-items: center !important;
-  gap: 10px !important;
+  flex-direction: column !important;
+  gap: 4px !important;
   padding: 11px 14px !important;
   border: 1px solid var(--color-border) !important;
   border-radius: var(--r-md) !important;
@@ -2290,13 +2292,15 @@ select { appearance: auto; cursor: pointer; }
   background: var(--color-primary-l) !important;
 }
 .unit-option.selected .unit-option-name { color: var(--color-primary) !important; font-weight: 700 !important; }
+.unit-option-row1 { display: flex !important; align-items: center !important; gap: 10px !important; }
+.unit-option-row2 { display: flex !important; align-items: center !important; gap: 8px !important; padding-left: 22px !important; min-height: 16px; }
 .unit-option input[type="checkbox"] {
   accent-color: var(--color-primary);
-  width: 16px; height: 16px;
+  width: 16px; height: 16px; flex-shrink: 0;
   pointer-events: none;
 }
 .unit-option-name { font-weight: 600; font-size: .875rem; color: var(--color-text); flex: 1; }
-.unit-option-detail { font-size: .72rem; color: var(--color-text-3); }
+.unit-option-detail { font-size: .72rem; color: var(--color-text-3); white-space: nowrap; }
 [data-theme="dark"] .unit-option { border-color: #334155; }
 [data-theme="dark"] .unit-option.selected,
 [data-theme="dark"] .unit-option:hover { background: rgba(99,102,241,.15) !important; }
@@ -4718,20 +4722,16 @@ input[type="color"].unit-color-input::-webkit-color-swatch { border: none; borde
 
 /* ── Pax selector — 2-column grid ───────────────── */
 .pax-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
 }
 
 .pax-col {
   display: flex;
-  flex-direction: column;
   align-items: center;
   gap: 8px;
-  padding: 12px;
-  border: 1px solid var(--color-border);
-  border-radius: var(--r-lg);
-  background: var(--color-surface-2);
 }
 
 .pax-col-label {
@@ -4740,12 +4740,15 @@ input[type="color"].unit-color-input::-webkit-color-swatch { border: none; borde
   color: var(--color-text-2);
   white-space: nowrap;
 }
+.pax-col-sub { font-size: .66rem; opacity: .6; font-weight: 400; }
 
 .pax-total-bar {
-  text-align: center;
-  padding: 6px 0 2px;
+  text-align: left;
+  padding: 0;
   font-size: .8rem;
   color: var(--color-text-2);
+  white-space: nowrap;
+  margin-left: auto;
 }
 
 .pax-total-bar #pax-total-num {
@@ -4831,7 +4834,7 @@ select.field-error {
 @media (max-height: 700px) {
   .booking-modal-body { max-height: calc(100vh - 200px) !important; }
   .form-group { margin-bottom: 10px !important; }
-  .pax-col { padding: 8px !important; }
+  .pax-grid { gap: 10px !important; }
 }
 
 /* ── Calculator mode tabs + button highlight ─────── */
