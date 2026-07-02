@@ -621,6 +621,7 @@ export class Dashboard {
   // 0 = malo · 1 a 3 = medio · 4 a 7 (o más) = bueno.
   // Reemplaza los colores fijos kpi-blue/amber/rose/green por el
   // estado real de actividad de cada card.
+  // Un solo emoji por card, en el texto secundario (no en el número).
   _applyKpiState(cardId, value, opts = {}) {
     const card = document.getElementById(cardId);
     if (!card) return;
@@ -630,11 +631,13 @@ export class Dashboard {
       'kpi-state-red', 'kpi-state-yellow', 'kpi-state-green');
     card.classList.add(`kpi-state-${state}`);
 
-    // Carita según el estado: 😊 cuando llega al tope (100%/lleno),
-    // 😢 cuando está en el peor caso (0).
-    const emojiEl = card.querySelector('.kpi-emoji');
-    if (emojiEl) {
-      emojiEl.textContent = value <= 0 ? ' 😢' : value >= total ? ' 😊' : '';
+    // 😊 cuando está lleno/al tope — se agrega al texto secundario existente
+    // (el caso 😢 de "sin actividad" ya viene escrito en ese mismo texto).
+    if (state === 'green' && value >= total) {
+      const secEl = document.getElementById(cardId + '-sec');
+      if (secEl && secEl.innerHTML && !secEl.innerHTML.includes('😊') && !secEl.innerHTML.includes('😢')) {
+        secEl.innerHTML += ' 😊';
+      }
     }
   }
 
@@ -951,35 +954,48 @@ export class Dashboard {
 
   _renderCleaningWidget(tasks) {
     const el = document.getElementById('dashboard-cleaning-widget');
+    const revparCard = document.querySelector('[data-card-id="revpar"]');
     if (!el) return;
-    if (!tasks.length) { el.style.display = 'none'; return; }
-    const pending   = tasks.filter(t => t.status !== 'completed');
-    el.style.display = 'block';
+
+    // Sin tareas de limpieza hoy -> vuelve a mostrarse la card de RevPAR/ADR.
+    if (!tasks.length) {
+      el.style.display = 'none';
+      if (revparCard) revparCard.style.display = '';
+      return;
+    }
+
+    // Con tareas hoy -> la card de Limpieza ocupa el mismo lugar/tamaño
+    // que RevPAR/ADR, y esta última se oculta.
+    if (revparCard) revparCard.style.display = 'none';
+    el.style.display = 'flex';
+
+    const pending = tasks.filter(t => t.status !== 'completed');
+    const state   = pending.length ? 'yellow' : 'green';
     const row = (t) => {
       const unit  = t.units;
       const color = unit?.color ?? '#6366f1';
       const done  = t.status === 'completed';
-      return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--color-border);opacity:${done ? '.5' : '1'}">
+      return `<div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--color-border);opacity:${done ? '.5' : '1'}">
         <span style="width:8px;height:8px;border-radius:50%;background:${color};flex-shrink:0"></span>
-        <span style="font-size:.82rem;font-weight:600;flex:1;${done ? 'text-decoration:line-through;color:var(--color-text-3)' : 'color:var(--color-text)'}">
+        <span style="font-size:.8rem;font-weight:600;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;${done ? 'text-decoration:line-through;color:var(--color-text-3)' : 'color:var(--color-text)'}">
           #${unit?.sort_order ?? '?'} · ${unit?.name ?? t.title ?? 'Limpieza'}
         </span>
         ${done
-          ? '<span style="font-size:.72rem;color:#16a34a;font-weight:600">✓ Lista</span>'
-          : '<span style="font-size:.72rem;padding:2px 7px;border-radius:4px;background:#fef3c7;color:#92400e;font-weight:600">Pendiente</span>'
+          ? `<span style="font-size:.68rem;color:var(--state-green-txt);font-weight:700;flex-shrink:0">✓</span>`
+          : `<span style="font-size:.68rem;padding:2px 7px;border-radius:4px;background:var(--state-yellow-bg);color:var(--state-yellow-txt);font-weight:700;flex-shrink:0">Pendiente</span>`
         }
       </div>`;
     };
-    el.innerHTML = `<div class="card" style="border-left:3px solid ${pending.length ? '#f59e0b' : '#16a34a'}">
-      <div class="card-header" style="margin-bottom:8px">
+    el.innerHTML = `
+      <div class="card-header">
         <h3>🧹 Limpieza de hoy</h3>
-        <span style="font-size:.75rem;font-weight:600;padding:2px 8px;border-radius:4px;background:${pending.length ? '#fef3c7' : '#dcfce7'};color:${pending.length ? '#92400e' : '#166534'}">
+        <span style="font-size:.68rem;font-weight:700;padding:2px 8px;border-radius:4px;background:var(--state-${state}-bg);color:var(--state-${state}-txt)">
           ${pending.length ? `${pending.length} pendiente${pending.length > 1 ? 's' : ''}` : '✓ Todo listo'}
         </span>
       </div>
-      <div style="max-height:200px;overflow-y:auto">${tasks.map(row).join('')}</div>
-      ${pending.length ? '<a href="#" onclick="window.milaNav&amp;&amp;window.milaNav(\"operations\");return false;" style="display:block;text-align:center;margin-top:10px;font-size:.78rem;color:var(--color-primary);font-weight:600;text-decoration:none">Ver en Operaciones →</a>' : ''}
-    </div>`;
+      <div style="flex:1;overflow-y:auto">${tasks.map(row).join('')}</div>
+      ${pending.length ? '<a href="#" onclick="window.milaNav&amp;&amp;window.milaNav(\'operations\');return false;" style="display:block;text-align:center;margin-top:8px;font-size:.75rem;color:var(--color-primary);font-weight:600;text-decoration:none">Ver en Operaciones →</a>' : ''}
+    `;
   }
 
   // ══════════════════════════════════════════════════

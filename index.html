@@ -394,22 +394,22 @@
         <div class="kpi-grid" id="kpi-grid">
           <div class="kpi-card kpi-state-green" id="kpi-checkins">
             <div class="kpi-icon-wrap"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22"><path d="M15 3h4a2 2 0 012 2v14a2 2 0 01-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg></div>
-            <div class="kpi-body"><div class="kpi-row-1"><span class="kpi-label">Check-ins</span><span class="kpi-value" id="kpi-checkins-val">—</span><span class="kpi-emoji" id="kpi-checkins-val-emoji" style="display:inline-block;margin-left:4px"></span></div>
+            <div class="kpi-body"><div class="kpi-row-1"><span class="kpi-label">Check-ins</span><span class="kpi-value" id="kpi-checkins-val">—</span></div>
             <div id="kpi-checkins-sec" class="kpi-sec"></div></div>
           </div>
           <div class="kpi-card kpi-state-green" id="kpi-checkouts">
             <div class="kpi-icon-wrap"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></div>
-            <div class="kpi-body"><div class="kpi-row-1"><span class="kpi-label">Check-outs</span><span class="kpi-value" id="kpi-checkouts-val">—</span><span class="kpi-emoji" id="kpi-checkouts-val-emoji" style="display:inline-block;margin-left:4px"></span></div>
+            <div class="kpi-body"><div class="kpi-row-1"><span class="kpi-label">Check-outs</span><span class="kpi-value" id="kpi-checkouts-val">—</span></div>
             <div id="kpi-checkouts-sec" class="kpi-sec"></div></div>
           </div>
           <div class="kpi-card kpi-state-red" id="kpi-recambios">
             <div class="kpi-icon-wrap"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 014-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 01-4 4H3"/></svg></div>
-            <div class="kpi-body"><div class="kpi-row-1"><span class="kpi-label">Recambios</span><span class="kpi-value" id="kpi-recambios-val">—</span><span class="kpi-emoji" id="kpi-recambios-val-emoji" style="display:inline-block;margin-left:4px"></span></div>
+            <div class="kpi-body"><div class="kpi-row-1"><span class="kpi-label">Recambios</span><span class="kpi-value" id="kpi-recambios-val">—</span></div>
             <div id="kpi-recambios-sec" class="kpi-sec"></div></div>
           </div>
           <div class="kpi-card kpi-state-green" id="kpi-guests">
             <div class="kpi-icon-wrap"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg></div>
-            <div class="kpi-body"><div class="kpi-row-1"><span class="kpi-label">Alojadas</span><span class="kpi-value" id="kpi-guests-val">—</span><span class="kpi-emoji" id="kpi-guests-val-emoji" style="display:inline-block;margin-left:4px"></span></div>
+            <div class="kpi-body"><div class="kpi-row-1"><span class="kpi-label">Alojadas</span><span class="kpi-value" id="kpi-guests-val">—</span></div>
             <div id="kpi-guests-sec" class="kpi-sec"></div></div>
           </div>
         </div>
@@ -498,7 +498,7 @@
             </div>
           </div>
 
-          <!-- CARD: RevPAR / ADR -->
+          <!-- CARD: RevPAR / ADR (se oculta y cede su lugar a Limpieza si hay tareas hoy) -->
           <div class="card dash-card-uniform" data-card-id="revpar">
             <div class="card-header"><h3>📈 RevPAR / ADR</h3></div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:10px">
@@ -520,6 +520,9 @@
               <span style="font-weight:700;color:var(--color-text)" id="dash-nights-sold-val">—</span>
             </div>
           </div>
+
+          <!-- CARD: Limpieza de hoy — mismo lugar/tamaño que RevPAR/ADR, solo cuando hay tareas -->
+          <div id="dashboard-cleaning-widget" class="card dash-card-uniform" data-card-id="cleaning" style="display:none"></div>
 
           <!-- CARD: Dólar Oficial -->
           <div class="card dash-card-uniform" data-card-id="dollar">
@@ -557,7 +560,6 @@
           </div>
 
           <!-- Extras inyectados por JS (sin slot visual fijo) -->
-          <div id="dashboard-cleaning-widget" style="display:none"></div>
           <div class="card" data-card-id="reminders" style="display:none">
             <div class="card-header"><h3>🔔 Recordatorios</h3></div>
             <div id="dashboard-reminders"></div>

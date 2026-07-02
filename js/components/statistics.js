@@ -815,11 +815,11 @@ export class Statistics {
         ${this._sdcLineOccupancy(avgOcc, monthlyData)}
         ${this._sdcDonutChannels(cur, fmt)}
         ${this._sdcAreaADR(adrData, fmt)}
-        ${this._sdcBarCountBookings(monthlyData)}
+        ${this._sdcBarCountBookings(monthlyData, avgOcc)}
         ${await this._sdcHorizUnits(month, year, fmt)}
-        ${this._sdcRevPAR(revParData, fmtK, totalUnits)}
-        ${this._sdcKPICard('Cancelaciones', cancelCount + ' este año', totalBookings, totalRev, fmt)}
-        ${this._sdcAreaRevPARTrend(revParData, fmtK)}
+        ${this._sdcRevPAR(revParData, fmtK, totalUnits, avgOcc)}
+        ${this._sdcKPICard('Cancelaciones', cancelCount, totalBookings, totalRev, fmt)}
+        ${this._sdcAreaRevPARTrend(revParData, fmtK, avgOcc)}
       </div>`;
 
     } catch (err) {
@@ -1026,23 +1026,32 @@ export class Statistics {
     </div>`;
   }
 
+  // Color/estado basado en % de ocupación real (no en el valor crudo),
+  // porque una cantidad de reservas o un RevPAR "alto" no dice nada bueno
+  // por sí solo si la ocupación de ese mes fue baja.
+  _occState(pct) {
+    const c = pct <= 0 ? 'var(--state-red)' : pct < 70 ? 'var(--state-yellow)' : 'var(--state-green)';
+    const t = pct <= 0 ? 'var(--state-red-txt)' : pct < 70 ? 'var(--state-yellow-txt)' : 'var(--state-green-txt)';
+    const face = pct <= 0 ? ' 😢' : pct >= 100 ? ' 😊' : '';
+    return { c, t, face };
+  }
+
   // ── Card 5: Barras de cantidad de reservas ───────
-  _sdcBarCountBookings(data) {
+  _sdcBarCountBookings(data, avgOcc = []) {
     const maxVal = Math.max(...data.map(d => d.count), 1);
-    const minVal = Math.min(...data.map(d => d.count));
     const total  = data.reduce((s,d) => s+d.count, 0);
     const n = data.length;
     const curVal = data[n-1].count;
-    const curColor = this._perfColor(maxVal > 0 ? (curVal/maxVal)*100 : 0).bottom;
-    const face = curVal >= maxVal ? ' 😊' : (curVal <= minVal && curVal > 0 ? ' 😢' : '');
+    const curOcc = avgOcc[n-1] ?? 0;
+    const { c: curColor, face } = this._occState(curOcc);
     const bars = data.map((d, i) => {
       const h     = Math.max(3, Math.round((d.count / maxVal) * 100));
       const isLast = i === n - 1;
       const showLabel = isLast || i % 3 === 0;
-      const color  = this._perfColor(maxVal > 0 ? (d.count/maxVal)*100 : 0).bottom;
+      const color  = this._occState(avgOcc[i] ?? 0).c;
       return `<div class="sdc-bar" style="height:${h}%;background:${isLast ? color : color + '80'}">
         ${showLabel ? `<span class="sdc-bar-value${isLast?' is-current':''}">${d.count}</span>` : ''}
-        <div class="sdc-bar-tooltip">${d.fullLabel ?? d.label}: ${d.count} reservas</div>
+        <div class="sdc-bar-tooltip">${d.fullLabel ?? d.label}: ${d.count} reservas · ${avgOcc[i] ?? 0}% ocup.</div>
       </div>`;
     }).join('');
     const axis = data.map((d, i) => {
@@ -1130,14 +1139,13 @@ export class Statistics {
   }
 
   // ── Card 7: RevPAR 12 meses ──────────────────────
-  _sdcRevPAR(data, fmtK, totalUnits) {
+  _sdcRevPAR(data, fmtK, totalUnits, avgOcc = []) {
     const maxVal = Math.max(...data.map(d => d.revpar), 1);
-    const minVal = Math.min(...data.map(d => d.revpar));
     const curVal = data[11].revpar;
     const n = data.length;
     const W = 240, H = 70, pad = 8;
-    const curColor = this._perfColor(maxVal > 0 ? (curVal/maxVal)*100 : 0).bottom;
-    const face = curVal >= maxVal ? ' 😊' : (curVal <= minVal && curVal > 0 ? ' 😢' : '');
+    const curOcc = avgOcc[11] ?? 0;
+    const { c: curColor, face } = this._occState(curOcc);
     const pts = data.map((d, i) => {
       const x = pad + (i/(data.length-1))*(W-pad*2);
       const y = H - pad - (d.revpar/maxVal)*(H-pad*2);
@@ -1166,7 +1174,7 @@ export class Statistics {
             const x = pad + (i/(data.length-1))*(W-pad*2);
             const y = H - pad - (d.revpar/maxVal)*(H-pad*2);
             const isLast = i === n-1;
-            const ptColor = this._perfColor(maxVal > 0 ? (d.revpar/maxVal)*100 : 0).bottom;
+            const ptColor = this._occState(avgOcc[i] ?? 0).c;
             return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${isLast?4:2.5}" fill="${isLast?curColor:ptColor}"/>
               <text x="${x.toFixed(1)}" y="${(y-6).toFixed(1)}" text-anchor="middle" font-size="7.5" font-weight="700" fill="${isLast?curColor:ptColor}">${fmtK(d.revpar)}</text>
               <text x="${x.toFixed(1)}" y="${H+11}" text-anchor="middle" font-size="7" fill="var(--color-text-3)">${d.label}</text>`;
@@ -1177,12 +1185,17 @@ export class Statistics {
   }
 
   // ── Card 8: KPI Cancelaciones + estadías prom. ───
-  _sdcKPICard(title, value, totalBookings, totalRev, fmt) {
+  _sdcKPICard(title, cancelCount, totalBookings, totalRev, fmt) {
     const avgRev = totalBookings > 0 ? Math.round(totalRev / totalBookings) : 0;
-    return `<div class="stats-dashboard-card" style="--accent:var(--color-danger)">
+    // Criterio invertido: acá 0 es el mejor caso, más cancelaciones es peor.
+    const state = cancelCount <= 0 ? 'green' : cancelCount <= 3 ? 'yellow' : 'red';
+    const color = `var(--state-${state})`;
+    const txt   = `var(--state-${state}-txt)`;
+    const face  = cancelCount <= 0 ? ' 😊' : state === 'red' ? ' 😢' : '';
+    return `<div class="stats-dashboard-card" style="--accent:${color}">
       <div class="sdc-header"><div>
         <div class="sdc-title">❌ Cancelaciones</div>
-        <div class="sdc-value" style="color:var(--color-danger)">${value}</div>
+        <div class="sdc-value" style="color:${txt}">${cancelCount}${face}</div>
         <div class="sdc-sub">en el año calendario</div>
       </div></div>
       <div style="flex:1;display:flex;flex-direction:column;justify-content:flex-end;gap:12px">
@@ -1196,11 +1209,12 @@ export class Statistics {
   }
 
   // ── Card 9: Tendencia RevPAR con área ────────────
-  _sdcAreaRevPARTrend(data, fmtK) {
+  _sdcAreaRevPARTrend(data, fmtK, avgOcc = []) {
     const maxVal = Math.max(...data.map(d => d.revpar), 1);
     const total  = data.reduce((s,d) => s+d.revpar, 0);
     const avgVal = total / 12;
-    const avgColor = this._perfColor(maxVal > 0 ? (avgVal/maxVal)*100 : 0).bottom;
+    const avgOccVal = avgOcc.length ? Math.round(avgOcc.reduce((s,v)=>s+v,0)/avgOcc.length) : 0;
+    const { c: avgColor } = this._occState(avgOccVal);
     const W = 240, H = 90, pad = 10;
     const areaPath = `M${pad},${H-pad} ` +
       data.map((d,i) => {
@@ -1232,7 +1246,7 @@ export class Statistics {
             const x = pad+(i/(data.length-1))*(W-pad*2);
             const y = H-pad-(d.revpar/maxVal)*(H-pad*2);
             const isLast = i === data.length-1;
-            const ptColor = this._perfColor(maxVal > 0 ? (d.revpar/maxVal)*100 : 0).bottom;
+            const ptColor = this._occState(avgOcc[i] ?? 0).c;
             return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${isLast?4:2}" fill="${ptColor}"/>
               <text x="${x.toFixed(1)}" y="${(y-6).toFixed(1)}" text-anchor="middle" font-size="7.5" font-weight="700" fill="${ptColor}">${fmtK(d.revpar)}</text>
               <text x="${x.toFixed(1)}" y="${H}" text-anchor="middle" font-size="7" fill="var(--color-text-3)">${d.label}</text>`;

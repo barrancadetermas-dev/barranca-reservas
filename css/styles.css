@@ -52,9 +52,9 @@
      Rojo = malo/poca actividad · Amarillo = medio · Verde = bueno.
      Usar SIEMPRE estos 3 tonos para representar estado/rendimiento;
      no mezclar con otros verdes/amarillos/rojos ni con azul. */
-  --state-red:     #EF4444; --state-red-bg:    #EF44440F; --state-red-txt:    #B91C1C;
-  --state-yellow:  #FACC15; --state-yellow-bg: #FACC150F; --state-yellow-txt: #8A6D0A;
-  --state-green:   #22C55E; --state-green-bg:  #22C55E12; --state-green-txt:  #15803D;
+  --state-red:     #EF4444; --state-red-bg:    #EF444409; --state-red-txt:    #B91C1C;
+  --state-yellow:  #FACC15; --state-yellow-bg: #FACC1509; --state-yellow-txt: #8A6D0A;
+  --state-green:   #22C55E; --state-green-bg:  #22C55E0A; --state-green-txt:  #15803D;
 
   /* Booking status × time — paleta azul MILA */
   --booking-pending-f: #1E4DB7;   /* futuro sin seña */
@@ -497,9 +497,9 @@ svg { flex-shrink: 0; }
 /* ── Estado único (rojo/amarillo/verde) — reemplaza los 4 colores fijos
    de arriba en los KPIs que representan actividad (Check-in, Check-out,
    Alojadas, Recambios) y en la card de Ocupación. ── */
-.kpi-state-red    { background: var(--state-red-bg);    border-color: rgba(239,68,68,.16); }
-.kpi-state-yellow { background: var(--state-yellow-bg); border-color: rgba(250,204,21,.2); }
-.kpi-state-green  { background: var(--state-green-bg);  border-color: rgba(34,197,94,.16); }
+.kpi-state-red    { background: var(--state-red-bg);    border-color: rgba(239,68,68,.12); }
+.kpi-state-yellow { background: var(--state-yellow-bg); border-color: rgba(250,204,21,.15); }
+.kpi-state-green  { background: var(--state-green-bg);  border-color: rgba(34,197,94,.12); }
 .kpi-state-red    .kpi-icon-wrap, .kpi-state-red    .kpi-value { color: var(--state-red-txt); }
 .kpi-state-yellow .kpi-icon-wrap, .kpi-state-yellow .kpi-value { color: var(--state-yellow-txt); }
 .kpi-state-green  .kpi-icon-wrap, .kpi-state-green  .kpi-value { color: var(--state-green-txt); }
@@ -522,7 +522,6 @@ svg { flex-shrink: 0; }
 
 .kpi-label { display: block; font-size: .78rem; font-weight: 500; color: var(--color-text-2); margin-bottom: 4px; }
 .kpi-value { display: inline-block; font-size: 2rem; font-weight: 800; line-height: 1; }
-.kpi-emoji { font-size: 1.15rem; vertical-align: middle; }
 .kpi-blue  .kpi-value { color: var(--kpi-blue-txt); }
 .kpi-amber .kpi-value { color: var(--kpi-navy-txt); }
 .kpi-rose  .kpi-value { color: var(--kpi-sky-txt); }
@@ -4465,7 +4464,7 @@ input[type="color"].unit-color-input::-webkit-color-swatch { border: none; borde
   content: '';
   position: absolute;
   inset: 0;
-  opacity: .07;
+  opacity: .035;
   pointer-events: none;
   border-radius: inherit;
 }
