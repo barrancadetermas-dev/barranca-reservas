@@ -6,6 +6,12 @@
 
 import { formatARS, formatDate, showToast, getUnitChipHTML, getUnitLabel } from '../supabase-config.js';
 
+// Escapa texto para insertarlo seguro dentro de atributos/HTML (el modal de
+// edición inyecta valores de huésped directamente en el markup).
+function esc(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+}
+
 const STATUS_LABELS = {
   pending:   'Sin seña',
   partial:   'Señada',
@@ -206,7 +212,7 @@ export class GuestsCRM {
     area.innerHTML = `<div style="padding:16px;text-align:center;color:var(--color-text-3)">⟳ Cargando...</div>`;
     const { data: guests } = await this.db
       .from('guests')
-      .select(`id, first_name, last_name, phone, email, dni, nationality, tags, bad_experience, created_at,
+      .select(`id, first_name, last_name, phone, email, dni, nationality, tags, bad_experience, created_at, locality, age, car_model, car_plate,
         bookings!bookings_guest_id_fkey(id, total_paid, check_in, check_out, status, notes,
           booking_units(units(name, color))),
         guest_notes!guest_notes_guest_id_fkey(body, category, created_at)`)
@@ -257,7 +263,7 @@ export class GuestsCRM {
 
     const { data: guests, error } = await this.db
       .from('guests')
-      .select(`id, first_name, last_name, phone, email, dni, nationality, tags, bad_experience, created_at,
+      .select(`id, first_name, last_name, phone, email, dni, nationality, tags, bad_experience, created_at, locality, age, car_model, car_plate,
         bookings!bookings_guest_id_fkey(id, total_paid, check_in, check_out, status, notes,
           booking_units(units(name, color))),
         guest_notes!guest_notes_guest_id_fkey(body, category, created_at)`)
@@ -383,6 +389,12 @@ export class GuestsCRM {
             ${contactLine ? `<div style="font-size:.71rem;color:var(--color-text-3);
               white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
               ${contactLine}</div>` : ''}
+            <!-- Datos adicionales (registro): localidad, edad, auto, patente -->
+            ${(g.locality || g.age || g.car_model || g.car_plate) ? `<div style="font-size:.68rem;color:var(--color-text-3);
+              white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px">
+              ${[g.locality ? '📍 ' + g.locality : null, g.age ? g.age + ' años' : null,
+                 g.car_model ? '🚗 ' + g.car_model : null, g.car_plate ? g.car_plate : null]
+                 .filter(Boolean).join('  ·  ')}</div>` : ''}
           </div>
 
           <!-- SEPARADOR + SECCIÓN 2: última visita -->
@@ -417,6 +429,17 @@ export class GuestsCRM {
             font-weight:600;white-space:nowrap">${formatARS(g.total_spent)}</div>` : ''}
         </div>
 
+        <!-- Botón editar -->
+        <button class="btn-edit-guest"
+          onclick="event.stopPropagation();window._guestsCRM?._openEditModal('${g.id}')"
+          style="flex-shrink:0;width:26px;height:26px;border-radius:6px;border:none;
+            background:transparent;cursor:pointer;color:var(--color-text-3);font-size:.82rem;
+            display:flex;align-items:center;justify-content:center;opacity:.3;transition:all .15s;
+            margin-top:1px"
+          onmouseenter="this.style.opacity='1';this.style.background='var(--color-primary-l)';this.style.color='var(--color-primary)'"
+          onmouseleave="this.style.opacity='.3';this.style.background='transparent';this.style.color='var(--color-text-3)'"
+          title="Editar datos">✏️</button>
+
         <!-- Botón borrar -->
         <button class="btn-delete-guest"
           onclick="event.stopPropagation();window._guestsCRM?._confirmDelete('${g.id}','${g.first_name} ${g.last_name}')"
@@ -448,6 +471,76 @@ export class GuestsCRM {
       if (row) row.remove();
     } catch (err) {
       showToast('Error al eliminar: ' + err.message, 'error');
+    }
+  }
+
+  // ── Editar datos del huésped (modal liviano) ──────
+  async _openEditModal(guestId) {
+    const { data: g, error } = await this.db.from('guests')
+      .select('id, first_name, last_name, dni, phone, email, locality, age, car_model, car_plate')
+      .eq('id', guestId).single();
+    if (error || !g) { showToast('No se pudo cargar el huésped', 'error'); return; }
+
+    document.getElementById('guest-edit-modal-overlay')?.remove();
+    const overlay = document.createElement('div');
+    overlay.id = 'guest-edit-modal-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px';
+    overlay.innerHTML = `
+      <div class="card" style="width:100%;max-width:420px;max-height:90vh;overflow-y:auto">
+        <div class="card-title" style="margin-bottom:14px">✏️ Editar datos — ${esc(g.first_name)} ${esc(g.last_name)}</div>
+        <div class="form-grid-2">
+          <div class="form-group"><label>Nombre</label><input type="text" id="ge-fn" value="${esc(g.first_name ?? '')}"></div>
+          <div class="form-group"><label>Apellido</label><input type="text" id="ge-ln" value="${esc(g.last_name ?? '')}"></div>
+        </div>
+        <div class="form-grid-2">
+          <div class="form-group"><label>DNI</label><input type="text" id="ge-dni" value="${esc(g.dni ?? '')}"></div>
+          <div class="form-group"><label>Teléfono</label><input type="text" id="ge-phone" value="${esc(g.phone ?? '')}"></div>
+        </div>
+        <div class="form-group"><label>Email</label><input type="email" id="ge-email" value="${esc(g.email ?? '')}"></div>
+        <div class="form-grid-2" style="margin-top:8px">
+          <div class="form-group"><label>Localidad</label><input type="text" id="ge-locality" value="${esc(g.locality ?? '')}" placeholder="Ej: Rosario, Santa Fe"></div>
+          <div class="form-group"><label>Edad</label><input type="number" id="ge-age" min="0" max="120" value="${g.age ?? ''}"></div>
+        </div>
+        <div class="form-grid-2">
+          <div class="form-group"><label>Auto</label><input type="text" id="ge-car" value="${esc(g.car_model ?? '')}" placeholder="Ej: VW Gol gris"></div>
+          <div class="form-group"><label>Patente</label><input type="text" id="ge-plate" value="${esc(g.car_plate ?? '')}" style="text-transform:uppercase">
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
+          <button class="btn btn-outline" id="ge-cancel">Cancelar</button>
+          <button class="btn btn-primary" id="ge-save">💾 Guardar</button>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+
+    const close = () => overlay.remove();
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+    overlay.querySelector('#ge-cancel').addEventListener('click', close);
+    overlay.querySelector('#ge-save').addEventListener('click', () => this._saveGuestEdit(guestId, close));
+  }
+
+  async _saveGuestEdit(guestId, close) {
+    const val = (id) => document.getElementById(id)?.value?.trim() || null;
+    const payload = {
+      first_name: val('ge-fn'),
+      last_name:  val('ge-ln'),
+      dni:        val('ge-dni'),
+      phone:      val('ge-phone'),
+      email:      val('ge-email'),
+      locality:   val('ge-locality'),
+      age:        parseInt(document.getElementById('ge-age')?.value) || null,
+      car_model:  val('ge-car'),
+      car_plate:  val('ge-plate')?.toUpperCase() ?? null,
+    };
+    if (!payload.first_name || !payload.last_name) { showToast('Nombre y apellido son obligatorios', 'warning'); return; }
+    try {
+      const { error } = await this.db.from('guests').update(payload).eq('id', guestId);
+      if (error) throw error;
+      showToast('Datos actualizados ✓', 'success');
+      close();
+      await this._loadAll();
+    } catch (err) {
+      showToast('Error al guardar: ' + (err.message ?? err), 'error');
     }
   }
 

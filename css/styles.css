@@ -717,6 +717,21 @@ textarea { resize: vertical; min-height: 72px; line-height: 1.5; }
 select { appearance: auto; cursor: pointer; }
 
 .form-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-16); }
+
+.form-collapsible {
+  margin-top: 12px; border: 1px solid var(--color-border); border-radius: var(--r-md);
+  padding: 10px 14px; background: var(--color-surface-2);
+}
+.form-collapsible summary {
+  cursor: pointer; font-size: .82rem; font-weight: 600; color: var(--color-text-2);
+  list-style: none; user-select: none;
+}
+.form-collapsible summary::-webkit-details-marker { display: none; }
+.form-collapsible[open] summary { color: var(--color-text); margin-bottom: 4px; }
+.form-collapsible summary::before { content: '▸ '; }
+.form-collapsible[open] summary::before { content: '▾ '; }
+.form-collapsible summary { padding-left: 0; }
+.form-collapsible summary + * { margin-top: 8px; }
 .form-grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--sp-16); }
 
 /* ── 16. SEARCH BAR ──────────────────────────────── */
