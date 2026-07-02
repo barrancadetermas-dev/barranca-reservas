@@ -759,11 +759,18 @@ function reservasHTML(list) {
 
 function disponibilidadHTML(list) {
   if (!list.length) return emptyState('No hay departamentos configurados');
-  return `<div class="mila-avail-grid">${list.map(u => `
-    <div class="mila-avail-item ${u.available ? 'is-free' : 'is-busy'}">
-      <span>${esc(u.name)}</span>
-      <span class="mila-avail-tag">${u.available ? 'Disponible' : 'Ocupado'}</span>
-    </div>`).join('')}</div>`;
+  return `<div class="mila-avail-grid">${list.map(u => {
+    const tag = u.available ? 'Disponible' : (u.partial ? `${u.partial.nights}/${u.partial.ofNights} noches` : 'Ocupado');
+    const cls = u.available ? 'is-free' : (u.partial ? 'is-partial' : 'is-busy');
+    const sub = u.partial
+      ? `<span class="mila-avail-sub">Libre del ${fmtDate(u.partial.from)} al ${fmtDate(u.partial.to)}</span>`
+      : '';
+    return `
+    <div class="mila-avail-item ${cls}">
+      <span>${esc(u.name)}${sub}</span>
+      <span class="mila-avail-tag">${tag}</span>
+    </div>`;
+  }).join('')}</div>`;
 }
 
 function facturacionHTML(d) {

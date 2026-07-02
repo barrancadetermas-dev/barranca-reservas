@@ -56,20 +56,68 @@ export async function fetchReservasByDate(dateISO) {
 }
 
 // 3) Disponibilidad — misma validación de superposición que booking-form.js (_validar solapamiento)
+// Además: si una unidad no está libre en todo el rango pedido, calcula el sub-rango
+// contiguo más largo que sí está libre dentro de ese rango, para poder sugerirlo
+// (ej: pediste 5 noches, la unidad tiene 3 libres de esas 5 — se informa, no se oculta).
 export async function fetchDisponibilidad(checkIn, checkOut) {
   const units = (AppContext.units ?? []).slice().sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
   const unitIds = units.map(u => u.id);
   if (!unitIds.length) return [];
 
   const { data: conflicts } = await supabase.from('booking_units')
-    .select('unit_id, bookings!inner(id, status)')
+    .select('unit_id, bookings!inner(id, status, check_in, check_out)')
     .in('unit_id', unitIds)
     .not('bookings.status', 'in', '(cancelled,blocked)')
     .lt('bookings.check_in', checkOut)
     .gt('bookings.check_out', checkIn);
 
-  const occupied = new Set((conflicts ?? []).map(c => c.unit_id));
-  return units.map(u => ({ id: u.id, name: u.name, available: !occupied.has(u.id) }));
+  const byUnit = new Map();
+  (conflicts ?? []).forEach(c => {
+    const arr = byUnit.get(c.unit_id) ?? [];
+    arr.push({ from: c.bookings.check_in, to: c.bookings.check_out });
+    byUnit.set(c.unit_id, arr);
+  });
+
+  const dayMs   = 86400000;
+  const toDate  = s => new Date(s + 'T00:00:00');
+  const nights  = (a, b) => Math.round((toDate(b) - toDate(a)) / dayMs);
+  const totalNights = nights(checkIn, checkOut);
+
+  return units.map(u => {
+    const busy = (byUnit.get(u.id) ?? []).slice().sort((a, b) => a.from.localeCompare(b.from));
+    if (!busy.length) return { id: u.id, name: u.name, available: true, partial: null };
+
+    // Recorrer las reservas ocupadas ordenadas y juntar los huecos libres
+    // dentro del rango pedido.
+    let cursor = checkIn;
+    const freeRanges = [];
+    for (const b of busy) {
+      if (b.from > cursor) freeRanges.push({ from: cursor, to: b.from < checkOut ? b.from : checkOut });
+      if (b.to > cursor) cursor = b.to;
+      if (cursor >= checkOut) break;
+    }
+    if (cursor < checkOut) freeRanges.push({ from: cursor, to: checkOut });
+
+    const valid = freeRanges.filter(r => r.from < r.to);
+    if (!valid.length) return { id: u.id, name: u.name, available: false, partial: null };
+
+    // Sub-rango contiguo más largo dentro de lo pedido
+    let best = valid[0];
+    for (const r of valid) if (nights(r.from, r.to) > nights(best.from, best.to)) best = r;
+
+    const fullyAvailable = best.from === checkIn && best.to === checkOut;
+    return {
+      id: u.id,
+      name: u.name,
+      available: fullyAvailable,
+      partial: fullyAvailable ? null : {
+        from: best.from,
+        to:   best.to,
+        nights:    nights(best.from, best.to),
+        ofNights:  totalNights,
+      },
+    };
+  });
 }
 
 // 4) Facturación en un período — misma forma que el cálculo de "revenue del mes" del Dashboard / Estadísticas

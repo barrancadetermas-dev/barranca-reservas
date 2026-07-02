@@ -557,9 +557,9 @@ export class Dashboard {
       const nights = Math.round((new Date(b.check_out+'T12:00:00') - new Date(b.check_in+'T12:00:00')) / 86400000);
       const dAway  = Math.round((new Date(b.check_in+'T12:00:00') - new Date(today+'T12:00:00')) / 86400000);
       const dayLabel = dAway === 0
-        ? '<span style="font-size:.65rem;padding:1px 6px;border-radius:3px;background:#dcfce7;color:#16a34a;font-weight:700">HOY</span>'
+        ? '<span style="font-size:.65rem;padding:1px 6px;border-radius:3px;background:var(--state-green-bg);color:var(--state-green-txt);font-weight:700">HOY</span>'
         : dAway === 1
-        ? '<span style="font-size:.65rem;padding:1px 6px;border-radius:3px;background:#fef9c3;color:#854d0e;font-weight:700">MAÑANA</span>'
+        ? '<span style="font-size:.65rem;padding:1px 6px;border-radius:3px;background:var(--state-yellow-bg);color:var(--state-yellow-txt);font-weight:700">MAÑANA</span>'
         : '<span style="font-size:.65rem;color:var(--color-text-3)">en ' + dAway + 'd</span>';
       return '<div style="display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-bottom:1px solid var(--color-border)">' +
         '<div style="width:3px;min-height:44px;border-radius:2px;background:' + color + ';flex-shrink:0;margin-top:2px"></div>' +
@@ -774,8 +774,8 @@ export class Dashboard {
     if (mode === 'arrival') {
       const done = !!b.checked_in_at;
       statusChip = done
-        ? '<span style="font-size:.65rem;padding:1px 7px;border-radius:3px;background:#dcfce7;color:#16a34a;font-weight:700">✓ Check-in</span>'
-        : '<span style="font-size:.65rem;padding:1px 7px;border-radius:3px;background:#fef3c7;color:#92400e;font-weight:700">Pendiente</span>';
+        ? '<span style="font-size:.65rem;padding:1px 7px;border-radius:3px;background:var(--state-green-bg);color:var(--state-green-txt);font-weight:700">✓ Check-in</span>'
+        : '<span style="font-size:.65rem;padding:1px 7px;border-radius:3px;background:var(--state-yellow-bg);color:var(--state-yellow-txt);font-weight:700">Pendiente</span>';
       actionBtn = !done
         ? '<button class="btn btn-primary btn-sm" style="flex-shrink:0;font-size:.72rem;padding:5px 10px" ' +
           'onclick="window._dashCheckIn(\'' + b.id + '\',\'arr-' + b.id + '\',\'' + guest.replace(/'/g,'&#39;') + '\')">✅ Check-in</button>'
@@ -783,8 +783,8 @@ export class Dashboard {
     } else if (mode === 'departure') {
       const done = !!b.checked_out_at;
       statusChip = done
-        ? '<span style="font-size:.65rem;padding:1px 7px;border-radius:3px;background:#e0e7ff;color:#3730a3;font-weight:700">✓ Check-out</span>'
-        : '<span style="font-size:.65rem;padding:1px 7px;border-radius:3px;background:#fef3c7;color:#92400e;font-weight:700">Pendiente</span>';
+        ? '<span style="font-size:.65rem;padding:1px 7px;border-radius:3px;background:var(--info-blue-bg);color:var(--info-blue-txt);font-weight:700">✓ Check-out</span>'
+        : '<span style="font-size:.65rem;padding:1px 7px;border-radius:3px;background:var(--state-yellow-bg);color:var(--state-yellow-txt);font-weight:700">Pendiente</span>';
       actionBtn = !done
         ? '<button class="btn btn-outline btn-sm" style="flex-shrink:0;font-size:.72rem;padding:5px 10px" ' +
           'onclick="window._dashCheckOut(\'' + b.id + '\',\'dep-' + b.id + '\',\'' + guest.replace(/'/g,'&#39;') + '\')">👋 Check-out</button>'
@@ -917,9 +917,9 @@ export class Dashboard {
         <div class="forecast-bar-group">
           <div class="forecast-bar-label">Este mes</div>
           <div class="forecast-bar-track">
-            <div class="forecast-bar-seg" style="width:${pctConf}%;background:#22c55e" title="Confirmado: ${fmt(confirmed)}"></div>
-            <div class="forecast-bar-seg" style="width:${pctPart}%;background:#f59e0b" title="Parcial: ${fmt(partial)}"></div>
-            <div class="forecast-bar-seg" style="width:${pctPend}%;background:#e2e8f0" title="Pendiente: ${fmt(pending)}"></div>
+            <div class="forecast-bar-seg" style="width:${pctConf}%;background:var(--state-green)" title="Confirmado: ${fmt(confirmed)}"></div>
+            <div class="forecast-bar-seg" style="width:${pctPart}%;background:var(--state-yellow)" title="Parcial: ${fmt(partial)}"></div>
+            <div class="forecast-bar-seg" style="width:${pctPend}%;background:var(--color-border)" title="Pendiente: ${fmt(pending)}"></div>
           </div>
           <span class="forecast-bar-val">${fmt(confirmed + partial + pending)}</span>
         </div>
@@ -927,15 +927,15 @@ export class Dashboard {
         <div class="forecast-bar-group">
           <div class="forecast-bar-label" style="color:var(--color-text-3)">${monthName} ${prevYear}</div>
           <div class="forecast-bar-track">
-            <div class="forecast-bar-seg" style="width:${pctPrev}%;background:#cbd5e1"></div>
+            <div class="forecast-bar-seg" style="width:${pctPrev}%;background:var(--color-border)"></div>
           </div>
           <span class="forecast-bar-val" style="color:var(--color-text-3)">${fmt(prevTotal)}</span>
         </div>
 
         <div class="forecast-legend">
-          <span><span class="fleg-dot" style="background:#22c55e"></span>Confirmado ${fmt(confirmed)}</span>
-          <span><span class="fleg-dot" style="background:#f59e0b"></span>Parcial ${fmt(partial)}</span>
-          <span><span class="fleg-dot" style="background:#e2e8f0"></span>Pendiente ${fmt(pending)}</span>
+          <span><span class="fleg-dot" style="background:var(--state-green)"></span>Confirmado ${fmt(confirmed)}</span>
+          <span><span class="fleg-dot" style="background:var(--state-yellow)"></span>Parcial ${fmt(partial)}</span>
+          <span><span class="fleg-dot" style="background:var(--color-border)"></span>Pendiente ${fmt(pending)}</span>
           ${yoyDelta !== null ? `<span style="margin-left:auto;font-weight:700;color:${yoyColor}">AaA ${yoySign}${yoyDelta}%</span>` : ''}
         </div>
       </div>`;
@@ -1235,6 +1235,7 @@ export class Dashboard {
           <defs>${gradDefs.join('')}</defs>
           <g transform="translate(0,8)">
             <line x1="0" y1="${refY}" x2="${chartW}" y2="${refY}" stroke="var(--color-border)" stroke-width="0.6" stroke-dasharray="2,2" />
+            <text x="${chartW}" y="${refY - 1}" text-anchor="end" font-size="3.6" fill="var(--color-text-3)">50%</text>
             ${bars}
           </g>
           <line x1="${todayX}" y1="0" x2="${todayX}" y2="${chartH + 8 - Math.max(4, Math.round((todayPct/100)*chartH)) - 2}"

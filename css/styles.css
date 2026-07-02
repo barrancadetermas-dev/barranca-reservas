@@ -65,6 +65,9 @@
   --booking-paid-p:    #065F46;   /* pagado pasado */
   --booking-blocked:   #7B9ABE;
 
+  /* Chips informativos (no son estado rojo/amarillo/verde) */
+  --info-blue-bg: #E0E7FF; --info-blue-txt: #3730A3;
+
   /* Spacing scale */
   --sp-2:  2px;  --sp-4:  4px;  --sp-6:  6px;  --sp-8:  8px;
   --sp-12: 12px; --sp-16: 16px; --sp-20: 20px; --sp-24: 24px;
@@ -1973,6 +1976,7 @@ select { appearance: auto; cursor: pointer; }
   --state-red-bg:    #EF44441F; --state-red-txt:    #FCA5A5;
   --state-yellow-bg: #FACC151F; --state-yellow-txt: #FDE68A;
   --state-green-bg:  #22C55E1F; --state-green-txt:  #86EFAC;
+  --info-blue-bg: #3730A340; --info-blue-txt: #C7D2FE;
   --booking-pending-f: #3B82F6;
   --booking-partial-f: #0284C7;
   --booking-paid-f:    #22C55E;
