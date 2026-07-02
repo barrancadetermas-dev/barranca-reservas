@@ -1801,9 +1801,18 @@ export class Calendar {
   // DISPONIBILIDAD
   // ══════════════════════════════════════════════════
   setupViewToggle() {
-    let _availMode = false;
     const availBtn = document.getElementById('cal-avail-toggle');
     if (!availBtn) return;
+
+    // ── Guard de idempotencia ──────────────────────────
+    // Si esta función llega a ejecutarse más de una vez (doble init,
+    // re-render del toolbar, etc.) evitamos crear un segundo panel y un
+    // segundo listener sobre el mismo botón: eso era lo que hacía que el
+    // bloque de "Disponibilidad" apareciera duplicado en pantalla.
+    if (availBtn.dataset.availBound === '1') return;
+    availBtn.dataset.availBound = '1';
+
+    let _availMode = false;
 
     const filterPanel = document.createElement('div');
     filterPanel.id = 'avail-filter-panel';

@@ -297,7 +297,7 @@ svg { flex-shrink: 0; }
 }
 .nav-item.active .nav-icon { color: var(--sidebar-accent); }
 .nav-icon { display: flex; align-items: center; color: #64748B; transition: color var(--t-fast); }
-.nav-item:hover .nav-icon { color: #94A3B8; }
+.nav-item:hover .nav-icon { color: var(--sidebar-accent); }
 .nav-label { flex: 1; }
 
 /* ── Animaciones por ícono al pasar el mouse ─────────────────
