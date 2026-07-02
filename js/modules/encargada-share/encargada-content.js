@@ -31,6 +31,18 @@ function unitLabel(bu) {
   return `#${u.sort_order ?? '?'} – ${u.name ?? 'Unidad'}`;
 }
 
+// Versión abreviada para WhatsApp (mensaje de limpieza): "Planta Baja/Alta"
+// se acorta a "P. Baja/Alta" para que la línea entre más corta, y separa
+// el número (negrita) del resto (cursiva) para que el n° de depto resalte.
+function unitLabelWA(bu) {
+  const u = bu.units;
+  if (!u) return { num: '—', rest: '' };
+  const shortName = (u.name ?? 'Unidad')
+    .replace(/Planta Baja/i, 'P. Baja')
+    .replace(/Planta Alta/i, 'P. Alta');
+  return { num: `#${u.sort_order ?? '?'}`, rest: `– ${shortName}` };
+}
+
 function unitDot(bu) {
   const u = bu.units;
   if (!u) return '';
@@ -259,23 +271,23 @@ export function generateEncargadaWhatsApp(bookings, rangeLabel, includeAmounts) 
       `🏡 *Barranca de Termas*`,
       `🧹 *Limpiezas programadas*${rangeLabel ? ' · ' + rangeLabel : ''}`,
       `${now} · ${total} departamento${total !== 1 ? 's' : ''}`,
-      `━━━━━━━━━━━━━━━━━━━━━━`,
     );
 
     groups.forEach((items, date) => {
       const dayLabel = fmtWithDay(date);
-      if (items.length > 1) {
-        lines.push(``, `*${dayLabel} · ${items.length} departamentos*`);
-      }
+      lines.push(
+        `━━━━━━━━━━━━━━━━━━━━━━`,
+        `📅 *_${dayLabel} · ${items.length} departamento${items.length !== 1 ? 's' : ''}_*`,
+      );
       items.forEach(({ bu, nights, recambio }) => {
-        const uLabel = bu.units ? unitLabel(bu) : '—';
+        const { num, rest } = unitLabelWA(bu);
         const recLabel = recambio ? ' *RECAMBIO*' : '';
         lines.push(
           ``,
-          `🧹 *Día de limpieza: ${dayLabel}*`,
-          `• Apart. N°: ${uLabel}${recLabel}`,
-          `• Noches: _Estuvieron ${nights} noche${nights !== 1 ? 's' : ''}_`,
-          `• NOTA:`,
+          `🧹 *Limpieza: ${dayLabel}*`,
+          `- _Apart. N°: *${num}*_ _${rest}_${recLabel}`,
+          `- _Estuvieron ${nights} noche${nights !== 1 ? 's' : ''}_`,
+          `- _NOTA:_`,
         );
       });
     });

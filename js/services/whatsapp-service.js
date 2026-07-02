@@ -3,17 +3,6 @@
 // Vouchers WhatsApp: huésped + encargada
 // ═══════════════════════════════════════════════════
 
-import { SOURCE_CONFIG } from '../supabase-config.js';
-
-const PAYMENT_METHOD_LABELS = {
-  cash:        'Efectivo',
-  transfer:    'Transferencia',
-  mercadopago: 'MercadoPago',
-  naranjax:    'Naranja X',
-  uala:        'Ualá',
-  credit_card: 'Tarjeta de Crédito',
-};
-
 const STATUS_LABELS = {
   pending:   '⏳ Sin seña / Pendiente',
   partial:   '🔶 Con seña / Depósito recibido',
@@ -43,12 +32,10 @@ export function generateVoucherText(booking, ctx) {
   const hotelName = ctx?.hotel?.name ?? 'Barranca de Termas';
   const guest     = booking.guests;
   const payments  = booking.payments ?? [];
-  const source    = booking.source ?? 'direct';
-  const srcCfg    = SOURCE_CONFIG[source];
 
   const unitsText = (booking.booking_units ?? [])
     .map(bu => unitLabel(bu.units))
-    .join('\n         ');
+    .join(' / ');
 
   const totalPaid = payments.reduce((s, p) => s + (p.amount_ars ?? p.amount ?? 0), 0);
   const balance   = (booking.total_amount ?? 0) - totalPaid;
@@ -60,60 +47,28 @@ export function generateVoucherText(booking, ctx) {
     : '—';
   const fmt = (n) => `$${Math.round(n ?? 0).toLocaleString('es-AR')}`;
 
-  const payLines = payments.map(p => {
-    const method = PAYMENT_METHOD_LABELS[p.method] ?? p.method ?? '—';
-    const amount = p.currency === 'USD'
-      ? `USD ${p.amount} (@ $${p.exchange_rate}) = ${fmt(p.amount_ars)}`
-      : fmt(p.amount_ars ?? p.amount);
-    return `   • ${method}: ${amount}`;
-  }).join('\n');
-
   return [
-    `🏨 *${hotelName}*`,
-    `📋 COMPROBANTE DE RESERVA`,
-    `━━━━━━━━━━━━━━━━━━━━━━━`,
+    `*COMPROBANTE DE RESERVA*`,
+    `━━━━━━━━━━━━━━━━━━━━━━`,
+    `*DATOS DEL HUÉSPED*`,
+    `- Huésped: *${guest?.first_name ?? ''} ${guest?.last_name ?? ''}*`,
+    guest?.dni   ? `- DNI: ${guest.dni}`     : null,
+    guest?.phone ? `- Tel: ${guest.phone}`   : null,
+    `- Depto: *${unitsText || '—'}*`,
+    `- Check-in: _${fmtDate(booking.check_in)}_`,
+    `- Check-out: _${fmtDate(booking.check_out)}_`,
+    `- Noches: *${booking.nights ?? '—'}*`,
+    `━━━━━━━━━━━━━━━━━━━━━━`,
+    `*DETALLE DE PAGO*`,
+    `- Precio por noche: ${fmt(booking.price_per_night)}`,
+    `- Total: *${fmt(booking.total_amount)}*`,
+    `- Abonado: ${fmt(totalPaid)}`,
+    balance > 0 ? `- Saldo: *${fmt(balance)}*` : `- ✅ *Sin saldo pendiente*`,
+    `━━━━━━━━━━━━━━━━━━━━━━`,
+    `${STATUS_LABELS[booking.status] ?? booking.status}`,
     ``,
-    `👤 *Huésped:*  ${guest?.first_name ?? ''} ${guest?.last_name ?? ''}`,
-    guest?.dni   ? `🪪 *DNI:*      ${guest.dni}`  : null,
-    guest?.phone ? `📱 *Tel:*      ${guest.phone}` : null,
-    guest?.email ? `✉️ *Email:*    ${guest.email}` : null,
-    ``,
-    `🛏️ *Departamento:*`,
-    `   ${unitsText}`,
-    ``,
-    `📅 *Check-in:*   ${fmtDate(booking.check_in)}`,
-    `📅 *Check-out:*  ${fmtDate(booking.check_out)}`,
-    `🌙 *Noches:*     ${booking.nights ?? '—'}`,
-    srcCfg && source !== 'direct'
-      ? `${srcCfg.emoji ?? '📌'} *Canal:*      ${srcCfg.label}` : null,
-    ``,
-    `━━━━━━━━━━━━━━━━━━━━━━━`,
-    `💰 *DETALLE FINANCIERO*`,
-    ``,
-    `Precio por noche: ${fmt(booking.price_per_night)}`,
-    `Subtotal base:    ${fmt((booking.nights ?? 0) * (booking.price_per_night ?? 0))}`,
-    (booking.free_nights ?? 0) > 0
-      ? `Noches sin cargo (${booking.free_nights}): -${fmt(booking.free_nights * (booking.price_per_night ?? 0))}` : null,
-    (booking.discount_pct ?? 0) > 0
-      ? `Descuento ${booking.discount_pct}%: -${fmt(((booking.nights ?? 0) * (booking.price_per_night ?? 0)) * booking.discount_pct / 100)}` : null,
-    (booking.surcharge_amount ?? 0) > 0
-      ? `Recargo fijo: +${fmt(booking.surcharge_amount)}` : null,
-    ``,
-    `*TOTAL:        ${fmt(booking.total_amount)}*`,
-    ``,
-    payments.length ? `Pagos registrados:\n${payLines}` : null,
-    ``,
-    `*Abonado:      ${fmt(totalPaid)}*`,
-    balance > 0
-      ? `*Saldo:        ${fmt(balance)}*`
-      : `*✅ Sin saldo pendiente*`,
-    ``,
-    `━━━━━━━━━━━━━━━━━━━━━━━`,
-    `📌 *Estado:* ${STATUS_LABELS[booking.status] ?? booking.status}`,
-    booking.notes ? `\n💬 *Obs:* ${booking.notes}` : null,
-    ``,
-    `Muchas gracias por elegirnos 🌿`,
-    `_${hotelName}_`,
+    `_Muchas gracias por elegirnos_`,
+    `_*${hotelName}*_🏡`,
   ].filter(Boolean).join('\n');
 }
 
