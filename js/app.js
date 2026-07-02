@@ -1781,37 +1781,37 @@ function populateReminderUnitSelect(){
   const sel = document.getElementById('r-unit');
   if (!sel) return;
 
+  const fill = (units) => {
+    sel.innerHTML = '<option value="">General (todo el complejo)</option>';
+    units.forEach(u => {
+      const opt = document.createElement('option');
+      opt.value = u.id;
+      opt.textContent = `#${u.sort_order ?? ''} · ${u.name}`;
+      sel.appendChild(opt);
+    });
+  };
+
   const units = AppContext.units ?? [];
+  if (units.length) { fill(units); return; }
 
-  // Reset
-  sel.innerHTML = '<option value="">General (todo el hotel)</option>';
-
-  if (!units.length) {
-    // Units might still be loading — show a placeholder
-    const opt = document.createElement('option');
-    opt.value = ''; opt.disabled = true;
-    opt.textContent = '(Cargando unidades...)';
-    sel.appendChild(opt);
-    // Retry once in 1 second
-    setTimeout(() => {
-      const retryUnits = AppContext.units ?? [];
-      sel.innerHTML = '<option value="">General (todo el hotel)</option>';
-      retryUnits.forEach(u => {
-        const o = document.createElement('option');
-        o.value = u.id;
-        o.textContent = `#${u.sort_order ?? ''} · ${u.name}`;
-        sel.appendChild(o);
-      });
-    }, 1000);
-    return;
-  }
-
-  units.forEach(u => {
-    const opt = document.createElement('option');
-    opt.value = u.id;
-    opt.textContent = `#${u.sort_order ?? ''} · ${u.name}`;
-    sel.appendChild(opt);
-  });
+  // AppContext.units todavía no cargó (modal abierto muy rápido tras el
+  // inicio de la app) — antes esto reintentaba una sola vez a los 1000ms y
+  // si tampoco estaba listo para entonces, se quedaba pegado mostrando
+  // solo "General" para siempre en ese modal. Ahora reintenta cada 300ms
+  // hasta 10 veces (3s) — cubre conexiones lentas sin bloquear la UI.
+  sel.innerHTML = '<option value="" disabled>(Cargando departamentos...)</option>';
+  let attempts = 0;
+  const poll = setInterval(() => {
+    attempts++;
+    const retryUnits = AppContext.units ?? [];
+    if (retryUnits.length) {
+      clearInterval(poll);
+      fill(retryUnits);
+    } else if (attempts >= 10) {
+      clearInterval(poll);
+      sel.innerHTML = '<option value="">General (todo el complejo)</option>';
+    }
+  }, 300);
 }
 
 function setupExpenseModal() {
