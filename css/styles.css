@@ -1015,6 +1015,12 @@ select { appearance: auto; cursor: pointer; }
   padding: 2px 8px; transition: all .12s;
 }
 .unit-split-hint:hover { border-color: var(--color-primary); }
+.unit-split-select {
+  font-size: .64rem; font-weight: 600; color: var(--color-primary);
+  cursor: pointer; margin-left: auto; max-width: 140px;
+  background: var(--color-primary-l); border: 1px solid transparent; border-radius: 999px;
+  padding: 2px 6px;
+}
 
 .notes-counter { font-size: .72rem; color: var(--color-text-3); font-weight: 400; margin-left: auto; }
 

@@ -677,20 +677,39 @@ export class BookingForm {
     if (myRequestId !== this._availRequestSeq) return; // respuesta vieja, descartar
 
     const thisUnitId = String(chip.dataset.unitId);
-    const candidate = missList.find(u => String(u.id) !== thisUnitId && u.available);
-    if (!candidate) return;
+    const candidates = missList.filter(u => String(u.id) !== thisUnitId && u.available);
+    if (!candidates.length) return;
 
     const fmtD = (s) => { const [y,m,d] = s.split('-'); return `${d}/${m}`; };
     const row2b = chip.querySelector('.unit-option-row2');
-    if (!row2b || row2b.querySelector('.unit-split-hint')) return;
-    row2b.insertAdjacentHTML('beforeend',
-      `<button type="button" class="unit-split-hint" data-split-unit-id="${candidate.id}" data-split-unit-name="${candidate.name}"
-         data-split-from="${missing.from}" data-split-to="${missing.to}"
-         title="Arma 2 reservas: esta unidad cubre ${fmtD(partial.from)}–${fmtD(partial.to)}, ${candidate.name} cubre el resto">🔀 Combina con ${candidate.name}</button>`);
-    row2b.querySelector('.unit-split-hint').addEventListener('click', (e) => {
-      e.preventDefault();
+    if (!row2b || row2b.querySelector('.unit-split-hint, .unit-split-select')) return;
+
+    if (candidates.length === 1) {
+      const candidate = candidates[0];
+      row2b.insertAdjacentHTML('beforeend',
+        `<button type="button" class="unit-split-hint" title="Arma 2 reservas: esta unidad cubre ${fmtD(partial.from)}–${fmtD(partial.to)}, ${candidate.name} cubre el resto">🔀 Combina con ${candidate.name}</button>`);
+      row2b.querySelector('.unit-split-hint').addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        this._startSplitStay(chip.dataset.unitId, partial, candidate.id, candidate.name, missing);
+      });
+      return;
+    }
+
+    // Varias unidades cubren lo que falta — dejar elegir en vez de agarrar la primera.
+    row2b.insertAdjacentHTML('beforeend', `
+      <select class="unit-split-select" title="Elegí con cuál combinar para completar el pedido">
+        <option value="">🔀 Combinar con...</option>
+        ${candidates.map(c => `<option value="${c.id}">${c.name}</option>`).join('')}
+      </select>`);
+    const sel = row2b.querySelector('.unit-split-select');
+    sel.addEventListener('click', (e) => e.stopPropagation());
+    sel.addEventListener('change', (e) => {
       e.stopPropagation();
-      this._startSplitStay(chip.dataset.unitId, partial, candidate.id, candidate.name, missing);
+      const chosen = candidates.find(c => String(c.id) === e.target.value);
+      if (!chosen) return;
+      this._startSplitStay(chip.dataset.unitId, partial, chosen.id, chosen.name, missing);
+      sel.value = ''; // reset — la selección ya se aplicó
     });
   }
 
@@ -2256,6 +2275,9 @@ ${notes ? `
         );
         if (gErr) throw gErr;
         guestId = newGuest.id;
+        this._selectedGuestId = guestId; // bug: antes solo se actualizaba la variable local,
+        // así que cualquier cosa que mirara this._selectedGuestId DESPUÉS de guardar (como
+        // el prefill de huésped de "Dividir estadía") quedaba vacía para huéspedes nuevos.
       }
 
       // ── Columnas CORE (siempre existen en la DB) ──────────────
