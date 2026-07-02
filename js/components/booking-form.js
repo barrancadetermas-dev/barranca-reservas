@@ -645,12 +645,45 @@ export class BookingForm {
       } else if (info.partial) {
         const fmtD = (s) => { const [y,m,d] = s.split('-'); return `${d}/${m}`; };
         tagHTML = `<span class="unit-avail-tag unit-avail-partial" title="Libre del ${fmtD(info.partial.from)} al ${fmtD(info.partial.to)}">${info.partial.nights}/${info.partial.ofNights} noches</span>`;
+        // Buscar con qué otra unidad se podría completar el pedido —
+        // "Dividir estadía": esta unidad cubre una parte, otra cubre el resto.
+        this._suggestSplitStay(chip, ci, co, info.partial);
       } else if (info.available && !isSelected) {
         tagHTML = `<span class="unit-avail-tag unit-avail-free">Disponible</span>`;
       }
       const row2 = chip.querySelector('.unit-option-row2');
       if (tagHTML && row2) row2.insertAdjacentHTML('beforeend', tagHTML);
     });
+  }
+
+  // ── Dividir estadía ────────────────────────────────
+  // Si la unidad "A" solo cubre una parte del pedido (ej: pediste 5 noches,
+  // tiene 3 libres), busca si OTRA unidad cubre las noches que faltan. Si
+  // encuentra una, muestra un texto informativo — no arma nada solo, porque
+  // hoy una reserva no soporta fechas distintas por unidad; el usuario
+  // tendría que cargar 2 reservas separadas (una por unidad).
+  async _suggestSplitStay(chip, ci, co, partial) {
+    const missing = partial.from === ci
+      ? { from: partial.to, to: co }
+      : partial.to === co
+        ? { from: ci, to: partial.from }
+        : null; // hueco en el medio — caso raro, no lo resolvemos automático
+    if (!missing || missing.from >= missing.to) return;
+
+    const myRequestId = this._availRequestSeq;
+    let missList;
+    try { missList = await fetchDisponibilidad(missing.from, missing.to); } catch { return; }
+    if (myRequestId !== this._availRequestSeq) return; // respuesta vieja, descartar
+
+    const thisUnitId = String(chip.dataset.unitId);
+    const candidate = missList.find(u => String(u.id) !== thisUnitId && u.available);
+    if (!candidate) return;
+
+    const fmtD = (s) => { const [y,m,d] = s.split('-'); return `${d}/${m}`; };
+    const row2b = chip.querySelector('.unit-option-row2');
+    if (!row2b || row2b.querySelector('.unit-split-hint')) return;
+    row2b.insertAdjacentHTML('beforeend',
+      `<span class="unit-split-hint" title="Esta unidad no cubre todo el pedido — armá 2 reservas: una acá y otra en ${candidate.name} para completar del ${fmtD(missing.from)} al ${fmtD(missing.to)}">🔀 Combina con ${candidate.name}</span>`);
   }
 
 

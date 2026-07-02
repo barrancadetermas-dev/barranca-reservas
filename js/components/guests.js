@@ -5,6 +5,7 @@
 // ═══════════════════════════════════════════════════
 
 import { formatARS, formatDate, showToast, getUnitChipHTML, getUnitLabel } from '../supabase-config.js';
+import { fetchNotasCreditoAbiertas } from '../modules/mila-assistant/mila-data.js';
 
 // Escapa texto para insertarlo seguro dentro de atributos/HTML (el modal de
 // edición inyecta valores de huésped directamente en el markup).
@@ -94,11 +95,14 @@ export class GuestsCRM {
           Exportar ▾
         </button>
       </div>
+      <div id="guests-nc-summary"></div>
       <div id="guests-results-area">
         <div style="padding:16px;text-align:center;color:var(--color-text-3)">⟳ Cargando...</div>
       </div>
       <div id="guests-destacados-area"></div>
     `;
+
+    this._renderOpenCreditNotesSummary();
 
     const input = document.getElementById('guests-search-input');
     input?.addEventListener('input', (e) => {
@@ -175,6 +179,37 @@ export class GuestsCRM {
     if (!m) return;
     const ageDays = Math.round((Date.now() - new Date(m[2] + 'T00:00:00')) / 86400000);
     g.open_credit_note = { amount: parseInt(m[1], 10), ageDays, stale: ageDays >= 90, bookingId: ncBooking.id };
+  }
+
+  // ── Franja resumen: todas las NC abiertas juntas ──
+  // Antes solo se veía una nota de crédito cuando buscabas al huésped
+  // puntual. Esto muestra TODAS las que están abiertas en un solo lugar.
+  async _renderOpenCreditNotesSummary() {
+    const el = document.getElementById('guests-nc-summary');
+    if (!el) return;
+    let list;
+    try { list = await fetchNotasCreditoAbiertas(); } catch { return; }
+    if (!list.length) { el.innerHTML = ''; return; }
+
+    const total = list.reduce((s, nc) => s + nc.amount, 0);
+    const staleCount = list.filter(nc => nc.stale).length;
+
+    el.innerHTML = `
+      <details class="nc-summary-bar">
+        <summary>
+          🔄 <strong>${list.length}</strong> nota${list.length !== 1 ? 's' : ''} de crédito abierta${list.length !== 1 ? 's' : ''}
+          · ${formatARS(total)}
+          ${staleCount ? `<span class="nc-summary-stale">⚠️ ${staleCount} vieja${staleCount !== 1 ? 's' : ''}</span>` : ''}
+        </summary>
+        <div class="nc-summary-list">
+          ${list.map(nc => `
+            <div class="nc-summary-row ${nc.stale ? 'is-stale' : ''}">
+              <span class="nc-summary-guest">${nc.guest}</span>
+              <span class="nc-summary-amount">${formatARS(nc.amount)}</span>
+              <span class="nc-summary-age">${nc.stale ? '⚠️ ' : ''}${nc.ageDays}d</span>
+            </div>`).join('')}
+        </div>
+      </details>`;
   }
 
   _sortGuests(guests) {
