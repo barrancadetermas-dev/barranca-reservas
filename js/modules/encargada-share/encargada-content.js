@@ -115,6 +115,8 @@ function buildReservaBlocks(bookings) {
       return {
         b, name,
         phone:   g?.phone ?? '—',
+        age:     g?.age ?? null,
+        car:     [g?.car_model, g?.car_plate].filter(Boolean).join(' · ') || null,
         units:   b.booking_units ?? [],
         nights:  b.nights ?? Math.round((new Date(b.check_out) - new Date(b.check_in)) / 86400000),
         pax:     (b.adults ?? b.pax ?? '') || '',
@@ -279,14 +281,18 @@ export function generateEncargadaWhatsApp(bookings, rangeLabel, includeAmounts) 
         `━━━━━━━━━━━━━━━━━━━━━━`,
         `📅 *_${dayLabel} · ${items.length} departamento${items.length !== 1 ? 's' : ''}_*`,
       );
-      items.forEach(({ bu, nights, recambio }) => {
+      items.forEach(({ b, bu, nights, recambio }) => {
         const { num, rest } = unitLabelWA(bu);
         const recLabel = recambio ? ' *RECAMBIO*' : '';
+        const g = b?.guests;
+        const car = [g?.car_model, g?.car_plate].filter(Boolean).join(' · ') || null;
         lines.push(
           ``,
           `🧹 *Limpieza: ${dayLabel}*`,
           `- _Apart. N°: *${num}*_ _${rest}_${recLabel}`,
           `- _Estuvieron ${nights} noche${nights !== 1 ? 's' : ''}_`,
+          g?.age ? `- _Edad: ${g.age}_` : null,
+          car    ? `- _Auto: ${car}_` : null,
           `- _NOTA:_`,
         );
       });
@@ -300,7 +306,7 @@ export function generateEncargadaWhatsApp(bookings, rangeLabel, includeAmounts) 
       `${now} · ${blocks.length} reserva${blocks.length !== 1 ? 's' : ''}`,
       `━━━━━━━━━━━━━━━━━━━━━━`,
     );
-    blocks.forEach(({ b, name, phone, units, nights, pax, balance, notes, status }, i) => {
+    blocks.forEach(({ b, name, phone, age, car, units, nights, pax, balance, notes, status }, i) => {
       const unitsText = units.map(bu => unitLabel(bu)).join(' / ') || '—';
       if (i > 0) lines.push(`──────────────────────`);
       lines.push(
@@ -314,6 +320,8 @@ export function generateEncargadaWhatsApp(bookings, rangeLabel, includeAmounts) 
         `- Fecha Salida: ${fmtShort(b.check_out)}`,
         `- Noches: ${nights}`,
         `- Cant. de Personas: ${pax !== '' ? String(pax) : '—'}`,
+        age ? `- Edad: ${age}` : null,
+        car ? `- Auto: ${car}` : null,
       );
       if (balance > 0) lines.push(`- Abonan al ingreso: *${fmtMoney(balance)}*`);
       lines.push(`- Estado: ${status}`);
@@ -322,5 +330,5 @@ export function generateEncargadaWhatsApp(bookings, rangeLabel, includeAmounts) 
   }
 
   lines.push(``, `━━━━━━━━━━━━━━━━━━━━━━`, `_MILA · Barranca de Termas_`);
-  return lines.join('\n');
+  return lines.filter(l => l !== null).join('\n');
 }

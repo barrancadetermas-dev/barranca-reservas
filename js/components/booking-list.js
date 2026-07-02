@@ -120,7 +120,7 @@ export class BookingList {
           notes, is_blocked, block_reason, created_at, adults, children, pax,
           guests!bookings_guest_id_fkey(
             id, first_name, last_name, dni, phone,
-            bad_experience, bad_experience_note, tags
+            bad_experience, bad_experience_note, tags, age, car_model, car_plate
           ),
           booking_units(unit_id, price_per_night, units(name, sort_order, color))
         `)
