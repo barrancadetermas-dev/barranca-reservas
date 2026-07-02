@@ -278,7 +278,7 @@ export class Statistics {
       <div class="stats-kpi-row">
         ${this._kpiCard('Ingreso bruto',  formatARS(totalRevenue), 'blue', 'vs periodo')}
         ${this._kpiCard('ADR',            formatARS(ADR),          'green',    'Tarifa prom. diaria')}
-        ${this._kpiCard('RevPAR',         formatARS(RevPAR),       'purple',   'Ingreso por hab. disp.')}
+        ${this._kpiCard('RevPAR',         formatARS(RevPAR),       'blue',   'Ingreso por hab. disp.')}
         ${this._kpiCard('Ocupación',      avgOcc + '%',            avgOcc >= 70 ? 'green' : avgOcc >= 40 ? 'amber' : 'rose', `${totalNights} noches`)}
         ${this._kpiCard('Estadía prom.',  avgStay + ' noches',     'blue',     `${totalBookings} reservas`)}
         ${this._kpiCard('Unidades',       totalRooms,              'gray',     `${daysInMonth} días disponibles`)}
@@ -406,7 +406,6 @@ export class Statistics {
     const colors = {
       blue:   { bg:'#e6f1fb', text:'#185fa5' },
       green:  { bg:'#eaf3de', text:'#3b6d11' },
-      purple: { bg:'#eeedfe', text:'#534ab7' },
       amber:  { bg:'#faeeda', text:'#854f0b' },
       rose:   { bg:'#fcebeb', text:'#a32d2d' },
       gray:   { bg:'#f1efe8', text:'#5f5e5a' },
@@ -984,7 +983,7 @@ export class Statistics {
     const W = 240, H = 90, pad = 10;
     const curPct = maxADR > 0 ? (curADR / maxADR) * 100 : 0;
     const curColor = this._perfColor(curPct).bottom;
-    const face = curADR >= maxADR ? ' 😊' : (curADR <= minADR && curADR > 0 ? ' 😢' : '');
+    const face = '';
     const pts = adrData.map((d, i) => {
       const x = pad + (i / (adrData.length-1)) * (W-pad*2);
       const y = H - pad - (d.adr / maxADR) * (H-pad*2);
@@ -999,7 +998,7 @@ export class Statistics {
 
     return `<div class="stats-dashboard-card" style="--accent:${curColor}">
       <div class="sdc-header"><div>
-        <div class="sdc-title">💵 ADR — Tarifa Diaria</div>
+        <div class="sdc-title">ADR — Tarifa Diaria</div>
         <div class="sdc-value" style="color:${curColor}">${fmt(curADR)}${face}</div>
         <div class="sdc-sub">por noche ocupada</div>
       </div></div>
@@ -1191,11 +1190,10 @@ export class Statistics {
     const state = cancelCount <= 0 ? 'green' : cancelCount <= 3 ? 'yellow' : 'red';
     const color = `var(--state-${state})`;
     const txt   = `var(--state-${state}-txt)`;
-    const face  = cancelCount <= 0 ? ' 😊' : state === 'red' ? ' 😢' : '';
     return `<div class="stats-dashboard-card" style="--accent:${color}">
       <div class="sdc-header"><div>
-        <div class="sdc-title">❌ Cancelaciones</div>
-        <div class="sdc-value" style="color:${txt}">${cancelCount}${face}</div>
+        <div class="sdc-title">Cancelaciones</div>
+        <div class="sdc-value" style="color:${txt}">${cancelCount}</div>
         <div class="sdc-sub">en el año calendario</div>
       </div></div>
       <div style="flex:1;display:flex;flex-direction:column;justify-content:flex-end;gap:12px">

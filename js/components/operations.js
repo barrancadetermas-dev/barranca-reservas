@@ -282,6 +282,8 @@ export class OperationsModule {
           ${data.map(t => this._cleaningRowHTML(t, today)).join('')}
         </div>`;
 
+      this._lastCleaningData = data;
+
       // ── Event delegation — usa data-bound para no duplicar listener ──
       if (!panel.dataset.cleaningBound) {
         panel.dataset.cleaningBound = '1';
@@ -305,6 +307,11 @@ export class OperationsModule {
               showToast('Error: ' + (err?.message ?? err), 'error');
               btn.disabled = false; btn.textContent = newStatus === 'in_progress' ? 'Iniciar' : '✓ Listo';
             }
+          }
+
+          if (btn.classList.contains('cleaning-edit-btn') && !btn.disabled) {
+            const task = (this._lastCleaningData ?? []).find(t => String(t.id) === String(btn.dataset.id));
+            if (task) this._openCleaningModal(task);
           }
 
           if (btn.classList.contains('cleaning-delete-btn') && !btn.disabled) {
@@ -357,6 +364,8 @@ export class OperationsModule {
           ${task.status === 'in_progress' ? `
             <button class="btn btn-primary btn-xs cleaning-status-btn"
                     data-id="${task.id}" data-status="completed">✓ Listo</button>` : ''}
+          <button class="btn btn-ghost btn-xs cleaning-edit-btn"
+                  data-id="${task.id}" title="Editar">✏️</button>
           <button class="btn btn-ghost btn-xs cleaning-delete-btn"
                   data-id="${task.id}" title="Eliminar">🗑️</button>
         </div>
@@ -399,9 +408,10 @@ export class OperationsModule {
       }
     } catch { /* silencioso — si la tabla no existe aún */ }
   }
-  _openCleaningModal() {
+  _openCleaningModal(task = null) {
     const units = this.ctx.units ?? [];
     const today = toISODate(new Date());
+    const isEdit = !!task;
 
     // Modal inline simple
     const existing = document.getElementById('overlay-cleaning-task');
@@ -413,7 +423,7 @@ export class OperationsModule {
     modal.innerHTML = `
       <div class="modal modal-sm">
         <div class="modal-header">
-          <h3 class="modal-title">Nueva Tarea de Limpieza</h3>
+          <h3 class="modal-title">${isEdit ? 'Editar Tarea de Limpieza' : 'Nueva Tarea de Limpieza'}</h3>
           <button class="modal-close" id="cleaning-modal-close">✕</button>
         </div>
         <div class="modal-body">
@@ -421,31 +431,31 @@ export class OperationsModule {
             <label>Unidad</label>
             <select id="ct-unit" class="filter-select">
               <option value="">General</option>
-              ${units.map(u => `<option value="${u.id}">#${u.sort_order} · ${u.name}</option>`).join('')}
+              ${units.map(u => `<option value="${u.id}" ${task?.unit_id === u.id ? 'selected' : ''}>#${u.sort_order} · ${u.name}</option>`).join('')}
             </select>
           </div>
           <div class="form-group">
             <label>Título <span class="req">*</span></label>
-            <input type="text" id="ct-title" placeholder="Limpieza profunda, cambio de sábanas...">
+            <input type="text" id="ct-title" placeholder="Limpieza profunda, cambio de sábanas..." value="${task?.title ? task.title.replace(/"/g,'&quot;') : ''}">
           </div>
           <div class="form-grid-2">
             <div class="form-group">
               <label>Fecha <span class="req">*</span></label>
-              <input type="date" id="ct-date" value="${today}">
+              <input type="date" id="ct-date" value="${task?.scheduled_date ?? today}">
             </div>
             <div class="form-group">
               <label>Responsable</label>
-              <input type="text" id="ct-assigned" placeholder="Nombre">
+              <input type="text" id="ct-assigned" placeholder="Nombre" value="${task?.assigned_to ? task.assigned_to.replace(/"/g,'&quot;') : ''}">
             </div>
           </div>
           <div class="form-group">
             <label>Observaciones</label>
-            <textarea id="ct-notes" rows="2"></textarea>
+            <textarea id="ct-notes" rows="2">${task?.notes ?? ''}</textarea>
           </div>
         </div>
         <div class="modal-footer">
           <button class="btn btn-outline" id="ct-cancel">Cancelar</button>
-          <button class="btn btn-primary" id="ct-save">Guardar</button>
+          <button class="btn btn-primary" id="ct-save">${isEdit ? 'Guardar cambios' : 'Guardar'}</button>
         </div>
       </div>`;
 
@@ -466,24 +476,26 @@ export class OperationsModule {
       const saveBtn = modal.querySelector('#ct-save');
       if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Guardando...'; }
       try {
-        const { error } = await this._withTimeout(this.db.from('cleaning_tasks').insert({
-          hotel_id:     this.ctx.hotelId,
+        const payload = {
           unit_id:      modal.querySelector('#ct-unit').value || null,
-          title, scheduled_date: date, status: 'pending',
+          title, scheduled_date: date,
           assigned_to:  modal.querySelector('#ct-assigned').value.trim() || null,
           notes:        modal.querySelector('#ct-notes').value.trim() || null,
-        }), 'Crear tarea de limpieza');
+        };
+        const { error } = isEdit
+          ? await this._withTimeout(this.db.from('cleaning_tasks').update(payload).eq('id', task.id), 'Editar tarea de limpieza')
+          : await this._withTimeout(this.db.from('cleaning_tasks').insert({ ...payload, hotel_id: this.ctx.hotelId, status: 'pending' }), 'Crear tarea de limpieza');
         if (error) throw error;
-        showToast('Tarea de limpieza creada ✓', 'success');
+        showToast(isEdit ? 'Tarea actualizada ✓' : 'Tarea de limpieza creada ✓', 'success');
         close();
         const panel = document.getElementById('ops-panel');
         const hdrEl = document.getElementById('ops-header-actions');
         if (panel && hdrEl) await this._loadCleaning(panel, hdrEl);
         if (typeof updateOperationsBadge === 'function') updateOperationsBadge();
       } catch (err) {
-        console.error('[Operations] cleaning insert:', err);
+        console.error('[Operations] cleaning save:', err);
         showToast('Error: ' + (err?.message ?? 'Verificá que hayas corrido migration_complete_v8.sql en Supabase'), 'error');
-        if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Guardar'; }
+        if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = isEdit ? 'Guardar cambios' : 'Guardar'; }
       }
     });
   }

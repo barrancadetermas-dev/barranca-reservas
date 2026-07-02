@@ -52,9 +52,9 @@
      Rojo = malo/poca actividad · Amarillo = medio · Verde = bueno.
      Usar SIEMPRE estos 3 tonos para representar estado/rendimiento;
      no mezclar con otros verdes/amarillos/rojos ni con azul. */
-  --state-red:     #EF4444; --state-red-bg:    #EF444406; --state-red-txt:    #B91C1C;
-  --state-yellow:  #FACC15; --state-yellow-bg: #FACC1506; --state-yellow-txt: #8A6D0A;
-  --state-green:   #22C55E; --state-green-bg:  #22C55E07; --state-green-txt:  #15803D;
+  --state-red:     #EF4444; --state-red-bg:    #EF444406; --state-red-txt:    #D6504F;
+  --state-yellow:  #FACC15; --state-yellow-bg: #FACC1506; --state-yellow-txt: #A9862F;
+  --state-green:   #22C55E; --state-green-bg:  #22C55E07; --state-green-txt:  #29A360;
 
   /* Booking status × time — paleta azul MILA */
   --booking-pending-f: #1E4DB7;   /* futuro sin seña */

@@ -1178,7 +1178,7 @@ export class Dashboard {
     const totalUnits = data.totalUnits || 1;
     const barW   = 5.4, gap = 1.3;
     const chartW = days.length * (barW + gap) - gap;
-    const chartH = 40;
+    const chartH = 64;
     // Degradé continuo rojo → amarillo → verde según % de ocupación:
     // 0% = rojo (baja), 50% = amarillo (media), 100% = verde (alta).
     const hexToRgb = h => [1,3,5].map(i => parseInt(h.slice(i,i+2),16));
