@@ -655,7 +655,10 @@ select.mila-pill {
   .mila-grid { grid-template-columns: 1fr; gap: 14px; }
   .mila-connector { display: none; }
   .mila-right { position: static; }
-  .mila-soon-card { animation: none; } /* no float en mobile */
+
+  /* FIX: pedido — sacar el cuadro "Próximamente" en mobile (ocupaba
+     mucho alto y todavía no hace nada, disabled). */
+  .mila-soon-card { display: none; }
 
   /* hero */
   .mila-hero { padding: 12px 14px; border-radius: 14px; gap: 10px; }
@@ -663,14 +666,73 @@ select.mila-pill {
   .mila-hero-greet { font-size: .9rem; }
   .mila-hero-question { font-size: .74rem; }
 
-  /* filas */
-  .mila-row { grid-template-columns: 26px 1fr; gap: 8px; padding: 9px 10px; }
-  .mila-row-controls { grid-column: 1 / -1; flex-wrap: wrap; justify-content: flex-start; }
+  /* FIX: pedido — las cards de consulta rápida pasan de lista vertical
+     (mucho scroll) a un carril horizontal de una sola línea, con scroll
+     lateral tipo carrusel. Cada card queda compacta (ícono + título,
+     sin subtítulo) para que entren varias a la vez. */
+  .mila-rows {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overflow-y: hidden;
+    gap: 8px;
+    padding: 2px 2px 10px;
+    margin: 0 -2px;
+    -webkit-overflow-scrolling: touch;
+    scroll-snap-type: x proximity;
+  }
+  .mila-rows::-webkit-scrollbar { height: 4px; }
+  .mila-rows::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 4px; }
+
+  /* filas → cards compactas dentro del carril horizontal */
+  .mila-row {
+    flex: 0 0 auto;
+    width: auto;
+    min-width: 128px;
+    max-width: 168px;
+    grid-template-columns: 22px 1fr;
+    grid-template-rows: auto;
+    gap: 8px;
+    padding: 9px 10px;
+    scroll-snap-align: start;
+  }
+  /* una sola línea: sin subtítulo, sin controles inline en la card cerrada */
+  .mila-row-sub { display: none; }
+  .mila-row-controls { display: none; }
   .mila-row-icon { width: 26px; height: 26px; }
   .mila-row-icon svg { width: 14px; height: 14px; }
 
-  /* búsqueda de huésped */
-  .mila-row-stack .mila-row-controls { margin-left: -10px; margin-right: -10px; width: calc(100% + 20px); padding: 0 4px; }
+  /* al tocar una card que necesita fecha/rango/búsqueda, se expande a lo
+     ancho completo (fuera del carril) para mostrar sus controles */
+  .mila-row.is-active {
+    flex: 1 0 100%;
+    min-width: 100%;
+    max-width: 100%;
+    grid-template-columns: 26px 1fr;
+  }
+  .mila-row.is-active .mila-row-sub { display: block; }
+  .mila-row.is-active .mila-row-controls {
+    display: flex;
+    grid-column: 1 / -1;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+
+  /* búsqueda de huésped/gasto: no dispara con un tap (solo con Enter), así
+     que no puede depender de .is-active para mostrar el input — queda
+     siempre expandida a lo ancho, con el buscador visible */
+  .mila-row-stack {
+    flex: 1 0 100%;
+    min-width: 100%;
+    max-width: 100%;
+    grid-template-columns: 26px 1fr;
+  }
+  .mila-row-stack .mila-row-controls {
+    display: flex;
+    grid-column: 1 / -1;
+    margin-left: -10px; margin-right: -10px; width: calc(100% + 20px); padding: 0 4px;
+  }
 
   /* panel de respuesta */
   .mila-answer { min-height: 0; padding: 12px; }
