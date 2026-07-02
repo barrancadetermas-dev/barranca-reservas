@@ -213,7 +213,12 @@ function quickStatsSkeleton() {
     <div class="mila-qstats-trend">
       <span class="mila-qstats-trend-label">Próximos 7 días</span>
       <div class="mila-trend-bars" id="mila-trend-bars">
-        ${Array.from({ length: 7 }).map((_, i) => `<span class="mila-trend-bar mila-trend-bar-loading" style="--i:${i}"><span class="mila-trend-bar-fill"></span></span>`).join('')}
+        ${Array.from({ length: 7 }).map((_, i) => `
+          <span class="mila-trend-bar mila-trend-bar-loading" style="--i:${i}">
+            <span class="mila-trend-bar-pct">&nbsp;</span>
+            <span class="mila-trend-bar-track"><span class="mila-trend-bar-fill"></span></span>
+            <span class="mila-trend-bar-day">&nbsp;</span>
+          </span>`).join('')}
       </div>
     </div>`;
 }
@@ -254,8 +259,14 @@ async function loadQuickStats(todayISO) {
     const trendWrap = document.getElementById('mila-trend-bars');
     if (trendWrap) {
       trendWrap.innerHTML = trend.map((d, i) => {
-        const dow = DIAS_CORTO[new Date(d.date + 'T12:00:00').getDay()];
-        return `<span class="mila-trend-bar" style="--i:${i}" title="${dow} · ${d.pct}%"><span class="mila-trend-bar-fill" data-pct="${d.pct}"></span></span>`;
+        const dow = i === 0 ? 'Hoy' : DIAS_CORTO[new Date(d.date + 'T12:00:00').getDay()];
+        const todayCls = i === 0 ? ' mila-trend-bar-today' : '';
+        return `
+          <span class="mila-trend-bar${todayCls}" style="--i:${i}" title="${dow} · ${d.pct}%">
+            <span class="mila-trend-bar-pct">${d.pct}%</span>
+            <span class="mila-trend-bar-track"><span class="mila-trend-bar-fill" data-pct="${d.pct}"></span></span>
+            <span class="mila-trend-bar-day">${dow}</span>
+          </span>`;
       }).join('');
       requestAnimationFrame(() => {
         // Double rAF: primer frame pinta la barra en 0, segundo frame dispara la transición al valor real
