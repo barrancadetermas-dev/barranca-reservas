@@ -4,8 +4,9 @@ import { isDemo } from "../auth/permissions.js";
 // KPIs, Ocupación, Dólar, Llegadas, Recordatorios
 // ═══════════════════════════════════════════════════
 
-import { formatARS, formatDate, toISODate, showToast, localToday, localDateISO } from '../supabase-config.js';
+import { formatARS, formatDate, toISODate, showToast, localToday, localDateISO, AppContext } from '../supabase-config.js';
 import { fetchDollarRates } from '../services/dollar-api.js';
+import { recordDailyRateSnapshot, getUsdConversionRate } from '../services/usd-rate-history.js';
 // ↑ Sin import de app.js — evita dependencia circular.
 // El badge se actualiza via CustomEvent que app.js escucha.
 
@@ -135,6 +136,10 @@ export class Dashboard {
       this._renderReservasMes(extraStats);
       this._renderDineroAsegurado(dineroStats);
       this._renderDollar(dollarRates);
+      if (dollarRates?.oficial?.sell) {
+        recordDailyRateSnapshot(this.db, this.ctx.hotelId, dollarRates.oficial.sell);
+        this._renderUsdConversion();
+      }
       this._renderOccupancyForecast(occForecast, today);
       this._renderRevPAR(extraStats);
       this._renderCobros(extraStats);
@@ -751,6 +756,23 @@ export class Dashboard {
       statusEl.style.background = isStale ? '#fef9c3' : '#f0fdf4';
       statusEl.style.color      = isStale ? '#a16207' : '#15803d';
     }
+  }
+
+  // Cotización que se usa como sugerencia al cargar pagos en USD: promedio
+  // de los últimos 5 días registrados + el margen configurado en
+  // Configuración → "Dólar — margen sobre cotización oficial".
+  async _renderUsdConversion() {
+    const el = document.getElementById('dollar-widget-body');
+    if (!el) return;
+    const marginPct = parseFloat(AppContext.config?.usd_margin_pct ?? 0) || 0;
+    const conv = await getUsdConversionRate(this.db, this.ctx.hotelId, marginPct, 5);
+    if (!conv.margined) return;
+    document.getElementById('dollar-usd-conv-line')?.remove();
+    el.insertAdjacentHTML('beforeend', `
+      <div id="dollar-usd-conv-line" style="margin-top:8px;padding-top:8px;border-top:1px dashed var(--color-border);font-size:.72rem;color:var(--color-text-3)">
+        💵 Cotización sugerida para pagos USD: <strong style="color:var(--color-text)">$${conv.margined.toLocaleString('es-AR')}</strong>
+        <span title="Promedio de los últimos ${conv.daysUsed} días registrados${marginPct ? ` + margen ${marginPct}%` : ''}">(prom. ${conv.daysUsed}d${marginPct ? ` +${marginPct}%` : ''})</span>
+      </div>`);
   }
 
   _animateValue(id, target, formatter) {

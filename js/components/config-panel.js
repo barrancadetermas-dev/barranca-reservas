@@ -35,6 +35,29 @@ const CONFIG_SCHEMA = [
       { key: 'surcharge_mercadopago', label: 'MercadoPago',         default: 0,  type: 'number', min: 0, max: 50, step: 0.5 },
     ],
   },
+  {
+    group: 'Horarios de check-in / check-out',
+    icon: '🕒',
+    fields: [
+      { key: 'checkin_time',  label: 'Hora de check-in',  default: '14:00', type: 'time' },
+      { key: 'checkout_time', label: 'Hora de check-out', default: '10:00', type: 'time' },
+    ],
+  },
+  {
+    group: 'Política de cancelación',
+    icon: '❌',
+    fields: [
+      { key: 'cancel_free_days', label: 'Días antes del check-in para cancelar sin cargo', default: 3,  type: 'number', min: 0, max: 90, step: 1 },
+      { key: 'cancel_penalty_pct', label: 'Retención si cancela fuera de ese plazo',       default: 30, type: 'number', min: 0, max: 100, step: 5 },
+    ],
+  },
+  {
+    group: 'Dólar — margen sobre cotización oficial (%)',
+    icon: '💵',
+    fields: [
+      { key: 'usd_margin_pct', label: 'Margen aplicado a pagos en USD', default: 0, type: 'number', min: -20, max: 20, step: 0.5, unit: '%' },
+    ],
+  },
 ];
 
 export class ConfigPanel {
@@ -155,7 +178,7 @@ export class ConfigPanel {
                     <div style="display:flex;align-items:center;gap:4px">
                       <input id="cfg-${f.key}" class="config-input" ${inputAttrs}
                              data-key="${f.key}" data-default="${f.default}">
-                      ${f.type === 'number' && f.max === 100 ? '<span class="cfg-unit">%</span>' : ''}
+                      ${f.unit ? `<span class="cfg-unit">${f.unit}</span>` : (f.type === 'number' && f.max === 100 ? '<span class="cfg-unit">%</span>' : '')}
                     </div>
                   </div>`;
               }).join('')}
@@ -692,6 +715,10 @@ export class ConfigPanel {
 
   static getNumber(key, defaultVal = 0) {
     return parseFloat(AppContext.config?.[key] ?? defaultVal) || defaultVal;
+  }
+
+  static getString(key, defaultVal = '') {
+    return AppContext.config?.[key] ?? defaultVal;
   }
 
   // ══════════════════════════════════════════════════
