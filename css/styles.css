@@ -5074,7 +5074,7 @@ select.field-error {
    ══════════════════════════════════════════════════ */
 
 .booking-voucher {
-  padding: 4px 0 12px;
+  padding: 4px 10px 12px 0;
   max-height: calc(100vh - 260px);
   overflow-y: auto;
 }

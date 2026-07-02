@@ -833,7 +833,7 @@
       <div class="form-group"><label>Email</label><input type="email" id="f-email" placeholder="juan@correo.com"></div>
 
       <details class="form-collapsible" id="f-extra-details">
-        <summary>Datos adicionales (registro)</summary>
+        <summary>Datos adicionales <em>(registro)</em></summary>
         <div class="form-grid-2" style="margin-top:10px">
           <div class="form-group"><label>Localidad</label><input type="text" id="f-locality" placeholder="Ej: Rosario, Santa Fe"></div>
           <div class="form-group"><label>Edad</label><input type="number" id="f-age" min="0" max="120" placeholder="35"></div>
@@ -848,39 +848,10 @@
     <!-- Step 2: Stay -->
     <div class="step-content hidden" id="step-2">
       <div class="form-group">
-        <label>Canal de origen <span class="label-hint">¿Cómo llegó esta reserva?</span></label>
-        <div id="f-source-selector">
-          <!-- Renderizado por booking-form.js via _renderSourceSelector() -->
-          <!-- Fallback estático en caso de que JS no haya corrido aún -->
-          <label class="src-chip selected" data-source="direct" style="--src-color:#64748B">
-            <input type="radio" name="booking-source" value="direct" checked style="display:none">
-            <span class="src-dot" style="background:#64748B"></span><span class="src-label">Directo</span>
-          </label>
-          <label class="src-chip" data-source="walkin" style="--src-color:#0891B2">
-            <input type="radio" name="booking-source" value="walkin" style="display:none">
-            <span class="src-dot" style="background:#0891B2"></span><span class="src-label">Espontáneo</span>
-          </label>
-          <label class="src-chip" data-source="booking" style="--src-color:#1D4ED8">
-            <input type="radio" name="booking-source" value="booking" style="display:none">
-            <span class="src-dot" style="background:#1D4ED8"></span><span class="src-label">Booking</span>
-          </label>
-          <label class="src-chip" data-source="airbnb" style="--src-color:#EA580C">
-            <input type="radio" name="booking-source" value="airbnb" style="display:none">
-            <span class="src-dot" style="background:#EA580C"></span><span class="src-label">Airbnb</span>
-          </label>
-          <label class="src-chip" data-source="family" style="--src-color:#7C3AED">
-            <input type="radio" name="booking-source" value="family" style="display:none">
-            <span class="src-dot" style="background:#7C3AED"></span><span class="src-label">Familia</span>
-          </label>
-          <label class="src-chip" data-source="company" style="--src-color:#0F766E">
-            <input type="radio" name="booking-source" value="company" style="display:none">
-            <span class="src-dot" style="background:#0F766E"></span><span class="src-label">Empresa</span>
-          </label>
-          <label class="src-chip" data-source="referral" style="--src-color:#B45309">
-            <input type="radio" name="booking-source" value="referral" style="display:none">
-            <span class="src-dot" style="background:#B45309"></span><span class="src-label">Referido</span>
-          </label>
-        </div>
+        <label>Fechas de estadía <span class="req">*</span></label>
+        <div id="f-date-picker" class="date-picker-container"></div>
+        <input type="date" id="f-checkin"  style="display:none">
+        <input type="date" id="f-checkout" style="display:none">
       </div>
       <div class="form-group">
         <label>Unidades <span class="req">*</span> <span class="label-hint">Podés seleccionar más de una</span></label>
@@ -915,12 +886,40 @@
         </div>
         <input type="hidden" id="f-pax" value="1">
       </div>
-
       <div class="form-group">
-        <label>Fechas de estadía <span class="req">*</span></label>
-        <div id="f-date-picker" class="date-picker-container"></div>
-        <input type="date" id="f-checkin"  style="display:none">
-        <input type="date" id="f-checkout" style="display:none">
+        <label>Canal de origen <span class="label-hint">¿Cómo llegó esta reserva?</span></label>
+        <div id="f-source-selector">
+          <!-- Renderizado por booking-form.js via _renderSourceSelector() -->
+          <!-- Fallback estático en caso de que JS no haya corrido aún -->
+          <label class="src-chip selected" data-source="direct" style="--src-color:#64748B">
+            <input type="radio" name="booking-source" value="direct" checked style="display:none">
+            <span class="src-dot" style="background:#64748B"></span><span class="src-label">Directo</span>
+          </label>
+          <label class="src-chip" data-source="walkin" style="--src-color:#0891B2">
+            <input type="radio" name="booking-source" value="walkin" style="display:none">
+            <span class="src-dot" style="background:#0891B2"></span><span class="src-label">Espontáneo</span>
+          </label>
+          <label class="src-chip" data-source="booking" style="--src-color:#1D4ED8">
+            <input type="radio" name="booking-source" value="booking" style="display:none">
+            <span class="src-dot" style="background:#1D4ED8"></span><span class="src-label">Booking</span>
+          </label>
+          <label class="src-chip" data-source="airbnb" style="--src-color:#EA580C">
+            <input type="radio" name="booking-source" value="airbnb" style="display:none">
+            <span class="src-dot" style="background:#EA580C"></span><span class="src-label">Airbnb</span>
+          </label>
+          <label class="src-chip" data-source="family" style="--src-color:#7C3AED">
+            <input type="radio" name="booking-source" value="family" style="display:none">
+            <span class="src-dot" style="background:#7C3AED"></span><span class="src-label">Familia</span>
+          </label>
+          <label class="src-chip" data-source="company" style="--src-color:#0F766E">
+            <input type="radio" name="booking-source" value="company" style="display:none">
+            <span class="src-dot" style="background:#0F766E"></span><span class="src-label">Empresa</span>
+          </label>
+          <label class="src-chip" data-source="referral" style="--src-color:#B45309">
+            <input type="radio" name="booking-source" value="referral" style="display:none">
+            <span class="src-dot" style="background:#B45309"></span><span class="src-label">Referido</span>
+          </label>
+        </div>
       </div>
       <div class="form-group">
         <label>Observaciones <span class="notes-counter"><span id="notes-count">0</span>/200</span></label>
