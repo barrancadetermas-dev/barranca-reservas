@@ -140,6 +140,8 @@ export class Dashboard {
       this._renderOccupancyRing(kpis.occupiedUnits ?? 0, this.ctx.units?.length ?? 7);
       this._renderArrivals(kpis.arrivals ?? []);
       this._renderDepartures(kpis.checkouts ?? []);
+      // Widget de Limpieza — estaba definido pero nunca se llamaba
+      this._fetchTodayCleaningTasks(today).then(tasks => this._renderCleaningWidget(tasks));
       // Update header badge
       const buyEl = document.getElementById('dollar-badge-buy');
       const sellEl = document.getElementById('dollar-badge-value');
