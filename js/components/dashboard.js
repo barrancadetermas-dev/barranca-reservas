@@ -119,6 +119,7 @@ export class Dashboard {
   // ── Entrada pública ──────────────────────────────
   async load() {
     window._dashboardInstance = this;
+    this._renderSkeleton(); // estaba definido pero nunca se llamaba
     try {
       const today = toISODate(new Date());
       const [kpis, extraStats, dineroStats, dollarRates, occForecast] = await Promise.all([
@@ -152,6 +153,8 @@ export class Dashboard {
       }
     } catch (err) {
       console.error('Dashboard load error:', err);
+    } finally {
+      this._clearSkeleton();
     }
   }
 
@@ -162,14 +165,16 @@ export class Dashboard {
 
   _renderSkeleton() {
     const grid = document.getElementById('kpi-grid');
-    if (!grid) return;
-    grid.querySelectorAll('.kpi-card').forEach(c => c.classList.add('kpi-loading'));
+    if (grid) grid.querySelectorAll('.kpi-card').forEach(c => c.classList.add('kpi-loading'));
+    const cards = document.getElementById('dashboard-cards');
+    if (cards) cards.querySelectorAll('.dash-card-uniform').forEach(c => c.classList.add('dash-card-loading'));
   }
 
   _clearSkeleton() {
     const grid = document.getElementById('kpi-grid');
-    if (!grid) return;
-    grid.querySelectorAll('.kpi-card').forEach(c => c.classList.remove('kpi-loading'));
+    if (grid) grid.querySelectorAll('.kpi-card').forEach(c => c.classList.remove('kpi-loading'));
+    const cards = document.getElementById('dashboard-cards');
+    if (cards) cards.querySelectorAll('.dash-card-uniform').forEach(c => c.classList.remove('dash-card-loading'));
   }
 
   // ── Contador animado ──────────────────────────────
