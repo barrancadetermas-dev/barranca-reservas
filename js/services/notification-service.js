@@ -142,6 +142,52 @@ export class NotificationService {
         });
       });
 
+      // ── Limpiezas pendientes de hoy (o atrasadas) ──
+      // Solo pending/in_progress: al marcarse 'completed' dejan de traerse acá.
+      const { data: cleanings } = await this.db
+        .from('cleaning_tasks')
+        .select('id, scheduled_date, status, notes, units(name)')
+        .eq('hotel_id', AppContext.hotelId)
+        .neq('status', 'completed')
+        .lte('scheduled_date', today)
+        .order('scheduled_date', { ascending: true })
+        .limit(10);
+
+      (cleanings ?? []).forEach(t => {
+        const overdue = t.scheduled_date < today;
+        this._list.push({
+          id:       `cl-${t.id}`,
+          type:     'cleaning',
+          priority: overdue ? 'high' : 'medium',
+          icon:     '🧹',
+          title:    overdue ? 'Limpieza atrasada' : 'Limpieza pendiente',
+          body:     `${t.units?.name ?? 'Unidad'}${t.notes ? ` · ${t.notes}` : ''}`,
+          taskId:   t.id,
+        });
+      });
+
+      // ── Incidencias de mantenimiento abiertas ──
+      // Solo status !== 'resolved': al resolverse dejan de traerse acá.
+      const { data: maint } = await this.db
+        .from('maintenance_issues')
+        .select('id, title, priority, status, created_at, units(name)')
+        .eq('hotel_id', AppContext.hotelId)
+        .neq('status', 'resolved')
+        .order('created_at', { ascending: false })
+        .limit(10);
+
+      (maint ?? []).forEach(m => {
+        this._list.push({
+          id:       `mt-${m.id}`,
+          type:     'maintenance',
+          priority: m.priority === 'urgent' ? 'high' : 'medium',
+          icon:     '🔧',
+          title:    'Mantenimiento pendiente',
+          body:     `${m.units?.name ?? 'Unidad'} · ${m.title ?? 'Incidencia'}`,
+          issueId:  m.id,
+        });
+      });
+
     } catch (err) {
       console.warn('[NotifService] error fetching notifications:', err.message);
     }

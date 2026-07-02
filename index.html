@@ -447,23 +447,6 @@
             <div id="occ-sub" style="text-align:center;font-size:.75rem;color:var(--color-text-3);margin-top:2px">—</div>
           </div>
 
-          <!-- CARD: Ocupación próximos días -->
-          <div class="card dash-card-uniform" data-card-id="next-event">
-            <div class="card-header"><h3>📈 Ocupación próx. días</h3></div>
-            <div id="dash-next-event" style="flex:1"></div>
-          </div>
-
-          <!-- CARD: Próximas llegadas -->
-          <div class="card dash-card-uniform widget-upcoming" data-card-id="upcoming">
-            <div class="card-header">
-              <h3>📅 Próximas llegadas</h3>
-              <span class="badge-today" style="font-size:.65rem;background:#f0f9ff;color:#0369a1;padding:2px 8px;border-radius:4px;font-weight:700">7d</span>
-            </div>
-            <div id="dashboard-upcoming" style="flex:1;overflow-y:auto;max-height:200px"></div>
-          </div>
-
-          <!-- ROW 2: financiero del mes -->
-
           <!-- CARD: Reservas del mes -->
           <div class="card dash-card-uniform" data-card-id="rmes">
             <div class="card-header">
@@ -477,25 +460,21 @@
             </div>
           </div>
 
-          <!-- CARD: Cobros del mes -->
-          <div class="card dash-card-uniform" data-card-id="cobros">
+          <!-- CARD: Próximas llegadas -->
+          <div class="card dash-card-uniform widget-upcoming" data-card-id="upcoming">
             <div class="card-header">
-              <h3>💰 Cobros del mes</h3>
-              <span id="dash-cobros-badge" style="font-size:.65rem;background:var(--color-surface-2);color:var(--color-text-2);padding:2px 8px;border-radius:4px;font-weight:700">—</span>
+              <h3>📅 Próximas llegadas</h3>
+              <span class="badge-today" style="font-size:.65rem;background:#f0f9ff;color:#0369a1;padding:2px 8px;border-radius:4px;font-weight:700">7d</span>
             </div>
-            <div style="font-size:1.5rem;font-weight:800;color:var(--color-text)" id="dash-cobros-val">—</div>
-            <div style="font-size:.72rem;color:var(--color-text-3);margin-bottom:8px">pendiente de cobro</div>
-            <div style="display:flex;justify-content:space-between;font-size:.78rem;margin-bottom:4px">
-              <span style="color:var(--color-text-3)">Cobrado</span>
-              <span style="font-weight:700;color:#16a34a" id="dash-cobrado-val">—</span>
-            </div>
-            <div style="display:flex;justify-content:space-between;font-size:.78rem;margin-bottom:8px">
-              <span style="color:var(--color-text-3)">Total facturado</span>
-              <span style="font-weight:700;color:var(--color-text)" id="dash-total-val">—</span>
-            </div>
-            <div style="height:6px;border-radius:3px;background:var(--color-border);overflow:hidden;margin-top:auto">
-              <div id="dash-cobros-bar-fill" style="height:100%;background:#16a34a;border-radius:3px;width:0%;transition:width .6s"></div>
-            </div>
+            <div id="dashboard-upcoming" style="flex:1;overflow-y:auto;max-height:200px"></div>
+          </div>
+
+          <!-- ROW 2: financiero del mes -->
+
+          <!-- CARD: Ocupación próximos días -->
+          <div class="card dash-card-uniform" data-card-id="next-event">
+            <div class="card-header"><h3>📈 Ocupación próx. días</h3></div>
+            <div id="dash-next-event" style="flex:1"></div>
           </div>
 
           <!-- CARD: RevPAR / ADR (se oculta y cede su lugar a Limpieza si hay tareas hoy) -->
@@ -524,13 +503,25 @@
           <!-- CARD: Limpieza de hoy — mismo lugar/tamaño que RevPAR/ADR, solo cuando hay tareas -->
           <div id="dashboard-cleaning-widget" class="card dash-card-uniform" data-card-id="cleaning" style="display:none"></div>
 
-          <!-- CARD: Dólar Oficial -->
-          <div class="card dash-card-uniform" data-card-id="dollar">
+          <!-- CARD: Cobros del mes -->
+          <div class="card dash-card-uniform" data-card-id="cobros">
             <div class="card-header">
-              <h3>💵 Dólar Oficial</h3>
-              <span id="dollar-status-badge" style="font-size:.65rem;padding:2px 8px;border-radius:4px;font-weight:700;background:#f0fdf4;color:#15803d">—</span>
+              <h3>💰 Cobros del mes</h3>
+              <span id="dash-cobros-badge" style="font-size:.65rem;background:var(--color-surface-2);color:var(--color-text-2);padding:2px 8px;border-radius:4px;font-weight:700">—</span>
             </div>
-            <div id="dollar-widget-body" style="flex:1"></div>
+            <div style="font-size:1.5rem;font-weight:800;color:var(--color-text)" id="dash-cobros-val">—</div>
+            <div style="font-size:.72rem;color:var(--color-text-3);margin-bottom:8px">pendiente de cobro</div>
+            <div style="display:flex;justify-content:space-between;font-size:.78rem;margin-bottom:4px">
+              <span style="color:var(--color-text-3)">Cobrado</span>
+              <span style="font-weight:700;color:#16a34a" id="dash-cobrado-val">—</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;font-size:.78rem;margin-bottom:8px">
+              <span style="color:var(--color-text-3)">Total facturado</span>
+              <span style="font-weight:700;color:var(--color-text)" id="dash-total-val">—</span>
+            </div>
+            <div style="height:6px;border-radius:3px;background:var(--color-border);overflow:hidden;margin-top:auto">
+              <div id="dash-cobros-bar-fill" style="height:100%;background:#16a34a;border-radius:3px;width:0%;transition:width .6s"></div>
+            </div>
           </div>
 
           <!-- CARD: Dinero asegurado -->
@@ -557,6 +548,15 @@
               <div id="dash-dinero-bar-fill" style="height:100%;background:#16a34a;border-radius:3px;width:0%;transition:width .6s"></div>
             </div>
             <div style="font-size:.65rem;color:var(--color-text-3);margin-top:4px" id="dash-dinero-pct">0% cobrado</div>
+          </div>
+
+          <!-- CARD: Dólar Oficial -->
+          <div class="card dash-card-uniform" data-card-id="dollar">
+            <div class="card-header">
+              <h3>💵 Dólar Oficial</h3>
+              <span id="dollar-status-badge" style="font-size:.65rem;padding:2px 8px;border-radius:4px;font-weight:700;background:#f0fdf4;color:#15803d">—</span>
+            </div>
+            <div id="dollar-widget-body" style="flex:1"></div>
           </div>
 
           <!-- Extras inyectados por JS (sin slot visual fijo) -->

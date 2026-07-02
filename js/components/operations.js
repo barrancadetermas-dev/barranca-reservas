@@ -303,6 +303,7 @@ export class OperationsModule {
               showToast(newStatus === 'completed' ? '✅ Limpieza lista — depto disponible' : '🔄 En proceso', 'success');
               await this._loadCleaning(panel, header);
               if (typeof updateOperationsBadge === 'function') updateOperationsBadge();
+              document.dispatchEvent(new CustomEvent('booking:changed')); // refresca campana de notificaciones
             } catch (err) {
               showToast('Error: ' + (err?.message ?? err), 'error');
               btn.disabled = false; btn.textContent = newStatus === 'in_progress' ? 'Iniciar' : '✓ Listo';
@@ -598,6 +599,7 @@ export class OperationsModule {
             panel.dataset.maintBound = '';
             await this._loadMaintenance(panel, header);
             if (typeof updateOperationsBadge === 'function') updateOperationsBadge();
+            document.dispatchEvent(new CustomEvent('booking:changed')); // refresca campana de notificaciones
           }
 
           if (btn.classList.contains('maint-edit-btn')) {
