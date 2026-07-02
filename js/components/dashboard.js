@@ -1112,55 +1112,84 @@ export class Dashboard {
     }
 
     const totalUnits = data.totalUnits || 1;
-    const barW   = 5, gap = 1;
+    const barW   = 5.4, gap = 1.3;
     const chartW = days.length * (barW + gap) - gap;
-    const chartH = 34;
-    // Umbrales pensados para ocupación real de hotel chico (rara vez
-    // toca 70%+ con mucha anticipación): así el color ya dice algo
-    // incluso en valores bajos, en vez de quedar todo gris parejo.
-    const colorFor = pct => pct >= 50 ? '#22c55e' : pct >= 20 ? '#f59e0b' : '#94a3b8';
+    const chartH = 40;
+    // Degradé continuo rojo → amarillo → verde según % de ocupación:
+    // 0% = rojo (baja), 50% = amarillo (media), 100% = verde (alta).
+    const hexToRgb = h => [1,3,5].map(i => parseInt(h.slice(i,i+2),16));
+    const rgbToHex = ([r,g,b]) => '#' + [r,g,b].map(n => Math.round(Math.max(0,Math.min(255,n))).toString(16).padStart(2,'0')).join('');
+    const mix = (c1, c2, t) => rgbToHex(hexToRgb(c1).map((v,i) => v + (hexToRgb(c2)[i]-v)*t));
+    const shade = (hex, amt) => rgbToHex(hexToRgb(hex).map(v => v + amt));
+    const colorFor = pct => pct >= 50
+      ? mix('#F59E0B', '#22C55E', Math.min(1, (pct - 50) / 50))
+      : mix('#EF4444', '#F59E0B', Math.min(1, Math.max(0, pct) / 50));
     const refY = chartH - Math.round(chartH * 0.5); // línea de referencia al 50%
 
+    let todayX = 0, todayPct = 0;
+    const gradDefs = [];
     const bars = days.map((d, i) => {
       const pct = Math.round((d.occupied / totalUnits) * 100);
       // Piso más generoso que antes (4px) para que valores chicos (8-10%)
       // sigan siendo visibles como barra y no como una línea perdida.
-      const h   = pct <= 0 ? 1 : Math.max(4, Math.round((pct / 100) * chartH));
+      const h   = pct <= 0 ? 1.5 : Math.max(4, Math.round((pct / 100) * chartH));
       const x   = i * (barW + gap);
       const y   = chartH - h;
       const isToday = d.date === today;
+      if (isToday) { todayX = x + barW / 2; todayPct = pct; }
       const fecha = new Date(d.date+'T12:00:00').toLocaleDateString('es-AR',{day:'numeric',month:'short'});
-      return `<rect x="${x}" y="${y}" width="${barW}" height="${h}" rx="1" fill="${colorFor(pct)}" opacity="${isToday ? 1 : 0.85}" style="cursor:pointer">` +
-             `<title>${isToday ? 'Hoy' : fecha}: ${pct}% ocupado (${d.occupied}/${totalUnits})</title></rect>`;
+      const base  = colorFor(pct);
+      const gid   = `occGrad${i}`;
+      gradDefs.push(`<linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="${shade(base, 28)}"/><stop offset="100%" stop-color="${shade(base, -18)}"/></linearGradient>`);
+      const ring  = isToday
+        ? `<rect x="${x - 0.6}" y="${y - 0.6}" width="${barW + 1.2}" height="${h + 1.2}" rx="2" fill="none" stroke="var(--color-primary)" stroke-width="0.9"/>`
+        : '';
+      return `<g style="cursor:pointer">` +
+             `<rect x="${x}" y="${y}" width="${barW}" height="${h}" rx="1.6" fill="url(#${gid})" opacity="${isToday ? 1 : 0.92}"/>` +
+             ring +
+             `<title>${isToday ? 'Hoy' : fecha}: ${pct}% ocupado (${d.occupied}/${totalUnits})</title></g>`;
     }).join('');
 
     const lastDate = new Date(days[days.length - 1].date + 'T12:00:00')
       .toLocaleDateString('es-AR', { day: 'numeric', month: 'short' });
 
+    const statPill = (label, pct) => {
+      const c = colorFor(pct);
+      return `
+        <div style="flex:1;text-align:center;padding:5px 2px;border-radius:9px;background:${c}1f">
+          <div style="display:flex;align-items:center;justify-content:center;gap:4px">
+            <span style="width:6px;height:6px;border-radius:50%;background:${c};flex-shrink:0"></span>
+            <span style="font-size:.95rem;font-weight:800;color:var(--color-text)">${pct}%</span>
+          </div>
+          <div style="font-size:.6rem;color:var(--color-text-3);margin-top:1px">${label}</div>
+        </div>`;
+    };
+
     el.innerHTML = `
-      <div style="display:flex;flex-direction:column;gap:4px;height:100%;justify-content:center">
-        <svg viewBox="0 0 ${chartW} ${chartH}" width="100%" height="${chartH}" style="display:block;overflow:visible">
-          <line x1="0" y1="${refY}" x2="${chartW}" y2="${refY}" stroke="var(--color-border)" stroke-width="0.6" stroke-dasharray="2,2" />
-          <line x1="0" y1="0" x2="0" y2="${chartH}" stroke="var(--color-primary)" stroke-width="1" opacity="0.6" />
-          ${bars}
+      <div style="display:flex;flex-direction:column;gap:6px;height:100%;justify-content:center">
+        <svg viewBox="0 0 ${chartW} ${chartH + 8}" width="100%" height="${chartH + 8}" style="display:block;overflow:visible">
+          <defs>${gradDefs.join('')}</defs>
+          <g transform="translate(0,8)">
+            <line x1="0" y1="${refY}" x2="${chartW}" y2="${refY}" stroke="var(--color-border)" stroke-width="0.6" stroke-dasharray="2,2" />
+            ${bars}
+          </g>
+          <line x1="${todayX}" y1="0" x2="${todayX}" y2="${chartH + 8 - Math.max(4, Math.round((todayPct/100)*chartH)) - 2}"
+                stroke="var(--color-primary)" stroke-width="0.7" stroke-dasharray="1.5,1.5" opacity="0.55"/>
+          <text x="${todayX}" y="6" text-anchor="middle" font-size="4.6" font-weight="700" fill="var(--color-primary)">HOY</text>
         </svg>
         <div style="display:flex;justify-content:space-between;font-size:.58rem;color:var(--color-text-3);padding:0 1px">
-          <span>hoy</span>
+          <span>${new Date(days[0].date+'T12:00:00').toLocaleDateString('es-AR',{day:'numeric',month:'short'})}</span>
           <span>${lastDate}</span>
         </div>
-        <div style="display:flex;justify-content:space-between;gap:4px;margin-top:2px">
-          <div style="text-align:center;flex:1">
-            <div style="font-size:.95rem;font-weight:700;color:var(--color-text)">${pct7}%</div>
-            <div style="font-size:.62rem;color:var(--color-text-3)">7 días</div>
-          </div>
-          <div style="text-align:center;flex:1;border-left:1px solid var(--color-border);border-right:1px solid var(--color-border)">
-            <div style="font-size:.95rem;font-weight:700;color:var(--color-text)">${pct14}%</div>
-            <div style="font-size:.62rem;color:var(--color-text-3)">14 días</div>
-          </div>
-          <div style="text-align:center;flex:1">
-            <div style="font-size:.95rem;font-weight:700;color:var(--color-text)">${pct28}%</div>
-            <div style="font-size:.62rem;color:var(--color-text-3)">28 días</div>
-          </div>
+        <div style="display:flex;justify-content:space-between;gap:5px">
+          ${statPill('7 días', pct7)}
+          ${statPill('14 días', pct14)}
+          ${statPill('28 días', pct28)}
+        </div>
+        <div style="display:flex;align-items:center;gap:5px;margin-top:1px">
+          <span style="font-size:.56rem;color:var(--color-text-3)">Baja</span>
+          <div style="flex:1;height:4px;border-radius:2px;background:linear-gradient(90deg,#EF4444,#F59E0B,#22C55E)"></div>
+          <span style="font-size:.56rem;color:var(--color-text-3)">Alta</span>
         </div>
       </div>`;
   }
