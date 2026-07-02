@@ -1788,7 +1788,12 @@ function setupReminderModal() {
   document.getElementById('btn-add-reminder-main')?.addEventListener('click',open);
   document.getElementById('reminder-close')?.addEventListener('click',close);
   document.getElementById('reminder-cancel')?.addEventListener('click',close);
-  document.getElementById('overlay-reminder').addEventListener('click',(e)=>{if(e.target===e.currentTarget)close();});
+  document.getElementById('overlay-reminder').addEventListener('click',(e)=>{
+    if (e.target !== e.currentTarget) return;
+    const hasData = document.getElementById('r-title')?.value.trim() || document.getElementById('r-desc')?.value.trim();
+    if (hasData && !confirm('¿Descartar este recordatorio? Lo que escribiste se va a perder.')) return;
+    close();
+  });
   document.getElementById('reminder-save')?.addEventListener('click',async()=>{
     const title=document.getElementById('r-title').value.trim(),date=document.getElementById('r-date').value;
     if(!title||!date){showToast('Título y fecha obligatorios','warning');return;}

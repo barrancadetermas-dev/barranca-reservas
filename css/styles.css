@@ -2376,8 +2376,11 @@ select {
 [data-theme="dark"] .src-chip { background: #1e293b; border-color: #334155; }
 [data-theme="dark"] .src-chip.selected { background: color-mix(in srgb, var(--src-color, #6366f1) 20%, #1e293b); }
 
-/* ── REMINDER MODAL — fix select overflow ─────────── */
-#overlay-reminder .modal-body { overflow: visible; }
+/* ── REMINDER MODAL ────────────────────────────────
+   Antes tenía overflow:visible acá para que no se recorte un <select>
+   nativo — pero el select ya no existe (ahora son checkboxes), y ese
+   overflow:visible le sacaba el scroll al modal-body, empujando el
+   botón Guardar fuera de la pantalla en formularios largos. */
 #overlay-reminder select { width: 100%; }
 
 /* ── DROPSHADOW ON MODAL — sin backdrop-filter fix── */
