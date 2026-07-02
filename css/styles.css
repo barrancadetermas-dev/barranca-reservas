@@ -908,6 +908,18 @@ select { appearance: auto; cursor: pointer; }
 .available { color: var(--color-success); }
 .unavailable { color: var(--color-danger); }
 
+/* Tag de disponibilidad por unidad en el selector del form de reserva —
+   verde = libre todo el rango, amarillo = libre parcial (con sugerencia
+   de sub-rango), rojo = ocupado todo el rango pedido. */
+.unit-avail-tag {
+  margin-left: 8px; flex-shrink: 0;
+  font-size: .66rem; font-weight: 700; padding: 2px 9px; border-radius: var(--r-full);
+  white-space: nowrap;
+}
+.unit-avail-free    { background: var(--state-green-bg);  color: var(--state-green-txt); }
+.unit-avail-partial { background: var(--state-yellow-bg); color: var(--state-yellow-txt); cursor: help; }
+.unit-avail-busy     { background: var(--state-red-bg);    color: var(--state-red-txt); }
+
 .notes-counter { font-size: .72rem; color: var(--color-text-3); font-weight: 400; margin-left: auto; }
 
 /* Price breakdown */

@@ -13,6 +13,7 @@ import { DateRangePicker } from './date-range-picker.js';
 import { Bus, EVENTS } from '../services/event-bus.js';
 import { cache } from '../services/supabase-cache.js';
 import { Sound } from '../services/sound-service.js';
+import { fetchDisponibilidad } from '../modules/mila-assistant/mila-data.js';
 // PriceSuggester se carga lazy en _runPriceSuggestion()
 
 const PAYMENT_METHODS = [
@@ -548,16 +549,63 @@ export class BookingForm {
           this._updateBreakdown();
           this._updateBlockedDates();
           this._triggerPriceSuggestion();
+          this._renderUnitAvailability();
         }
       });
     }
 
     this._renderUnitSelector();
+    this._renderUnitAvailability();
     this._updateBreakdown();
     this._goToStep(1);
   }
 
-  // ── Renderizar selector de unidades ──────────────
+  // ── Disponibilidad por unidad, con sugerencia de rango parcial ──
+  // Si al huésped le pide 5 noches y una unidad solo tiene 3 libres dentro
+  // de ese rango, no se oculta la unidad: se muestra igual con un tag
+  // informativo "3/5 noches" + el sub-rango exacto que sí está libre.
+  // Reutiliza la misma lógica de mila-data.js (fetchDisponibilidad).
+  async _renderUnitAvailability() {
+    const container = document.getElementById('units-selector');
+    if (!container) return;
+    const ci = document.getElementById('f-checkin')?.value;
+    const co = document.getElementById('f-checkout')?.value;
+    // Sin rango de fechas válido todavía: no hay nada que anotar.
+    if (!ci || !co || ci >= co) {
+      container.querySelectorAll('.unit-avail-tag').forEach(el => el.remove());
+      return;
+    }
+
+    const myRequestId = ++this._availRequestSeq || (this._availRequestSeq = 1);
+    let list;
+    try {
+      list = await fetchDisponibilidad(ci, co);
+    } catch { return; }
+    if (myRequestId !== this._availRequestSeq) return; // llegó una respuesta vieja, descartar
+
+    const byId = new Map(list.map(u => [String(u.id), u]));
+    container.querySelectorAll('.unit-option[data-unit-id]').forEach(chip => {
+      chip.querySelectorAll('.unit-avail-tag').forEach(el => el.remove());
+      const info = byId.get(String(chip.dataset.unitId));
+      if (!info) return;
+      // Si la unidad está seleccionada, no hace falta mostrarle "disponible" —
+      // ya la eligió. Solo avisamos si está ocupada o parcialmente libre,
+      // que es la información accionable.
+      const isSelected = chip.classList.contains('selected');
+      let tagHTML = '';
+      if (!info.available && !info.partial) {
+        tagHTML = `<span class="unit-avail-tag unit-avail-busy">Ocupado</span>`;
+      } else if (info.partial) {
+        const fmtD = (s) => { const [y,m,d] = s.split('-'); return `${d}/${m}`; };
+        tagHTML = `<span class="unit-avail-tag unit-avail-partial" title="Libre del ${fmtD(info.partial.from)} al ${fmtD(info.partial.to)}">${info.partial.nights}/${info.partial.ofNights} noches</span>`;
+      } else if (info.available && !isSelected) {
+        tagHTML = `<span class="unit-avail-tag unit-avail-free">Disponible</span>`;
+      }
+      if (tagHTML) chip.insertAdjacentHTML('beforeend', tagHTML);
+    });
+  }
+
+
   _renderUnitSelector() {
     const container = document.getElementById('units-selector');
     if (!container) return;
@@ -599,6 +647,7 @@ export class BookingForm {
         this._updateBreakdown();
         this._renderPerUnitPrices();
         this._triggerPriceSuggestion();
+        this._renderUnitAvailability();
         // Update pax cap when unit changes
         this._updatePaxCap?.();
       });
