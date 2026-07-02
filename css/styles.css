@@ -3622,6 +3622,7 @@ input[type="color"].unit-color-input::-webkit-color-swatch { border: none; borde
   align-items: flex-end;
   gap: 4px;
   min-height: 80px;
+  margin-top: 14px;
 }
 
 .sdc-bar {
@@ -3658,6 +3659,38 @@ input[type="color"].unit-color-input::-webkit-color-swatch { border: none; borde
 .sdc-bar:hover .sdc-bar-tooltip {
   display: block;
 }
+
+/* Etiqueta de valor permanente arriba de barras destacadas (cada N + última) */
+.sdc-bar-value {
+  position: absolute;
+  bottom: calc(100% + 3px);
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: .56rem;
+  font-weight: 700;
+  color: var(--color-text-3);
+  white-space: nowrap;
+  line-height: 1;
+}
+.sdc-bar-value.is-current { color: var(--color-primary); font-weight: 800; }
+
+/* Fila de referencias del eje X debajo de las barras (meses, días, etc.) */
+.sdc-chart-axis {
+  display: flex;
+  gap: 4px;
+  margin-top: 2px;
+}
+.sdc-chart-axis-label {
+  flex: 1;
+  text-align: center;
+  font-size: .58rem;
+  font-weight: 600;
+  color: var(--color-text-3);
+  overflow: hidden;
+  white-space: nowrap;
+  text-transform: capitalize;
+}
+.sdc-chart-axis-label.is-current { color: var(--color-primary); font-weight: 800; }
 
 .sdc-donut-wrap {
   display: flex;

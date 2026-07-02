@@ -818,13 +818,21 @@ export class Statistics {
   _sdcBarRevenue(data, fmtK, delta) {
     const maxVal = Math.max(...data.map(d => d.revenue), 1);
     const total  = data.reduce((s,d) => s+d.revenue, 0);
-    const bars   = data.map((d, i) => {
+    const n = data.length;
+    const bars = data.map((d, i) => {
       const h      = Math.max(3, Math.round((d.revenue / maxVal) * 100));
-      const isLast = i === data.length - 1;
+      const isLast = i === n - 1;
+      const showLabel = isLast || i % 3 === 0;
       const color  = isLast ? 'var(--color-primary)' : 'rgba(99,102,241,.35)';
       return `<div class="sdc-bar" style="height:${h}%;background:${color}${isLast?';opacity:1':''}">
-        <div class="sdc-bar-tooltip">${d.label}: ${fmtK(d.revenue)}</div>
+        ${showLabel ? `<span class="sdc-bar-value${isLast?' is-current':''}">${fmtK(d.revenue)}</span>` : ''}
+        <div class="sdc-bar-tooltip">${d.fullLabel ?? d.label}: ${fmtK(d.revenue)}</div>
       </div>`;
+    }).join('');
+    const axis = data.map((d, i) => {
+      const isLast = i === n - 1;
+      const show = isLast || i % 3 === 0;
+      return `<span class="sdc-chart-axis-label${isLast?' is-current':''}">${show ? d.label : ''}</span>`;
     }).join('');
     const deltaClass = delta >= 0 ? '' : 'down';
     return `<div class="stats-dashboard-card">
@@ -837,6 +845,7 @@ export class Statistics {
         <span class="sdc-delta ${deltaClass}">${delta >= 0 ? '+' : ''}${delta}%</span>
       </div>
       <div class="sdc-chart">${bars}</div>
+      <div class="sdc-chart-axis">${axis}</div>
     </div>`;
   }
 
@@ -846,6 +855,7 @@ export class Statistics {
     const cur  = occPct[11];
     const prev = occPct[10];
     const delta = cur - prev;
+    const n = occPct.length;
     const W = 240, H = 90, pad = 10;
     const pts = occPct.map((v, i) => {
       const x = pad + (i / (occPct.length-1)) * (W - pad*2);
@@ -870,7 +880,7 @@ export class Statistics {
         <span class="sdc-delta ${deltaClass}">${delta >= 0 ? '+' : ''}${delta}%</span>
       </div>
       <div style="flex:1;display:flex;align-items:flex-end">
-        <svg class="sdc-area-chart" viewBox="0 0 ${W} ${H}" style="overflow:visible">
+        <svg class="sdc-area-chart" viewBox="0 0 ${W} ${H+10}" style="overflow:visible">
           <defs><linearGradient id="occGrad" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stop-color="var(--color-primary)" stop-opacity=".3"/>
             <stop offset="100%" stop-color="var(--color-primary)" stop-opacity=".02"/>
@@ -881,10 +891,13 @@ export class Statistics {
           <path d="${areaPath}" fill="url(#occGrad)"/>
           <polyline points="${pts}" fill="none" stroke="var(--color-primary)" stroke-width="2" stroke-linejoin="round"/>
           ${occPct.map((v, i) => {
-            if (i !== 11 && i % 3 !== 0) return '';
+            if (i !== n-1 && i % 3 !== 0) return '';
             const x = pad + (i/(occPct.length-1))*(W-pad*2);
             const y = H - pad - (v/100)*(H-pad*2);
-            return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${i===11?4:2.5}" fill="${i===11?'var(--color-primary)':'rgba(99,102,241,.5)'}"/>`;
+            const isLast = i === n-1;
+            return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${isLast?4:2.5}" fill="${isLast?'var(--color-primary)':'rgba(99,102,241,.5)'}"/>
+              <text x="${x.toFixed(1)}" y="${(y-6).toFixed(1)}" text-anchor="middle" font-size="7.5" font-weight="700" fill="${isLast?'var(--color-primary)':'var(--color-text-3)'}">${v}%</text>
+              <text x="${x.toFixed(1)}" y="${H+9}" text-anchor="middle" font-size="7" fill="${isLast?'var(--color-primary)':'var(--color-text-3)'}">${monthlyData[i].label}</text>`;
           }).join('')}
         </svg>
       </div>
@@ -959,6 +972,7 @@ export class Statistics {
   _sdcAreaADR(adrData, fmt) {
     const maxADR = Math.max(...adrData.map(d => d.adr), 1);
     const curADR = adrData[11].adr;
+    const n = adrData.length;
     const W = 240, H = 90, pad = 10;
     const pts = adrData.map((d, i) => {
       const x = pad + (i / (adrData.length-1)) * (W-pad*2);
@@ -979,7 +993,7 @@ export class Statistics {
         <div class="sdc-sub">por noche ocupada</div>
       </div></div>
       <div style="flex:1;display:flex;align-items:flex-end">
-        <svg class="sdc-area-chart" viewBox="0 0 ${W} ${H}">
+        <svg class="sdc-area-chart" viewBox="0 0 ${W} ${H+10}" style="overflow:visible">
           <defs><linearGradient id="adrGrad" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stop-color="#f59e0b" stop-opacity=".4"/>
             <stop offset="100%" stop-color="#f59e0b" stop-opacity=".02"/>
@@ -987,10 +1001,13 @@ export class Statistics {
           <path d="${areaPath}" fill="url(#adrGrad)"/>
           <polyline points="${pts}" fill="none" stroke="#f59e0b" stroke-width="2" stroke-linejoin="round"/>
           ${adrData.map((d, i) => {
-            if (i !== 11) return '';
+            if (i !== n-1 && i % 3 !== 0) return '';
             const x = pad + (i/(adrData.length-1))*(W-pad*2);
             const y = H - pad - (d.adr/maxADR)*(H-pad*2);
-            return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="4" fill="#f59e0b"/>`;
+            const isLast = i === n-1;
+            return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${isLast?4:2.5}" fill="#f59e0b"/>
+              <text x="${x.toFixed(1)}" y="${(y-6).toFixed(1)}" text-anchor="middle" font-size="7.5" font-weight="700" fill="#f59e0b">${fmt(d.adr)}</text>
+              <text x="${x.toFixed(1)}" y="${H+9}" text-anchor="middle" font-size="7" fill="var(--color-text-3)">${d.label}</text>`;
           }).join('')}
         </svg>
       </div>
@@ -1002,13 +1019,21 @@ export class Statistics {
     const maxVal = Math.max(...data.map(d => d.count), 1);
     const total  = data.reduce((s,d) => s+d.count, 0);
     const avgMonth = Math.round(total / data.length);
+    const n = data.length;
     const bars = data.map((d, i) => {
       const h     = Math.max(3, Math.round((d.count / maxVal) * 100));
-      const isLast = i === data.length - 1;
+      const isLast = i === n - 1;
+      const showLabel = isLast || i % 3 === 0;
       const color  = d.count >= avgMonth ? '#22c55e' : '#94a3b8';
       return `<div class="sdc-bar" style="height:${h}%;background:${isLast ? color : color + '80'}">
-        <div class="sdc-bar-tooltip">${d.label}: ${d.count} reservas</div>
+        ${showLabel ? `<span class="sdc-bar-value${isLast?' is-current':''}">${d.count}</span>` : ''}
+        <div class="sdc-bar-tooltip">${d.fullLabel ?? d.label}: ${d.count} reservas</div>
       </div>`;
+    }).join('');
+    const axis = data.map((d, i) => {
+      const isLast = i === n - 1;
+      const show = isLast || i % 3 === 0;
+      return `<span class="sdc-chart-axis-label${isLast?' is-current':''}">${show ? d.label : ''}</span>`;
     }).join('');
     return `<div class="stats-dashboard-card">
       <div class="sdc-header"><div>
@@ -1017,6 +1042,7 @@ export class Statistics {
         <div class="sdc-sub">este mes · ${total} en 12 meses</div>
       </div></div>
       <div class="sdc-chart">${bars}</div>
+      <div class="sdc-chart-axis">${axis}</div>
     </div>`;
   }
 
@@ -1052,6 +1078,7 @@ export class Statistics {
     }
     const sorted = [...unitStats].sort((a,b) => b.rev - a.rev);
     const maxRev = sorted[0]?.rev ?? 1;
+    const totalRev = sorted.reduce((s,u) => s + u.rev, 0) || 1;
 
     if (!maxRev) {
       return `<div class="stats-dashboard-card">
@@ -1067,11 +1094,13 @@ export class Statistics {
 
     const bars = sorted.map(u => {
       const pct = Math.max(2, Math.round((u.rev / maxRev) * 100));
+      const share = Math.round((u.rev / totalRev) * 100);
       return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
         <div style="width:80px;font-size:.7rem;color:var(--color-text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${u.name.replace("Planta Baja","P. Baja").replace("Planta Alta","P. Alta")}</div>
         <div style="flex:1;height:8px;background:var(--color-surface-2);border-radius:4px;overflow:hidden">
           <div style="height:100%;width:${pct}%;background:${u.color};border-radius:4px;transition:width .6s"></div>
         </div>
+        <div style="width:34px;text-align:right;font-size:.64rem;font-weight:700;color:var(--color-text-3)">${share}%</div>
         <div style="width:60px;text-align:right;font-size:.7rem;font-weight:700;color:${u.color}">${fmt(u.rev)}</div>
       </div>`;
     }).join('');
@@ -1089,6 +1118,7 @@ export class Statistics {
   _sdcRevPAR(data, fmtK, totalUnits) {
     const maxVal = Math.max(...data.map(d => d.revpar), 1);
     const curVal = data[11].revpar;
+    const n = data.length;
     const W = 240, H = 70, pad = 8;
     const pts = data.map((d, i) => {
       const x = pad + (i/(data.length-1))*(W-pad*2);
@@ -1102,7 +1132,7 @@ export class Statistics {
         <div class="sdc-sub">ingreso por hab. disp. · ${totalUnits} deptos.</div>
       </div></div>
       <div style="flex:1;display:flex;align-items:flex-end">
-        <svg class="sdc-area-chart" viewBox="0 0 ${W} ${H}" style="height:70px">
+        <svg class="sdc-area-chart" viewBox="0 0 ${W} ${H+16}" style="height:86px;overflow:visible">
           <defs><linearGradient id="rpGrad" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stop-color="#8b5cf6" stop-opacity=".4"/>
             <stop offset="100%" stop-color="#8b5cf6" stop-opacity=".02"/>
@@ -1113,6 +1143,15 @@ export class Statistics {
             return `L${x.toFixed(1)},${y.toFixed(1)}`;
           }).join(' ')} L${W-pad},${H-pad} Z" fill="url(#rpGrad)"/>
           <polyline points="${pts}" fill="none" stroke="#8b5cf6" stroke-width="2" stroke-linejoin="round"/>
+          ${data.map((d, i) => {
+            if (i !== n-1 && i % 3 !== 0) return '';
+            const x = pad + (i/(data.length-1))*(W-pad*2);
+            const y = H - pad - (d.revpar/maxVal)*(H-pad*2);
+            const isLast = i === n-1;
+            return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${isLast?4:2.5}" fill="#8b5cf6"/>
+              <text x="${x.toFixed(1)}" y="${(y-6).toFixed(1)}" text-anchor="middle" font-size="7.5" font-weight="700" fill="#8b5cf6">${fmtK(d.revpar)}</text>
+              <text x="${x.toFixed(1)}" y="${H+11}" text-anchor="middle" font-size="7" fill="var(--color-text-3)">${d.label}</text>`;
+          }).join('')}
         </svg>
       </div>
     </div>`;
@@ -1161,7 +1200,7 @@ export class Statistics {
         <div class="sdc-sub">promedio mensual 12 meses</div>
       </div></div>
       <div style="flex:1;display:flex;align-items:flex-end">
-        <svg class="sdc-area-chart" viewBox="0 0 ${W} ${H}">
+        <svg class="sdc-area-chart" viewBox="0 0 ${W} ${H}" style="overflow:visible">
           <defs><linearGradient id="rpEvGrad" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stop-color="#06b6d4" stop-opacity=".4"/>
             <stop offset="100%" stop-color="#06b6d4" stop-opacity=".02"/>
@@ -1172,7 +1211,9 @@ export class Statistics {
             if (i !== data.length-1 && i % 3 !== 0) return '';
             const x = pad+(i/(data.length-1))*(W-pad*2);
             const y = H-pad-(d.revpar/maxVal)*(H-pad*2);
-            return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${i===data.length-1?4:2}" fill="#06b6d4"/>
+            const isLast = i === data.length-1;
+            return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${isLast?4:2}" fill="#06b6d4"/>
+              <text x="${x.toFixed(1)}" y="${(y-6).toFixed(1)}" text-anchor="middle" font-size="7.5" font-weight="700" fill="#06b6d4">${fmtK(d.revpar)}</text>
               <text x="${x.toFixed(1)}" y="${H}" text-anchor="middle" font-size="7" fill="var(--color-text-3)">${d.label}</text>`;
           }).join('')}
         </svg>
