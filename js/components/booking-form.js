@@ -1610,6 +1610,10 @@ export class BookingForm {
     const dni    = document.getElementById('f-dni')?.value?.trim()       ?? '';
     const phone  = document.getElementById('f-phone')?.value?.trim()     ?? '';
     const email  = document.getElementById('f-email')?.value?.trim()     ?? '';
+    const locality = document.getElementById('f-locality')?.value?.trim() ?? '';
+    const age      = document.getElementById('f-age')?.value?.trim()      ?? '';
+    const car      = document.getElementById('f-car')?.value?.trim()      ?? '';
+    const plate    = document.getElementById('f-plate')?.value?.trim()    ?? '';
     const ci     = document.getElementById('f-checkin')?.value  ?? '';
     const co     = document.getElementById('f-checkout')?.value ?? '';
     const price  = parseFloat(document.getElementById('f-price')?.value  ?? 0);
@@ -1726,6 +1730,9 @@ export class BookingForm {
         ${dni   ? `<div class="voucher-row-sm">DNI: ${dni}</div>` : ''}
         ${phone ? `<div class="voucher-row-sm">📱 ${phone}</div>` : ''}
         ${email ? `<div class="voucher-row-sm">✉️ ${email}</div>` : ''}
+        ${locality ? `<div class="voucher-row-sm">📍 ${locality}</div>` : ''}
+        ${age      ? `<div class="voucher-row-sm">${age} años</div>` : ''}
+        ${car || plate ? `<div class="voucher-row-sm">🚗 ${[car, plate].filter(Boolean).join(' · ')}</div>` : ''}
       </div>
 
       <div class="voucher-section">
@@ -1949,6 +1956,9 @@ export class BookingForm {
     ${dni   ? `<div class="field"><div class="field-label">DNI / Documento</div><div class="field-value">${dni}</div></div>` : ''}
     ${phone ? `<div class="field"><div class="field-label">Teléfono</div><div class="field-value">${phone}</div></div>` : ''}
     ${email ? `<div class="field"><div class="field-label">Email</div><div class="field-value">${email}</div></div>` : ''}
+    ${locality ? `<div class="field"><div class="field-label">Localidad</div><div class="field-value">${locality}</div></div>` : ''}
+    ${age      ? `<div class="field"><div class="field-label">Edad</div><div class="field-value">${age}</div></div>` : ''}
+    ${(car || plate) ? `<div class="field"><div class="field-label">Vehículo</div><div class="field-value">${[car, plate].filter(Boolean).join(' · ')}</div></div>` : ''}
   </div>
   <div class="card">
     <div class="card-title">🏠 Alojamiento</div>

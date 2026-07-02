@@ -678,6 +678,14 @@ export class GuestsCRM {
               ${['Argentina','Uruguay','Brasil','Paraguay','Chile','Bolivia','Perú','Colombia','Venezuela','Ecuador','España','México','EE.UU.','Otro']
                 .map(n => `<option value="${n}" ${(g.nationality ?? 'Argentina') === n ? 'selected' : ''}>${n}</option>`).join('')}
             </select></div>
+          <div><label style="font-size:.7rem;color:var(--color-text-3);display:block;margin-bottom:3px">📍 Localidad</label>
+            <input id="gp-locality" class="form-input" style="font-size:.82rem" value="${g.locality ?? ''}" placeholder="Ej: Rosario, Santa Fe"></div>
+          <div><label style="font-size:.7rem;color:var(--color-text-3);display:block;margin-bottom:3px">Edad</label>
+            <input id="gp-age" type="number" min="0" max="120" class="form-input" style="font-size:.82rem" value="${g.age ?? ''}"></div>
+          <div><label style="font-size:.7rem;color:var(--color-text-3);display:block;margin-bottom:3px">🚗 Auto</label>
+            <input id="gp-car" class="form-input" style="font-size:.82rem" value="${g.car_model ?? ''}" placeholder="Ej: VW Gol gris"></div>
+          <div><label style="font-size:.7rem;color:var(--color-text-3);display:block;margin-bottom:3px">Patente</label>
+            <input id="gp-plate" class="form-input" style="font-size:.82rem;text-transform:uppercase" value="${g.car_plate ?? ''}" placeholder="AB123CD"></div>
         </div>
         <button id="btn-save-contact" class="btn btn-outline btn-sm" style="margin-top:10px;font-size:.76rem">💾 Guardar datos</button>
       </div>
@@ -933,6 +941,10 @@ export class GuestsCRM {
         dni:         document.getElementById('gp-dni')?.value.trim()    || null,
         email:       document.getElementById('gp-email')?.value.trim()  || null,
         nationality: document.getElementById('gp-nationality')?.value   || 'Argentina',
+        locality:    document.getElementById('gp-locality')?.value.trim() || null,
+        age:         parseInt(document.getElementById('gp-age')?.value)   || null,
+        car_model:   document.getElementById('gp-car')?.value.trim()    || null,
+        car_plate:   document.getElementById('gp-plate')?.value.trim()?.toUpperCase() || null,
       };
       const { error } = await this.db.from('guests').update(updates).eq('id', guest.id);
       if (btn) { btn.disabled = false; btn.textContent = '💾 Guardar datos'; }
