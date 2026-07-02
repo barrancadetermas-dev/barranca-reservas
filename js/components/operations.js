@@ -112,13 +112,13 @@ export class OperationsModule {
       if (r_title) r_title.value = '';
       if (r_date)  r_date.value  = localToday();
       if (r_desc)  r_desc.value  = '';
-      if (typeof populateReminderUnitSelect === 'function') populateReminderUnitSelect();
+      window.populateReminderUnitSelect?.();
       overlay?.classList.remove('hidden');
     });
 
     const { data: reminders, error } = await this.db
       .from('reminders')
-      .select('*, units(name)')
+      .select('*')
       .eq('hotel_id', this.ctx.hotelId)
       .order('scheduled_date');
 
@@ -153,8 +153,7 @@ export class OperationsModule {
           <div class="reminder-body">
             <div class="reminder-title">${r.title}</div>
             <div class="reminder-meta">
-              📅 ${fmtD(r.scheduled_date)}
-              ${r.units?.name ? ` · 🏠 ${r.units.name}` : ' · General'}
+              📅 ${fmtD(r.scheduled_date)}${window.reminderUnitsLabel(r.unit_ids)}
               ${r.description ? ` · ${r.description}` : ''}
             </div>
           </div>
@@ -162,7 +161,7 @@ export class OperationsModule {
             <button class="btn btn-ghost btn-xs reminder-edit-btn"
               data-id="${r.id}" data-title="${r.title.replace(/"/g,'&quot;')}"
               data-date="${r.scheduled_date}" data-desc="${(r.description??'').replace(/"/g,'&quot;')}"
-              data-unit="${r.unit_id??''}" data-is-note="1" title="Editar">✏️</button>
+              data-units="${(r.unit_ids ?? []).join(',')}" data-is-note="1" title="Editar">✏️</button>
             <button class="btn btn-ghost btn-xs reminder-del-ops-btn" data-id="${r.id}" title="Eliminar">🗑️</button>
           </div>
         </div>`;
@@ -172,8 +171,7 @@ export class OperationsModule {
         <div class="reminder-body">
           <div class="reminder-title ${r.completed?'line-through':''}">${r.title}</div>
           <div class="reminder-meta">
-            📅 ${fmtD(r.scheduled_date)}
-            ${r.units?.name ? ` · 🏠 ${r.units.name}` : ' · General'}
+            📅 ${fmtD(r.scheduled_date)}${window.reminderUnitsLabel(r.unit_ids)}
             ${r.description ? ` · ${r.description}` : ''}
           </div>
         </div>
@@ -185,7 +183,7 @@ export class OperationsModule {
           <button class="btn btn-ghost btn-xs reminder-edit-btn"
             data-id="${r.id}" data-title="${r.title.replace(/"/g,'&quot;')}"
             data-date="${r.scheduled_date}" data-desc="${(r.description??'').replace(/"/g,'&quot;')}"
-            data-unit="${r.unit_id??''}" data-is-note="0" title="Editar">✏️</button>
+            data-units="${(r.unit_ids ?? []).join(',')}" data-is-note="0" title="Editar">✏️</button>
           <button class="btn btn-ghost btn-xs reminder-del-ops-btn" data-id="${r.id}" title="Eliminar">🗑️</button>
         </div>
       </div>`;
@@ -202,14 +200,14 @@ export class OperationsModule {
           const titleEl = document.getElementById('r-title');
           const dateEl  = document.getElementById('r-date');
           const descEl  = document.getElementById('r-desc');
-          const unitEl  = document.getElementById('r-unit');
+
           const noteEl  = document.getElementById('r-is-note');
           if (titleEl) titleEl.value = editBtn.dataset.title;
           if (dateEl)  dateEl.value  = editBtn.dataset.date;
           if (descEl)  descEl.value  = editBtn.dataset.desc;
           if (noteEl)  noteEl.checked = editBtn.dataset.isNote === '1';
-          if (typeof populateReminderUnitSelect === 'function') populateReminderUnitSelect();
-          setTimeout(() => { if (unitEl) unitEl.value = editBtn.dataset.unit; }, 60);
+          window.populateReminderUnitSelect?.();
+          setTimeout(() => window.setReminderCheckedUnitIds?.((editBtn.dataset.units ?? '').split(',').filter(Boolean)), 60);
           const overlay    = document.getElementById('overlay-reminder');
           const saveBtn    = document.getElementById('reminder-save');
           const modalTitle = overlay?.querySelector('.modal-title');
@@ -220,7 +218,7 @@ export class OperationsModule {
             const date  = dateEl?.value;
             if (!title || !date) { showToast('Título y fecha obligatorios','warning'); return; }
             const { error } = await this.db.from('reminders')
-              .update({ title, description: descEl?.value.trim()||null, scheduled_date: date, unit_id: unitEl?.value||null, is_note: noteEl?.checked||false })
+              .update({ title, description: descEl?.value.trim()||null, scheduled_date: date, unit_ids: window.getReminderCheckedUnitIds?.() ?? [], is_note: noteEl?.checked||false })
               .eq('id', editBtn.dataset.id);
             if (error) { showToast('Error: '+error.message,'error'); return; }
             showToast('Recordatorio actualizado ✓','success');

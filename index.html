@@ -1132,17 +1132,15 @@
         <label for="r-is-note">📌 Es una nota <span>(no una tarea — ej: cumpleaños, Mundial. No suma al contador de pendientes)</span></label>
       </div>
       <div class="form-group"><label>Descripción</label><textarea id="r-desc" rows="2" placeholder="Detalles adicionales..."></textarea></div>
-      <div class="form-grid-2">
-        <div class="form-group"><label>Fecha <span class="req">*</span></label><input type="date" id="r-date"></div>
-        <div class="form-group" id="r-unit-container">
-          <label for="r-unit">Departamento (opcional)</label>
-          <select id="r-unit" class="filter-select" style="width:100%;padding:10px 12px;border:1px solid var(--color-border);border-radius:var(--r-md);background:var(--color-surface);color:var(--color-text);font-size:.875rem">
-            <option value="">General (todo el complejo)</option>
-          </select>
-          <p style="font-size:.7rem;color:var(--color-text-3);margin-top:4px">
-            Las unidades se cargan automáticamente desde tu configuración.
-          </p>
+      <div class="form-group"><label>Fecha <span class="req">*</span></label><input type="date" id="r-date" style="max-width:200px"></div>
+      <div class="form-group" id="r-unit-container">
+        <label>Departamento(s) <span class="label-hint">Sin marcar ninguno = todo el complejo</span></label>
+        <div id="r-unit-checks" class="r-unit-checks">
+          <!-- Poblado por populateReminderUnitSelect() -->
         </div>
+        <p style="font-size:.7rem;color:var(--color-text-3);margin-top:4px">
+          Las unidades se cargan automáticamente desde tu configuración.
+        </p>
       </div>
     </div>
     <div class="modal-footer">

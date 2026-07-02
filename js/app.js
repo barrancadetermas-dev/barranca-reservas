@@ -1568,7 +1568,7 @@ async function loadRemindersSection() {
 
   const { data: reminders, error } = await supabase
     .from('reminders')
-    .select('*, units(name)')
+    .select('*')
     .eq('hotel_id', AppContext.hotelId)
     .order('scheduled_date');
 
@@ -1614,8 +1614,7 @@ async function loadRemindersSection() {
           <div class="reminder-body">
             <div class="reminder-title">${r.title}</div>
             <div class="reminder-meta">
-              📅 ${fmtD(r.scheduled_date)}
-              ${r.units?.name ? ` · 🏠 ${r.units.name}` : ' · General'}
+              📅 ${fmtD(r.scheduled_date)}${reminderUnitsLabel(r.unit_ids)}
               ${r.description ? ` · ${r.description}` : ''}
             </div>
           </div>
@@ -1624,7 +1623,7 @@ async function loadRemindersSection() {
                     data-title="${r.title.replace(/"/g,'&quot;')}"
                     data-date="${r.scheduled_date}"
                     data-desc="${(r.description ?? '').replace(/"/g,'&quot;')}"
-                    data-unit="${r.unit_id ?? ''}"
+                    data-units="${(r.unit_ids ?? []).join(',')}"
                     data-is-note="1"
                     title="Editar">✏️</button>
             <button class="btn btn-ghost btn-xs reminder-del-btn" data-id="${r.id}" title="Eliminar">🗑️</button>
@@ -1637,8 +1636,7 @@ async function loadRemindersSection() {
         <div class="reminder-body">
           <div class="reminder-title ${r.completed ? 'line-through' : ''}">${r.title}</div>
           <div class="reminder-meta">
-            📅 ${fmtD(r.scheduled_date)}
-            ${r.units?.name ? ` · 🏠 ${r.units.name}` : ' · General'}
+            📅 ${fmtD(r.scheduled_date)}${reminderUnitsLabel(r.unit_ids)}
             ${r.description ? ` · ${r.description}` : ''}
           </div>
         </div>
@@ -1651,7 +1649,7 @@ async function loadRemindersSection() {
                   data-title="${r.title.replace(/"/g,'&quot;')}"
                   data-date="${r.scheduled_date}"
                   data-desc="${(r.description ?? '').replace(/"/g,'&quot;')}"
-                  data-unit="${r.unit_id ?? ''}"
+                  data-units="${(r.unit_ids ?? []).join(',')}"
                   data-is-note="0"
                   title="Editar">✏️</button>
           <button class="btn btn-ghost btn-xs reminder-del-btn" data-id="${r.id}" title="Eliminar">🗑️</button>
@@ -1672,14 +1670,13 @@ async function loadRemindersSection() {
         const titleEl = document.getElementById('r-title');
         const dateEl  = document.getElementById('r-date');
         const descEl  = document.getElementById('r-desc');
-        const unitEl  = document.getElementById('r-unit');
         const noteEl  = document.getElementById('r-is-note');
         if (titleEl) titleEl.value = editBtn.dataset.title;
         if (dateEl)  dateEl.value  = editBtn.dataset.date;
         if (descEl)  descEl.value  = editBtn.dataset.desc;
         if (noteEl)  noteEl.checked = editBtn.dataset.isNote === '1';
         populateReminderUnitSelect();
-        setTimeout(() => { if (unitEl) unitEl.value = editBtn.dataset.unit; }, 60);
+        setTimeout(() => setReminderCheckedUnitIds((editBtn.dataset.units ?? '').split(',').filter(Boolean)), 60);
 
         const overlay    = document.getElementById('overlay-reminder');
         const saveBtn    = document.getElementById('reminder-save');
@@ -1692,7 +1689,7 @@ async function loadRemindersSection() {
           const date  = dateEl?.value;
           if (!title || !date) { showToast('Título y fecha obligatorios', 'warning'); return; }
           const { error } = await supabase.from('reminders')
-            .update({ title, description: descEl?.value.trim() || null, scheduled_date: date, unit_id: unitEl?.value || null, is_note: noteEl?.checked || false })
+            .update({ title, description: descEl?.value.trim() || null, scheduled_date: date, unit_ids: getReminderCheckedUnitIds(), is_note: noteEl?.checked || false })
             .eq('id', id);
           if (error) { showToast('Error: ' + error.message, 'error'); return; }
           showToast('Recordatorio actualizado ✓', 'success');
@@ -1767,7 +1764,7 @@ function setupReminderModal() {
     const title=document.getElementById('r-title').value.trim(),date=document.getElementById('r-date').value;
     if(!title||!date){showToast('Título y fecha obligatorios','warning');return;}
     if(isDemo()){showDemoAction(null);close();return;}
-    const{error}=await supabase.from('reminders').insert({hotel_id:AppContext.hotelId,title,description:document.getElementById('r-desc').value.trim()||null,scheduled_date:date,unit_id:document.getElementById('r-unit').value||null,is_note:document.getElementById('r-is-note')?.checked||false});
+    const{error}=await supabase.from('reminders').insert({hotel_id:AppContext.hotelId,title,description:document.getElementById('r-desc').value.trim()||null,scheduled_date:date,unit_ids:getReminderCheckedUnitIds(),is_note:document.getElementById('r-is-note')?.checked||false});
     if(error){showToast('Error al guardar','error');return;}
     showToast('Recordatorio guardado ✓','success');close();
     ['r-title','r-desc','r-date'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
@@ -1776,30 +1773,37 @@ function setupReminderModal() {
     if(currentSection==='dashboard')await dashboard?.load();
   });
 }
+// Arma el texto "🏠 #4 · #6" a partir de unit_ids — resuelve nombres desde
+// AppContext.units (ya en memoria) en vez de pedirle un embed a Supabase,
+// que no funciona con un array de IDs (no es una relación FK simple).
+function reminderUnitsLabel(unitIds) {
+  const ids = unitIds ?? [];
+  if (!ids.length) return ' · General';
+  const names = ids
+    .map(id => AppContext.units?.find(u => String(u.id) === String(id)))
+    .filter(Boolean)
+    .map(u => `#${u.sort_order ?? ''}`);
+  return names.length ? ` · 🏠 ${names.join(', ')}` : ' · General';
+}
+
 function populateReminderUnitSelect(){
-  const container = document.getElementById('r-unit-container');
-  const sel = document.getElementById('r-unit');
-  if (!sel) return;
+  const box = document.getElementById('r-unit-checks');
+  if (!box) return;
 
   const fill = (units) => {
-    sel.innerHTML = '<option value="">General (todo el complejo)</option>';
-    units.forEach(u => {
-      const opt = document.createElement('option');
-      opt.value = u.id;
-      opt.textContent = `#${u.sort_order ?? ''} · ${u.name}`;
-      sel.appendChild(opt);
-    });
+    box.innerHTML = units.map(u => `
+      <label class="r-unit-check">
+        <input type="checkbox" value="${u.id}">
+        <span>#${u.sort_order ?? ''} · ${u.name}</span>
+      </label>`).join('') || '<span style="font-size:.78rem;color:var(--color-text-3);padding:4px">Sin unidades configuradas.</span>';
   };
 
   const units = AppContext.units ?? [];
   if (units.length) { fill(units); return; }
 
   // AppContext.units todavía no cargó (modal abierto muy rápido tras el
-  // inicio de la app) — antes esto reintentaba una sola vez a los 1000ms y
-  // si tampoco estaba listo para entonces, se quedaba pegado mostrando
-  // solo "General" para siempre en ese modal. Ahora reintenta cada 300ms
-  // hasta 10 veces (3s) — cubre conexiones lentas sin bloquear la UI.
-  sel.innerHTML = '<option value="" disabled>(Cargando departamentos...)</option>';
+  // inicio de la app) — reintenta cada 300ms hasta 10 veces (3s).
+  box.innerHTML = '<span style="font-size:.78rem;color:var(--color-text-3);padding:4px">Cargando departamentos...</span>';
   let attempts = 0;
   const poll = setInterval(() => {
     attempts++;
@@ -1809,10 +1813,28 @@ function populateReminderUnitSelect(){
       fill(retryUnits);
     } else if (attempts >= 10) {
       clearInterval(poll);
-      sel.innerHTML = '<option value="">General (todo el complejo)</option>';
+      box.innerHTML = '<span style="font-size:.78rem;color:var(--color-text-3);padding:4px">Sin unidades configuradas.</span>';
     }
   }, 300);
 }
+
+// Devuelve los IDs de las unidades tildadas en el formulario de recordatorio.
+function getReminderCheckedUnitIds() {
+  return [...document.querySelectorAll('#r-unit-checks input[type="checkbox"]:checked')].map(cb => cb.value);
+}
+// Tilda las unidades correspondientes a esos IDs (para editar un recordatorio existente).
+function setReminderCheckedUnitIds(ids) {
+  const set = new Set((ids ?? []).map(String));
+  document.querySelectorAll('#r-unit-checks input[type="checkbox"]').forEach(cb => {
+    cb.checked = set.has(String(cb.value));
+  });
+}
+// operations.js es otro módulo — sin esto, sus llamadas a estas funciones
+// fallaban en silencio (typeof devolvía "undefined" siempre).
+window.populateReminderUnitSelect  = populateReminderUnitSelect;
+window.getReminderCheckedUnitIds   = getReminderCheckedUnitIds;
+window.setReminderCheckedUnitIds   = setReminderCheckedUnitIds;
+window.reminderUnitsLabel          = reminderUnitsLabel;
 
 function setupExpenseModal() {
   const close=()=>document.getElementById('overlay-expense').classList.add('hidden');
