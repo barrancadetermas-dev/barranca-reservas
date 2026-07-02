@@ -53,19 +53,24 @@ const iconSVG = (id, size = 16) => `<svg viewBox="0 0 24 24" fill="none" stroke=
 // 'period' (desde/hasta libre) | 'preset' (dropdown de período) |
 // 'unit-range' (depto + rango) | 'none' (sin campos)
 const QUERIES = [
+  // Uso diario / operativo
   { id: 'checkinout',  color: 'cyan',   title: 'Check-ins / Check-outs', sub: 'Ver movimientos en una fecha',  type: 'date' },
   { id: 'reservas',    color: 'blue',   title: 'Reservas',                sub: 'Ver reservas en una fecha',     type: 'date' },
   { id: 'disponib',    color: 'green',  title: 'Disponibilidad',          sub: 'Ver departamentos disponibles', type: 'range' },
-  { id: 'facturacion', color: 'orange', title: 'Facturación',             sub: 'Ver facturación en un período', type: 'period' },
-  { id: 'ocupacion',   color: 'purple', title: 'Ocupación',               sub: 'Ver ocupación en un período',   type: 'preset' },
-  { id: 'precios',     color: 'pink',   title: 'Precios',                 sub: 'Consultar precios por fecha',   type: 'unit-range' },
+  { id: 'huesped',     color: 'teal',   title: 'Huésped',                 sub: 'Buscar reservas por nombre',    type: 'text' },
+  // Plata
   { id: 'pagos',       color: 'amber',  title: 'Pagos pendientes',        sub: 'Ver pagos que faltan cobrar',   type: 'none' },
+  { id: 'notascredito',color: 'violet', title: 'Notas de crédito',        sub: 'Ver NC abiertas por reprogramación', type: 'none' },
+  { id: 'precios',     color: 'pink',   title: 'Precios',                 sub: 'Consultar precios por fecha',   type: 'unit-range' },
+  // Operación del día a día
+  { id: 'operaciones', color: 'lime',   title: 'Limpieza / Mantenimiento', sub: 'Ver pendientes de hoy',        type: 'none' },
+  { id: 'bloqueos',    color: 'indigo', title: 'Bloqueos',                sub: 'Ver bloqueos en una fecha',     type: 'date' },
+  // Reportes de más largo plazo
+  { id: 'ocupacion',   color: 'purple', title: 'Ocupación',               sub: 'Ver ocupación en un período',   type: 'preset' },
+  { id: 'facturacion', color: 'orange', title: 'Facturación',             sub: 'Ver facturación en un período', type: 'period' },
+  // Administrativo
   { id: 'gastosmes',   color: 'rose',   title: 'Gastos del mes',          sub: '¿Cuánto gastaste y en qué?',    type: 'month' },
   { id: 'gastosbusca', color: 'cyan',   title: 'Buscar gasto',            sub: 'Por proveedor o concepto (ej: Turismoentrerios)', type: 'text' },
-  { id: 'bloqueos',    color: 'indigo', title: 'Bloqueos',                sub: 'Ver bloqueos en una fecha',     type: 'date' },
-  { id: 'huesped',     color: 'teal',   title: 'Huésped',                 sub: 'Buscar reservas por nombre',    type: 'text' },
-  { id: 'notascredito',color: 'violet', title: 'Notas de crédito',        sub: 'Ver NC abiertas por reprogramación', type: 'none' },
-  { id: 'operaciones', color: 'lime',   title: 'Limpieza / Mantenimiento', sub: 'Ver pendientes de hoy',        type: 'none' },
 ];
 
 const PRESETS = {
