@@ -204,7 +204,7 @@ export class Calendar {
   async _fetchReminders(firstDay, lastDay) {
     const { data, error } = await this.db
       .from('reminders')
-      .select('*, units(name, sort_order)')
+      .select('*')
       .eq('hotel_id', this.ctx.hotelId)
       .gte('scheduled_date', firstDay)
       .lte('scheduled_date', lastDay)
@@ -438,10 +438,20 @@ export class Calendar {
         }
 
         rems.forEach(r => {
-          if (r.unit_id && r.unit_id !== unit.id) return;
+          // unit_ids es el campo nuevo (array, permite varios deptos o
+          // ninguno = todo el complejo). unit_id es el campo viejo — se
+          // deja como fallback por si hay recordatorios de antes de la
+          // migración que todavía no se migraron.
+          const ids = (r.unit_ids?.length ? r.unit_ids : (r.unit_id ? [r.unit_id] : [])).map(String);
+          if (ids.length && !ids.includes(String(unit.id))) return;
           const dot = document.createElement('div');
           dot.className = 'cal-reminder-dot';
-          dot.innerHTML = `<div class="tooltip">🔔 ${r.title}${r.units ? ` · #${r.units.sort_order} ${r.units.name}` : ''}</div>`;
+          const unitNames = ids
+            .map(id => this.ctx.units?.find(u => String(u.id) === id))
+            .filter(Boolean)
+            .map(u => `#${u.sort_order} ${u.name}`)
+            .join(', ');
+          dot.innerHTML = `<div class="tooltip">🔔 ${r.title}${unitNames ? ` · ${unitNames}` : ''}</div>`;
           cell.appendChild(dot);
         });
 
