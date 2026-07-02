@@ -795,15 +795,19 @@ export class Statistics {
       }));
 
       // Cancelaciones — consulta adicional
-      let cancelCount = 0;
+      // (las reprogramaciones también quedan con status='cancelled', así que
+      // ya están incluidas acá; se desglosan aparte para que se entienda
+      // cuánto es reprogramación real vs cancelación definitiva)
+      let cancelCount = 0, reprogCount = 0;
       try {
         const firstOfYear = `${year}-01-01`;
-        const { count } = await this.db.from('bookings')
-          .select('id', { count: 'exact', head: true })
+        const { data: cancelled, count } = await this.db.from('bookings')
+          .select('id, notes', { count: 'exact' })
           .eq('hotel_id', hotelId)
           .eq('status', 'cancelled')
           .gte('check_in', firstOfYear);
         cancelCount = count ?? 0;
+        reprogCount = (cancelled ?? []).filter(b => b.notes?.includes('🔄')).length;
       } catch { /* silencioso */ }
 
       const fmt    = n => '$' + Math.round(n).toLocaleString('es-AR');
@@ -817,7 +821,7 @@ export class Statistics {
         ${this._sdcBarCountBookings(monthlyData, avgOcc)}
         ${await this._sdcHorizUnits(month, year, fmt)}
         ${this._sdcRevPAR(revParData, fmtK, totalUnits, avgOcc)}
-        ${this._sdcKPICard('Cancelaciones', cancelCount, totalBookings, totalRev, fmt)}
+        ${this._sdcKPICard('Cancelaciones', cancelCount, totalBookings, totalRev, fmt, reprogCount)}
         ${this._sdcAreaRevPARTrend(revParData, fmtK, avgOcc)}
       </div>`;
 
@@ -1184,8 +1188,9 @@ export class Statistics {
   }
 
   // ── Card 8: KPI Cancelaciones + estadías prom. ───
-  _sdcKPICard(title, cancelCount, totalBookings, totalRev, fmt) {
+  _sdcKPICard(title, cancelCount, totalBookings, totalRev, fmt, reprogCount = 0) {
     const avgRev = totalBookings > 0 ? Math.round(totalRev / totalBookings) : 0;
+    const definitivas = cancelCount - reprogCount;
     // Criterio invertido: acá 0 es el mejor caso, más cancelaciones es peor.
     const state = cancelCount <= 0 ? 'green' : cancelCount <= 3 ? 'yellow' : 'red';
     const color = `var(--state-${state})`;
@@ -1197,6 +1202,10 @@ export class Statistics {
         <div class="sdc-sub">en el año calendario</div>
       </div></div>
       <div style="flex:1;display:flex;flex-direction:column;justify-content:flex-end;gap:12px">
+        ${cancelCount > 0 ? `<div style="display:flex;gap:8px;font-size:.72rem">
+          <span style="flex:1;text-align:center;background:var(--state-yellow-bg);color:var(--state-yellow-txt);border-radius:var(--r-md);padding:6px">🔄 ${reprogCount} reprogramadas</span>
+          <span style="flex:1;text-align:center;background:var(--state-red-bg);color:var(--state-red-txt);border-radius:var(--r-md);padding:6px">❌ ${definitivas} definitivas</span>
+        </div>` : ''}
         <div style="background:var(--color-surface-2);border-radius:var(--r-md);padding:12px">
           <div style="font-size:.7rem;color:var(--color-text-3);margin-bottom:4px">TICKET PROMEDIO</div>
           <div style="font-size:1.1rem;font-weight:700">${fmt(avgRev)}</div>

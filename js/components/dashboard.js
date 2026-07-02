@@ -4,8 +4,9 @@ import { isDemo } from "../auth/permissions.js";
 // KPIs, Ocupación, Dólar, Llegadas, Recordatorios
 // ═══════════════════════════════════════════════════
 
-import { formatARS, formatDate, toISODate, showToast, localToday, localDateISO } from '../supabase-config.js';
+import { formatARS, formatDate, toISODate, showToast, localToday, localDateISO, AppContext } from '../supabase-config.js';
 import { fetchDollarRates } from '../services/dollar-api.js';
+import { recordDailyRateSnapshot, getUsdConversionRate } from '../services/usd-rate-history.js';
 // ↑ Sin import de app.js — evita dependencia circular.
 // El badge se actualiza via CustomEvent que app.js escucha.
 
@@ -135,6 +136,10 @@ export class Dashboard {
       this._renderReservasMes(extraStats);
       this._renderDineroAsegurado(dineroStats);
       this._renderDollar(dollarRates);
+      if (dollarRates?.oficial?.sell) {
+        recordDailyRateSnapshot(this.db, this.ctx.hotelId, dollarRates.oficial.sell);
+        this._renderUsdConversion();
+      }
       this._renderOccupancyForecast(occForecast, today);
       this._renderRevPAR(extraStats);
       this._renderCobros(extraStats);
@@ -368,7 +373,7 @@ export class Dashboard {
     } else if (kpis.checkins.length > 1) {
       setSec('kpi-checkins', '<span style="font-size:.68rem;color:var(--color-text-3)">' + kpis.checkins.map(b => uName(b) ?? '—').join(' · ') + '</span>');
     } else {
-      setSec('kpi-checkins', '<span style="font-size:.68rem;color:var(--color-text-3)">Sin llegadas hoy 😢</span>');
+      setSec('kpi-checkins', '<span style="font-size:.68rem;color:var(--color-text-3)">Sin llegadas hoy 😭</span>');
     }
     this._bindKpiTooltip('kpi-checkins', { emptyText: 'No hay ingresos para hoy.',
       lines: kpis.checkins.map(b => (uName(b) ?? '—') + ' — ' + (gName(b) || '—')) });
@@ -388,7 +393,7 @@ export class Dashboard {
     } else if (kpis.checkouts.length > 1) {
       setSec('kpi-checkouts', '<span style="font-size:.68rem;color:var(--color-text-3)">' + kpis.checkouts.map(b => uName(b) ?? '—').join(' · ') + '</span>');
     } else {
-      setSec('kpi-checkouts', '<span style="font-size:.68rem;color:var(--color-text-3)">Sin salidas hoy 😢</span>');
+      setSec('kpi-checkouts', '<span style="font-size:.68rem;color:var(--color-text-3)">Sin salidas hoy 😭</span>');
     }
     this._bindKpiTooltip('kpi-checkouts', { emptyText: 'No hay egresos para hoy.',
       lines: kpis.checkouts.map(b => (uName(b) ?? '—') + ' — ' + (gName(b) || '—')) });
@@ -403,7 +408,7 @@ export class Dashboard {
         '<span style="font-size:.66rem;color:var(--color-text-2)">' + r.unitName + '</span>' +
         '<br><span style="font-size:.63rem;color:var(--color-text-3)">' + r.outGuest + ' → ' + r.inGuest + '</span>');
     } else {
-      setSec('kpi-recambios', '<span style="font-size:.68rem;color:var(--color-text-3)">Sin recambios 😢</span>');
+      setSec('kpi-recambios', '<span style="font-size:.68rem;color:var(--color-text-3)">Sin recambios 😭</span>');
     }
     this._bindKpiTooltip('kpi-recambios', { emptyText: 'No hay recambios para hoy.',
       blocks: kpis.recambios.map(r => ({ title: r.unitName, rows: ['Sale: ' + r.outGuest, '↓', 'Entra: ' + r.inGuest] })) });
@@ -420,7 +425,7 @@ export class Dashboard {
     } else if (occ.length > 1) {
       setSec('kpi-guests', '<span style="font-size:.68rem;color:var(--color-text-3)">' + occ.slice(0,3).map(o => o.unitName).join(' · ') + (occ.length > 3 ? '...' : '') + '</span>');
     } else {
-      setSec('kpi-guests', '<span style="font-size:.68rem;color:var(--color-text-3)">Complejo libre 😢</span>');
+      setSec('kpi-guests', '<span style="font-size:.68rem;color:var(--color-text-3)">Complejo libre 😭</span>');
     }
     this._bindKpiTooltip('kpi-guests', { emptyText: 'No hay unidades ocupadas.',
       lines: occ.map(o => o.unitName + ' — ' + o.guestName) });
@@ -642,10 +647,10 @@ export class Dashboard {
     card.classList.add(`kpi-state-${state}`);
 
     // 😊 cuando está lleno/al tope — se agrega al texto secundario existente
-    // (el caso 😢 de "sin actividad" ya viene escrito en ese mismo texto).
+    // (el caso 😭 de "sin actividad" ya viene escrito en ese mismo texto).
     if (state === 'green' && value >= total) {
       const secEl = document.getElementById(cardId + '-sec');
-      if (secEl && secEl.innerHTML && !secEl.innerHTML.includes('😊') && !secEl.innerHTML.includes('😢')) {
+      if (secEl && secEl.innerHTML && !secEl.innerHTML.includes('😊') && !secEl.innerHTML.includes('😭')) {
         secEl.innerHTML += ' 😊';
       }
     }
@@ -675,7 +680,10 @@ export class Dashboard {
 
     const pctEl = document.getElementById('occ-pct');
     const subEl = document.getElementById('occ-sub');
-    const face  = occupied <= 0 ? ' 😢' : occupied >= total ? ' 😊' : '';
+    // Escala de caras alineada con el mismo criterio de color: 0 ocupadas es
+    // el peor caso (llorando fuerte, no "triste" — eso quedaba muy suave),
+    // 1-3 es intermedio (cara neutral), completo es el mejor caso (contento).
+    const face  = occupied <= 0 ? ' 😭' : occupied <= 3 ? ' 😐' : occupied >= total ? ' 😊' : '';
     if (pctEl) {
       pctEl.textContent = `${pct}%`;
       pctEl.style.fill = stateTxt;
@@ -751,6 +759,23 @@ export class Dashboard {
       statusEl.style.background = isStale ? '#fef9c3' : '#f0fdf4';
       statusEl.style.color      = isStale ? '#a16207' : '#15803d';
     }
+  }
+
+  // Cotización que se usa como sugerencia al cargar pagos en USD: promedio
+  // de los últimos 5 días registrados + el margen configurado en
+  // Configuración → "Dólar — margen sobre cotización oficial".
+  async _renderUsdConversion() {
+    const el = document.getElementById('dollar-widget-body');
+    if (!el) return;
+    const marginPct = parseFloat(AppContext.config?.usd_margin_pct ?? 0) || 0;
+    const conv = await getUsdConversionRate(this.db, this.ctx.hotelId, marginPct, 5);
+    if (!conv.margined) return;
+    document.getElementById('dollar-usd-conv-line')?.remove();
+    el.insertAdjacentHTML('beforeend', `
+      <div id="dollar-usd-conv-line" style="margin-top:8px;padding-top:8px;border-top:1px dashed var(--color-border);font-size:.72rem;color:var(--color-text-3)">
+        💵 Cotización sugerida para pagos USD: <strong style="color:var(--color-text)">$${conv.margined.toLocaleString('es-AR')}</strong>
+        <span title="Promedio de los últimos ${conv.daysUsed} días registrados${marginPct ? ` + margen ${marginPct}%` : ''}">(prom. ${conv.daysUsed}d${marginPct ? ` +${marginPct}%` : ''})</span>
+      </div>`);
   }
 
   _animateValue(id, target, formatter) {

@@ -212,6 +212,64 @@ export async function fetchPagosPendientes() {
     .filter(b => b.balance > 0);
 }
 
+// 7b) Notas de crédito abiertas — mismo tag 🔄NC:<monto>:<fecha ISO> que
+// usan booking-list.js / booking-form.js / guests.js para reprogramaciones
+// sin fecha nueva todavía.
+export async function fetchNotasCreditoAbiertas() {
+  const hotelId = AppContext.hotelId;
+  const { data } = await supabase.from('bookings')
+    .select(`id, check_in, check_out, notes, ${guestSel}`)
+    .eq('hotel_id', hotelId)
+    .eq('status', 'cancelled')
+    .like('notes', '%🔄NC:%');
+
+  return (data ?? [])
+    .filter(b => !b.notes?.includes('✅NCUSED') && !b.notes?.includes('❌NCVOID'))
+    .map(b => {
+      const m = b.notes.match(/🔄NC:(\d+):(\d{4}-\d{2}-\d{2})/);
+      if (!m) return null;
+      const ageDays = Math.round((Date.now() - new Date(m[2] + 'T00:00:00')) / 86400000);
+      return {
+        id: b.id, guest: guestName(b), amount: parseInt(m[1], 10),
+        dateApplied: m[2], ageDays, stale: ageDays >= 90,
+        originalDates: `${b.check_in} → ${b.check_out}`,
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => b.ageDays - a.ageDays);
+}
+
+// 7c) Limpieza y mantenimiento pendiente — mismo criterio que
+// notification-service.js (status !== 'completed' / 'resolved')
+export async function fetchPendingOps() {
+  const hotelId = AppContext.hotelId;
+  const today = new Date().toISOString().slice(0, 10);
+  const unitName = (id) => AppContext.units?.find(u => u.id === id)?.name ?? 'Unidad';
+
+  const [{ data: cleanings }, { data: maint }] = await Promise.all([
+    supabase.from('cleaning_tasks')
+      .select('id, scheduled_date, status, notes, unit_id')
+      .eq('hotel_id', hotelId)
+      .neq('status', 'completed')
+      .order('scheduled_date', { ascending: true }),
+    supabase.from('maintenance_issues')
+      .select('id, title, priority, status, created_at, unit_id')
+      .eq('hotel_id', hotelId)
+      .neq('status', 'resolved')
+      .order('created_at', { ascending: false }),
+  ]);
+
+  return {
+    cleaning: (cleanings ?? []).map(t => ({
+      id: t.id, unit: unitName(t.unit_id), date: t.scheduled_date,
+      overdue: t.scheduled_date < today, notes: t.notes,
+    })),
+    maintenance: (maint ?? []).map(m => ({
+      id: m.id, unit: unitName(m.unit_id), title: m.title, urgent: m.priority === 'urgent',
+    })),
+  };
+}
+
 // 8) Bloqueos en una fecha — mismo criterio (status='blocked' / is_blocked) que calendar.js
 export async function fetchBloqueos(dateISO) {
   const hotelId = AppContext.hotelId;

@@ -45,6 +45,8 @@ const ICON_PATHS = {
 };
 ICON_PATHS.gastosmes   = ICON_PATHS.wallet;
 ICON_PATHS.gastosbusca = ICON_PATHS.search;
+ICON_PATHS.notascredito = '<path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 014-4h14"/><path d="M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 01-4 4H3"/>';
+ICON_PATHS.operaciones  = '<path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/>';
 const iconSVG = (id, size = 16) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="${size}" height="${size}">${ICON_PATHS[id]}</svg>`;
 
 // type: 'date' (1 fecha) | 'range' (ingreso/salida, 1 noche por defecto) |
@@ -62,6 +64,8 @@ const QUERIES = [
   { id: 'gastosbusca', color: 'cyan',   title: 'Buscar gasto',            sub: 'Por proveedor o concepto (ej: Turismoentrerios)', type: 'text' },
   { id: 'bloqueos',    color: 'indigo', title: 'Bloqueos',                sub: 'Ver bloqueos en una fecha',     type: 'date' },
   { id: 'huesped',     color: 'teal',   title: 'Huésped',                 sub: 'Buscar reservas por nombre',    type: 'text' },
+  { id: 'notascredito',color: 'violet', title: 'Notas de crédito',        sub: 'Ver NC abiertas por reprogramación', type: 'none' },
+  { id: 'operaciones', color: 'lime',   title: 'Limpieza / Mantenimiento', sub: 'Ver pendientes de hoy',        type: 'none' },
 ];
 
 const PRESETS = {
@@ -603,6 +607,16 @@ async function runQuery(queryId) {
         guardedRender(`"${esc(s.query)}"`, gastosBuscaHTML(data));
         break;
       }
+      case 'notascredito': {
+        const data = await MilaData.fetchNotasCreditoAbiertas();
+        guardedRender('', notasCreditoHTML(data));
+        break;
+      }
+      case 'operaciones': {
+        const data = await MilaData.fetchPendingOps();
+        guardedRender('', operacionesHTML(data));
+        break;
+      }
     }
   } catch (err) {
     console.error('[MILA Assistant]', err);
@@ -851,6 +865,42 @@ function huespedHTML(list) {
     ],
     badge: b.status,
   })).join('');
+}
+
+function notasCreditoHTML(list) {
+  if (!list.length) return emptyState('✓ No hay notas de crédito abiertas');
+  return list.map(nc => bookingCard({
+    id: nc.id, title: esc(nc.guest),
+    lines: [
+      `💜 ${formatARS(nc.amount)} — reserva original ${nc.originalDates}`,
+      nc.stale
+        ? `⚠️ Sin usar hace ${nc.ageDays} días — se puede anular desde Reservas`
+        : `🕓 Aplicada hace ${nc.ageDays} día${nc.ageDays === 1 ? '' : 's'}`,
+    ],
+    badge: nc.stale ? 'Vieja' : 'Abierta',
+  })).join('');
+}
+
+function operacionesHTML(d) {
+  const { cleaning = [], maintenance = [] } = d ?? {};
+  if (!cleaning.length && !maintenance.length) return emptyState('✓ Sin limpieza ni mantenimiento pendiente');
+  const cleanRows = cleaning.map(t => `
+    <div class="mila-card${t.overdue ? ' mila-card-overdue' : ''}">
+      <div class="mila-card-head">
+        <span class="mila-card-title">🧹 ${esc(t.unit)}</span>
+        ${t.overdue ? '<span class="mila-urgency-tag is-overdue">Atrasada</span>' : ''}
+      </div>
+      <div class="mila-card-line">📅 ${fmtDate(t.date)}${t.notes ? ` · ${esc(t.notes)}` : ''}</div>
+    </div>`).join('');
+  const maintRows = maintenance.map(m => `
+    <div class="mila-card${m.urgent ? ' mila-card-overdue' : ''}">
+      <div class="mila-card-head">
+        <span class="mila-card-title">🔧 ${esc(m.unit)}</span>
+        ${m.urgent ? '<span class="mila-urgency-tag is-overdue">Urgente</span>' : ''}
+      </div>
+      <div class="mila-card-line">${esc(m.title)}</div>
+    </div>`).join('');
+  return cleanRows + maintRows;
 }
 
 function expenseRowLine(e) {
