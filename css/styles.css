@@ -732,6 +732,21 @@ select { appearance: auto; cursor: pointer; }
 .form-collapsible[open] summary::before { content: '▾ '; }
 .form-collapsible summary { padding-left: 0; }
 .form-collapsible summary + * { margin-top: 8px; }
+
+.reminder-note-toggle {
+  display: flex; align-items: flex-start; gap: 8px;
+  padding: 10px 12px; margin: 12px 0;
+  background: var(--color-surface-2); border-radius: var(--r-md);
+}
+.reminder-note-toggle input[type="checkbox"] {
+  flex-shrink: 0; width: 16px; height: 16px; margin-top: 2px;
+  accent-color: var(--color-primary); cursor: pointer;
+}
+.reminder-note-toggle label {
+  margin: 0; cursor: pointer; font-size: .82rem; font-weight: 500;
+  color: var(--color-text); line-height: 1.4;
+}
+.reminder-note-toggle label span { color: var(--color-text-3); font-weight: 400; }
 .form-grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--sp-16); }
 
 /* ── 16. SEARCH BAR ──────────────────────────────── */

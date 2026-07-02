@@ -1128,9 +1128,9 @@
     </div>
     <div class="modal-body">
       <div class="form-group"><label>Título <span class="req">*</span></label><input type="text" id="r-title" placeholder="Cortar el pasto, Fumigar, etc."></div>
-      <div class="form-group" style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--color-surface-2);border-radius:var(--r-md)">
-        <input type="checkbox" id="r-is-note" style="width:16px;height:16px;accent-color:var(--color-primary)">
-        <label for="r-is-note" style="margin:0;cursor:pointer;font-size:.82rem">📌 Es una nota <span style="color:var(--color-text-3);font-weight:400">(no una tarea — ej: cumpleaños, Mundial. No suma al contador de pendientes)</span></label>
+      <div class="reminder-note-toggle">
+        <input type="checkbox" id="r-is-note">
+        <label for="r-is-note">📌 Es una nota <span>(no una tarea — ej: cumpleaños, Mundial. No suma al contador de pendientes)</span></label>
       </div>
       <div class="form-group"><label>Descripción</label><textarea id="r-desc" rows="2" placeholder="Detalles adicionales..."></textarea></div>
       <div class="form-grid-2">
