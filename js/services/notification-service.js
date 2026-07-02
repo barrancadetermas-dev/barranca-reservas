@@ -118,10 +118,13 @@ export class NotificationService {
 
       // ── Recordatorios vencidos ───────────────────
       // NOTA: La tabla reminders NO tiene columna 'priority' — no incluirla en select
+      // is_note=false: las notas (cumpleaños, Mundial, etc.) no son tareas
+      // vencidas, no tiene sentido que aparezcan acá como pendientes.
       const { data: reminders } = await this.db
         .from('reminders')
         .select('id, title, scheduled_date, completed_at')
         .eq('hotel_id', AppContext.hotelId)
+        .eq('is_note', false)
         .is('completed', false)
         .lte('scheduled_date', today)
         .order('scheduled_date', { ascending: true })

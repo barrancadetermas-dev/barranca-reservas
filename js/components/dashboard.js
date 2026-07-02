@@ -977,13 +977,20 @@ export class Dashboard {
   // ══════════════════════════════════════════════════
   async _fetchTodayCleaningTasks(today) {
     try {
+      // NOTA: no se usa el embed units(...) — en algunos hoteles esa
+      // relación no está en el schema cache de PostgREST y tira 400
+      // (mismo bug que ya resolvimos en notification-service.js). Se
+      // resuelve la unidad con AppContext.units, que ya está en memoria.
       const { data } = await this.db
         .from('cleaning_tasks')
-        .select('id, title, status, unit_id, notes, scheduled_date, units(name, sort_order, color)')
+        .select('id, title, status, unit_id, notes, scheduled_date')
         .eq('hotel_id', this.ctx.hotelId)
         .eq('scheduled_date', today)
         .order('status', { ascending: true });
-      return data ?? [];
+      return (data ?? []).map(t => ({
+        ...t,
+        units: AppContext.units?.find(u => u.id === t.unit_id) ?? null,
+      }));
     } catch { return []; }
   }
 

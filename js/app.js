@@ -1606,6 +1606,31 @@ async function loadRemindersSection() {
                    : isPast     ? '#ef4444'
                    :              'var(--color-primary)';
     const fmtD = d => d ? new Date(d + 'T12:00:00').toLocaleDateString('es-AR', {weekday:'short',day:'numeric',month:'short'}) : '—';
+    // Nota (📌): informativa, no es tarea — sin checkbox ni semáforo de urgencia.
+    if (r.is_note) {
+      return `
+        <div class="reminder-card" data-id="${r.id}">
+          <div class="reminder-dot" style="background:transparent;display:flex;align-items:center;justify-content:center;font-size:.85rem">📌</div>
+          <div class="reminder-body">
+            <div class="reminder-title">${r.title}</div>
+            <div class="reminder-meta">
+              📅 ${fmtD(r.scheduled_date)}
+              ${r.units?.name ? ` · 🏠 ${r.units.name}` : ' · General'}
+              ${r.description ? ` · ${r.description}` : ''}
+            </div>
+          </div>
+          <div class="reminder-actions">
+            <button class="btn btn-ghost btn-xs reminder-edit-btn" data-id="${r.id}"
+                    data-title="${r.title.replace(/"/g,'&quot;')}"
+                    data-date="${r.scheduled_date}"
+                    data-desc="${(r.description ?? '').replace(/"/g,'&quot;')}"
+                    data-unit="${r.unit_id ?? ''}"
+                    data-is-note="1"
+                    title="Editar">✏️</button>
+            <button class="btn btn-ghost btn-xs reminder-del-btn" data-id="${r.id}" title="Eliminar">🗑️</button>
+          </div>
+        </div>`;
+    }
     return `
       <div class="reminder-card ${r.completed ? 'reminder-done' : ''} ${isPast ? 'reminder-overdue' : ''}" data-id="${r.id}">
         <div class="reminder-dot" style="background:${dotColor}"></div>
@@ -1627,6 +1652,7 @@ async function loadRemindersSection() {
                   data-date="${r.scheduled_date}"
                   data-desc="${(r.description ?? '').replace(/"/g,'&quot;')}"
                   data-unit="${r.unit_id ?? ''}"
+                  data-is-note="0"
                   title="Editar">✏️</button>
           <button class="btn btn-ghost btn-xs reminder-del-btn" data-id="${r.id}" title="Eliminar">🗑️</button>
         </div>
@@ -1647,9 +1673,11 @@ async function loadRemindersSection() {
         const dateEl  = document.getElementById('r-date');
         const descEl  = document.getElementById('r-desc');
         const unitEl  = document.getElementById('r-unit');
+        const noteEl  = document.getElementById('r-is-note');
         if (titleEl) titleEl.value = editBtn.dataset.title;
         if (dateEl)  dateEl.value  = editBtn.dataset.date;
         if (descEl)  descEl.value  = editBtn.dataset.desc;
+        if (noteEl)  noteEl.checked = editBtn.dataset.isNote === '1';
         populateReminderUnitSelect();
         setTimeout(() => { if (unitEl) unitEl.value = editBtn.dataset.unit; }, 60);
 
@@ -1664,7 +1692,7 @@ async function loadRemindersSection() {
           const date  = dateEl?.value;
           if (!title || !date) { showToast('Título y fecha obligatorios', 'warning'); return; }
           const { error } = await supabase.from('reminders')
-            .update({ title, description: descEl?.value.trim() || null, scheduled_date: date, unit_id: unitEl?.value || null })
+            .update({ title, description: descEl?.value.trim() || null, scheduled_date: date, unit_id: unitEl?.value || null, is_note: noteEl?.checked || false })
             .eq('id', id);
           if (error) { showToast('Error: ' + error.message, 'error'); return; }
           showToast('Recordatorio actualizado ✓', 'success');
@@ -1691,7 +1719,7 @@ async function loadRemindersSection() {
     });
   }
 
-  updateReminderBadge(reminders.filter(r => !r.completed && r.scheduled_date <= today).length);
+  updateReminderBadge(reminders.filter(r => !r.is_note && !r.completed && r.scheduled_date <= today).length);
 }
 
 window.toggleReminder = async (id, completed) => {
@@ -1719,9 +1747,11 @@ function setupReminderModal() {
     const titleEl = document.getElementById('r-title');
     const dateEl  = document.getElementById('r-date');
     const descEl  = document.getElementById('r-desc');
+    const noteEl  = document.getElementById('r-is-note');
     if (titleEl) titleEl.value = '';
     if (descEl)  descEl.value  = '';
     if (dateEl)  dateEl.value  = localToday();
+    if (noteEl)  noteEl.checked = false;
     populateReminderUnitSelect();
     document.getElementById('overlay-reminder').classList.remove('hidden');
     // Focus the title field for better UX
@@ -1737,10 +1767,11 @@ function setupReminderModal() {
     const title=document.getElementById('r-title').value.trim(),date=document.getElementById('r-date').value;
     if(!title||!date){showToast('Título y fecha obligatorios','warning');return;}
     if(isDemo()){showDemoAction(null);close();return;}
-    const{error}=await supabase.from('reminders').insert({hotel_id:AppContext.hotelId,title,description:document.getElementById('r-desc').value.trim()||null,scheduled_date:date,unit_id:document.getElementById('r-unit').value||null});
+    const{error}=await supabase.from('reminders').insert({hotel_id:AppContext.hotelId,title,description:document.getElementById('r-desc').value.trim()||null,scheduled_date:date,unit_id:document.getElementById('r-unit').value||null,is_note:document.getElementById('r-is-note')?.checked||false});
     if(error){showToast('Error al guardar','error');return;}
     showToast('Recordatorio guardado ✓','success');close();
     ['r-title','r-desc','r-date'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+    if(document.getElementById('r-is-note'))document.getElementById('r-is-note').checked=false;
     if(currentSection==='reminders')await loadRemindersSection();
     if(currentSection==='dashboard')await dashboard?.load();
   });

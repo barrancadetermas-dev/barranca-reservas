@@ -144,6 +144,29 @@ export class OperationsModule {
       const isPast   = r.scheduled_date < today && !r.completed;
       const dotColor = r.completed ? '#94a3b8' : isToday ? '#f59e0b' : isPast ? '#ef4444' : 'var(--color-primary)';
       const fmtD = d => d ? new Date(d+'T12:00:00').toLocaleDateString('es-AR',{weekday:'short',day:'numeric',month:'short'}) : '—';
+      // Nota (📌): es información para tener en cuenta, no una tarea — sin
+      // checkbox de completado y sin el semáforo de urgencia rojo/amarillo,
+      // porque una nota no "se atrasa" como sí lo hace una tarea operativa.
+      if (r.is_note) {
+        return `<div class="reminder-card" data-id="${r.id}">
+          <div class="reminder-dot" style="background:transparent;display:flex;align-items:center;justify-content:center;font-size:.85rem">📌</div>
+          <div class="reminder-body">
+            <div class="reminder-title">${r.title}</div>
+            <div class="reminder-meta">
+              📅 ${fmtD(r.scheduled_date)}
+              ${r.units?.name ? ` · 🏠 ${r.units.name}` : ' · General'}
+              ${r.description ? ` · ${r.description}` : ''}
+            </div>
+          </div>
+          <div class="reminder-actions">
+            <button class="btn btn-ghost btn-xs reminder-edit-btn"
+              data-id="${r.id}" data-title="${r.title.replace(/"/g,'&quot;')}"
+              data-date="${r.scheduled_date}" data-desc="${(r.description??'').replace(/"/g,'&quot;')}"
+              data-unit="${r.unit_id??''}" data-is-note="1" title="Editar">✏️</button>
+            <button class="btn btn-ghost btn-xs reminder-del-ops-btn" data-id="${r.id}" title="Eliminar">🗑️</button>
+          </div>
+        </div>`;
+      }
       return `<div class="reminder-card ${r.completed?'reminder-done':''} ${isPast?'reminder-overdue':''}" data-id="${r.id}">
         <div class="reminder-dot" style="background:${dotColor}"></div>
         <div class="reminder-body">
@@ -162,7 +185,7 @@ export class OperationsModule {
           <button class="btn btn-ghost btn-xs reminder-edit-btn"
             data-id="${r.id}" data-title="${r.title.replace(/"/g,'&quot;')}"
             data-date="${r.scheduled_date}" data-desc="${(r.description??'').replace(/"/g,'&quot;')}"
-            data-unit="${r.unit_id??''}" title="Editar">✏️</button>
+            data-unit="${r.unit_id??''}" data-is-note="0" title="Editar">✏️</button>
           <button class="btn btn-ghost btn-xs reminder-del-ops-btn" data-id="${r.id}" title="Eliminar">🗑️</button>
         </div>
       </div>`;
@@ -180,9 +203,11 @@ export class OperationsModule {
           const dateEl  = document.getElementById('r-date');
           const descEl  = document.getElementById('r-desc');
           const unitEl  = document.getElementById('r-unit');
+          const noteEl  = document.getElementById('r-is-note');
           if (titleEl) titleEl.value = editBtn.dataset.title;
           if (dateEl)  dateEl.value  = editBtn.dataset.date;
           if (descEl)  descEl.value  = editBtn.dataset.desc;
+          if (noteEl)  noteEl.checked = editBtn.dataset.isNote === '1';
           if (typeof populateReminderUnitSelect === 'function') populateReminderUnitSelect();
           setTimeout(() => { if (unitEl) unitEl.value = editBtn.dataset.unit; }, 60);
           const overlay    = document.getElementById('overlay-reminder');
@@ -195,7 +220,7 @@ export class OperationsModule {
             const date  = dateEl?.value;
             if (!title || !date) { showToast('Título y fecha obligatorios','warning'); return; }
             const { error } = await this.db.from('reminders')
-              .update({ title, description: descEl?.value.trim()||null, scheduled_date: date, unit_id: unitEl?.value||null })
+              .update({ title, description: descEl?.value.trim()||null, scheduled_date: date, unit_id: unitEl?.value||null, is_note: noteEl?.checked||false })
               .eq('id', editBtn.dataset.id);
             if (error) { showToast('Error: '+error.message,'error'); return; }
             showToast('Recordatorio actualizado ✓','success');
@@ -222,8 +247,8 @@ export class OperationsModule {
       });
     }
 
-    // Update badge
-    const pending = reminders.filter(r => !r.completed && r.scheduled_date <= today).length;
+    // Update badge — las notas (📌) no cuentan como pendientes, no son tareas
+    const pending = reminders.filter(r => !r.is_note && !r.completed && r.scheduled_date <= today).length;
     document.dispatchEvent(new CustomEvent('reminders:badge', { detail: { count: pending } }));
   }
 
