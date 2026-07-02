@@ -583,10 +583,13 @@ export class Dashboard {
         '</div></div>';
     }).join('');
 
+    const countLine = '<div style="font-size:.78rem;font-weight:700;color:var(--color-text);margin-bottom:8px">' +
+      bookings.length + ' llegada' + (bookings.length !== 1 ? 's' : '') + ' en los próximos ' + _upDays + ' días</div>';
+
     const headerBadge = document.querySelector('.widget-upcoming .badge-today');
     if (headerBadge) headerBadge.textContent = nextBadge;
 
-    el.innerHTML = sBar + '<div style="max-height:260px;overflow-y:auto">' + rows + '</div>';
+    el.innerHTML = sBar + countLine + '<div style="max-height:230px;overflow-y:auto">' + rows + '</div>';
   }
 
 
@@ -769,6 +772,26 @@ export class Dashboard {
     if (!el) return;
     const marginPct = parseFloat(AppContext.config?.usd_margin_pct ?? 0) || 0;
     const conv = await getUsdConversionRate(this.db, this.ctx.hotelId, marginPct, 5);
+
+    // Variación día a día — compara el registro de hoy contra el de ayer
+    // en el historial que ya se guarda para el promedio de 5 días.
+    const hist = conv.history ?? [];
+    if (hist.length >= 2) {
+      const todayEntry = hist[hist.length - 1];
+      const prevEntry  = hist[hist.length - 2];
+      if (todayEntry?.sell && prevEntry?.sell) {
+        const diffPct = Math.round(((todayEntry.sell - prevEntry.sell) / prevEntry.sell) * 1000) / 10;
+        const up = diffPct > 0;
+        const flat = diffPct === 0;
+        const color = flat ? 'var(--color-text-3)' : up ? 'var(--state-red-txt)' : 'var(--state-green-txt)';
+        const arrow = flat ? '=' : up ? '▲' : '▼';
+        document.getElementById('dollar-day-delta')?.remove();
+        const mainValEl = document.querySelector('.dollar-main-val');
+        if (mainValEl) mainValEl.insertAdjacentHTML('afterend',
+          `<div id="dollar-day-delta" style="font-size:.72rem;font-weight:700;color:${color};margin-top:-4px;margin-bottom:4px" title="vs. ayer (${prevEntry.date})">${arrow} ${Math.abs(diffPct)}% vs. ayer</div>`);
+      }
+    }
+
     if (!conv.margined) return;
     document.getElementById('dollar-usd-conv-line')?.remove();
     el.insertAdjacentHTML('beforeend', `
@@ -1027,7 +1050,7 @@ export class Dashboard {
         </span>
         ${done
           ? `<span style="font-size:.68rem;color:var(--state-green-txt);font-weight:700;flex-shrink:0">✓</span>`
-          : `<span style="font-size:.68rem;padding:2px 7px;border-radius:4px;background:var(--state-yellow-bg);color:var(--state-yellow-txt);font-weight:700;flex-shrink:0">Pendiente</span>`
+          : `<button data-quick-clean-id="${t.id}" style="font-size:.68rem;padding:2px 8px;border-radius:4px;background:var(--state-yellow-bg);color:var(--state-yellow-txt);font-weight:700;flex-shrink:0;border:none;cursor:pointer" title="Marcar como lista">✓ Listo</button>`
         }
       </div>`;
     };
@@ -1041,6 +1064,25 @@ export class Dashboard {
       <div style="flex:1;overflow-y:auto">${tasks.map(row).join('')}</div>
       ${pending.length ? '<a href="#" onclick="window.milaNav&amp;&amp;window.milaNav(\'operations\');return false;" style="display:block;text-align:center;margin-top:8px;font-size:.75rem;color:var(--color-primary);font-weight:600;text-decoration:none">Ver en Operaciones →</a>' : ''}
     `;
+
+    el.querySelectorAll('[data-quick-clean-id]').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.preventDefault();
+        const id = btn.dataset.quickCleanId;
+        btn.disabled = true;
+        btn.textContent = '...';
+        try {
+          await this.db.from('cleaning_tasks').update({ status: 'completed' }).eq('id', id);
+          const updated = tasks.map(t => t.id === id ? { ...t, status: 'completed' } : t);
+          this._renderCleaningWidget(updated);
+          document.dispatchEvent(new CustomEvent('booking:changed')); // refresca campana/operaciones
+        } catch (err) {
+          showToast('Error al marcar como lista: ' + (err?.message ?? err), 'error');
+          btn.disabled = false;
+          btn.textContent = '✓ Listo';
+        }
+      });
+    });
   }
 
   // ══════════════════════════════════════════════════
@@ -1068,7 +1110,7 @@ export class Dashboard {
           .not('status', 'in', '(cancelled,blocked)')
           .gte('check_in', firstDay).lte('check_in', lastDay),
         this.db.from('bookings')
-          .select('id', { count: 'exact', head: true })
+          .select('id, total_amount')
           .eq('hotel_id', this.ctx.hotelId)
           .not('status', 'in', '(cancelled,blocked)')
           .gte('check_in', prevFirst).lte('check_in', prevLastStr),
@@ -1084,13 +1126,16 @@ export class Dashboard {
       const revPAR      = avail > 0 ? totalRev / avail : 0;
       const adr         = totalNights > 0 ? totalRev / totalNights : 0;
       const occPct      = avail > 0 ? Math.min(100, Math.round(totalNights / avail * 100)) : 0;
-      const prevCount   = prevRes.count ?? 0;
+      const prevBks     = prevRes.data ?? [];
+      const prevCount   = prevBks.length;
+      const prevRev     = prevBks.reduce((s,b) => s + (b.total_amount ?? 0), 0);
 
       return {
         revPAR, adr, occPct, totalNights,
         totalRev, totalPaid, totalBal,
         bkCount: bks.length, prevCount,
         ticket: bks.length > 0 ? totalRev / bks.length : 0,
+        prevTicket: prevCount > 0 ? prevRev / prevCount : 0,
       };
     } catch (err) {
       console.warn('[Dashboard] extraStats error:', err);
@@ -1149,6 +1194,17 @@ export class Dashboard {
     }
     const tkEl = document.getElementById('dash-rmes-ticket');
     if (tkEl) tkEl.textContent = fmt(stats.ticket);
+    const tkVsEl = document.getElementById('dash-rmes-ticket-vs');
+    if (tkVsEl) {
+      if (stats.prevTicket > 0) {
+        const diffPct = Math.round(((stats.ticket - stats.prevTicket) / stats.prevTicket) * 100);
+        const sign = diffPct >= 0 ? '+' : '';
+        tkVsEl.textContent = `${sign}${diffPct}% vs ${fmt(stats.prevTicket)} mes ant.`;
+        tkVsEl.style.color = diffPct >= 0 ? '#16a34a' : '#ef4444';
+      } else {
+        tkVsEl.textContent = '';
+      }
+    }
   }
 
   // ══════════════════════════════════════════════════
@@ -1195,7 +1251,41 @@ export class Dashboard {
         return Math.round((avg / totalUnits) * 100);
       };
 
-      return { days, totalUnits, pct7: pct(7), pct14: pct(14), pct28: pct(28) };
+      const result = { days, totalUnits, pct7: pct(7), pct14: pct(14), pct28: pct(28) };
+
+      // Comparación — misma métrica, calculada 28 días atrás (mismo largo
+      // de ventana, evita líos de "mes" con distinta cantidad de días).
+      try {
+        const prevStart = new Date(start.getTime() - HORIZON * dayMs);
+        const prevEndISO = toISODate(new Date(prevStart.getTime() + (HORIZON - 1) * dayMs));
+        const prevStartISO = toISODate(prevStart);
+        const { data: prevBookings } = await this.db
+          .from('bookings')
+          .select('check_in, check_out, booking_units(unit_id)')
+          .eq('hotel_id', hotelId)
+          .not('status', 'in', '(cancelled,blocked)')
+          .lt('check_in', prevEndISO)
+          .gt('check_out', prevStartISO);
+        const prevDays = [];
+        for (let i = 0; i < HORIZON; i++) {
+          const d   = toISODate(new Date(prevStart.getTime() + i * dayMs));
+          const occ = new Set();
+          (prevBookings ?? []).forEach(b => {
+            if (b.check_in <= d && b.check_out > d) (b.booking_units ?? []).forEach(bu => occ.add(bu.unit_id));
+          });
+          prevDays.push({ date: d, occupied: occ.size });
+        }
+        const prevPct = (n) => {
+          const slice = prevDays.slice(0, n);
+          if (!slice.length || !totalUnits) return 0;
+          return Math.round((slice.reduce((s, d) => s + d.occupied, 0) / slice.length / totalUnits) * 100);
+        };
+        result.prevPct7  = prevPct(7);
+        result.prevPct14 = prevPct(14);
+        result.prevPct28 = prevPct(28);
+      } catch (_) { /* comparación es un plus, no crítica */ }
+
+      return result;
     } catch (err) {
       console.warn('[Dashboard] _fetchOccupancyForecast:', err?.message ?? err);
       return { days: [], totalUnits, pct7: 0, pct14: 0, pct28: 0 };
@@ -1205,7 +1295,7 @@ export class Dashboard {
   _renderOccupancyForecast(data, today) {
     const el = document.getElementById('dash-next-event');
     if (!el) return;
-    const { days, pct7, pct14, pct28 } = data ?? {};
+    const { days, pct7, pct14, pct28, prevPct7, prevPct14, prevPct28 } = data ?? {};
 
     if (!days?.length) {
       el.innerHTML = '<div style="padding:16px 0;text-align:center;color:var(--color-text-3);font-size:.82rem">📈 Sin datos de ocupación futura</div>';
@@ -1254,8 +1344,12 @@ export class Dashboard {
     const lastDate = new Date(days[days.length - 1].date + 'T12:00:00')
       .toLocaleDateString('es-AR', { day: 'numeric', month: 'short' });
 
-    const statPill = (label, pct) => {
+    const statPill = (label, pct, prevPct) => {
       const c = colorFor(pct);
+      const hasComparison = prevPct !== undefined && prevPct !== null;
+      const delta = hasComparison ? pct - prevPct : null;
+      const deltaColor = delta > 0 ? 'var(--state-green-txt)' : delta < 0 ? 'var(--state-red-txt)' : 'var(--color-text-3)';
+      const deltaTxt = delta === null ? '' : delta === 0 ? '=' : (delta > 0 ? '▲+' : '▼') + Math.abs(delta) + 'pp';
       return `
         <div style="flex:1;text-align:center;padding:5px 2px;border-radius:9px;background:${c}1f">
           <div style="display:flex;align-items:center;justify-content:center;gap:4px">
@@ -1263,6 +1357,7 @@ export class Dashboard {
             <span style="font-size:.95rem;font-weight:800;color:var(--color-text)">${pct}%</span>
           </div>
           <div style="font-size:.6rem;color:var(--color-text-3);margin-top:1px">${label}</div>
+          ${hasComparison ? `<div style="font-size:.58rem;font-weight:700;color:${deltaColor}" title="vs. hace 4 semanas: ${prevPct}%">${deltaTxt}</div>` : ''}
         </div>`;
     };
 
@@ -1284,9 +1379,9 @@ export class Dashboard {
           <span>${lastDate}</span>
         </div>
         <div style="display:flex;justify-content:space-between;gap:5px">
-          ${statPill('7 días', pct7)}
-          ${statPill('14 días', pct14)}
-          ${statPill('28 días', pct28)}
+          ${statPill('7 días', pct7, prevPct7)}
+          ${statPill('14 días', pct14, prevPct14)}
+          ${statPill('28 días', pct28, prevPct28)}
         </div>
         <div style="display:flex;align-items:center;gap:5px;margin-top:1px">
           <span style="font-size:.56rem;color:var(--color-text-3)">Baja</span>

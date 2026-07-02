@@ -104,6 +104,12 @@ export class BookingList {
 
   async load() {
     try {
+      // Si venimos de un link "Ver reservas →" del dashboard (Dinero
+      // asegurado / Cobros del mes), abrir ya ordenado por saldo pendiente.
+      if (sessionStorage.getItem('mila_jump_pending_balance') === '1') {
+        sessionStorage.removeItem('mila_jump_pending_balance');
+        this._sortBy = 'balance_desc';
+      }
       if (this.ctx.IS_DEMO) {
         const { generateMockBookings } = await import('../services/mock-data.js');
         const now = new Date();
@@ -327,6 +333,7 @@ export class BookingList {
         (b.booking_units?.[0]?.units?.sort_order ?? 99));
       case 'amount_asc':    return sorted.sort((a, b) => Number(a.total_amount) - Number(b.total_amount));
       case 'amount_desc':   return sorted.sort((a, b) => Number(b.total_amount) - Number(a.total_amount));
+      case 'balance_desc':  return sorted.sort((a, b) => Number(b.balance ?? 0) - Number(a.balance ?? 0));
       default:              return sorted;
     }
   }
@@ -338,6 +345,7 @@ export class BookingList {
       { value: 'unit_asc',      label: '🏠 Depto.'   },
       { value: 'amount_asc',    label: '💰 Menor'    },
       { value: 'amount_desc',   label: '💰 Mayor'    },
+      { value: 'balance_desc',  label: '🔴 Saldo pendiente' },
     ];
     return `
       <div class="bl-sort-wrap">
