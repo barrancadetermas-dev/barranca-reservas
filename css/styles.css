@@ -3620,21 +3620,23 @@ input[type="color"].unit-color-input::-webkit-color-swatch { border: none; borde
 }
 
 /* FIX: botón "Cobrar" — necesita ancho automático (no 34x34) */
+/* Relleno sólido a propósito: se distingue de "Señada" (badge de estado,
+   fondo suave) porque este SÍ es una acción para apretar. */
 .bl-action-btn.bl-payfull-btn {
   width: auto !important;
   padding: 0 10px !important;
   font-size: .76rem !important;
-  font-weight: 600 !important;
-  color: #16a34a;
-  border-color: rgba(34,197,94,.35);
-  background: rgba(34,197,94,.08);
+  font-weight: 700 !important;
+  color: #fff;
+  border-color: #16a34a;
+  background: #16a34a;
   gap: 4px;
   white-space: nowrap;
 }
 .bl-action-btn.bl-payfull-btn:hover {
-  background: rgba(34,197,94,.18) !important;
-  border-color: #22c55e !important;
-  color: #15803d !important;
+  background: #15803d !important;
+  border-color: #15803d !important;
+  color: #fff !important;
   transform: translateY(-1px);
 }
 
@@ -5579,6 +5581,9 @@ html, body {
   flex-direction: column !important;
   min-height: 160px;
 }
+
+/* Card "Ocupación próx. días" — el gráfico necesita más alto que el resto */
+[data-card-id="next-event"] { min-height: 220px; }
 
 /* Grid dashboard: 5 col fijas desktop */
 #dashboard-cards {

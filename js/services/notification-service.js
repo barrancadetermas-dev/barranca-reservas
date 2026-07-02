@@ -144,9 +144,14 @@ export class NotificationService {
 
       // ── Limpiezas pendientes de hoy (o atrasadas) ──
       // Solo pending/in_progress: al marcarse 'completed' dejan de traerse acá.
+      // NOTA: no se usa el embed units(name) porque en algunos hoteles la
+      // relación no está aún en el schema cache de PostgREST y devuelve 400 —
+      // se resuelve el nombre de la unidad con AppContext.units (ya en memoria).
+      const unitName = (id) => AppContext.units?.find(u => u.id === id)?.name ?? 'Unidad';
+
       const { data: cleanings } = await this.db
         .from('cleaning_tasks')
-        .select('id, scheduled_date, status, notes, units(name)')
+        .select('id, scheduled_date, status, notes, unit_id')
         .eq('hotel_id', AppContext.hotelId)
         .neq('status', 'completed')
         .lte('scheduled_date', today)
@@ -161,7 +166,7 @@ export class NotificationService {
           priority: overdue ? 'high' : 'medium',
           icon:     '🧹',
           title:    overdue ? 'Limpieza atrasada' : 'Limpieza pendiente',
-          body:     `${t.units?.name ?? 'Unidad'}${t.notes ? ` · ${t.notes}` : ''}`,
+          body:     `${unitName(t.unit_id)}${t.notes ? ` · ${t.notes}` : ''}`,
           taskId:   t.id,
         });
       });
@@ -170,7 +175,7 @@ export class NotificationService {
       // Solo status !== 'resolved': al resolverse dejan de traerse acá.
       const { data: maint } = await this.db
         .from('maintenance_issues')
-        .select('id, title, priority, status, created_at, units(name)')
+        .select('id, title, priority, status, created_at, unit_id')
         .eq('hotel_id', AppContext.hotelId)
         .neq('status', 'resolved')
         .order('created_at', { ascending: false })
@@ -183,7 +188,7 @@ export class NotificationService {
           priority: m.priority === 'urgent' ? 'high' : 'medium',
           icon:     '🔧',
           title:    'Mantenimiento pendiente',
-          body:     `${m.units?.name ?? 'Unidad'} · ${m.title ?? 'Incidencia'}`,
+          body:     `${unitName(m.unit_id)} · ${m.title ?? 'Incidencia'}`,
           issueId:  m.id,
         });
       });

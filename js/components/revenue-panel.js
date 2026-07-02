@@ -238,7 +238,7 @@ export class RevenuePanel {
               <div style="color:var(--color-text-3);font-size:.8rem">→</div>
               <div style="text-align:right">
                 <div style="font-size:.7rem;color:var(--color-text-3)">Sugerido</div>
-                <div style="font-size:1rem;font-weight:800;color:${s.delta > 0 ? 'var(--color-success)' : s.delta < 0 ? 'var(--color-warning)' : 'var(--color-text)'}">
+                <div style="font-size:1rem;font-weight:800;color:${s.delta > 3 ? 'var(--state-green-txt)' : s.delta < -3 ? 'var(--state-red-txt)' : 'var(--state-yellow-txt)'}">
                   ${formatARS(s.suggested)}
                   <span style="font-size:.7rem">${s.delta > 0 ? '+' : ''}${s.delta}%</span>
                 </div>
@@ -258,7 +258,11 @@ export class RevenuePanel {
   }
 
   _kpi(label, value, pct, sub) {
-    const deltaColor = pct == null ? '' : pct >= 0 ? 'color:#15803d;background:rgba(34,197,94,.1)' : 'color:#dc2626;background:rgba(239,68,68,.1)';
+    // Criterio de color: verde = bueno (mejora clara), amarillo = medio (estable),
+    // rojo = malo (caída clara). Igual que el resto de MILA (Ocupación, etc).
+    const deltaColor = pct == null ? '' : pct >= 5 ? 'color:var(--state-green-txt);background:var(--state-green-bg)'
+      : pct <= -5 ? 'color:var(--state-red-txt);background:var(--state-red-bg)'
+      : 'color:var(--state-yellow-txt);background:var(--state-yellow-bg)';
     const delta = pct != null ? `<span style="font-size:.7rem;font-weight:700;padding:2px 7px;border-radius:99px;${deltaColor}">${pct >= 0 ? '+' : ''}${pct}%</span>` : '';
     return `<div class="rev-kpi-card">
       <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--color-text-3);margin-bottom:4px">${label}</div>

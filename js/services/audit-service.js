@@ -34,20 +34,26 @@ export async function logAction(action, entityType, entityId, summary, changes =
       description: summary, // alias — por si el schema usa description
       changes:     changes ? JSON.parse(JSON.stringify(changes)) : null,
     };
-    await supabase.from('audit_log').insert(row);
+    const { error } = await supabase.from('audit_log').insert(row);
+    if (error) throw error;
   } catch (err) {
     // Si falla por columna no existente, reintentar sin la columna problemática
     if (err?.message?.includes('description') || err?.message?.includes('summary')) {
       try {
-        await supabase.from('audit_log').insert({
+        const { error: err2 } = await supabase.from('audit_log').insert({
           hotel_id:   AppContext.hotelId,
           user_id:    AppContext.user?.id    ?? null,
           user_email: AppContext.user?.email ?? null,
           role:       AppContext.role        ?? 'staff',
           action, entity_type: entityType, entity_id: entityId ?? null,
         });
-      } catch { /* silencioso siempre */ }
+        if (err2) console.warn('[Audit] insert falló (reintento):', err2.message);
+      } catch (e2) { console.warn('[Audit] insert falló (reintento):', e2.message); }
+    } else {
+      // Log visible en consola para poder diagnosticar (ej: RLS "admin_only"
+      // bloqueando el insert si el usuario logueado no tiene role='admin'
+      // en hotel_users). Nunca rompe el flujo principal — solo se avisa.
+      console.warn('[Audit] insert falló:', err?.message ?? err);
     }
-    // El audit log nunca rompe el flujo principal
   }
 }
