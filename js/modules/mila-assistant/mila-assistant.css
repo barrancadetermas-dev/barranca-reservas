@@ -400,33 +400,31 @@ select.mila-pill {
   animation-delay: calc(var(--i, 0) * 80ms);
 }
 .mila-trend-bar-pct {
-  font-size: .6rem; font-weight: 700; color: var(--color-text-3);
+  font-size: .6rem; font-weight: 800;
   line-height: 1; white-space: nowrap;
 }
-.mila-trend-bar-today .mila-trend-bar-pct { color: var(--mila-violet, #8B5CF6); font-weight: 800; }
 .mila-trend-bar-track {
   flex: 1; width: 100%; display: flex; align-items: flex-end; justify-content: center;
   background: var(--color-surface-2); border-radius: 6px; overflow: hidden;
   min-height: 0;
 }
+.mila-trend-bar-today .mila-trend-bar-track {
+  box-shadow: 0 0 0 2px var(--mila-violet, #8B5CF6);
+}
 .mila-trend-bar-fill {
   width: 100%; height: 0; border-radius: 6px 6px 0 0; min-height: 4px;
-  background: linear-gradient(180deg, var(--mila-violet, #8B5CF6) 0%, var(--color-primary) 100%);
+  /* color se define inline por barra, según % de ocupación (rojo→ámbar→verde) */
   transition: height .8s cubic-bezier(.22,1,.36,1), opacity .18s ease;
-}
-.mila-trend-bar-today .mila-trend-bar-fill {
-  background: linear-gradient(180deg, #A78BFA 0%, var(--mila-violet, #8B5CF6) 100%);
-  box-shadow: 0 0 0 1px rgba(139,92,246,.35) inset;
 }
 .mila-trend-bar-day {
   font-size: .6rem; font-weight: 700; color: var(--color-text-3); text-transform: uppercase;
   line-height: 1;
 }
-.mila-trend-bar-today .mila-trend-bar-day { color: var(--mila-violet, #8B5CF6); }
+.mila-trend-bar-today .mila-trend-bar-day { color: var(--mila-violet, #8B5CF6); font-weight: 800; }
 .mila-trend-bar:hover .mila-trend-bar-fill { opacity: .8; }
-.mila-trend-bar:hover .mila-trend-bar-track { background: var(--color-primary-l); }
+.mila-trend-bar:hover .mila-trend-bar-track { background: var(--color-surface-2); }
 .mila-trend-bar-loading .mila-trend-bar-fill {
-  background: var(--color-surface-2); height: 30% !important;
+  background: var(--color-surface-2) !important; height: 30% !important;
   animation: mila-shimmer-v 1.3s ease-in-out infinite;
 }
 @keyframes mila-shimmer-v { 0%, 100% { opacity: .4; } 50% { opacity: .8; } }

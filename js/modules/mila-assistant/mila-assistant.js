@@ -256,15 +256,22 @@ async function loadQuickStats(todayISO) {
     if (bar) requestAnimationFrame(() => { bar.style.width = `${occ.pct}%`; });
 
     const DIAS_CORTO = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+    // Color según ocupación: 0% rojo → 100% verde (pasando por ámbar en el medio)
+    const occColor = (pct) => {
+      const p = Math.max(0, Math.min(100, pct));
+      const hue = (p / 100) * 120; // 0=rojo, 60=ámbar, 120=verde
+      return { top: `hsl(${hue}, 75%, 58%)`, bottom: `hsl(${hue}, 75%, 45%)` };
+    };
     const trendWrap = document.getElementById('mila-trend-bars');
     if (trendWrap) {
       trendWrap.innerHTML = trend.map((d, i) => {
         const dow = i === 0 ? 'Hoy' : DIAS_CORTO[new Date(d.date + 'T12:00:00').getDay()];
         const todayCls = i === 0 ? ' mila-trend-bar-today' : '';
+        const c = occColor(d.pct);
         return `
           <span class="mila-trend-bar${todayCls}" style="--i:${i}" title="${dow} · ${d.pct}%">
-            <span class="mila-trend-bar-pct">${d.pct}%</span>
-            <span class="mila-trend-bar-track"><span class="mila-trend-bar-fill" data-pct="${d.pct}"></span></span>
+            <span class="mila-trend-bar-pct" style="color:${c.bottom}">${d.pct}%</span>
+            <span class="mila-trend-bar-track"><span class="mila-trend-bar-fill" data-pct="${d.pct}" style="background:linear-gradient(180deg, ${c.top}, ${c.bottom})"></span></span>
             <span class="mila-trend-bar-day">${dow}</span>
           </span>`;
       }).join('');
