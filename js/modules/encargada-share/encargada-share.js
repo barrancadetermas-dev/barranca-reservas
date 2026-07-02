@@ -15,6 +15,18 @@ let _initialized = false;
 let _modalEl = null;
 let _allBookings = []; // todas las reservas sin filtrar (para poder re-filtrar dentro del modal)
 
+// Lee el radio realmente tildado — antes esto se leía de un <input> con
+// id="enc-filter-type" que en realidad era el radio "Hoy" reutilizado como
+// variable de estado (bug: al tildar otro radio, ese primero nunca se
+// "destildaba" internamente, así que el filtro por rango no aplicaba bien).
+function _getFilterType() {
+  return _modalEl.querySelector('input[name="enc-filter-type"]:checked')?.value ?? 'created_today';
+}
+function _setFilterType(value) {
+  const radio = _modalEl.querySelector(`input[name="enc-filter-type"][value="${value}"]`);
+  if (radio) radio.checked = true;
+}
+
 export function initEncargadaShare() {
   if (_initialized) return;
   _initialized = true;
@@ -29,7 +41,7 @@ export function openEncargadaShare(bookings) {
 
   // Valores por defecto: "Creadas hoy"
   const today = localToday();
-  _modalEl.querySelector('#enc-filter-type').value = 'created_today';
+  _setFilterType('created_today');
   _modalEl.querySelector('#enc-from').value = today;
   _modalEl.querySelector('#enc-to').value = today;
   _modalEl.querySelector('#enc-include-amounts').checked = true;
@@ -49,7 +61,7 @@ export function closeEncargadaShare() {
 
 // ── Filtro aplicado ──────────────────────────────────
 function _applyFilter() {
-  const type = _modalEl.querySelector('#enc-filter-type').value;
+  const type = _getFilterType();
   const from = _modalEl.querySelector('#enc-from').value;
   const to   = _modalEl.querySelector('#enc-to').value;
   const today = localToday();
@@ -85,7 +97,7 @@ function _updateCount() {
 }
 
 function _rangeLabel() {
-  const type = _modalEl.querySelector('#enc-filter-type').value;
+  const type = _getFilterType();
   const from = _modalEl.querySelector('#enc-from').value;
   const to   = _modalEl.querySelector('#enc-to').value;
   const fd = (s) => s ? s.split('-').reverse().join('/') : '';
@@ -97,7 +109,7 @@ function _rangeLabel() {
 }
 
 function _updateFilterUI() {
-  const type     = _modalEl.querySelector('#enc-filter-type').value;
+  const type     = _getFilterType();
   const rangeRow = _modalEl.querySelector('#enc-range-row');
   const fromLbl  = _modalEl.querySelector('#enc-from-label');
   const toLbl    = _modalEl.querySelector('#enc-to-label');
@@ -146,7 +158,7 @@ function _injectModal() {
 
           <div class="enc-filter-chips" id="enc-filter-chips">
             <label class="enc-chip">
-              <input type="radio" name="enc-filter-type" id="enc-filter-type" value="created_today" checked>
+              <input type="radio" name="enc-filter-type" value="created_today" checked>
               <span>🕐 Hoy</span>
             </label>
             <label class="enc-chip">
@@ -258,8 +270,6 @@ function _bindEvents() {
   // Chips de filtro — usan radio buttons; escuchar change en el fieldset padre
   _modalEl.querySelector('#enc-filter-chips').addEventListener('change', () => {
     // Sincronizar el select oculto (compatibilidad con _updateFilterUI)
-    const checked = _modalEl.querySelector('input[name="enc-filter-type"]:checked');
-    _modalEl.querySelector('#enc-filter-type').value = checked?.value ?? 'created_today';
     _updateFilterUI();
     _updateCount();
   });
