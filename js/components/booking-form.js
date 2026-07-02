@@ -547,6 +547,7 @@ export class BookingForm {
     this._cachedTotal     = 0;
     this._submitting      = false;
     this._removedPaymentIds = []; // pagos existentes que el usuario eliminó del form
+    this._pendingSplitStay = null; // "Dividir estadía" — se cancela si no se llega a guardar
 
     // Volver al modo de precio único (single unit) por defecto
     const singleWrap = document.getElementById('f-price-single-wrap');
@@ -683,7 +684,44 @@ export class BookingForm {
     const row2b = chip.querySelector('.unit-option-row2');
     if (!row2b || row2b.querySelector('.unit-split-hint')) return;
     row2b.insertAdjacentHTML('beforeend',
-      `<span class="unit-split-hint" title="Esta unidad no cubre todo el pedido — armá 2 reservas: una acá y otra en ${candidate.name} para completar del ${fmtD(missing.from)} al ${fmtD(missing.to)}">🔀 Combina con ${candidate.name}</span>`);
+      `<button type="button" class="unit-split-hint" data-split-unit-id="${candidate.id}" data-split-unit-name="${candidate.name}"
+         data-split-from="${missing.from}" data-split-to="${missing.to}"
+         title="Arma 2 reservas: esta unidad cubre ${fmtD(partial.from)}–${fmtD(partial.to)}, ${candidate.name} cubre el resto">🔀 Combina con ${candidate.name}</button>`);
+    row2b.querySelector('.unit-split-hint').addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      this._startSplitStay(chip.dataset.unitId, partial, candidate.id, candidate.name, missing);
+    });
+  }
+
+  // Arma "Parte 1/2": deja esta reserva con solo la unidad A y el sub-rango
+  // que sí cubre, guarda los datos de la Parte 2 pendiente (unidad B +
+  // fechas restantes), para abrirla automáticamente apenas se guarde esta.
+  _startSplitStay(unitAId, partial, unitBId, unitBName, missing) {
+    const unitAName = this.ctx?.units?.find(u => String(u.id) === String(unitAId))?.name ?? 'esta unidad';
+    if (!confirm(`Dividir estadía:\n\n• Esta reserva → ${unitAName}, del ${partial.from} al ${partial.to}\n• Después de guardar, se abre automáticamente una 2ª reserva → ${unitBName}, del ${missing.from} al ${missing.to}\n\n¿Continuar?`)) return;
+
+    // Dejar seleccionada SOLO la unidad A
+    this._selectedUnitIds = new Set([String(unitAId)]);
+    this._renderUnitSelector();
+    this._renderPerUnitPrices();
+
+    // Acotar las fechas al sub-rango que la unidad A sí cubre
+    this._datePicker?.setValue(partial.from, partial.to);
+    document.getElementById('f-checkin').value  = partial.from;
+    document.getElementById('f-checkout').value = partial.to;
+    this._updateBreakdown();
+    this._updateBlockedDates();
+
+    // Marcar en notas que esto es la Parte 1/2
+    const notesEl = document.getElementById('f-notes');
+    if (notesEl && !notesEl.value.includes('🔗 Parte 1/2')) {
+      notesEl.value = [notesEl.value, `🔗 Parte 1/2 — estadía dividida con ${unitBName} del ${missing.from} al ${missing.to}`].filter(Boolean).join(' · ');
+      document.getElementById('notes-count').textContent = String(notesEl.value.length);
+    }
+
+    this._pendingSplitStay = { unitBId, unitBName, unitAName, from: missing.from, to: missing.to };
+    showToast(`Reserva 1/2 lista (${unitAName}) — al guardar se abre la 2ª (${unitBName})`, 'info');
   }
 
 
@@ -2413,6 +2451,21 @@ ${notes ? `
       showToast(this._editingId ? 'Reserva actualizada ✓' : 'Reserva creada ✓', 'success');
       Sound?.[this._editingId ? 'success' : 'newBooking']?.();
 
+      // Estadía dividida: si esta reserva era la "Parte 1/2", abrir ahora
+      // automáticamente la "Parte 2/2" con la otra unidad y el resto de
+      // las fechas, con el mismo huésped precargado.
+      let _splitPart2 = null;
+      if (this._pendingSplitStay && !this._editingId) {
+        _splitPart2 = {
+          unitId:  this._pendingSplitStay.unitBId,
+          checkIn:  this._pendingSplitStay.from,
+          checkOut: this._pendingSplitStay.to,
+          prefillGuestId: this._selectedGuestId,
+          notes: `🔗 Parte 2/2 — estadía dividida con ${this._pendingSplitStay.unitAName}`,
+        };
+      }
+      this._pendingSplitStay = null;
+
       // Email de confirmación — solo en creación nueva (no edición)
       if (!this._editingId) {
         const guestEmail = document.getElementById('f-email')?.value?.trim();
@@ -2434,6 +2487,11 @@ ${notes ? `
 
       this.close(true); // force=true: guardado exitoso, no mostrar "¿Salir sin guardar?"
       document.dispatchEvent(new CustomEvent('booking:changed'));
+
+      if (_splitPart2) {
+        showToast('Abriendo la 2ª reserva de la estadía dividida…', 'info');
+        setTimeout(() => this.open(_splitPart2), 400);
+      }
 
     } catch (err) {
       console.error('[MILA] Booking save error:', err);
