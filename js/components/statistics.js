@@ -23,6 +23,13 @@ const SOURCE_LABELS = {
 };
 
 export class Statistics {
+  // Color de desempeño relativo: 0% del máximo = rojo, 100% del máximo = verde
+  _perfColor(pct) {
+    const p = Math.max(0, Math.min(100, pct));
+    const hue = (p / 100) * 120; // 0=rojo, 60=ámbar, 120=verde
+    return { top: `hsl(${hue}, 72%, 56%)`, bottom: `hsl(${hue}, 72%, 44%)` };
+  }
+
   constructor(supabase, ctx) {
     this.db           = supabase;
     this.ctx          = ctx;
@@ -823,9 +830,10 @@ export class Statistics {
       const h      = Math.max(3, Math.round((d.revenue / maxVal) * 100));
       const isLast = i === n - 1;
       const showLabel = isLast || i % 3 === 0;
-      const color  = isLast ? 'var(--color-primary)' : 'rgba(99,102,241,.35)';
-      return `<div class="sdc-bar" style="height:${h}%;background:${color}${isLast?';opacity:1':''}">
-        ${showLabel ? `<span class="sdc-bar-value${isLast?' is-current':''}">${fmtK(d.revenue)}</span>` : ''}
+      const c = this._perfColor(h);
+      const ring = isLast ? 'box-shadow:0 0 0 2px var(--color-primary) inset;' : '';
+      return `<div class="sdc-bar" style="height:${h}%;background:linear-gradient(180deg, ${c.top}, ${c.bottom});${ring}">
+        ${showLabel ? `<span class="sdc-bar-value${isLast?' is-current':''}" style="color:${c.bottom}">${fmtK(d.revenue)}</span>` : ''}
         <div class="sdc-bar-tooltip">${d.fullLabel ?? d.label}: ${fmtK(d.revenue)}</div>
       </div>`;
     }).join('');
@@ -835,7 +843,7 @@ export class Statistics {
       return `<span class="sdc-chart-axis-label${isLast?' is-current':''}">${show ? d.label : ''}</span>`;
     }).join('');
     const deltaClass = delta >= 0 ? '' : 'down';
-    return `<div class="stats-dashboard-card">
+    return `<div class="stats-dashboard-card" style="--accent:var(--color-primary)">
       <div class="sdc-header">
         <div>
           <div class="sdc-title">💰 Ingresos</div>
@@ -870,7 +878,7 @@ export class Statistics {
       }).join(' ') +
       ` L${W-pad},${H-pad} Z`;
     const deltaClass = delta >= 0 ? '' : 'down';
-    return `<div class="stats-dashboard-card">
+    return `<div class="stats-dashboard-card" style="--accent:var(--color-primary)">
       <div class="sdc-header">
         <div>
           <div class="sdc-title">📊 Ocupación</div>
@@ -956,7 +964,7 @@ export class Statistics {
       </div>`
     ).join('');
 
-    return `<div class="stats-dashboard-card">
+    return `<div class="stats-dashboard-card" style="--accent:#64748b">
       <div class="sdc-header"><div>
         <div class="sdc-title">🔗 Canales</div>
         <div class="sdc-sub">mes actual</div>
@@ -986,7 +994,7 @@ export class Statistics {
         return `L${x.toFixed(1)},${y.toFixed(1)}`;
       }).join(' ') + ` L${W-pad},${H-pad} Z`;
 
-    return `<div class="stats-dashboard-card">
+    return `<div class="stats-dashboard-card" style="--accent:#f59e0b">
       <div class="sdc-header"><div>
         <div class="sdc-title">💵 ADR — Tarifa Diaria</div>
         <div class="sdc-value">${fmt(curADR)}</div>
@@ -1035,7 +1043,7 @@ export class Statistics {
       const show = isLast || i % 3 === 0;
       return `<span class="sdc-chart-axis-label${isLast?' is-current':''}">${show ? d.label : ''}</span>`;
     }).join('');
-    return `<div class="stats-dashboard-card">
+    return `<div class="stats-dashboard-card" style="--accent:#22c55e">
       <div class="sdc-header"><div>
         <div class="sdc-title">📋 Reservas</div>
         <div class="sdc-value">${data[11].count}</div>
@@ -1081,7 +1089,7 @@ export class Statistics {
     const totalRev = sorted.reduce((s,u) => s + u.rev, 0) || 1;
 
     if (!maxRev) {
-      return `<div class="stats-dashboard-card">
+      return `<div class="stats-dashboard-card" style="--accent:#8b5cf6">
         <div class="sdc-header"><div>
           <div class="sdc-title">🛏️ Departamentos</div>
           <div class="sdc-sub">Cargá primero la pestaña Unidades</div>
@@ -1105,7 +1113,7 @@ export class Statistics {
       </div>`;
     }).join('');
 
-    return `<div class="stats-dashboard-card">
+    return `<div class="stats-dashboard-card" style="--accent:#8b5cf6">
       <div class="sdc-header"><div>
         <div class="sdc-title">🛏️ Ingreso por Depto.</div>
         <div class="sdc-sub">mes seleccionado</div>
@@ -1125,7 +1133,7 @@ export class Statistics {
       const y = H - pad - (d.revpar/maxVal)*(H-pad*2);
       return `${x.toFixed(1)},${y.toFixed(1)}`;
     }).join(' ');
-    return `<div class="stats-dashboard-card">
+    return `<div class="stats-dashboard-card" style="--accent:#8b5cf6">
       <div class="sdc-header"><div>
         <div class="sdc-title">📈 RevPAR</div>
         <div class="sdc-value">${fmtK(curVal)}</div>
@@ -1160,7 +1168,7 @@ export class Statistics {
   // ── Card 8: KPI Cancelaciones + estadías prom. ───
   _sdcKPICard(title, value, totalBookings, totalRev, fmt) {
     const avgRev = totalBookings > 0 ? Math.round(totalRev / totalBookings) : 0;
-    return `<div class="stats-dashboard-card">
+    return `<div class="stats-dashboard-card" style="--accent:var(--color-danger)">
       <div class="sdc-header"><div>
         <div class="sdc-title">❌ Cancelaciones</div>
         <div class="sdc-value" style="color:var(--color-danger)">${value}</div>
@@ -1193,7 +1201,7 @@ export class Statistics {
       return `${x.toFixed(1)},${y.toFixed(1)}`;
     }).join(' ');
     const labels = data.filter((_,i) => i % 3 === 0 || i === data.length-1);
-    return `<div class="stats-dashboard-card">
+    return `<div class="stats-dashboard-card" style="--accent:#06b6d4">
       <div class="sdc-header"><div>
         <div class="sdc-title">📉 Evolución RevPAR</div>
         <div class="sdc-value">${fmtK(Math.round(total/12))}</div>
