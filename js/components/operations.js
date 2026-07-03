@@ -1028,6 +1028,61 @@ export class OperationsModule {
   // ══════════════════════════════════════════════════
   // GASTOS — movidos desde Estadísticas
   // ══════════════════════════════════════════════════
+  // ── Saldo en cuenta (carga manual) ──────────────────
+  // No calcula nada (no cruza ingresos con gastos) — es solo un número
+  // que vos actualizás a mano cuando quieras, para tener a la vista
+  // "cuánta plata hay hoy en la cuenta del complejo" sin salir de la app.
+  // Se guarda en hotel_config, mismo esquema clave/valor de siempre.
+  async _renderBalanceBox(panel) {
+    const box = panel.querySelector('#ops-balance-box');
+    if (!box) return;
+
+    const { data } = await this.db.from('hotel_config')
+      .select('value, updated_at').eq('hotel_id', this.ctx.hotelId).eq('key', 'account_balance').maybeSingle();
+    const balance = parseFloat(data?.value ?? 0) || 0;
+    const updatedAt = data?.updated_at
+      ? new Date(data.updated_at).toLocaleDateString('es-AR', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' })
+      : null;
+
+    box.innerHTML = `
+      <div class="card" style="margin-bottom:16px;padding:14px 18px;display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+        <div style="flex:1;min-width:200px">
+          <div style="font-size:.7rem;color:var(--color-text-3);font-weight:600;text-transform:uppercase;letter-spacing:.04em">💰 Saldo en cuenta</div>
+          <div id="ops-balance-display" style="font-size:1.6rem;font-weight:800;color:var(--color-text);margin-top:2px">${formatARS(balance)}</div>
+          ${updatedAt ? `<div style="font-size:.68rem;color:var(--color-text-3);margin-top:2px">Actualizado: ${updatedAt}</div>` : `<div style="font-size:.68rem;color:var(--color-text-3);margin-top:2px">Todavía no lo cargaste</div>`}
+        </div>
+        <div id="ops-balance-edit-area">
+          <button class="btn btn-outline btn-sm" id="ops-balance-edit-btn">✏️ Actualizar saldo</button>
+        </div>
+      </div>`;
+
+    box.querySelector('#ops-balance-edit-btn')?.addEventListener('click', () => {
+      const editArea = box.querySelector('#ops-balance-edit-area');
+      editArea.innerHTML = `
+        <div style="display:flex;gap:6px;align-items:center">
+          <input type="number" id="ops-balance-input" value="${balance}" step="1000"
+            style="width:150px;padding:8px 10px;border:1px solid var(--color-border);border-radius:var(--r-sm);background:var(--color-surface);color:var(--color-text);font-size:.9rem">
+          <button class="btn btn-primary btn-sm" id="ops-balance-save">Guardar</button>
+          <button class="btn btn-ghost btn-sm" id="ops-balance-cancel">Cancelar</button>
+        </div>`;
+      document.getElementById('ops-balance-input')?.focus();
+      document.getElementById('ops-balance-input')?.select();
+
+      editArea.querySelector('#ops-balance-cancel')?.addEventListener('click', () => this._renderBalanceBox(panel));
+      editArea.querySelector('#ops-balance-save')?.addEventListener('click', async () => {
+        const newVal = parseFloat(document.getElementById('ops-balance-input')?.value) || 0;
+        const saveBtn = document.getElementById('ops-balance-save');
+        if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Guardando...'; }
+        const { error } = await this.db.from('hotel_config')
+          .upsert({ hotel_id: this.ctx.hotelId, key: 'account_balance', value: String(newVal), updated_at: new Date().toISOString() }, { onConflict: 'hotel_id,key' });
+        if (error) { showToast('Error al guardar: ' + error.message, 'error'); return; }
+        showToast('✓ Saldo actualizado', 'success');
+        await logAction('UPDATE', 'hotel_config', null, `Saldo en cuenta actualizado a ${formatARS(newVal)}`);
+        await this._renderBalanceBox(panel);
+      });
+    });
+  }
+
   async _loadExpenses(panel, header) {
     const canManage = can('manageExpenses');
     if (header) {
@@ -1046,6 +1101,7 @@ export class OperationsModule {
     this._opsExpCursor = this._opsExpCursor ?? { month: now.getMonth(), year: now.getFullYear() };
 
     panel.innerHTML = `
+      <div id="ops-balance-box"></div>
       <div class="ops-expenses-header">
         <div class="ops-month-nav">
           <button type="button" class="ops-month-nav-btn" id="ops-exp-prev" title="Mes anterior">‹</button>
@@ -1057,10 +1113,31 @@ export class OperationsModule {
           <span class="ops-month-nav-label" id="ops-exp-year-label"></span>
           <button type="button" class="ops-month-nav-btn" id="ops-exp-next-year" title="Año siguiente">›</button>
         </div>
+        <button type="button" class="btn btn-outline btn-sm" id="ops-exp-export" style="margin-left:auto;gap:5px">📤 Exportar rango…</button>
       </div>
       <div id="ops-expenses-summary"></div>
       <div id="ops-expenses-list"><div class="loading-state">Cargando...</div></div>
     `;
+
+    this._renderBalanceBox(panel);
+
+    panel.querySelector('#ops-exp-export')?.addEventListener('click', async (e) => {
+      const btn = e.currentTarget;
+      const { data: allExpenses } = await this.db.from('expenses').select('*')
+        .eq('hotel_id', this.ctx.hotelId)
+        .order('due_date', { ascending: false });
+      const { showExportDropdown, exportExpensesCSV, exportExpensesExcel } = await import('../services/export-service.js');
+      showExportDropdown({
+        anchorEl: btn,
+        type: 'expenses',
+        data: allExpenses ?? [],
+        onExport: ({ fmt, data, from, to }) => {
+          const range = from && to ? `${from}_a_${to}` : '';
+          if (fmt === 'excel') exportExpensesExcel(data, 'gastos', range);
+          else exportExpensesCSV(data, 'gastos', range);
+        },
+      });
+    });
 
     const monthLabel = panel.querySelector('#ops-exp-month-label');
     const yearLabel  = panel.querySelector('#ops-exp-year-label');

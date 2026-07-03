@@ -85,6 +85,19 @@ export function showExportDropdown({ anchorEl, type, data, onExport }) {
       <div style="display:flex;gap:6px;margin-top:10px">
         <button class="_mila-dd-btn _mila-dd-btn-primary" data-fmt="pdf" style="flex:1">📄 Exportar PDF</button>
       </div>`;
+  } else if (type === 'expenses') {
+    innerHtml = `
+      <div class="_mila-dd-title">Exportar Gastos</div>
+      <label class="_mila-dd-label">Rango de fechas <span style="color:#94a3b8">(ej: todo el verano, un trimestre, lo que necesites)</span></label>
+      <div style="display:flex;gap:6px;align-items:center">
+        <input type="date" id="_exp-from" value="${first}" class="_mila-dd-input">
+        <span style="color:#94a3b8;font-size:.8rem">→</span>
+        <input type="date" id="_exp-to" value="${lastS}" class="_mila-dd-input">
+      </div>
+      <div style="display:flex;gap:6px;margin-top:10px">
+        <button class="_mila-dd-btn _mila-dd-btn-outline" data-fmt="csv">📋 CSV</button>
+        <button class="_mila-dd-btn _mila-dd-btn-primary" data-fmt="excel">📊 Excel</button>
+      </div>`;
   }
 
   dd.innerHTML = `
@@ -130,9 +143,10 @@ export function showExportDropdown({ anchorEl, type, data, onExport }) {
       let filtered = [...data];
 
       if (from && to) {
-        filtered = filtered.filter(b => {
-          const ci = b.check_in ?? '';
-          return ci >= from && ci <= to;
+        const dateField = type === 'expenses' ? 'due_date' : 'check_in';
+        filtered = filtered.filter(item => {
+          const d = item[dateField] ?? '';
+          return d >= from && d <= to;
         });
       }
       if (unitIds.length > 0) {
@@ -448,6 +462,47 @@ export function exportPaymentsCSV(payments, filename = 'pagos') {
   const rows = payments.map(p => [p.booking_id??'',p.method??'',p.amount??'',p.currency??'ARS',p.exchange_rate??'',p.amount_ars??'',p.paid_at?p.paid_at.slice(0,10):'',p.notes??'']);
   _download(_toCSV(headers, rows), `${filename}_${dateTag()}.csv`);
   showToast(`✓ Exportado: ${payments.length} pagos`, 'success');
+}
+
+// ══════════════════════════════════════════════════
+// EXPORTAR GASTOS — para pasarle al contador, al dueño,
+// o a quien haga falta un rango puntual (ej: "los gastos
+// del verano" — elegís las fechas y listo)
+// ══════════════════════════════════════════════════
+function _capitalize(s) { return s ? s.charAt(0).toUpperCase() + s.slice(1) : ''; }
+
+export function exportExpensesCSV(expenses, filename = 'gastos', range = '') {
+  if (!can('exportData')) { showToast('🔒 Sin permiso para exportar', 'warning'); return; }
+  const headers = ['Categoría','Descripción','Monto','Vencimiento','Pagado','Fecha de pago'];
+  const rows = expenses.map(e => [
+    _capitalize(e.category ?? ''), e.description ?? '', e.amount ?? 0,
+    e.due_date ?? '', e.paid ? 'Sí' : 'No', e.paid_at ? e.paid_at.slice(0,10) : '',
+  ]);
+  const total = expenses.reduce((s, e) => s + (e.amount ?? 0), 0);
+  rows.push(['', 'TOTAL', total, '', '', '']);
+  _download(_toCSV(headers, rows), `${filename}_${range || dateTag()}.csv`);
+  showToast(`✓ Exportado: ${expenses.length} gastos`, 'success');
+}
+
+export async function exportExpensesExcel(expenses, filename = 'gastos', range = '') {
+  if (!can('exportData')) { showToast('🔒 Sin permiso para exportar', 'warning'); return; }
+  if (!window.XLSX) await _loadSheetJS();
+  const XLSX = window.XLSX;
+
+  const headers = ['Categoría','Descripción','Monto','Vencimiento','Pagado','Fecha de pago'];
+  const rows = expenses.map(e => [
+    _capitalize(e.category ?? ''), e.description ?? '', e.amount ?? 0,
+    e.due_date ?? '', e.paid ? 'Sí' : 'No', e.paid_at ? e.paid_at.slice(0,10) : '',
+  ]);
+  const total = expenses.reduce((s, e) => s + (e.amount ?? 0), 0);
+  rows.push(['', 'TOTAL', total, '', '', '']);
+
+  const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+  ws['!cols'] = [16, 32, 13, 13, 9, 13].map(w => ({ wch: w }));
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Gastos');
+  XLSX.writeFile(wb, `${filename}_${range || dateTag()}.xlsx`);
+  showToast(`✓ Exportado: ${expenses.length} gastos`, 'success');
 }
 
 // ══════════════════════════════════════════════════
