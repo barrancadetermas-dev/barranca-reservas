@@ -1009,16 +1009,18 @@ select { appearance: auto; cursor: pointer; }
 .unit-avail-partial { background: var(--state-yellow-bg); color: var(--state-yellow-txt); cursor: help; }
 .unit-avail-busy     { background: var(--state-red-bg);    color: var(--state-red-txt); }
 .unit-split-hint {
-  font-size: .64rem; font-weight: 600; color: var(--color-primary);
-  cursor: pointer; margin-left: auto; white-space: nowrap;
-  background: var(--color-primary-l); border: 1px solid transparent; border-radius: 999px;
-  padding: 2px 8px; transition: all .12s;
+  font-size: .8rem; line-height: 1;
+  width: 22px; height: 22px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; margin-left: auto;
+  background: var(--color-primary); color: #fff; border: none; border-radius: 50%;
+  transition: transform .12s;
 }
-.unit-split-hint:hover { border-color: var(--color-primary); }
+.unit-split-hint:hover { transform: scale(1.12); }
 .unit-split-select {
-  font-size: .64rem; font-weight: 600; color: var(--color-primary);
-  cursor: pointer; margin-left: auto; max-width: 140px;
-  background: var(--color-primary-l); border: 1px solid transparent; border-radius: 999px;
+  font-size: .68rem; font-weight: 600; color: var(--color-text);
+  cursor: pointer; margin-left: auto; max-width: 150px;
+  background: var(--color-surface); border: 1.5px solid var(--color-primary); border-radius: var(--r-sm);
   padding: 2px 6px;
 }
 

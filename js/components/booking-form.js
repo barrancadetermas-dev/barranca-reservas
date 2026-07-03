@@ -685,36 +685,46 @@ export class BookingForm {
     const candidates = missList.filter(u => String(u.id) !== thisUnitId && u.available);
     if (!candidates.length) return;
 
-    const fmtD = (s) => { const [y,m,d] = s.split('-'); return `${d}/${m}`; };
     const row2b = chip.querySelector('.unit-option-row2');
     if (!row2b || row2b.querySelector('.unit-split-hint, .unit-split-select')) return;
 
-    if (candidates.length === 1) {
-      const candidate = candidates[0];
-      row2b.insertAdjacentHTML('beforeend',
-        `<button type="button" class="unit-split-hint" title="Arma 2 reservas: esta unidad cubre ${fmtD(partial.from)}–${fmtD(partial.to)}, ${candidate.name} cubre el resto">🔀 Combina con ${candidate.name}</button>`);
-      row2b.querySelector('.unit-split-hint').addEventListener('click', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        this._startSplitStay(chip.dataset.unitId, partial, candidate.id, candidate.name, missing);
-      });
-      return;
-    }
+    // Solo el ícono al principio — el texto completo (nombre de la otra
+    // unidad, fechas) va en el título/confirm, no compite por espacio en
+    // la fila y evita el problema de contraste/legibilidad que tenía antes.
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'unit-split-hint';
+    btn.textContent = '🔀';
+    btn.title = candidates.length === 1
+      ? `Combinar con ${candidates[0].name} para completar el pedido`
+      : `${candidates.length} unidades pueden completar el pedido — tocá para elegir`;
+    row2b.appendChild(btn);
 
-    // Varias unidades cubren lo que falta — dejar elegir en vez de agarrar la primera.
-    row2b.insertAdjacentHTML('beforeend', `
-      <select class="unit-split-select" title="Elegí con cuál combinar para completar el pedido">
-        <option value="">🔀 Combinar con...</option>
-        ${candidates.map(c => `<option value="${c.id}">${c.name}</option>`).join('')}
-      </select>`);
-    const sel = row2b.querySelector('.unit-split-select');
-    sel.addEventListener('click', (e) => e.stopPropagation());
-    sel.addEventListener('change', (e) => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
       e.stopPropagation();
-      const chosen = candidates.find(c => String(c.id) === e.target.value);
-      if (!chosen) return;
-      this._startSplitStay(chip.dataset.unitId, partial, chosen.id, chosen.name, missing);
-      sel.value = ''; // reset — la selección ya se aplicó
+      if (candidates.length === 1) {
+        this._startSplitStay(chip.dataset.unitId, partial, candidates[0].id, candidates[0].name, missing);
+        return;
+      }
+      // Varias opciones — desplegar un select recién acá, no antes.
+      if (row2b.querySelector('.unit-split-select')) return;
+      btn.style.display = 'none';
+      const sel = document.createElement('select');
+      sel.className = 'unit-split-select';
+      sel.title = 'Elegí con cuál combinar para completar el pedido';
+      sel.innerHTML = `<option value="">Elegir...</option>` +
+        candidates.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+      row2b.appendChild(sel);
+      sel.addEventListener('click', (ev) => ev.stopPropagation());
+      sel.addEventListener('change', (ev) => {
+        ev.stopPropagation();
+        const chosen = candidates.find(c => String(c.id) === ev.target.value);
+        sel.remove();
+        btn.style.display = '';
+        if (chosen) this._startSplitStay(chip.dataset.unitId, partial, chosen.id, chosen.name, missing);
+      });
+      sel.focus();
     });
   }
 
