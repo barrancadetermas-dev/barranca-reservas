@@ -1293,13 +1293,29 @@ export class Dashboard {
     const endISO      = toISODate(new Date(start.getTime() + (HORIZON - 1) * dayMs));
 
     try {
-      const { data: bookings, error } = await this.db
-        .from('bookings')
-        .select('check_in, check_out, booking_units(unit_id)')
-        .eq('hotel_id', hotelId)
-        .not('status', 'in', '(cancelled,blocked)')
-        .lt('check_in', endISO)
-        .gt('check_out', today);
+      const prevStart    = new Date(start.getTime() - HORIZON * dayMs);
+      const prevEndISO   = toISODate(new Date(prevStart.getTime() + (HORIZON - 1) * dayMs));
+      const prevStartISO = toISODate(prevStart);
+
+      // Antes esto era secuencial (esperaba la consulta actual, y RECIÉN
+      // ahí arrancaba la de comparación) — con eso, este fetch por sí solo
+      // tardaba el doble, y como corre en paralelo con el resto del
+      // dashboard, terminaba siendo el más lento de los 5 y frenando toda
+      // la carga del Panel de Hoy. Ahora las 2 consultas van juntas.
+      const [{ data: bookings, error }, { data: prevBookings }] = await Promise.all([
+        this.db.from('bookings')
+          .select('check_in, check_out, booking_units(unit_id)')
+          .eq('hotel_id', hotelId)
+          .not('status', 'in', '(cancelled,blocked)')
+          .lt('check_in', endISO)
+          .gt('check_out', today),
+        this.db.from('bookings')
+          .select('check_in, check_out, booking_units(unit_id)')
+          .eq('hotel_id', hotelId)
+          .not('status', 'in', '(cancelled,blocked)')
+          .lt('check_in', prevEndISO)
+          .gt('check_out', prevStartISO),
+      ]);
       if (error) throw error;
 
       // Por cada uno de los próximos 28 días, contar unidades distintas ocupadas
@@ -1324,19 +1340,7 @@ export class Dashboard {
 
       const result = { days, totalUnits, pct7: pct(7), pct14: pct(14), pct28: pct(28) };
 
-      // Comparación — misma métrica, calculada 28 días atrás (mismo largo
-      // de ventana, evita líos de "mes" con distinta cantidad de días).
       try {
-        const prevStart = new Date(start.getTime() - HORIZON * dayMs);
-        const prevEndISO = toISODate(new Date(prevStart.getTime() + (HORIZON - 1) * dayMs));
-        const prevStartISO = toISODate(prevStart);
-        const { data: prevBookings } = await this.db
-          .from('bookings')
-          .select('check_in, check_out, booking_units(unit_id)')
-          .eq('hotel_id', hotelId)
-          .not('status', 'in', '(cancelled,blocked)')
-          .lt('check_in', prevEndISO)
-          .gt('check_out', prevStartISO);
         const prevDays = [];
         for (let i = 0; i < HORIZON; i++) {
           const d   = toISODate(new Date(prevStart.getTime() + i * dayMs));
