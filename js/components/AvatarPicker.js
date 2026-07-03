@@ -88,7 +88,6 @@ export async function guardarPerfil(supabase, avatarId, avatarColor) {
     return false;
   }
 
-  console.log('✅ Perfil guardado — avatar:', avatarId, 'color:', avatarColor);
   return true;
 }
 

@@ -321,6 +321,12 @@ export class ConfigPanel {
               <button class="btn btn-outline btn-sm" id="cfg-export-bookings">📅 Reservas</button>
               <button class="btn btn-outline btn-sm" id="cfg-export-guests">👤 Huéspedes</button>
             </div>
+            <div style="border-top:1px solid var(--color-border);margin:10px 0 8px"></div>
+            <div style="font-size:.7rem;color:var(--color-text-3);margin-bottom:8px;font-weight:600">Backup completo (copia de seguridad):</div>
+            <button class="btn btn-outline btn-sm" id="cfg-export-full-backup" style="gap:5px">
+              💾 Descargar todo mi negocio
+            </button>
+            <div style="font-size:.66rem;color:var(--color-text-3);margin-top:6px">Un solo Excel con 3 hojas: Reservas, Huéspedes y Gastos — completo, sin filtros de fecha.</div>
           </div>
         </div>
 
@@ -556,6 +562,12 @@ export class ConfigPanel {
           else exportBookingsCSV(data);
         },
       });
+    });
+
+    // ── Backup completo: Reservas + Huéspedes + Gastos en un solo Excel ──
+    container.querySelector('#cfg-export-full-backup')?.addEventListener('click', async () => {
+      const { exportFullBackup } = await import('../services/export-service.js');
+      await exportFullBackup(this.db, this.ctx.hotelId);
     });
 
     // ── Reportes PDF ──────────────────────────────────

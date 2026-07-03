@@ -48,7 +48,6 @@ let _initializedUserId = null; // evita que initApp() corra más de una vez para
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('/sw.js')
     .then(reg => {
-      console.log('[PWA] Service Worker registrado');
       // Forzar activación inmediata del SW nuevo si hay uno esperando
       if (reg.waiting) reg.waiting.postMessage({ type: 'SKIP_WAITING' });
       reg.addEventListener('updatefound', () => {

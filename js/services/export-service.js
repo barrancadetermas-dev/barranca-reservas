@@ -617,6 +617,83 @@ export function exportGuestVoucher(guest, booking) {
   w.document.close();
 }
 
+// ══════════════════════════════════════════════════
+// BACKUP COMPLETO — Reservas + Huéspedes + Gastos en
+// un solo Excel con 3 hojas. A diferencia del resto de
+// las exportaciones de este archivo, esta consulta la
+// base directo (no depende de que la pantalla ya tenga
+// los datos cargados) — pensado como copia de seguridad
+// manual, no como reporte de una vista puntual.
+// ══════════════════════════════════════════════════
+export async function exportFullBackup(db, hotelId) {
+  if (isDemo()) { showToast('🎭 Exportación no disponible en modo demo', 'warning'); return; }
+  if (!can('exportData')) { showToast('🔒 Sin permiso para exportar', 'warning'); return; }
+
+  showToast('Preparando backup completo… puede tardar unos segundos', 'info');
+  try {
+    if (!window.XLSX) await _loadSheetJS();
+    const XLSX = window.XLSX;
+
+    const [{ data: bookings }, { data: guests }, { data: expenses }] = await Promise.all([
+      db.from('bookings')
+        .select('check_in, check_out, nights, status, source, price_per_night, total_amount, total_paid, balance, notes, created_at, guests(first_name,last_name,dni,phone,email), booking_units(units(name))')
+        .eq('hotel_id', hotelId).order('check_in', { ascending: false }),
+      db.from('guests')
+        .select('first_name,last_name,dni,phone,email,locality,age,car_model,car_plate,nationality,created_at')
+        .eq('hotel_id', hotelId).order('created_at', { ascending: false }),
+      db.from('expenses')
+        .select('category,description,amount,due_date,paid,paid_at,created_at')
+        .eq('hotel_id', hotelId).order('due_date', { ascending: false }),
+    ]);
+
+    const wb = XLSX.utils.book_new();
+
+    // ── Hoja Reservas ──
+    const bkHeaders = ['Huésped','DNI','Teléfono','Email','Unidades','Check-in','Check-out','Noches','Canal','Estado','Precio/noche','Total','Abonado','Saldo','Notas','Creada'];
+    const bkRows = (bookings ?? []).map(b => {
+      const g = b.guests;
+      return [
+        g ? `${g.first_name} ${g.last_name}` : '—', g?.dni ?? '', g?.phone ?? '', g?.email ?? '',
+        (b.booking_units ?? []).map(bu => bu.units?.name ?? '').join(' + '),
+        b.check_in ?? '', b.check_out ?? '', b.nights ?? '',
+        SOURCE_CONFIG[b.source ?? 'direct']?.label ?? 'Directo', STATUS_LABELS[b.status] ?? b.status,
+        b.price_per_night ?? 0, b.total_amount ?? 0, b.total_paid ?? 0, b.balance ?? 0,
+        (b.notes ?? '').replace(/\n/g, ' '), (b.created_at ?? '').slice(0, 10),
+      ];
+    });
+    const wsBk = XLSX.utils.aoa_to_sheet([bkHeaders, ...bkRows]);
+    wsBk['!cols'] = [20,12,14,22,18,11,11,7,12,10,13,12,12,12,28,11].map(w => ({ wch: w }));
+    XLSX.utils.book_append_sheet(wb, wsBk, 'Reservas');
+
+    // ── Hoja Huéspedes ──
+    const gHeaders = ['Nombre','Apellido','DNI','Teléfono','Email','Localidad','Edad','Auto','Patente','Nacionalidad','Alta'];
+    const gRows = (guests ?? []).map(g => [
+      g.first_name ?? '', g.last_name ?? '', g.dni ?? '', g.phone ?? '', g.email ?? '',
+      g.locality ?? '', g.age ?? '', g.car_model ?? '', g.car_plate ?? '', g.nationality ?? '',
+      (g.created_at ?? '').slice(0, 10),
+    ]);
+    const wsG = XLSX.utils.aoa_to_sheet([gHeaders, ...gRows]);
+    wsG['!cols'] = [16,16,12,14,22,18,7,18,10,14,11].map(w => ({ wch: w }));
+    XLSX.utils.book_append_sheet(wb, wsG, 'Huéspedes');
+
+    // ── Hoja Gastos ──
+    const eHeaders = ['Categoría','Descripción','Monto','Vencimiento','Pagado','Fecha de pago','Creado'];
+    const eRows = (expenses ?? []).map(e => [
+      e.category ?? '', e.description ?? '', e.amount ?? 0,
+      e.due_date ?? '', e.paid ? 'Sí' : 'No', (e.paid_at ?? '').slice(0, 10), (e.created_at ?? '').slice(0, 10),
+    ]);
+    const wsE = XLSX.utils.aoa_to_sheet([eHeaders, ...eRows]);
+    wsE['!cols'] = [16,32,12,13,9,13,11].map(w => ({ wch: w }));
+    XLSX.utils.book_append_sheet(wb, wsE, 'Gastos');
+
+    XLSX.writeFile(wb, `MILA_backup_completo_${dateTag()}.xlsx`);
+    showToast(`✓ Backup exportado: ${bkRows.length} reservas, ${gRows.length} huéspedes, ${eRows.length} gastos`, 'success');
+  } catch (err) {
+    console.error('[Export] Backup completo error:', err);
+    showToast('Error al generar el backup: ' + (err?.message ?? err), 'error');
+  }
+}
+
 // ── Internos ─────────────────────────────────────
 async function _loadSheetJS() {
   return new Promise((res, rej) => {

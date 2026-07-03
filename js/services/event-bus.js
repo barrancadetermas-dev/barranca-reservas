@@ -54,18 +54,23 @@ class EventBus {
     }
   }
 
-  /** Puente: escucha DOM events y los re-emite en el bus */
+  /** Puente: escucha DOM events y los re-emite en el bus (ignora eventos ya bridgeados) */
   bridgeFromDOM(...events) {
     events.forEach(ev => {
-      document.addEventListener(ev, (e) => this.emit(ev, e.detail ?? e));
+      document.addEventListener(ev, (e) => {
+        if (e._fromBridge) return; // evitar loop DOM→Bus→DOM→Bus→...
+        this.emit(ev, e.detail ?? e);
+      });
     });
   }
 
-  /** Puente inverso: emite en DOM cuando el bus emite */
+  /** Puente inverso: emite en DOM cuando el bus emite (marca el evento para no re-procesar) */
   bridgeToDOM(...events) {
     events.forEach(ev => {
       this.on(ev, (data) => {
-        document.dispatchEvent(new CustomEvent(ev, { detail: data }));
+        const ce = new CustomEvent(ev, { detail: data });
+        ce._fromBridge = true; // marca para que bridgeFromDOM lo ignore
+        document.dispatchEvent(ce);
       });
     });
   }

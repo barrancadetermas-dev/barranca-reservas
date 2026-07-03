@@ -148,6 +148,10 @@ export class Dashboard {
       this._renderDepartures(kpis.checkouts ?? []);
       // Widget de Limpieza — estaba definido pero nunca se llamaba
       this._fetchTodayCleaningTasks(today).then(tasks => this._renderCleaningWidget(tasks));
+      // Recordatorio automático de saldo pendiente antes del check-in —
+      // una vez por día (no en cada carga del dashboard) para no pegarle
+      // de más a la base ni generar recordatorios duplicados el mismo día.
+      this._autoCreateBalanceReminders(today);
       // Update header badge
       const buyEl = document.getElementById('dollar-badge-buy');
       const sellEl = document.getElementById('dollar-badge-value');
@@ -998,6 +1002,63 @@ export class Dashboard {
   // ══════════════════════════════════════════════════
   // WIDGET LIMPIEZA DIARIA
   // ══════════════════════════════════════════════════
+  // ── Recordatorio automático: saldo pendiente antes del check-in ──
+  // Corre una vez por día (localStorage). Busca reservas que hacen
+  // check-in hoy o mañana con saldo > 0, y si todavía no existe un
+  // recordatorio automático para esa reserva puntual, lo crea. El
+  // marcador 🔔AUTOBAL:<id> en la descripción es lo que evita duplicarlo
+  // si el dashboard se recarga varias veces en el mismo día.
+  async _autoCreateBalanceReminders(today) {
+    try {
+      if (localStorage.getItem('mila_autobal_lastrun') === today) return;
+
+      const tomorrow = toISODate(new Date(new Date(today + 'T12:00:00').getTime() + 86400000));
+      const { data: bookings } = await this.db
+        .from('bookings')
+        .select('id, check_in, balance, guests(first_name, last_name), booking_units(unit_id)')
+        .eq('hotel_id', this.ctx.hotelId)
+        .not('status', 'in', '(cancelled,blocked)')
+        .in('check_in', [today, tomorrow])
+        .gt('balance', 0);
+
+      if (!bookings?.length) { localStorage.setItem('mila_autobal_lastrun', today); return; }
+
+      const { data: existing } = await this.db
+        .from('reminders')
+        .select('description')
+        .eq('hotel_id', this.ctx.hotelId)
+        .eq('scheduled_date', today)
+        .like('description', '%🔔AUTOBAL:%');
+
+      const alreadyCovered = new Set(
+        (existing ?? []).map(r => r.description?.match(/🔔AUTOBAL:([a-f0-9-]+)/)?.[1]).filter(Boolean)
+      );
+
+      const toCreate = bookings.filter(b => !alreadyCovered.has(String(b.id)));
+      if (!toCreate.length) { localStorage.setItem('mila_autobal_lastrun', today); return; }
+
+      const fmt = n => '$' + Math.round(n).toLocaleString('es-AR');
+      const rows = toCreate.map(b => {
+        const guest = b.guests ? `${b.guests.first_name ?? ''} ${b.guests.last_name ?? ''}`.trim() : 'Huésped';
+        const when  = b.check_in === today ? 'hoy' : 'mañana';
+        return {
+          hotel_id:       this.ctx.hotelId,
+          title:          `💸 Saldo pendiente — check-in ${when}`,
+          description:    `${guest} debe ${fmt(b.balance)} 🔔AUTOBAL:${b.id}`,
+          scheduled_date: today,
+          unit_ids:       (b.booking_units ?? []).map(bu => bu.unit_id),
+          is_note:        false,
+        };
+      });
+
+      await this.db.from('reminders').insert(rows);
+      localStorage.setItem('mila_autobal_lastrun', today);
+    } catch (err) {
+      console.warn('[Dashboard] autoCreateBalanceReminders:', err?.message ?? err);
+      // No marcar lastrun si falló — que reintente la próxima carga.
+    }
+  }
+
   async _fetchTodayCleaningTasks(today) {
     try {
       // NOTA: no se usa el embed units(...) — en algunos hoteles esa

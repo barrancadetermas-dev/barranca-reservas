@@ -923,14 +923,12 @@ export class GuestsCRM {
       const tags   = [...document.querySelectorAll('.tag-toggle.active')].map(t => t.dataset.tag);
       const btn    = document.getElementById('btn-save-tags');
       const guestId = guest?.id;
-      console.log('[Tags] Guardando tags:', tags, '→ guest.id:', guestId);
       if (!guestId) { showToast('Error: no se encontró el ID del huésped', 'error'); return; }
       if (btn) { btn.textContent = 'Guardando...'; btn.disabled = true; }
       const { data, error, count, status, statusText } = await this.db.from('guests')
         .update({ tags, updated_at: new Date().toISOString() })
         .eq('id', guestId)
         .select('id, tags');
-      console.log('[Tags] Respuesta Supabase → status:', status, statusText, '| data:', data, '| error:', error);
       if (btn) { btn.textContent = 'Guardar etiquetas'; btn.disabled = false; }
       if (error) {
         console.error('[Tags] Error Supabase:', error);
