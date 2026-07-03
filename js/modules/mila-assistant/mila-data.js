@@ -85,7 +85,7 @@ export async function fetchDisponibilidad(checkIn, checkOut) {
 
   return units.map(u => {
     const busy = (byUnit.get(u.id) ?? []).slice().sort((a, b) => a.from.localeCompare(b.from));
-    if (!busy.length) return { id: u.id, name: u.name, available: true, partial: null };
+    if (!busy.length) return { id: u.id, name: u.name, sort_order: u.sort_order, color: u.color, available: true, partial: null };
 
     // Recorrer las reservas ocupadas ordenadas y juntar los huecos libres
     // dentro del rango pedido.
@@ -99,7 +99,7 @@ export async function fetchDisponibilidad(checkIn, checkOut) {
     if (cursor < checkOut) freeRanges.push({ from: cursor, to: checkOut });
 
     const valid = freeRanges.filter(r => r.from < r.to);
-    if (!valid.length) return { id: u.id, name: u.name, available: false, partial: null };
+    if (!valid.length) return { id: u.id, name: u.name, sort_order: u.sort_order, color: u.color, available: false, partial: null };
 
     // Sub-rango contiguo más largo dentro de lo pedido
     let best = valid[0];
@@ -109,6 +109,8 @@ export async function fetchDisponibilidad(checkIn, checkOut) {
     return {
       id: u.id,
       name: u.name,
+      sort_order: u.sort_order,
+      color: u.color,
       available: fullyAvailable,
       partial: fullyAvailable ? null : {
         from: best.from,

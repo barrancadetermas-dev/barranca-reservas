@@ -691,12 +691,14 @@ export class BookingForm {
     // Solo el ícono al principio — el texto completo (nombre de la otra
     // unidad, fechas) va en el título/confirm, no compite por espacio en
     // la fila y evita el problema de contraste/legibilidad que tenía antes.
+    const label = (c) => c.sort_order ? `#${c.sort_order} · ${c.name}` : c.name;
+
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'unit-split-hint';
     btn.textContent = '🔀';
     btn.title = candidates.length === 1
-      ? `Combinar con ${candidates[0].name} para completar el pedido`
+      ? `Combinar con ${label(candidates[0])} para completar el pedido`
       : `${candidates.length} unidades pueden completar el pedido — tocá para elegir`;
     row2b.appendChild(btn);
 
@@ -704,7 +706,7 @@ export class BookingForm {
       e.preventDefault();
       e.stopPropagation();
       if (candidates.length === 1) {
-        this._startSplitStay(chip.dataset.unitId, partial, candidates[0].id, candidates[0].name, missing);
+        this._startSplitStay(chip.dataset.unitId, partial, candidates[0].id, label(candidates[0]), missing);
         return;
       }
       // Varias opciones — menú propio (no un <select> nativo, que queda
@@ -712,9 +714,10 @@ export class BookingForm {
       document.querySelector('.unit-split-menu')?.remove();
       const menu = document.createElement('div');
       menu.className = 'unit-split-menu';
-      menu.innerHTML = candidates.map(c =>
-        `<button type="button" data-id="${c.id}" data-name="${c.name}">${c.name}</button>`
-      ).join('');
+      menu.innerHTML = candidates.map(c => `
+        <button type="button" data-id="${c.id}" data-name="${label(c)}">
+          <span class="unit-split-dot" style="background:${c.color ?? '#6366f1'}"></span>${label(c)}
+        </button>`).join('');
       chip.style.position = 'relative';
       chip.appendChild(menu);
       const closeMenu = () => { menu.remove(); document.removeEventListener('click', closeMenu); };
@@ -733,7 +736,8 @@ export class BookingForm {
   // que sí cubre, guarda los datos de la Parte 2 pendiente (unidad B +
   // fechas restantes), para abrirla automáticamente apenas se guarde esta.
   _startSplitStay(unitAId, partial, unitBId, unitBName, missing) {
-    const unitAName = this.ctx?.units?.find(u => String(u.id) === String(unitAId))?.name ?? 'esta unidad';
+    const unitA = this.ctx?.units?.find(u => String(u.id) === String(unitAId));
+    const unitAName = unitA ? (unitA.sort_order ? `#${unitA.sort_order} · ${unitA.name}` : unitA.name) : 'esta unidad';
     if (!confirm(`Dividir estadía:\n\n• Esta reserva → ${unitAName}, del ${partial.from} al ${partial.to}\n• Después de guardar, se abre automáticamente una 2ª reserva → ${unitBName}, del ${missing.from} al ${missing.to}\n\n¿Continuar?`)) return;
 
     // Dejar seleccionada SOLO la unidad A

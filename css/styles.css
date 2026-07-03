@@ -1031,6 +1031,10 @@ select { appearance: auto; cursor: pointer; }
 }
 .unit-split-menu button:last-child { border-bottom: none; }
 .unit-split-menu button:hover { background: var(--color-primary-l); color: var(--color-primary); }
+.unit-split-dot {
+  display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+  margin-right: 6px; flex-shrink: 0; vertical-align: middle;
+}
 
 .notes-counter { font-size: .72rem; color: var(--color-text-3); font-weight: 400; margin-left: auto; }
 
