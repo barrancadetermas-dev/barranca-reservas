@@ -4,7 +4,7 @@
 // Todos los valores se guardan en tabla hotel_config
 // ══════════════════════════════════════════════════
 
-import { showToast, AppContext } from '../supabase-config.js';
+import { showToast, AppContext, formatDate } from '../supabase-config.js';
 import { can } from '../auth/permissions.js';
 import { logAction } from '../services/audit-service.js';
 import { AdminUsers } from '../services/admin-users.js';
@@ -330,6 +330,26 @@ export class ConfigPanel {
           </div>
         </div>
 
+        <!-- ── Limpieza de huéspedes inactivos ── -->
+        <div style="background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--r-xl);padding:18px;margin-top:16px">
+          <div class="card-header" style="margin-bottom:10px">
+            <h3>🧹 Limpieza de huéspedes inactivos</h3>
+          </div>
+          <div style="font-size:.78rem;color:var(--color-text-3);margin-bottom:12px">
+            Busca huéspedes sin ninguna visita reciente — se mira la <strong>última</strong> reserva de cada uno,
+            no la primera. Si volvió hace poco, no aparece acá aunque su primera visita haya sido hace años.
+            Sus reservas históricas <strong>no se borran</strong> (quedan intactas para tus estadísticas), solo se
+            desvincula el huésped.
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <label style="font-size:.8rem;color:var(--color-text-2)">Años sin visitas:</label>
+            <input type="number" id="cfg-inactive-years" value="5" min="1" max="20" style="width:70px;padding:6px 8px;border:1px solid var(--color-border);border-radius:var(--r-sm);background:var(--color-surface);color:var(--color-text)">
+            <button class="btn btn-outline btn-sm" id="cfg-find-inactive">🔍 Buscar candidatos</button>
+          </div>
+          <div id="cfg-inactive-results" style="margin-top:14px"></div>
+        </div>
+
+
         <!-- ── MILA Info ── -->
         <div style="background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--r-xl);padding:18px">
           <div style="display:flex;align-items:center;justify-content:space-between">
@@ -570,6 +590,9 @@ export class ConfigPanel {
       await exportFullBackup(this.db, this.ctx.hotelId);
     });
 
+    // ── Limpieza de huéspedes inactivos ──
+    container.querySelector('#cfg-find-inactive')?.addEventListener('click', () => this._findInactiveGuests(container));
+
     // ── Reportes PDF ──────────────────────────────────
     container.querySelector('#cfg-exp-toggle-pdf')?.addEventListener('click', (e) => {
       const btn = e.currentTarget;
@@ -682,6 +705,91 @@ export class ConfigPanel {
         } catch { showToast('Error al guardar grupo tarifario', 'error'); }
       });
     });
+  }
+
+  // ── Limpieza de huéspedes inactivos ──────────────
+  // Se mira la reserva MÁS RECIENTE de cada huésped, no la primera — si
+  // volvió hace poco, no es candidato aunque haya venido por primera vez
+  // hace muchos años. Borrar al huésped no borra sus reservas viejas: la
+  // FK bookings.guest_id es ON DELETE SET NULL, así que las estadísticas
+  // históricas quedan intactas, solo se pierde el vínculo al huésped.
+  async _findInactiveGuests(container) {
+    const years = parseInt(container.querySelector('#cfg-inactive-years')?.value) || 5;
+    const resultsEl = container.querySelector('#cfg-inactive-results');
+    if (!resultsEl) return;
+    resultsEl.innerHTML = `<div style="padding:12px;text-align:center;color:var(--color-text-3)">⟳ Buscando...</div>`;
+
+    try {
+      const { data: guests, error } = await this.db.from('guests')
+        .select('id, first_name, last_name, dni, bookings!bookings_guest_id_fkey(id, check_in)')
+        .eq('hotel_id', this.ctx.hotelId);
+      if (error) throw error;
+
+      const cutoff = new Date();
+      cutoff.setFullYear(cutoff.getFullYear() - years);
+      const cutoffISO = cutoff.toISOString().slice(0, 10);
+
+      const candidates = (guests ?? [])
+        .map(g => {
+          const dates = (g.bookings ?? []).map(b => b.check_in).filter(Boolean).sort();
+          const lastVisit = dates[dates.length - 1] ?? null;
+          return { ...g, lastVisit, bookingCount: g.bookings?.length ?? 0 };
+        })
+        .filter(g => g.lastVisit && g.lastVisit < cutoffISO) // sin reservas = no se toca, no es "inactivo", nunca vino
+        .sort((a, b) => a.lastVisit.localeCompare(b.lastVisit));
+
+      if (!candidates.length) {
+        resultsEl.innerHTML = `<div style="padding:12px;color:var(--color-text-3);font-size:.82rem">✓ No hay huéspedes sin visitas hace más de ${years} años.</div>`;
+        return;
+      }
+
+      resultsEl.innerHTML = `
+        <div style="font-size:.8rem;font-weight:600;margin-bottom:8px">
+          ${candidates.length} huésped${candidates.length !== 1 ? 'es' : ''} sin visitas en los últimos ${years} años:
+        </div>
+        <div style="max-height:280px;overflow-y:auto;border:1px solid var(--color-border);border-radius:var(--r-md);padding:6px">
+          ${candidates.map(g => `
+            <label style="display:flex;align-items:center;gap:8px;padding:6px 8px;font-size:.8rem;cursor:pointer;border-radius:6px" onmouseover="this.style.background='var(--color-surface-2)'" onmouseout="this.style.background='transparent'">
+              <input type="checkbox" class="cfg-inactive-check" value="${g.id}" checked style="accent-color:var(--color-primary)">
+              <span style="flex:1">${g.first_name ?? ''} ${g.last_name ?? ''}${g.dni ? ` · ${g.dni}` : ''}</span>
+              <span style="color:var(--color-text-3)">última visita: ${formatDate(g.lastVisit)} (${g.bookingCount} reserva${g.bookingCount !== 1 ? 's' : ''})</span>
+            </label>`).join('')}
+        </div>
+        <div style="margin-top:10px;padding:10px;background:var(--state-yellow-bg);border-radius:var(--r-md);font-size:.72rem;color:var(--state-yellow-txt)">
+          ⚠️ Se borra el huésped, no sus reservas — quedan en la base para no afectar tus estadísticas de años anteriores. Esta acción no se puede deshacer.
+        </div>
+        <div style="display:flex;gap:8px;margin-top:10px">
+          <button class="btn btn-outline btn-sm" id="cfg-inactive-backup-first">💾 Descargar backup antes</button>
+          <button class="btn btn-primary btn-sm" id="cfg-inactive-delete" style="background:var(--state-red);border-color:var(--state-red)">🗑️ Eliminar seleccionados</button>
+        </div>`;
+
+      resultsEl.querySelector('#cfg-inactive-backup-first')?.addEventListener('click', async () => {
+        const { exportFullBackup } = await import('../services/export-service.js');
+        await exportFullBackup(this.db, this.ctx.hotelId);
+      });
+      resultsEl.querySelector('#cfg-inactive-delete')?.addEventListener('click', () => this._deleteInactiveGuests(resultsEl));
+    } catch (err) {
+      resultsEl.innerHTML = `<div style="padding:12px;color:var(--state-red-txt)">Error: ${err.message ?? err}</div>`;
+    }
+  }
+
+  async _deleteInactiveGuests(resultsEl) {
+    const ids = [...resultsEl.querySelectorAll('.cfg-inactive-check:checked')].map(c => c.value);
+    if (!ids.length) { showToast('No seleccionaste ningún huésped', 'warning'); return; }
+    if (!confirm(`¿Eliminar ${ids.length} huésped${ids.length !== 1 ? 'es' : ''}? Sus reservas históricas quedan intactas. Esta acción no se puede deshacer.`)) return;
+
+    const btn = resultsEl.querySelector('#cfg-inactive-delete');
+    if (btn) { btn.disabled = true; btn.textContent = 'Eliminando...'; }
+    try {
+      const { error } = await this.db.from('guests').delete().in('id', ids);
+      if (error) throw error;
+      await logAction('DELETE', 'guest', null, `Limpieza de huéspedes inactivos: ${ids.length} eliminados`);
+      showToast(`✓ ${ids.length} huésped${ids.length !== 1 ? 'es' : ''} eliminado${ids.length !== 1 ? 's' : ''}`, 'success');
+      resultsEl.innerHTML = '';
+    } catch (err) {
+      showToast('Error al eliminar: ' + (err.message ?? err), 'error');
+      if (btn) { btn.disabled = false; btn.textContent = '🗑️ Eliminar seleccionados'; }
+    }
   }
 
   async _save(container) {
