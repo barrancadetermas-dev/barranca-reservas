@@ -207,7 +207,7 @@ export class Dashboard {
     const { data: activeBookings } = await this.db
       .from('bookings')
       .select(`
-        id, check_in, check_out, status, guest_id,
+        id, check_in, check_out, status, guest_id, checked_in_at, checked_out_at,
         guests!bookings_guest_id_fkey(first_name, last_name),
         booking_units!inner(unit_id, units!inner(name))
       `)
@@ -223,7 +223,7 @@ export class Dashboard {
       .select(`
         id, check_in, check_out, checked_in_at, total_amount, total_paid, balance,
         guests!bookings_guest_id_fkey(first_name, last_name, phone),
-        booking_units(unit_id, units(name))
+        booking_units(unit_id, units(name, color, sort_order))
       `)
       .eq('hotel_id', hotelId)
       .eq('check_in', today)
@@ -236,7 +236,7 @@ export class Dashboard {
       .select(`
         id, check_in, check_out, checked_out_at,
         guests!bookings_guest_id_fkey(first_name, last_name),
-        booking_units(unit_id, units(name))
+        booking_units(unit_id, units(name, color, sort_order))
       `)
       .eq('hotel_id', hotelId)
       .eq('check_out', today)
@@ -244,9 +244,19 @@ export class Dashboard {
       .neq('status', 'blocked');
 
     // Unidades ocupadas hoy (para ocupación) — con detalle de huésped para tooltip
+    // OJO: "ocupado" acá significa que el huésped REALMENTE está en el
+    // complejo (apretó check-in), no solo que la fecha de hoy cae dentro
+    // del rango de la reserva. Si el check-in es hoy pero todavía no se
+    // registró, no cuenta como ocupado — recién cuenta cuando se hace el
+    // check-in real. Las reservas que ya venían de días anteriores se
+    // consideran ocupadas igual (asumimos que su check-in ya se hizo en
+    // su momento; no volvemos a exigirlo retroactivamente).
     const occupiedUnitIds = new Set();
     const occupiedDetail  = []; // [{ unitName, guestName }]
     (activeBookings ?? []).forEach(b => {
+      const arrivingToday = b.check_in === today;
+      if (arrivingToday && !b.checked_in_at) return; // llega hoy pero no hizo check-in todavía
+      if (b.checked_out_at) return; // ya se fue (salida anticipada), no cuenta como ocupado
       const guestName = b.guests ? `${b.guests.first_name ?? ''} ${b.guests.last_name ?? ''}`.trim() : '—';
       (b.booking_units ?? []).forEach(bu => {
         occupiedUnitIds.add(bu.unit_id);
