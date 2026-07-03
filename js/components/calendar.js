@@ -572,12 +572,18 @@ export class Calendar {
     const nameStyle = 'color:' + textColor + ';font-size:.68rem;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0';
     bar.innerHTML = avatar + canalChip + splitChip + '<span style="' + nameStyle + '">' + guestFull + '</span>';
 
-    // ── Resize handle (solo si la barra no está truncada a la derecha) ──
+    // ── Resize handles — derecha (checkout) y ahora también izquierda (check-in) ──
     if (!truncRight) {
       const handle = document.createElement('div');
       handle.className = 'bar-resize-handle';
       handle.title = 'Arrastrar para cambiar fecha de salida';
       bar.appendChild(handle);
+    }
+    if (!truncLeft) {
+      const handleL = document.createElement('div');
+      handleL.className = 'bar-resize-handle-left';
+      handleL.title = 'Arrastrar para cambiar fecha de ingreso';
+      bar.appendChild(handleL);
     }
 
     // ── Hover effects ──
@@ -1224,6 +1230,29 @@ export class Calendar {
     }, { signal: sig });
 
     // ────────────────────────────────────────────────
+    // RESIZE — borde izquierdo (fecha de ingreso)
+    // Antes solo se podía arrastrar el borde derecho (checkout) — no había
+    // forma de estirar/acortar el check-in con drag, había que editar la
+    // reserva a mano para eso.
+    // ────────────────────────────────────────────────
+    grid.addEventListener('mousedown', (e) => {
+      const handle = e.target.closest('.bar-resize-handle-left');
+      if (!handle) return;
+      e.preventDefault();
+      e.stopPropagation();
+
+      const bar       = handle.closest('.bar[data-booking-id]');
+      if (!bar) return;
+      const bookingId = bar.dataset.bookingId;
+      const booking   = (this._lastRenderedBookings ?? []).find(b => b.id === bookingId);
+      if (!booking) return;
+
+      this._resizeActive = true;
+      this._hideTooltip();
+      this._startResizeLeft(e, booking, bar, grid, sig);
+    }, { signal: sig });
+
+    // ────────────────────────────────────────────────
     // DRAG & DROP
     // ────────────────────────────────────────────────
     let _dragState  = null;
@@ -1713,6 +1742,142 @@ export class Calendar {
     document.addEventListener('mouseup', onUp, { once: true });
 
     // Soporte touch (cuando se llama desde touchstart del handle)
+    const onTM2 = (te) => { te.preventDefault(); onMove({ clientX: te.touches[0].clientX, clientY: te.touches[0].clientY }); };
+    const onTE2 = ()   => { document.removeEventListener('touchmove', onTM2); onUp(); };
+    document.addEventListener('touchmove', onTM2, { passive: false });
+    document.addEventListener('touchend',  onTE2, { once: true });
+  }
+
+  // ══════════════════════════════════════════════════
+  // RESIZE DE RESERVAS — borde izquierdo (check-in)
+  // Mismo mecanismo que _startResize, espejado: acá se mueve check_in en
+  // vez de check_out. El chequeo de conflicto usa la misma matemática con
+  // límites excluyentes, así que un check-out ajeno el mismo día que tu
+  // nuevo check-in (recambio) tampoco bloquea acá.
+  // ══════════════════════════════════════════════════
+  _startResizeLeft(e, booking, bar, grid, sig) {
+    const origCI     = booking.check_in;
+    const origLeft    = parseFloat(bar.style.left) || 0;
+    const origWidth  = bar.getBoundingClientRect().width;
+    const origWidthStyle = bar.style.width;
+    const origLeftStyle  = bar.style.left;
+    const startX     = e.clientX;
+    let currentCI    = origCI;
+    let lastDaysDiff = 0;
+
+    const getCellWidth = () => {
+      const firstCell = grid.querySelector('.cal-cell[data-date]');
+      return firstCell ? firstCell.getBoundingClientRect().width : CELL_W_DESK;
+    };
+
+    const onMove = (ev) => {
+      const cellWidth = getCellWidth();
+      const deltaX    = ev.clientX - startX;
+      const daysDiff  = Math.round(deltaX / cellWidth);
+      if (daysDiff === lastDaysDiff) return;
+      lastDaysDiff = daysDiff;
+
+      const nights    = this._dayDiff(origCI, booking.check_out);
+      const newNights = Math.max(1, nights - daysDiff);
+      currentCI = this._addDays(booking.check_out, -newNights);
+
+      // Actualizar posición/ancho visual de la barra (el borde izquierdo
+      // se mueve, el derecho queda fijo — al revés que el resize normal)
+      const newWidth = Math.max(origWidth - daysDiff * cellWidth, cellWidth - 4);
+      bar.style.width = `${newWidth}px`;
+      bar.style.left  = `${origLeft + daysDiff * cellWidth}px`;
+
+      // Validar localmente — mismo criterio exclusivo en los bordes que
+      // el resize derecho: un check_out ajeno == tu nuevo check_in no cuenta.
+      const hasConflict = (this._lastRenderedBookings ?? []).some(other => {
+        if (other.id === booking.id || other.status === 'cancelled') return false;
+        const srcUnitId = (booking.booking_units ?? [])[0]?.unit_id;
+        if (!(other.booking_units ?? []).some(bu => bu.unit_id === srcUnitId)) return false;
+        return other.check_in < booking.check_out && other.check_out > currentCI;
+      });
+
+      bar.classList.toggle('resize-conflict', hasConflict);
+      bar.classList.toggle('resize-valid',    !hasConflict);
+
+      this._floatInfo.innerHTML = `
+        <div class="fi-guest" style="font-size:.72rem;font-weight:600">Redimensionar reserva</div>
+        <div class="fi-dates">📅 ${this._fmtShort(currentCI)} → ${this._fmtShort(booking.check_out)}</div>
+        <div class="fi-nights">🌙 ${newNights} noche${newNights!==1?'s':''}</div>
+        ${hasConflict ? '<div class="fi-conflict">⚠️ Conflicto</div>' : ''}
+      `;
+      this._floatInfo.className = `cal-drag-float-info${hasConflict ? ' conflict' : ''}`;
+      this._floatInfo.style.left = `${ev.clientX + 16}px`;
+      this._floatInfo.style.top  = `${ev.clientY - 60}px`;
+    };
+
+    const onUp = async () => {
+      document.removeEventListener('mousemove', onMove);
+      this._resizeActive = false;
+      bar.classList.remove('resize-conflict', 'resize-valid');
+      this._floatInfo.classList.add('hidden');
+
+      if (currentCI === origCI) {
+        bar.style.width = origWidthStyle;
+        bar.style.left  = origLeftStyle;
+        return;
+      }
+
+      const confirmed = await this._confirmResizeChange({
+        guestName: booking.guests ? `${booking.guests.first_name ?? ''} ${booking.guests.last_name ?? ''}`.trim() : (booking.block_reason ?? 'Reserva'),
+        oldCI: origCI, oldCO: booking.check_out,
+        newCI: currentCI, newCO: booking.check_out,
+        oldNights: this._dayDiff(origCI, booking.check_out),
+        newNights: this._dayDiff(currentCI, booking.check_out),
+      });
+
+      if (!confirmed) {
+        bar.style.transition = 'width .3s cubic-bezier(.4,0,.2,1), left .3s cubic-bezier(.4,0,.2,1)';
+        bar.style.width = origWidthStyle;
+        bar.style.left  = origLeftStyle;
+        setTimeout(() => { bar.style.transition = ''; }, 350);
+        return;
+      }
+
+      // Validación final — mismos límites excluyentes que el resize derecho
+      const srcUnitId = (booking.booking_units ?? [])[0]?.unit_id;
+      const { data: conflicts } = await this.db
+        .from('booking_units')
+        .select('unit_id, bookings!inner(id, check_in, check_out, status)')
+        .eq('unit_id', srcUnitId)
+        .neq('bookings.status', 'cancelled')
+        .neq('bookings.id', booking.id)
+        .lt('bookings.check_in', booking.check_out)
+        .gt('bookings.check_out', currentCI);
+
+      if (conflicts?.length) {
+        showToast('⚠️ Conflicto: hay otra reserva en esas fechas', 'error');
+        bar.style.width = origWidthStyle;
+        bar.style.left  = origLeftStyle;
+        this.load(); return;
+      }
+
+      const newNights = this._dayDiff(currentCI, booking.check_out);
+      const { error } = await this.db.from('bookings')
+        .update({ check_in: currentCI, nights: newNights }).eq('id', booking.id);
+      if (error) {
+        showToast('Error al cambiar la fecha de ingreso', 'error');
+        bar.style.width = origWidthStyle;
+        bar.style.left  = origLeftStyle;
+        return;
+      }
+
+      await logAction('UPDATE', 'booking', booking.id,
+        `Resize: check_in ${origCI}→${currentCI}`);
+
+      this._pendingPulse.add(booking.id);
+      cache.invalidate('bookings');
+      showToast(`✓ Fecha de ingreso actualizada: ${this._fmtShort(currentCI)}`, 'success');
+      this.load();
+    };
+
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp, { once: true });
+
     const onTM2 = (te) => { te.preventDefault(); onMove({ clientX: te.touches[0].clientX, clientY: te.touches[0].clientY }); };
     const onTE2 = ()   => { document.removeEventListener('touchmove', onTM2); onUp(); };
     document.addEventListener('touchmove', onTM2, { passive: false });
