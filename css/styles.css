@@ -848,6 +848,10 @@ select { appearance: auto; cursor: pointer; }
   cursor: pointer;
 }
 .booking-row:hover { box-shadow: var(--sh-md); border-color: var(--color-border-2); }
+.booking-row-accent {
+  width: 4px; align-self: stretch; flex-shrink: 0;
+  border-radius: 3px; margin-right: 2px;
+}
 
 .booking-status-pill {
   width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;

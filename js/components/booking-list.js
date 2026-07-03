@@ -550,6 +550,21 @@ export class BookingList {
     const guest  = g ? `${g.first_name ?? ''} ${g.last_name ?? ''}`.trim() : (b.is_blocked ? 'Bloqueo' : 'Sin huésped');
     const { color: barColor, label: barLabel } = getBookingBarColor(b);
     const units  = (b.booking_units ?? []);
+    // La línea lateral ahora marca la(s) unidad(es) de la reserva — mismo
+    // color que usa el calendario para cada depto. Con una sola unidad
+    // queda sólida; con varias, se divide en franjas iguales (gradiente
+    // con cortes duros, no degradé real).
+    const unitColorsForAccent = units.map(bu => bu.units?.color ?? barColor).filter(Boolean);
+    const accentBg = unitColorsForAccent.length <= 1
+      ? (unitColorsForAccent[0] ?? barColor)
+      : (() => {
+          const n = unitColorsForAccent.length;
+          const stops = unitColorsForAccent.flatMap((c, i) => [
+            `${c} ${(i / n * 100).toFixed(2)}%`,
+            `${c} ${((i + 1) / n * 100).toFixed(2)}%`,
+          ]);
+          return `linear-gradient(to bottom, ${stops.join(', ')})`;
+        })();
     const unitChips = units.map(bu => {
       const u = { ...bu.units, id: bu.unit_id };
       return getUnitChipHTML(u, 'sm');
@@ -590,7 +605,7 @@ export class BookingList {
     return `
       <div class="booking-row ${isBad ? 'booking-row-bad' : ''}" data-booking-id="${b.id}"
            style="cursor:pointer">
-        <div class="booking-row-accent" style="background:${barColor}"></div>
+        <div class="booking-row-accent" style="background:${accentBg}" title="${units.map(bu => bu.units?.name).filter(Boolean).join(' · ') || barLabel}"></div>
         <div class="booking-row-body">
           <div class="bl-row-main">
             <div class="bl-col-guest">
