@@ -707,24 +707,25 @@ export class BookingForm {
         this._startSplitStay(chip.dataset.unitId, partial, candidates[0].id, candidates[0].name, missing);
         return;
       }
-      // Varias opciones — desplegar un select recién acá, no antes.
-      if (row2b.querySelector('.unit-split-select')) return;
-      btn.style.display = 'none';
-      const sel = document.createElement('select');
-      sel.className = 'unit-split-select';
-      sel.title = 'Elegí con cuál combinar para completar el pedido';
-      sel.innerHTML = `<option value="">Elegir...</option>` +
-        candidates.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
-      row2b.appendChild(sel);
-      sel.addEventListener('click', (ev) => ev.stopPropagation());
-      sel.addEventListener('change', (ev) => {
+      // Varias opciones — menú propio (no un <select> nativo, que queda
+      // apretado y se renderiza mal en una fila angosta).
+      document.querySelector('.unit-split-menu')?.remove();
+      const menu = document.createElement('div');
+      menu.className = 'unit-split-menu';
+      menu.innerHTML = candidates.map(c =>
+        `<button type="button" data-id="${c.id}" data-name="${c.name}">${c.name}</button>`
+      ).join('');
+      chip.style.position = 'relative';
+      chip.appendChild(menu);
+      const closeMenu = () => { menu.remove(); document.removeEventListener('click', closeMenu); };
+      menu.addEventListener('click', (ev) => {
         ev.stopPropagation();
-        const chosen = candidates.find(c => String(c.id) === ev.target.value);
-        sel.remove();
-        btn.style.display = '';
-        if (chosen) this._startSplitStay(chip.dataset.unitId, partial, chosen.id, chosen.name, missing);
+        const optBtn = ev.target.closest('button[data-id]');
+        if (!optBtn) return;
+        closeMenu();
+        this._startSplitStay(chip.dataset.unitId, partial, optBtn.dataset.id, optBtn.dataset.name, missing);
       });
-      sel.focus();
+      setTimeout(() => document.addEventListener('click', closeMenu), 0);
     });
   }
 
