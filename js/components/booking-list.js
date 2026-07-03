@@ -8,6 +8,7 @@ import { can, isDemo } from "../auth/permissions.js";
 
 import { formatARS, formatDate, showToast, getUnitChipHTML, getSourceBadgeHTML, getBookingBarColor, getUnitLabel, getUnitColor, SOURCE_CONFIG, localToday, localDateISO, AppContext } from '../supabase-config.js';
 import { logAction } from '../services/audit-service.js';
+import { Bus, EVENTS } from '../services/event-bus.js';
 
 const STATUS_LABELS = {
   pending:   'Sin seña',
@@ -862,6 +863,12 @@ export class BookingList {
       if (error) throw error;
 
       await logAction('CANCEL', 'booking', id, `Reprogramada: ${guest} (${dates})${credit > 0 ? ` — NC ${formatARS(credit)}` : ''}`);
+      Bus.emit(EVENTS.BOOKING_CANCELLED, {
+        hotelId: this.ctx.hotelId,
+        checkIn: b.check_in,
+        checkOut: b.check_out,
+        unitIds: (b.booking_units ?? []).map(bu => bu.unit_id),
+      });
       await this.load();
 
       if (!openNow) {
@@ -933,6 +940,14 @@ export class BookingList {
       if (error) throw error;
       showToast('Reserva eliminada ✓', 'success');
       await logAction('DELETE', 'booking', id, `Eliminada desde lista: ${guest}${dates}`);
+      if (booking) {
+        Bus.emit(EVENTS.BOOKING_CANCELLED, {
+          hotelId: this.ctx.hotelId,
+          checkIn: booking.check_in,
+          checkOut: booking.check_out,
+          unitIds: (booking.booking_units ?? []).map(bu => bu.unit_id),
+        });
+      }
       await this.load();
     } catch (err) {
       console.error('[BookingList] delete error:', err);

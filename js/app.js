@@ -3,6 +3,7 @@ import { Bus, EVENTS } from './services/event-bus.js';
 import { cache } from './services/supabase-cache.js';
 import { Sound } from './services/sound-service.js';
 import { NotificationService } from './services/notification-service.js';
+import { initWaitlistService } from './services/waitlist-service.js';
 // ═══════════════════════════════════════════════════
 // app.js v5.0 — MILA Sistema Inteligente para Alojamientos
 // + Roles (admin/staff/demo) + Demo banner
@@ -21,6 +22,7 @@ import { BookingForm }  from './components/booking-form.js';
 import { BookingList }  from './components/booking-list.js';
 import { Statistics }   from './components/statistics.js';
 import { GuestsCRM }    from './components/guests.js';
+import { WaitlistPanel } from './components/waitlist.js';
 import { fetchDollarRates, startDollarAutoRefresh, formatDollarBadge, formatDollarHeaderLabel, getOfficialAverageRate } from './services/dollar-api.js';
 import { ConfigPanel }    from './components/config-panel.js';
 import { AuditPanel }     from './components/audit-panel.js';
@@ -36,6 +38,7 @@ let notifService = null;
 let bookingList = null;
 let statistics  = null;
 let guestsCRM   = null;
+let waitlistPanel = null;
 let configPanel = null;
 let auditPanel  = null;
 let operations  = null;
@@ -306,6 +309,7 @@ async function initApp(user) {
     bookingList = tryInit('BookingList',() => new BookingList(supabase, AppContext, bookingForm));
     statistics  = tryInit('Statistics', () => new Statistics(supabase, AppContext));
     guestsCRM   = tryInit('GuestsCRM',  () => new GuestsCRM(supabase, AppContext, bookingForm));
+    waitlistPanel = tryInit('WaitlistPanel', () => new WaitlistPanel(supabase, AppContext));
     configPanel = tryInit('ConfigPanel',() => new ConfigPanel(supabase, AppContext));
     auditPanel  = tryInit('AuditPanel', () => new AuditPanel(supabase, AppContext));
     operations  = tryInit('Operations', () => new OperationsModule(supabase, AppContext));
@@ -330,6 +334,7 @@ async function initApp(user) {
 
     loadDollarBadge();
     updateOperationsBadge();
+    waitlistPanel?._updateBadge();
     setupRealtime();
     setupNavigation();
     setupGlobalShortcuts();
@@ -365,6 +370,7 @@ async function initApp(user) {
     trySetup('theme',         setupThemeSystem);
     notifService = new NotificationService(supabase);
     trySetup('realNotif',     () => setupRealNotifications(notifService));
+    trySetup('waitlist',      () => initWaitlistService(supabase));
 
     // Mini calendario sidebar
     const sidebarCalContainer = document.getElementById('sidebar-cal-container');
@@ -600,6 +606,7 @@ export async function navigateTo(section) {
       case 'statistics':  statistics?.init(); break;
       case 'reminders':   await loadRemindersSection(); break;
       case 'guests':      await guestsCRM?.load(); break;
+      case 'waitlist':    await waitlistPanel?.load(); break;
       case 'operations':  await operations?.load(); break;
       case 'audit':       await auditPanel?.load(); break;
       case 'config':      await configPanel?.load(); break;

@@ -647,7 +647,8 @@ export class BookingForm {
       const isSelected = chip.classList.contains('selected');
       let tagHTML = '';
       if (!info.available && !info.partial) {
-        tagHTML = `<span class="unit-avail-tag unit-avail-busy">Ocupado</span>`;
+        tagHTML = `<span class="unit-avail-tag unit-avail-busy">Ocupado</span>` +
+          `<button type="button" class="unit-waitlist-link" data-unit-id="${chip.dataset.unitId}" title="Guardar este pedido en la lista de espera">+ Lista de espera</button>`;
       } else if (info.partial) {
         const fmtD = (s) => { const [y,m,d] = s.split('-'); return `${d}/${m}`; };
         tagHTML = `<span class="unit-avail-tag unit-avail-partial" title="Libre del ${fmtD(info.partial.from)} al ${fmtD(info.partial.to)}">${info.partial.nights}/${info.partial.ofNights} noches</span>`;
@@ -659,6 +660,13 @@ export class BookingForm {
       }
       const row2 = chip.querySelector('.unit-option-row2');
       if (tagHTML && row2) row2.insertAdjacentHTML('beforeend', tagHTML);
+      row2?.querySelector('.unit-waitlist-link')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        this.close(true);
+        window.milaNav?.('waitlist');
+        setTimeout(() => window._waitlistPanel?._openForm({ checkIn: ci, checkOut: co, unitId: e.currentTarget.dataset.unitId }), 150);
+      });
     });
   }
 

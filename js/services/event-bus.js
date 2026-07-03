@@ -91,6 +91,7 @@ export const EVENTS = Object.freeze({
   BOOKING_CREATED:     'booking:created',
   BOOKING_UPDATED:     'booking:updated',
   BOOKING_DELETED:     'booking:deleted',
+  BOOKING_CANCELLED:   'booking:cancelled',    // { hotelId, checkIn, checkOut, unitIds } — libera capacidad, dispara chequeo de lista de espera
   BOOKING_FULLY_PAID:  'booking:fullypaid',
   BOOKING_DRAG_DONE:   'booking:drag_done',   // { bookingId, oldCI, newCI }
 

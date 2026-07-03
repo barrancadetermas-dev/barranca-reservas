@@ -760,12 +760,12 @@ select { appearance: auto; cursor: pointer; }
 .nc-summary-bar[open] summary::before { content: '▾ '; }
 .nc-summary-stale {
   margin-left: 8px; font-size: .7rem; font-weight: 700;
-  color: var(--state-red-txt); background: var(--state-red-bg); padding: 1px 7px; border-radius: 999px;
+  color: var(--state-red-txt); background: var(--state-red-bg); padding: 1px 7px; border-radius: var(--r-full);
 }
 .nc-summary-list { margin-top: 8px; display: flex; flex-direction: column; gap: 4px; }
 .nc-summary-row {
   display: flex; align-items: center; gap: 10px; font-size: .78rem;
-  padding: 5px 8px; border-radius: 6px; background: var(--color-surface);
+  padding: 5px 8px; border-radius: var(--r-sm); background: var(--color-surface);
 }
 .nc-summary-row.is-stale { background: var(--state-red-bg); }
 .nc-summary-guest { flex: 1; font-weight: 600; color: var(--color-text); }
@@ -1008,6 +1008,11 @@ select { appearance: auto; cursor: pointer; }
 .unit-avail-free    { background: var(--state-green-bg);  color: var(--state-green-txt); }
 .unit-avail-partial { background: var(--state-yellow-bg); color: var(--state-yellow-txt); cursor: help; }
 .unit-avail-busy     { background: var(--state-red-bg);    color: var(--state-red-txt); }
+.unit-waitlist-link {
+  font-size: .62rem; font-weight: 600; color: var(--color-primary);
+  background: none; border: none; text-decoration: underline; cursor: pointer;
+  padding: 0; margin-left: 6px;
+}
 .unit-split-hint {
   font-size: .8rem; line-height: 1;
   width: 22px; height: 22px; flex-shrink: 0;
