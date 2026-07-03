@@ -104,14 +104,23 @@ export class DateRangePicker {
       // Click
       el.addEventListener('click', (e) => {
         e.preventDefault(); e.stopPropagation();
-        if (el.classList.contains('drp-blocked')) return;
+        // Un día "bloqueado" puede ser simplemente el check-in de OTRA
+        // reserva (recambio mismo día) — eso no impide que sea TU fecha
+        // de salida (te vas a la mañana, entra el otro a la tarde). Por
+        // eso solo se rechaza de entrada cuando se está eligiendo la
+        // fecha de INGRESO; si ya se eligió el ingreso y se está por
+        // elegir la salida, se deja pasar a _handleClick(), que ya sabe
+        // distinguir esto correctamente con _hasBlockedInRange().
+        const pickingCheckout = this._startDate && !this._endDate;
+        if (el.classList.contains('drp-blocked') && !pickingCheckout) return;
         this._handleClick(el.dataset.date);
       });
 
       // Touch support
       el.addEventListener('touchend', (e) => {
         e.preventDefault();
-        if (el.classList.contains('drp-blocked')) return;
+        const pickingCheckout = this._startDate && !this._endDate;
+        if (el.classList.contains('drp-blocked') && !pickingCheckout) return;
         this._handleClick(el.dataset.date);
       }, { passive: false });
 
