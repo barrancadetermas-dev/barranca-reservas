@@ -6,7 +6,7 @@ import { can, isDemo } from "../auth/permissions.js";
 // + Exportar PDF y Excel desde la lista
 // ═══════════════════════════════════════════════════
 
-import { formatARS, formatDate, showToast, getUnitChipHTML, getSourceBadgeHTML, getBookingBarColor, getUnitLabel, getUnitColor, SOURCE_CONFIG, localToday, localDateISO, AppContext } from '../supabase-config.js';
+import { formatARS, formatDate, showToast, getUnitChipHTML, getSourceBadgeHTML, getBookingBarColor, getUnitLabel, getUnitColor, SOURCE_CONFIG, localToday, localDateISO, AppContext, getNationalityFlag } from '../supabase-config.js';
 import { logAction } from '../services/audit-service.js';
 import { Bus, EVENTS } from '../services/event-bus.js';
 
@@ -127,7 +127,7 @@ export class BookingList {
           notes, is_blocked, block_reason, created_at, adults, children, pax,
           guests!bookings_guest_id_fkey(
             id, first_name, last_name, dni, phone,
-            bad_experience, bad_experience_note, tags, age, car_model, car_plate
+            bad_experience, bad_experience_note, tags, age, car_model, car_plate, nationality
           ),
           booking_units(unit_id, price_per_night, units(name, sort_order, color))
         `)
@@ -553,7 +553,13 @@ export class BookingList {
     const unitChips = units.map(bu => {
       const u = { ...bu.units, id: bu.unit_id };
       return getUnitChipHTML(u, 'sm');
-    }).join(' ');
+    });
+    // Con más de 2 unidades, en vez de que el wrap dependa del ancho
+    // disponible (rompía la alineación de la fila entera), se agrupan de
+    // a 2 por línea siempre, y la card crece hacia abajo prolijamente.
+    const unitChipsHTML = unitChips.length > 2
+      ? `<div class="bl-unit-chips-grid">${unitChips.join('')}</div>`
+      : unitChips.join(' ');
 
     // Flags de huésped
     const isBad   = g?.bad_experience || (g?.tags ?? []).includes('no_recomendar');
@@ -590,8 +596,8 @@ export class BookingList {
             <div class="bl-col-guest">
               ${BookingList._avatar(g)}
               <div class="bl-guest-info">
-                <div class="bl-guest-name bl-guest-name-hover" data-booking-id="${b.id}">${guest}${flagHTML ? ' '+flagHTML : ''}</div>
-                <div class="bl-guest-meta">${unitChips}${getSourceBadgeHTML(b.source)}</div>
+                <div class="bl-guest-name bl-guest-name-hover" data-booking-id="${b.id}">${getNationalityFlag(g?.nationality) ? getNationalityFlag(g?.nationality) + ' ' : ''}${guest}${flagHTML ? ' '+flagHTML : ''}</div>
+                <div class="bl-guest-meta">${unitChipsHTML}${getSourceBadgeHTML(b.source)}</div>
               </div>
             </div>
             <div class="bl-col-dates">

@@ -127,6 +127,20 @@ export function getUnitColor(unit) {
 }
 
 /** Formato estándar: "#1 · Nombre Unidad" */
+// Bandera por nacionalidad — cubre tanto la lista completa de Huéspedes
+// como la lista acotada del formulario de reservas, para que se vea bien
+// sin importar de dónde salió el dato.
+const NATIONALITY_FLAGS = {
+  'Argentina': '🇦🇷', 'Uruguay': '🇺🇾', 'Brasil': '🇧🇷', 'Paraguay': '🇵🇾',
+  'Chile': '🇨🇱', 'Bolivia': '🇧🇴', 'Perú': '🇵🇪', 'Colombia': '🇨🇴',
+  'Venezuela': '🇻🇪', 'Ecuador': '🇪🇨', 'España': '🇪🇸', 'México': '🇲🇽',
+  'EE.UU.': '🇺🇸',
+};
+export function getNationalityFlag(nationality) {
+  if (!nationality || nationality === 'Otro' || nationality === 'Otros') return '';
+  return NATIONALITY_FLAGS[nationality] ?? '';
+}
+
 export function getUnitLabel(unit) {
   if (!unit) return '—';
   const num  = unit.sort_order ?? unit.number ?? '?';

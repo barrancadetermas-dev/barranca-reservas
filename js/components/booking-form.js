@@ -268,7 +268,7 @@ export class BookingForm {
     let g = guestData;
     if (!g) {
       const { data } = await this.db.from('guests')
-        .select('id, first_name, last_name, dni, phone, email, locality, age, car_model, car_plate')
+        .select('id, first_name, last_name, dni, phone, email, locality, age, car_model, car_plate, nationality')
         .eq('id', guestId).single();
       g = data;
     }
@@ -287,8 +287,9 @@ export class BookingForm {
     set('f-age',       g.age);
     set('f-car',       g.car_model);
     set('f-plate',     g.car_plate);
+    set('f-nationality', g.nationality);
     const details = document.getElementById('f-extra-details');
-    if (details && (g.locality || g.age || g.car_model || g.car_plate)) details.open = true;
+    if (details && (g.locality || g.age || g.car_model || g.car_plate || g.nationality)) details.open = true;
 
     // Ir al paso 2 directamente para que el usuario vea los datos pre-cargados
     this._goToStep(2);
@@ -336,14 +337,14 @@ export class BookingForm {
       // Rellenar huésped
       const g = b.guests ?? {};
       this._selectedGuestId = g.id ?? null;
-      ['firstname','lastname','dni','phone','email','locality','age','car','plate'].forEach(f => {
+      ['firstname','lastname','dni','phone','email','locality','age','car','plate','nationality'].forEach(f => {
         const el = document.getElementById(`f-${f}`);
         const key = f === 'firstname' ? 'first_name' : f === 'lastname' ? 'last_name'
                   : f === 'car' ? 'car_model' : f === 'plate' ? 'car_plate' : f;
         if (el) el.value = g[key] ?? '';
       });
       const extraDetails = document.getElementById('f-extra-details');
-      if (extraDetails && (g.locality || g.age || g.car_model || g.car_plate)) extraDetails.open = true;
+      if (extraDetails && (g.locality || g.age || g.car_model || g.car_plate || g.nationality)) extraDetails.open = true;
 
       // Canal de origen
       const sourceContainer = document.getElementById('f-source-selector');
@@ -561,7 +562,7 @@ export class BookingForm {
     if (multiWrap)  { multiWrap.classList.add('hidden');     multiWrap.style.display  = 'none'; }
 
     ['f-firstname','f-lastname','f-dni','f-phone','f-email','f-notes',
-     'f-locality','f-age','f-car','f-plate',
+     'f-locality','f-age','f-car','f-plate','f-nationality',
      'f-price','f-discount','f-surcharge','f-free-nights','f-deposit',
      'f-checkin','f-checkout'].forEach(id => {
       const el = document.getElementById(id);
@@ -1511,7 +1512,7 @@ export class BookingForm {
 
     const { data } = await this.db
       .from('guests')
-      .select('id, first_name, last_name, dni, phone, email, bad_experience, tags, locality, age, car_model, car_plate')
+      .select('id, first_name, last_name, dni, phone, email, bad_experience, tags, locality, age, car_model, car_plate, nationality')
       .eq('hotel_id', this.ctx.hotelId)
       .or(`first_name.ilike.%${q}%,last_name.ilike.%${q}%,dni.ilike.%${q}%`)
       .limit(6);
@@ -1524,7 +1525,8 @@ export class BookingForm {
       return `<div class="guest-result-item ${isBad ? 'bad-exp' : ''}" data-id="${g.id}"
            data-fn="${g.first_name ?? ''}" data-ln="${g.last_name ?? ''}"
            data-dni="${g.dni ?? ''}" data-phone="${g.phone ?? ''}" data-email="${g.email ?? ''}"
-           data-locality="${g.locality ?? ''}" data-age="${g.age ?? ''}" data-car="${g.car_model ?? ''}" data-plate="${g.car_plate ?? ''}">
+           data-locality="${g.locality ?? ''}" data-age="${g.age ?? ''}" data-car="${g.car_model ?? ''}" data-plate="${g.car_plate ?? ''}"
+           data-nationality="${g.nationality ?? ''}">
         ${isBad ? '⚠️ ' : isVIP ? '⭐ ' : ''}${g.first_name} ${g.last_name}
         ${g.dni ? `<span class="result-meta">${g.dni}</span>` : ''}
       </div>`;
@@ -1542,10 +1544,11 @@ export class BookingForm {
         document.getElementById('f-age').value       = item.dataset.age ?? '';
         document.getElementById('f-car').value       = item.dataset.car ?? '';
         document.getElementById('f-plate').value     = item.dataset.plate ?? '';
+        document.getElementById('f-nationality').value = item.dataset.nationality ?? '';
         // Si ya hay algo cargado en "Datos adicionales", desplegar la sección
         // para que se vea sin tener que abrirla a mano.
         const details = document.getElementById('f-extra-details');
-        if (details && (item.dataset.locality || item.dataset.age || item.dataset.car || item.dataset.plate)) details.open = true;
+        if (details && (item.dataset.locality || item.dataset.age || item.dataset.car || item.dataset.plate || item.dataset.nationality)) details.open = true;
         document.getElementById('guest-search').value = '';
         container.classList.add('hidden');
 
@@ -2288,6 +2291,7 @@ ${notes ? `
         age:        parseInt(document.getElementById('f-age')?.value)   || null,
         car_model:  document.getElementById('f-car')?.value?.trim()   || null,
         car_plate:  document.getElementById('f-plate')?.value?.trim()?.toUpperCase() || null,
+        nationality: document.getElementById('f-nationality')?.value || null,
       };
 
       if (guestId) {

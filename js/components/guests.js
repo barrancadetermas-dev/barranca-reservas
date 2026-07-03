@@ -739,6 +739,9 @@ export class GuestsCRM {
             ['empresa',    '🏢 Cliente empresa'],
             ['referido',   '👥 Referido'],
             ['sin_cargo',  '🎁 Estadía sin cargo'],
+            ['mascota',    '🐾 Con mascota'],
+            ['ocasion',    '🎉 Ocasión especial'],
+            ['tranquilo',  '🔇 Busca tranquilidad'],
           ].map(([key, label]) => `
             <label class="tag-toggle ${(g.tags??[]).includes(key) ? 'active' : ''}" data-tag="${key}">
               <input type="checkbox" style="display:none" ${(g.tags??[]).includes(key) ? 'checked' : ''}>
@@ -778,6 +781,9 @@ export class GuestsCRM {
       empresa:      ['🏢 Empresa',        'gtag-empresa'],
       referido:     ['👥 Referido',       'gtag-referido'],
       sin_cargo:    ['🎁 Sin cargo',      'gtag-sincargo'],
+      mascota:      ['🐾 Mascota',        'gtag-mascota'],
+      ocasion:      ['🎉 Ocasión',        'gtag-ocasion'],
+      tranquilo:    ['🔇 Tranquilidad',   'gtag-tranquilo'],
       no_recomendar:['⚠️ Mala exp.',      'gtag-bad'],   // legacy
     };
     if (!tags?.length) return '<span style="font-size:.75rem;color:var(--color-text-3)">Sin etiquetas</span>';
