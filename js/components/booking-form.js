@@ -194,6 +194,11 @@ export class BookingForm {
       if (prefill.checkOut) document.getElementById('f-checkout').value = prefill.checkOut;
       this._updateBreakdown();
     }
+    // Recalcular fechas bloqueadas para la(s) unidad(es) recién precargada(s)
+    // — si no se hace esto, el date-picker sigue con las fechas bloqueadas
+    // de la reserva anterior (o ninguna) y puede rechazar el rango nuevo
+    // por error, sin dejar re-seleccionar fechas ("Dividir estadía" Parte 2/2).
+    if (prefill.unitId || prefill.checkIn || prefill.checkOut) this._updateBlockedDates();
     // Precarga desde calculadora (paso 0)
     if (prefill.price) {
       const priceEl = document.getElementById('f-price');
