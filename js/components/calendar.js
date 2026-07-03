@@ -1732,6 +1732,19 @@ export class Calendar {
       await logAction('UPDATE', 'booking', booking.id,
         `Resize: check_out ${origCO}→${currentCO}`);
 
+      // Si el checkout se acortó (currentCO < origCO), las noches entre
+      // currentCO y origCO quedaron libres sin que la reserva se haya
+      // cancelado — dispara el mismo chequeo de lista de espera que una
+      // cancelación, por si alguien estaba esperando justo esas fechas.
+      if (currentCO < origCO) {
+        Bus.emit(EVENTS.BOOKING_CANCELLED, {
+          hotelId: this.ctx.hotelId,
+          checkIn: currentCO,
+          checkOut: origCO,
+          unitIds: (booking.booking_units ?? []).map(bu => bu.unit_id),
+        });
+      }
+
       this._pendingPulse.add(booking.id);
       cache.invalidate('bookings');
       showToast(`✓ Fecha de salida actualizada: ${this._fmtShort(currentCO)}`, 'success');
@@ -1868,6 +1881,18 @@ export class Calendar {
 
       await logAction('UPDATE', 'booking', booking.id,
         `Resize: check_in ${origCI}→${currentCI}`);
+
+      // Si el check-in se movió para más adelante (currentCI > origCI),
+      // las primeras noches quedaron libres sin cancelar la reserva —
+      // mismo chequeo de lista de espera que en una cancelación.
+      if (currentCI > origCI) {
+        Bus.emit(EVENTS.BOOKING_CANCELLED, {
+          hotelId: this.ctx.hotelId,
+          checkIn: origCI,
+          checkOut: currentCI,
+          unitIds: (booking.booking_units ?? []).map(bu => bu.unit_id),
+        });
+      }
 
       this._pendingPulse.add(booking.id);
       cache.invalidate('bookings');

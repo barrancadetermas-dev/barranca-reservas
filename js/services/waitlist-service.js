@@ -71,4 +71,5 @@ async function _checkAndNotify({ hotelId, checkIn, checkOut, unitIds }) {
     'info'
   );
   document.dispatchEvent(new CustomEvent('booking:changed')); // refresca badge de recordatorios
+  window._waitlistPanel?._updateBadge(); // refresca la campanita de lista de espera al instante
 }

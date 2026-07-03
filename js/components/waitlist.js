@@ -21,10 +21,10 @@ export class WaitlistPanel {
   constructor(supabase, ctx) {
     this.db  = supabase;
     this.ctx = ctx;
+    window._waitlistPanel = this;
   }
 
   async load() {
-    window._waitlistPanel = this;
     const container = document.getElementById('waitlist-container');
     if (!container) return;
 
@@ -36,11 +36,25 @@ export class WaitlistPanel {
         </div>
         <button class="btn btn-primary btn-sm" id="wl-add-btn">+ Nueva entrada</button>
       </div>
+      <div class="bl-sort-wrap" id="wl-filter-tabs" style="margin-bottom:12px">
+        <span class="bl-sort-label">Filtrar:</span>
+        ${[
+          ['all', '📋 Todas'], ['open', '🟡 Esperando'], ['notified', '🔔 Avisadas'],
+          ['converted', '✅ Convertidas'], ['expired', '⌛ Vencidas'], ['cancelled', '❌ Canceladas'],
+        ].map(([val, label]) => `<button type="button" class="wl-filter-btn${(this._filter ?? 'all') === val ? ' active' : ''}" data-filter="${val}">${label}</button>`).join('')}
+      </div>
       <div id="wl-form-container"></div>
       <div id="wl-list"><div style="padding:16px;text-align:center;color:var(--color-text-3)">⟳ Cargando...</div></div>
     `;
 
     document.getElementById('wl-add-btn')?.addEventListener('click', () => this._openForm());
+    document.getElementById('wl-filter-tabs')?.querySelectorAll('.wl-filter-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        this._filter = btn.dataset.filter;
+        document.querySelectorAll('.wl-filter-btn').forEach(b => b.classList.toggle('active', b === btn));
+        this._renderList();
+      });
+    });
     await this._renderList();
     this._updateBadge();
   }
@@ -61,13 +75,16 @@ export class WaitlistPanel {
     }
 
     // Vencidas visualmente (sin tocar la base) — check-in ya pasado y sigue "open"
-    const rows = (data ?? []).map(w => ({
+    let rows = (data ?? []).map(w => ({
       ...w,
       _effectiveStatus: (w.status === 'open' && w.check_in < today) ? 'expired' : w.status,
     }));
 
+    const filter = this._filter ?? 'all';
+    if (filter !== 'all') rows = rows.filter(w => w._effectiveStatus === filter);
+
     if (!rows.length) {
-      listEl.innerHTML = `<div class="empty-state"><span class="empty-state-icon">📋</span><p>Sin entradas en la lista de espera.</p></div>`;
+      listEl.innerHTML = `<div class="empty-state"><span class="empty-state-icon">📋</span><p>${filter === 'all' ? 'Sin entradas en la lista de espera.' : 'Sin entradas con ese filtro.'}</p></div>`;
       return;
     }
 
