@@ -172,7 +172,7 @@ export class RevenuePanel {
         <div class="rev-chart-title">📈 Evolución ADR e Ingresos — últimos 12 meses</div>
         <div class="rev-chart-legend">
           <span style="color:var(--color-primary)">━ ADR</span>
-          <span style="color:rgba(99,102,241,.35);margin-left:12px">▪ Ingresos</span>
+          <span style="color:var(--color-primary);opacity:.55;margin-left:12px">▪ Ingresos</span>
         </div>
       </div>
       <div class="rev-chart-body">

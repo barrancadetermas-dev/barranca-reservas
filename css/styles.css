@@ -4217,9 +4217,10 @@ input[type="color"].unit-color-input::-webkit-color-swatch { border: none; borde
 .rev-bar-revenue {
   width: 100%;
   max-width: 28px;
-  background: rgba(99,102,241,.35);
+  background: var(--color-primary);
+  opacity: .55;
   border-radius: 3px 3px 0 0;
-  transition: height .5s ease;
+  transition: height .5s ease, opacity .2s ease;
 }
 .rev-bar-adr {
   position: absolute;
@@ -4232,7 +4233,7 @@ input[type="color"].unit-color-input::-webkit-color-swatch { border: none; borde
 .rev-bar-prev {
   width: 100%;
   max-width: 28px;
-  background: rgba(148,163,184,.25);
+  background: var(--color-border);
   border-radius: 3px 3px 0 0;
   transition: height .5s ease;
 }
@@ -4242,7 +4243,7 @@ input[type="color"].unit-color-input::-webkit-color-swatch { border: none; borde
   margin-top: 4px;
   white-space: nowrap;
 }
-.rev-bar-group:hover .rev-bar-revenue { opacity: 1; filter: brightness(1.15); }
+.rev-bar-group:hover .rev-bar-revenue { opacity: 1; filter: brightness(1.1); }
 
 .rev-suggestion-row {
   display: flex;
