@@ -10,7 +10,11 @@ export default defineConfig({
     emptyOutDir: true,
     sourcemap: false,
     rollupOptions: {
-      input: { main: 'index.html' },
+      input: {
+        main:    'index.html',
+        landing: 'landing.html',
+        setup:   'setup.html',
+      },
       output: {
         // Code splitting manual: separa los módulos más pesados en chunks lazy
         manualChunks(id) {

@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MILA · Sistema Inteligente para Alojamientos</title>
+  <meta name="description" content="MILA es el sistema de gestión más completo para departamentos, cabañas y hoteles boutique. Reservas, operaciones, estadísticas y más — probalo 1 mes gratis.">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='5' fill='%230F172A'/><text x='16' y='22' font-family='system-ui,sans-serif' font-size='20' font-weight='700' fill='%236366F1' text-anchor='middle'>M</text></svg>" type="image/svg+xml">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0F172A; --bg2: #1E293B; --border: rgba(255,255,255,.08);
+      --text: #F1F5F9; --muted: #94A3B8; --primary: #6366F1;
+      --primary-l: rgba(99,102,241,.12); --green: #22c55e; --amber: #f59e0b;
+      --r: 14px; --r-sm: 8px; --max: 1100px;
+    }
+    html { font-family: 'Inter', system-ui, sans-serif; font-size: 16px; scroll-behavior: smooth; }
+    body { background: var(--bg); color: var(--text); line-height: 1.6; }
+
+    /* ── NAV ── */
+    nav {
+      position: sticky; top: 0; z-index: 100;
+      background: rgba(15,23,42,.85); backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 5%;
+    }
+    .nav-logo { display: flex; align-items: center; gap: 10px; text-decoration: none; }
+    .nav-logo-mark {
+      width: 34px; height: 34px; border-radius: 8px;
+      background: var(--primary); color: #fff;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px; font-weight: 800;
+    }
+    .nav-logo-text { font-size: 1.05rem; font-weight: 700; color: var(--text); }
+    .nav-logo-sub  { font-size: .7rem; color: var(--muted); display: block; line-height: 1; }
+    .nav-links { display: flex; align-items: center; gap: 24px; }
+    .nav-links a { color: var(--muted); text-decoration: none; font-size: .9rem; transition: color .15s; }
+    .nav-links a:hover { color: var(--text); }
+    .btn-demo { background: var(--primary); color: #fff; padding: 9px 20px; border-radius: var(--r-sm); font-size: .9rem; font-weight: 600; text-decoration: none; transition: background .15s; }
+    .btn-demo:hover { background: #4F46E5; }
+
+    /* ── SECTIONS ── */
+    section { padding: 80px 5%; max-width: var(--max); margin: 0 auto; }
+    .section-full { max-width: none; }
+
+    /* ── HERO ── */
+    .hero { text-align: center; padding: 100px 5% 80px; }
+    .hero-badge {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: var(--primary-l); border: 1px solid rgba(99,102,241,.25);
+      color: #818CF8; border-radius: 20px; padding: 5px 14px;
+      font-size: .78rem; font-weight: 600; margin-bottom: 28px;
+    }
+    h1 { font-size: clamp(2.2rem, 5vw, 3.6rem); font-weight: 800; line-height: 1.15; letter-spacing: -.03em; margin-bottom: 20px; }
+    h1 span { color: var(--primary); }
+    .hero-sub { font-size: 1.1rem; color: var(--muted); max-width: 540px; margin: 0 auto 40px; }
+    .hero-cta { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
+    .btn-primary { background: var(--primary); color: #fff; padding: 14px 28px; border-radius: var(--r-sm); font-size: 1rem; font-weight: 600; text-decoration: none; border: none; cursor: pointer; transition: background .15s; display: inline-block; }
+    .btn-primary:hover { background: #4F46E5; }
+    .btn-secondary { background: transparent; color: var(--text); padding: 14px 28px; border-radius: var(--r-sm); font-size: 1rem; font-weight: 600; text-decoration: none; border: 1px solid var(--border); transition: border-color .15s; display: inline-block; }
+    .btn-secondary:hover { border-color: rgba(255,255,255,.25); }
+
+    /* ── SCREEN MOCKUP ── */
+    .hero-screen {
+      margin: 60px auto 0; max-width: 900px;
+      background: var(--bg2); border-radius: 16px;
+      border: 1px solid var(--border); overflow: hidden;
+      box-shadow: 0 40px 80px rgba(0,0,0,.5);
+    }
+    .screen-bar {
+      background: rgba(255,255,255,.04); border-bottom: 1px solid var(--border);
+      padding: 12px 16px; display: flex; align-items: center; gap: 8px;
+    }
+    .screen-dot { width: 10px; height: 10px; border-radius: 50%; background: rgba(255,255,255,.15); }
+    .screen-url { flex: 1; background: rgba(255,255,255,.06); border-radius: 4px; padding: 4px 10px; font-size: .72rem; color: var(--muted); }
+    .screen-body { padding: 20px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+    .mock-kpi { background: rgba(255,255,255,.04); border: 1px solid var(--border); border-radius: 10px; padding: 14px; }
+    .mock-kpi-val { font-size: 1.5rem; font-weight: 700; }
+    .mock-kpi-lbl { font-size: .72rem; color: var(--muted); margin-top: 2px; }
+    .mock-kpi.c1 .mock-kpi-val { color: #22c55e; }
+    .mock-kpi.c2 .mock-kpi-val { color: #818CF8; }
+    .mock-kpi.c3 .mock-kpi-val { color: #f59e0b; }
+
+    /* ── LOGOS STRIP ── */
+    .logos-strip { text-align: center; padding: 40px 5%; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); background: rgba(255,255,255,.015); }
+    .logos-strip p { font-size: .78rem; color: var(--muted); margin-bottom: 20px; text-transform: uppercase; letter-spacing: .08em; }
+    .logos-row { display: flex; justify-content: center; align-items: center; gap: 32px; flex-wrap: wrap; }
+    .logo-pill { background: rgba(255,255,255,.06); border: 1px solid var(--border); border-radius: 8px; padding: 8px 18px; font-size: .85rem; font-weight: 600; color: var(--muted); }
+
+    /* ── FEATURES ── */
+    h2 { font-size: clamp(1.6rem, 3vw, 2.4rem); font-weight: 800; letter-spacing: -.02em; margin-bottom: 14px; }
+    .section-sub { font-size: 1rem; color: var(--muted); max-width: 520px; margin-bottom: 48px; }
+    .features-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; }
+    .feature-card {
+      background: var(--bg2); border: 1px solid var(--border); border-radius: var(--r);
+      padding: 28px; transition: border-color .2s;
+    }
+    .feature-card:hover { border-color: rgba(99,102,241,.4); }
+    .feature-icon {
+      width: 44px; height: 44px; border-radius: 10px;
+      background: var(--primary-l); border: 1px solid rgba(99,102,241,.2);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.3rem; margin-bottom: 16px;
+    }
+    .feature-card h3 { font-size: 1rem; font-weight: 700; margin-bottom: 8px; }
+    .feature-card p  { font-size: .875rem; color: var(--muted); line-height: 1.6; }
+
+    /* ── STATS ── */
+    .stats-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 20px; margin: 48px 0; }
+    .stat-item { text-align: center; }
+    .stat-num  { font-size: 2.4rem; font-weight: 800; color: var(--primary); letter-spacing: -.02em; }
+    .stat-desc { font-size: .875rem; color: var(--muted); margin-top: 4px; }
+
+    /* ── PRICING ── */
+    .pricing-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; }
+    .plan-card {
+      background: var(--bg2); border: 1px solid var(--border); border-radius: var(--r);
+      padding: 32px; position: relative;
+    }
+    .plan-card.featured { border-color: var(--primary); background: rgba(99,102,241,.07); }
+    .plan-badge {
+      position: absolute; top: -12px; left: 50%; transform: translateX(-50%);
+      background: var(--primary); color: #fff; border-radius: 20px;
+      padding: 3px 14px; font-size: .72rem; font-weight: 700; white-space: nowrap;
+    }
+    .plan-name  { font-size: .78rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 8px; }
+    .plan-price { font-size: 2.2rem; font-weight: 800; margin-bottom: 4px; }
+    .plan-period { font-size: .8rem; color: var(--muted); margin-bottom: 24px; }
+    .plan-features { list-style: none; margin-bottom: 32px; }
+    .plan-features li { display: flex; gap: 10px; margin-bottom: 10px; font-size: .9rem; color: var(--muted); }
+    .plan-features li::before { content: '✓'; color: var(--green); font-weight: 700; flex-shrink: 0; }
+    .plan-features li.no { color: rgba(255,255,255,.25); }
+    .plan-features li.no::before { content: '—'; color: rgba(255,255,255,.15); }
+
+    /* ── FAQ ── */
+    .faq-list { display: flex; flex-direction: column; gap: 1px; }
+    .faq-item { border: 1px solid var(--border); border-radius: var(--r-sm); overflow: hidden; }
+    .faq-q {
+      padding: 18px 20px; font-size: .95rem; font-weight: 600; cursor: pointer;
+      display: flex; justify-content: space-between; align-items: center;
+      background: var(--bg2); transition: background .15s; user-select: none;
+    }
+    .faq-q:hover { background: rgba(255,255,255,.04); }
+    .faq-q span { color: var(--primary); font-size: 1.1rem; }
+    .faq-a { padding: 0 20px; max-height: 0; overflow: hidden; transition: all .3s; color: var(--muted); font-size: .9rem; }
+    .faq-item.open .faq-a { max-height: 200px; padding: 0 20px 18px; }
+
+    /* ── CTA FINAL ── */
+    .cta-section { text-align: center; padding: 100px 5%; background: var(--primary-l); border-top: 1px solid rgba(99,102,241,.2); }
+    .cta-section h2 { font-size: 2.2rem; margin-bottom: 16px; }
+    .cta-section p { color: var(--muted); font-size: 1rem; margin-bottom: 36px; }
+
+    /* ── FOOTER ── */
+    footer { border-top: 1px solid var(--border); padding: 32px 5%; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; }
+    footer p { font-size: .8rem; color: var(--muted); }
+
+    @media (max-width: 600px) {
+      .nav-links { display: none; }
+      .screen-body { grid-template-columns: 1fr 1fr; }
+      .stats-row { grid-template-columns: 1fr 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <a href="/" class="nav-logo">
+    <div class="nav-logo-mark">M</div>
+    <div>
+      <div class="nav-logo-text">MILA</div>
+      <span class="nav-logo-sub">Sistema Inteligente</span>
+    </div>
+  </a>
+  <div class="nav-links">
+    <a href="#features">Funciones</a>
+    <a href="#pricing">Precios</a>
+    <a href="#faq">FAQ</a>
+    <a href="/setup.html">Empezar gratis</a>
+    <a href="/?demo=true" class="btn-demo">Ver demo</a>
+  </div>
+</nav>
+
+<!-- HERO -->
+<div class="hero section-full">
+  <div class="hero-badge">🏨 Nuevo · MILA v5.0</div>
+  <h1>La gestión de tu alojamiento,<br><span>sin complicaciones</span></h1>
+  <p class="hero-sub">MILA es el sistema todo-en-uno para departamentos turísticos, cabañas y hoteles boutique. Reservas, operaciones, estadísticas y más.</p>
+  <div class="hero-cta">
+    <a href="/setup.html" class="btn-primary">Empezar gratis →</a>
+    <a href="/?demo=true" class="btn-secondary">Ver demo en vivo</a>
+  </div>
+
+  <div class="hero-screen">
+    <div class="screen-bar">
+      <div class="screen-dot"></div>
+      <div class="screen-dot"></div>
+      <div class="screen-dot"></div>
+      <div class="screen-url">app.milasistema.com · Panel de Hoy</div>
+    </div>
+    <div class="screen-body">
+      <div class="mock-kpi c1">
+        <div class="mock-kpi-val">4</div>
+        <div class="mock-kpi-lbl">Check-ins hoy</div>
+      </div>
+      <div class="mock-kpi c2">
+        <div class="mock-kpi-val">$2.840.000</div>
+        <div class="mock-kpi-lbl">Ingresos del mes</div>
+      </div>
+      <div class="mock-kpi c3">
+        <div class="mock-kpi-val">87%</div>
+        <div class="mock-kpi-lbl">Ocupación actual</div>
+      </div>
+      <div class="mock-kpi" style="grid-column:1/-1;background:rgba(99,102,241,.1);border-color:rgba(99,102,241,.3)">
+        <div style="font-size:.72rem;font-weight:600;color:#818CF8;margin-bottom:8px">PROYECCIÓN DEL MES</div>
+        <div style="display:flex;gap:4px;height:8px;border-radius:4px;overflow:hidden">
+          <div style="width:55%;background:#22c55e"></div>
+          <div style="width:25%;background:#f59e0b"></div>
+          <div style="width:15%;background:#475569"></div>
+        </div>
+        <div style="font-size:.72rem;color:#94a3b8;margin-top:6px">Confirmado · Señado · Pendiente</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- LOGOS STRIP -->
+<div class="logos-strip section-full">
+  <p>Integrado con los canales que ya usás</p>
+  <div class="logos-row">
+    <div class="logo-pill">Booking.com</div>
+    <div class="logo-pill">Airbnb</div>
+    <div class="logo-pill">Despegar</div>
+    <div class="logo-pill">MercadoPago</div>
+    <div class="logo-pill">WhatsApp</div>
+    <div class="logo-pill">Supabase</div>
+  </div>
+</div>
+
+<!-- STATS -->
+<section>
+  <div class="stats-row">
+    <div class="stat-item"><div class="stat-num">15+</div><div class="stat-desc">Módulos integrados</div></div>
+    <div class="stat-item"><div class="stat-num">100%</div><div class="stat-desc">En tiempo real</div></div>
+    <div class="stat-item"><div class="stat-num">PWA</div><div class="stat-desc">Funciona sin app store</div></div>
+    <div class="stat-item"><div class="stat-num">$0</div><div class="stat-desc">Para empezar</div></div>
+  </div>
+</section>
+
+<!-- FEATURES -->
+<section id="features">
+  <h2>Todo lo que necesitás,<br>en un solo lugar</h2>
+  <p class="section-sub">Desde la primera reserva hasta el estado de resultados mensual. Sin hojas de cálculo, sin papeles.</p>
+  <div class="features-grid">
+    <div class="feature-card">
+      <div class="feature-icon">📅</div>
+      <h3>Calendario visual</h3>
+      <p>Vista mensual con arrastrar-y-soltar. Color por canal de origen. Detecta recambios, bloqueos y solapamientos al instante.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">🧠</div>
+      <h3>Sugeridor de precios</h3>
+      <p>Analiza ocupación histórica del mismo período y sugiere precio automáticamente. Compara con el año anterior e inflación.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">📊</div>
+      <h3>Estadísticas y P&L</h3>
+      <p>ADR, RevPAR, ocupación y estado de resultados mensual con mapa de calor. Exportar a PDF y Excel con un clic.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">🧹</div>
+      <h3>Módulo de Operaciones</h3>
+      <p>Tareas de limpieza generadas automáticamente al check-out. Control de mantenimiento e incidencias. Stock de insumos.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">👥</div>
+      <h3>CRM de Huéspedes</h3>
+      <p>Ficha completa con historial, etiquetas (VIP, Frecuente, No recomendar) y alertas automáticas en nuevas reservas.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">💬</div>
+      <h3>WhatsApp integrado</h3>
+      <p>Voucher de reserva por WhatsApp con un clic. Datos del huésped, unidad, fechas y forma de pago en formato profesional.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">📈</div>
+      <h3>Proyección de ingresos</h3>
+      <p>Forecast del mes con ingresos confirmados, estimados con reservas parciales y comparativa año a año. Para el dueño.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">⚙️</div>
+      <h3>Panel de configuración</h3>
+      <p>Comisiones por canal, recargos por forma de pago, IVA, tasa turística, horarios de check-in y check-out. Todo editable.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">🔒</div>
+      <h3>Roles y auditoría</h3>
+      <p>Tres niveles de acceso: Admin, Staff y Demo. Registro de auditoría de todas las acciones con usuario, fecha y detalle.</p>
+    </div>
+  </div>
+</section>
+
+<!-- PRICING -->
+<section id="pricing">
+  <h2>Planes simples y transparentes</h2>
+  <p class="section-sub">Sin comisiones por reserva, sin sorpresas. El plan Pro es un pago único — de por vida.</p>
+  <div class="pricing-grid">
+    <div class="plan-card">
+      <div class="plan-name">Básico</div>
+      <div class="plan-price">$0 <span style="font-size:1rem;font-weight:400;color:var(--muted)">USD</span></div>
+      <div class="plan-period">gratis por 1 mes · hasta 2 unidades</div>
+      <ul class="plan-features">
+        <li>Hasta 2 unidades</li>
+        <li>Reservas ilimitadas</li>
+        <li>Calendario visual</li>
+        <li>WhatsApp integrado</li>
+        <li>Todas las funciones, sin recorte</li>
+      </ul>
+      <a href="/setup.html" class="btn-secondary" style="width:100%;text-align:center">Probar 1 mes gratis</a>
+    </div>
+    <div class="plan-card featured">
+      <div class="plan-badge">Pago único</div>
+      <div class="plan-name">Pro</div>
+      <div class="plan-price">De por vida <span style="font-size:1rem;font-weight:400;color:var(--muted)">— consultar precio</span></div>
+      <div class="plan-period">un solo pago · unidades ilimitadas · sin mensualidad nunca</div>
+      <ul class="plan-features">
+        <li>Unidades ilimitadas</li>
+        <li>Todo el sistema, sin límite de tiempo</li>
+        <li>Estadísticas + P&L</li>
+        <li>Módulo Operaciones</li>
+        <li>Sugeridor de precios</li>
+        <li>Proyección de ingresos</li>
+        <li>Backup semanal automático</li>
+        <li>Soporte prioritario</li>
+      </ul>
+      <a href="mailto:marianomaq@gmail.com?subject=Quiero%20el%20plan%20Pro%20de%20MILA" class="btn-primary" style="width:100%;text-align:center">Contactar para pasar a Pro →</a>
+    </div>
+    <div class="plan-card">
+      <div class="plan-name">Agencias</div>
+      <div class="plan-price">A consultar</div>
+      <div class="plan-period">múltiples propiedades</div>
+      <ul class="plan-features">
+        <li>Múltiples propiedades</li>
+        <li>Panel centralizado</li>
+        <li>Todo del plan Pro</li>
+        <li>White label / marca propia</li>
+        <li>Onboarding asistido</li>
+        <li>SLA garantizado</li>
+        <li>Facturación consolidada</li>
+        <li>API de integración</li>
+      </ul>
+      <a href="mailto:marianomaq@gmail.com" class="btn-secondary" style="width:100%;text-align:center">Contactar ventas</a>
+    </div>
+  </div>
+</section>
+
+<!-- FAQ -->
+<section id="faq">
+  <h2>Preguntas frecuentes</h2>
+  <p class="section-sub" style="margin-bottom:32px">Lo que nos preguntan antes de empezar.</p>
+  <div class="faq-list">
+    <div class="faq-item">
+      <div class="faq-q" onclick="this.parentElement.classList.toggle('open')">
+        ¿Necesito saber programar para instalarlo? <span>+</span>
+      </div>
+      <div class="faq-a">No. El wizard de configuración te guía paso a paso: nombre del complejo, unidades, tarifas y usuarios. En menos de 15 minutos ya estás operativo.</div>
+    </div>
+    <div class="faq-item">
+      <div class="faq-q" onclick="this.parentElement.classList.toggle('open')">
+        ¿Dónde se guardan mis datos? <span>+</span>
+      </div>
+      <div class="faq-a">En Supabase, una plataforma de base de datos abierta basada en PostgreSQL. Tus datos son tuyos: podés exportarlos en cualquier momento. Backups automáticos semanales incluidos en el plan Pro.</div>
+    </div>
+    <div class="faq-item">
+      <div class="faq-q" onclick="this.parentElement.classList.toggle('open')">
+        ¿Funciona en el celular? <span>+</span>
+      </div>
+      <div class="faq-a">Sí. MILA es una PWA (Progressive Web App): se instala desde el navegador como si fuera una app nativa, funciona en Android e iPhone, y tiene soporte offline para consultar información cuando no hay conexión.</div>
+    </div>
+    <div class="faq-item">
+      <div class="faq-q" onclick="this.parentElement.classList.toggle('open')">
+        ¿Se puede conectar con Booking.com y Airbnb? <span>+</span>
+      </div>
+      <div class="faq-a">Por ahora el ingreso de reservas de OTAs es manual, pero los canales de origen están integrados para el P&L y las estadísticas. La sincronización iCal automática está en el roadmap.</div>
+    </div>
+    <div class="faq-item">
+      <div class="faq-q" onclick="this.parentElement.classList.toggle('open')">
+        ¿Puedo probar el sistema antes de pagar? <span>+</span>
+      </div>
+      <div class="faq-a">Sí. El plan Básico es gratis por 1 mes, hasta 2 unidades — sin tarjeta, sin compromiso. También tenés un modo demo completo con datos de ejemplo que podés explorar sin registrarte.</div>
+    </div>
+    <div class="faq-item">
+      <div class="faq-q" onclick="this.parentElement.classList.toggle('open')">
+        ¿Puedo cancelar en cualquier momento? <span>+</span>
+      </div>
+      <div class="faq-a">Sí. No hay contratos de permanencia. Si cancelás, tu plan pasa al nivel Básico gratuito y conservás todos tus datos.</div>
+    </div>
+  </div>
+</section>
+
+<!-- CTA FINAL -->
+<div class="cta-section section-full">
+  <h2>Empezá hoy, gratis</h2>
+  <p>Configurá tu alojamiento en 15 minutos. Sin tarjeta de crédito.</p>
+  <div class="hero-cta">
+    <a href="/setup.html" class="btn-primary">Crear mi cuenta gratis →</a>
+    <a href="/?demo=true" class="btn-secondary">Ver demo primero</a>
+  </div>
+</div>
+
+<!-- FOOTER -->
+<footer>
+  <p>© 2024 MILA Sistema Inteligente para Alojamientos</p>
+  <p style="display:flex;gap:20px">
+    <a href="/privacy.html" style="color:var(--muted);text-decoration:none;font-size:.8rem">Privacidad</a>
+    <a href="mailto:marianomaq@gmail.com" style="color:var(--muted);text-decoration:none;font-size:.8rem">Contacto</a>
+    <a href="/setup.html" style="color:var(--primary);text-decoration:none;font-size:.8rem;font-weight:600">Empezar →</a>
+  </p>
+</footer>
+
+</body>
+</html>
