@@ -556,9 +556,21 @@ export class Calendar {
         'background:rgba(255,255,255,.25);color:' + textColor + '">' + canalAbbr + '</span>'
       : '';
 
+    // Estadía dividida (booking-form.js → "Dividir estadía"): la reserva
+    // quedó marcada en notas con "🔗 Parte 1/2" o "🔗 Parte 2/2" — se
+    // muestra el mismo ícono acá para identificarla de un vistazo en el
+    // calendario, sin tener que abrir la reserva.
+    const splitMatch = !isBlock && booking.notes?.match(/🔗 Parte (\d)\/(\d)/);
+    const splitChip = splitMatch
+      ? '<span title="Estadía dividida — Parte ' + splitMatch[1] + '/' + splitMatch[2] + '" ' +
+        'style="display:inline-flex;align-items:center;justify-content:center;' +
+        'padding:0 3px;border-radius:3px;font-size:.62rem;line-height:1.5;' +
+        'flex-shrink:0;margin-right:4px;background:rgba(255,255,255,.25);color:' + textColor + '">🔗</span>'
+      : '';
+
     const avatar = !isBlock ? Calendar._guestAvatar(booking.guests, 16) : '';
     const nameStyle = 'color:' + textColor + ';font-size:.68rem;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0';
-    bar.innerHTML = avatar + canalChip + '<span style="' + nameStyle + '">' + guestFull + '</span>';
+    bar.innerHTML = avatar + canalChip + splitChip + '<span style="' + nameStyle + '">' + guestFull + '</span>';
 
     // ── Resize handle (solo si la barra no está truncada a la derecha) ──
     if (!truncRight) {
