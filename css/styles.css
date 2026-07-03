@@ -5464,7 +5464,7 @@ select.field-error {
 }
 .booking-row:last-child { border-bottom: none; }
 .booking-row:hover { background: var(--color-surface-2); box-shadow: inset 0 0 0 1px var(--color-border); }
-.bl-row-main { display:grid; grid-template-columns:2fr 160px 155px 120px auto; align-items:center; padding:10px 14px; min-height:54px; }
+.bl-row-main { display:grid; grid-template-columns:2fr 160px 180px 120px auto; align-items:center; padding:10px 14px; min-height:54px; }
 .bl-col-guest { display:flex; align-items:center; gap:10px; min-width:0; padding-right:8px; }
 .bl-guest-info { min-width:0; }
 .bl-guest-name { font-size:.84rem; font-weight:700; color:var(--color-text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:220px; }
@@ -5477,7 +5477,7 @@ select.field-error {
 .bl-nights { font-size:.67rem; color:var(--color-text-3); background:var(--color-surface-2); padding:1px 6px; border-radius:4px; width:fit-content; }
 .bl-col-amount { display:flex; flex-direction:column; gap:3px; padding:0 14px; align-items:flex-end; }
 .bl-amount-total { font-size:.86rem; font-weight:800; color:var(--color-text); }
-.bl-amount-breakdown { display:flex; align-items:center; gap:4px; font-size:.71rem; font-weight:600; }
+.bl-amount-breakdown { display:flex; align-items:center; gap:3px; font-size:.68rem; font-weight:600; white-space:nowrap; }
 .bl-paid    { color:var(--color-warning); }
 .bl-sep     { color:var(--color-text-3); }
 .bl-balance { color:#ef4444; font-weight:800; }
