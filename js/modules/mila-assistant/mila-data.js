@@ -272,6 +272,29 @@ export async function fetchPendingOps() {
   };
 }
 
+// Lista de espera abierta — mismo criterio que waitlist.js
+export async function fetchWaitlist() {
+  const hotelId = AppContext.hotelId;
+  const today = new Date().toISOString().slice(0, 10);
+  const { data } = await supabase.from('waitlist')
+    .select('*')
+    .eq('hotel_id', hotelId)
+    .in('status', ['open', 'notified'])
+    .order('check_in', { ascending: true });
+
+  return (data ?? []).map(w => {
+    const unitNames = (w.unit_ids?.length
+      ? w.unit_ids.map(id => AppContext.units?.find(u => String(u.id) === String(id))?.name).filter(Boolean).join(', ')
+      : 'Cualquier unidad');
+    return {
+      id: w.id, guest: w.guest_name, phone: w.phone,
+      checkIn: w.check_in, checkOut: w.check_out,
+      units: unitNames, pax: w.pax, status: w.status,
+      expired: w.check_in < today,
+    };
+  });
+}
+
 // 8) Bloqueos en una fecha — mismo criterio (status='blocked' / is_blocked) que calendar.js
 export async function fetchBloqueos(dateISO) {
   const hotelId = AppContext.hotelId;

@@ -185,6 +185,8 @@
 .mila-row:has(.mila-ic-rose):hover, .mila-row:has(.mila-ic-rose).is-active    { border-left-color: #E11D48; }
 .mila-row:has(.mila-ic-violet):hover, .mila-row:has(.mila-ic-violet).is-active { border-left-color: #7C3AED; }
 .mila-row:has(.mila-ic-lime):hover, .mila-row:has(.mila-ic-lime).is-active    { border-left-color: #65A30D; }
+.mila-row:has(.mila-ic-sky):hover, .mila-row:has(.mila-ic-sky).is-active      { border-left-color: #0284C7; }
+.mila-row:has(.mila-ic-emerald):hover, .mila-row:has(.mila-ic-emerald).is-active { border-left-color: #059669; }
 .mila-row:hover {
   border-color: var(--color-border);
   box-shadow: 0 6px 18px rgba(15,23,42,.1);
@@ -230,6 +232,8 @@
 .mila-ic-rose   { background: #FFE4E6; color: #E11D48; }
 .mila-ic-violet { background: #EDE4FF; color: #7C3AED; }
 .mila-ic-lime   { background: #ECFCCB; color: #65A30D; }
+.mila-ic-sky      { background: #E0F2FE; color: #0284C7; }
+.mila-ic-emerald  { background: #D1FAE5; color: #059669; }
 
 .mila-row-text { min-width: 0; }
 .mila-row-title { font-size: .79rem; font-weight: 700; color: var(--color-text); line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -531,7 +535,9 @@ select.mila-pill {
 
 .mila-answer-body { display: flex; flex-direction: column; gap: 8px; }
 
-.mila-answer-loading { display: flex; gap: 5px; align-items: center; justify-content: center; padding: 60px 0; }
+.mila-answer-loading { display: flex; flex-direction: column; gap: 10px; align-items: center; justify-content: center; padding: 50px 0; }
+.mila-answer-loading .mila-dot-row { display: flex; gap: 5px; }
+.mila-loading-text { font-size: .78rem; color: var(--color-text-3); font-weight: 500; }
 .mila-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--color-primary); opacity: .35; animation: mila-bounce 1s infinite ease-in-out; }
 .mila-dot:nth-child(2) { animation-delay: .15s; }
 .mila-dot:nth-child(3) { animation-delay: .3s; }
@@ -616,7 +622,18 @@ select.mila-pill {
   background: var(--color-surface); border: 1px solid var(--color-border);
   border-radius: 13px; padding: 12px 14px;
   transition: box-shadow .2s ease, transform .2s ease;
+  animation: mila-card-in .3s ease both;
 }
+@keyframes mila-card-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+.mila-card:nth-of-type(1)  { animation-delay: 0ms; }
+.mila-card:nth-of-type(2)  { animation-delay: 55ms; }
+.mila-card:nth-of-type(3)  { animation-delay: 110ms; }
+.mila-card:nth-of-type(4)  { animation-delay: 165ms; }
+.mila-card:nth-of-type(5)  { animation-delay: 220ms; }
+.mila-card:nth-of-type(6)  { animation-delay: 275ms; }
+.mila-card:nth-of-type(7)  { animation-delay: 330ms; }
+.mila-card:nth-of-type(8)  { animation-delay: 385ms; }
+.mila-card:nth-of-type(n+9) { animation-delay: 440ms; }
 .mila-card:hover { box-shadow: 0 4px 12px rgba(15,23,42,.06); transform: translateY(-1px); }
 .mila-card-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .mila-card-title { font-weight: 700; font-size: .82rem; color: var(--color-text); }
@@ -636,7 +653,14 @@ select.mila-pill {
   display: flex; align-items: center; justify-content: space-between;
   background: var(--color-surface); border: 1px solid var(--color-border);
   border-radius: 11px; padding: 10px 13px; font-size: .82rem; font-weight: 600; color: var(--color-text);
+  animation: mila-card-in .3s ease both;
 }
+.mila-avail-item:nth-of-type(1) { animation-delay: 0ms; }
+.mila-avail-item:nth-of-type(2) { animation-delay: 55ms; }
+.mila-avail-item:nth-of-type(3) { animation-delay: 110ms; }
+.mila-avail-item:nth-of-type(4) { animation-delay: 165ms; }
+.mila-avail-item:nth-of-type(5) { animation-delay: 220ms; }
+.mila-avail-item:nth-of-type(n+6) { animation-delay: 275ms; }
 .mila-avail-tag { font-size: .68rem; font-weight: 800; padding: 3px 9px; border-radius: 999px; }
 .mila-avail-item.is-free .mila-avail-tag { background: rgba(34,197,94,.15); color: var(--color-success); }
 .mila-avail-item.is-busy .mila-avail-tag { background: rgba(239,68,68,.12); color: var(--color-danger); }

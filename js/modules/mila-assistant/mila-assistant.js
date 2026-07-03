@@ -6,10 +6,11 @@
 // existentes. Reutiliza la lógica del sistema a través
 // de mila-data.js (mismas consultas, mismos criterios).
 // ══════════════════════════════════════════════════
-import { AppContext, formatARS, localToday, localDateISO } from '../../supabase-config.js';
+import { AppContext, formatARS, localToday, localDateISO, supabase } from '../../supabase-config.js';
 import { Sound } from '../../services/sound-service.js';
 import { categoryColor } from '../../services/expense-categories.js';
 import * as MilaData from './mila-data.js';
+import { getUsdConversionRate } from '../../services/usd-rate-history.js';
 
 let ctx = null;       // { can, isDemo, showToast, getBookingOpener }
 let bodyEl = null;
@@ -47,6 +48,8 @@ ICON_PATHS.gastosmes   = ICON_PATHS.wallet;
 ICON_PATHS.gastosbusca = ICON_PATHS.search;
 ICON_PATHS.notascredito = '<path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 014-4h14"/><path d="M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 01-4 4H3"/>';
 ICON_PATHS.operaciones  = '<path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/>';
+ICON_PATHS.waitlist = '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>';
+ICON_PATHS.usd = '<line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/>';
 const iconSVG = (id, size = 16) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="${size}" height="${size}">${ICON_PATHS[id]}</svg>`;
 
 // type: 'date' (1 fecha) | 'range' (ingreso/salida, 1 noche por defecto) |
@@ -58,10 +61,12 @@ const QUERIES = [
   { id: 'reservas',    color: 'blue',   title: 'Reservas',                sub: 'Ver reservas en una fecha',     type: 'date' },
   { id: 'disponib',    color: 'green',  title: 'Disponibilidad',          sub: 'Ver departamentos disponibles', type: 'range' },
   { id: 'huesped',     color: 'teal',   title: 'Huésped',                 sub: 'Buscar reservas por nombre',    type: 'text' },
+  { id: 'waitlist',    color: 'sky',    title: 'Lista de espera',         sub: 'Quién está esperando fechas',   type: 'none' },
   // Plata
   { id: 'pagos',       color: 'amber',  title: 'Pagos pendientes',        sub: 'Ver pagos que faltan cobrar',   type: 'none' },
   { id: 'notascredito',color: 'violet', title: 'Notas de crédito',        sub: 'Ver NC abiertas por reprogramación', type: 'none' },
   { id: 'precios',     color: 'pink',   title: 'Precios',                 sub: 'Consultar precios por fecha',   type: 'unit-range' },
+  { id: 'usd',         color: 'emerald',title: 'Cotización USD',          sub: 'Cotización sugerida para pagos', type: 'none' },
   // Operación del día a día
   { id: 'operaciones', color: 'lime',   title: 'Limpieza / Mantenimiento', sub: 'Ver pendientes de hoy',        type: 'none' },
   { id: 'bloqueos',    color: 'indigo', title: 'Bloqueos',                sub: 'Ver bloqueos en una fecha',     type: 'date' },
@@ -171,21 +176,6 @@ function renderPage() {
         <div class="mila-right">
           <div class="mila-quickstats" id="mila-quickstats">${quickStatsSkeleton()}</div>
           <div class="mila-answer" id="mila-answer" role="status" aria-live="polite">${answerPlaceholder()}</div>
-
-          <div class="mila-soon-card">
-            <span class="mila-soon-bot">✨</span>
-            <div class="mila-soon-body">
-              <div class="mila-soon-title">Próximamente</div>
-              <div class="mila-soon-text">Escribí o hablá con MILA AI. Muy pronto vas a poder realizar consultas en lenguaje natural utilizando Inteligencia Artificial.</div>
-              <div class="mila-soon-input-row">
-                <input type="text" class="mila-soon-input" placeholder="Escribí tu consulta..." disabled>
-                <button class="mila-soon-mic" disabled title="Próximamente" aria-label="Hablar con Mila (próximamente)">🎙️</button>
-                <button class="mila-soon-send" disabled title="Próximamente" aria-label="Enviar (próximamente)">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="15" height="15">${ICON_PATHS.send}</svg>
-                </button>
-              </div>
-            </div>
-          </div>
         </div>
       </div>
     </div>
@@ -519,7 +509,8 @@ function showLoading(q) {
         </div>
       </div>
       <div class="mila-answer-loading">
-        <span class="mila-dot"></span><span class="mila-dot"></span><span class="mila-dot"></span>
+        <div class="mila-dot-row"><span class="mila-dot"></span><span class="mila-dot"></span><span class="mila-dot"></span></div>
+        <span class="mila-loading-text">Mila está buscando</span>
       </div>`;
   }, 120);
 }
@@ -556,6 +547,22 @@ async function runQuery(queryId) {
       case 'disponib': {
         if (s.from >= s.to) { if (myRequestId === requestSeq) renderAnswer(q, '', emptyState('⚠️ La fecha de salida debe ser posterior al ingreso')); return; }
         const data = await MilaData.fetchDisponibilidad(s.from, s.to);
+        // Para cada unidad parcial, buscar con qué otra se completaría el
+        // pedido — mismo cálculo que "Dividir estadía" del formulario de
+        // reservas, acá solo como dato informativo (no arma nada solo).
+        await Promise.all(data.filter(u => u.partial).map(async (u) => {
+          const missing = u.partial.from === s.from
+            ? { from: u.partial.to, to: s.to }
+            : u.partial.to === s.to
+              ? { from: s.from, to: u.partial.from }
+              : null;
+          if (!missing || missing.from >= missing.to) return;
+          try {
+            const missList = await MilaData.fetchDisponibilidad(missing.from, missing.to);
+            const candidate = missList.find(c => String(c.id) !== String(u.id) && c.available);
+            if (candidate) u.combinesWith = candidate.name;
+          } catch { /* no crítico, se muestra sin sugerencia */ }
+        }));
         guardedRender(`${fmtDate(s.from)} → ${fmtDate(s.to)}`, disponibilidadHTML(data));
         break;
       }
@@ -620,6 +627,17 @@ async function runQuery(queryId) {
       case 'operaciones': {
         const data = await MilaData.fetchPendingOps();
         guardedRender('', operacionesHTML(data));
+        break;
+      }
+      case 'waitlist': {
+        const data = await MilaData.fetchWaitlist();
+        guardedRender('', waitlistHTML(data));
+        break;
+      }
+      case 'usd': {
+        const marginPct = parseFloat(AppContext.config?.usd_margin_pct ?? 0) || 0;
+        const conv = await getUsdConversionRate(supabase, AppContext.hotelId, marginPct, 5);
+        guardedRender('', usdHTML(conv, marginPct));
         break;
       }
     }
@@ -782,7 +800,7 @@ function disponibilidadHTML(list) {
     const tag = u.available ? 'Disponible' : (u.partial ? `${u.partial.nights}/${u.partial.ofNights} noches` : 'Ocupado');
     const cls = u.available ? 'is-free' : (u.partial ? 'is-partial' : 'is-busy');
     const sub = u.partial
-      ? `<span class="mila-avail-sub">Libre del ${fmtDate(u.partial.from)} al ${fmtDate(u.partial.to)}</span>`
+      ? `<span class="mila-avail-sub">Libre del ${fmtDate(u.partial.from)} al ${fmtDate(u.partial.to)}${u.combinesWith ? ` · 🔀 combina con ${esc(u.combinesWith)}` : ''}</span>`
       : '';
     return `
     <div class="mila-avail-item ${cls}">
@@ -906,6 +924,30 @@ function operacionesHTML(d) {
       <div class="mila-card-line">${esc(m.title)}</div>
     </div>`).join('');
   return cleanRows + maintRows;
+}
+
+function waitlistHTML(list) {
+  if (!list.length) return emptyState('✓ Nadie esperando fechas por ahora');
+  return list.map(w => `
+    <div class="mila-card${w.expired ? ' mila-card-overdue' : ''}">
+      <div class="mila-card-head">
+        <span class="mila-card-title">${esc(w.guest)}</span>
+        ${w.status === 'notified' ? '<span class="mila-urgency-tag" style="background:var(--color-primary-l);color:var(--color-primary)">🔔 Avisado</span>' : ''}
+        ${w.expired ? '<span class="mila-urgency-tag is-overdue">Vencida</span>' : ''}
+      </div>
+      <div class="mila-card-line">📅 ${fmtDate(w.checkIn)} → ${fmtDate(w.checkOut)} · 🏠 ${esc(w.units)}${w.pax ? ` · 👥 ${w.pax}` : ''}</div>
+      ${w.phone ? `<div class="mila-card-line">📱 ${esc(w.phone)}</div>` : ''}
+    </div>`).join('');
+}
+
+function usdHTML(conv, marginPct) {
+  if (!conv?.margined) return emptyState('Todavía no hay suficiente historial de cotización guardado (se guarda solo, un registro por día).');
+  return `
+    <div class="mila-card">
+      <div class="mila-card-head"><span class="mila-card-title">💵 Cotización sugerida para pagos USD</span></div>
+      <div class="mila-card-line" style="font-size:1.1rem;font-weight:800;color:var(--color-text)">${formatARS(conv.margined)}</div>
+      <div class="mila-card-line">Promedio de los últimos ${conv.daysUsed} día${conv.daysUsed !== 1 ? 's' : ''}${marginPct ? ` + margen ${marginPct}%` : ''} · dólar oficial base: ${formatARS(conv.avg)}</div>
+    </div>`;
 }
 
 function expenseRowLine(e) {
