@@ -714,7 +714,8 @@ export class ConfigPanel {
   // FK bookings.guest_id es ON DELETE SET NULL, así que las estadísticas
   // históricas quedan intactas, solo se pierde el vínculo al huésped.
   async _findInactiveGuests(container) {
-    const years = parseInt(container.querySelector('#cfg-inactive-years')?.value) || 5;
+    const rawYears = parseInt(container.querySelector('#cfg-inactive-years')?.value);
+    const years = Number.isFinite(rawYears) ? rawYears : 5; // antes "|| 5" pisaba el 0 (falsy en JS) por el default
     const resultsEl = container.querySelector('#cfg-inactive-results');
     if (!resultsEl) return;
     resultsEl.innerHTML = `<div style="padding:12px;text-align:center;color:var(--color-text-3)">⟳ Buscando...</div>`;
