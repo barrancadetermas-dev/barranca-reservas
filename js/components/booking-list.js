@@ -862,12 +862,24 @@ export class BookingList {
     const paid   = Math.round(freshPaid);
 
     // Política de cancelación configurada (Configuración → Política de
-    // cancelación): si falta menos de X días para el check-in, se retiene
-    // un % en vez de trasladar el pago completo a la nota de crédito.
+    // cancelación): si falta menos de X días para el check-in, la política
+    // SUGIERE retener un % — pero es una sugerencia, no una obligación.
+    // Antes se aplicaba sola sin preguntar; ahora, si corresponde retención,
+    // se pregunta si aplicarla o dar el 100% de crédito igual (por ejemplo,
+    // si el huésped no tuvo culpa, o simplemente preferís no cobrarle nada).
     const freeDays   = parseFloat(AppContext.config?.cancel_free_days   ?? 3)  || 0;
     const penaltyPct = parseFloat(AppContext.config?.cancel_penalty_pct ?? 30) || 0;
     const daysToGo   = Math.round((new Date(b.check_in + 'T00:00:00') - new Date()) / 86400000);
-    const inPenaltyWindow = paid > 0 && daysToGo < freeDays;
+    const wouldPenalize = paid > 0 && daysToGo < freeDays;
+    let inPenaltyWindow = false;
+    if (wouldPenalize) {
+      const suggestedRetained = Math.round(paid * (penaltyPct / 100));
+      inPenaltyWindow = confirm(
+        `Faltan ${daysToGo} día${daysToGo === 1 ? '' : 's'} para el check-in — según la política de cancelación configurada, correspondería retener ${penaltyPct}% (${formatARS(suggestedRetained)}).\n\n` +
+        `Aceptar → aplicar la retención (crédito de ${formatARS(paid - suggestedRetained)}).\n` +
+        `Cancelar → dar el 100% de crédito igual, sin retener nada (${formatARS(paid)}).`
+      );
+    }
     const credit = inPenaltyWindow ? Math.round(paid * (1 - penaltyPct / 100)) : paid;
     const retained = paid - credit;
 

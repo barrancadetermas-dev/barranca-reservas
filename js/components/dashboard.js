@@ -7,6 +7,8 @@ import { isDemo } from "../auth/permissions.js";
 import { formatARS, formatDate, toISODate, showToast, localToday, localDateISO, AppContext } from '../supabase-config.js';
 import { fetchDollarRates } from '../services/dollar-api.js';
 import { recordDailyRateSnapshot, getUsdConversionRate } from '../services/usd-rate-history.js';
+import { Bus, EVENTS } from '../services/event-bus.js';
+import { logAction } from '../services/audit-service.js';
 // ↑ Sin import de app.js — evita dependencia circular.
 // El badge se actualiza via CustomEvent que app.js escucha.
 
@@ -36,6 +38,68 @@ export class Dashboard {
         if (typeof Sound !== 'undefined') Sound?.checkIn?.();
       } catch (e) {
         document.dispatchEvent(new CustomEvent('show:toast', { detail: { msg: 'Error: ' + e.message, type: 'error' } }));
+      }
+    };
+
+    // "No vino" — el huésped no llegó y se cancela la reserva desde acá
+    // mismo, sin tener que ir a Reservas. Ofrece nota de crédito con la
+    // misma lógica que "Reprogramar" (retención opcional, no automática).
+    window._dashNoShow = async (bookingId, rowId, guest) => {
+      try {
+        const { data: b } = await this.db.from('bookings')
+          .select('check_in, notes, total_paid, booking_units(unit_id)')
+          .eq('id', bookingId).single();
+        if (!b) { showToast('No se encontró la reserva', 'error'); return; }
+
+        const paid = Math.round(b.total_paid ?? 0);
+        const freeDays   = parseFloat(AppContext.config?.cancel_free_days   ?? 3)  || 0;
+        const penaltyPct = parseFloat(AppContext.config?.cancel_penalty_pct ?? 30) || 0;
+        const daysToGo   = Math.round((new Date(b.check_in + 'T00:00:00') - new Date()) / 86400000);
+        const wouldPenalize = paid > 0 && daysToGo < freeDays;
+
+        let applyPenalty = false;
+        if (wouldPenalize) {
+          const suggestedRetained = Math.round(paid * (penaltyPct / 100));
+          applyPenalty = confirm(
+            `${guest} no vino — según la política de cancelación correspondería retener ${penaltyPct}% (${formatARS(suggestedRetained)}).\n\n` +
+            `Aceptar → retener y dar crédito de ${formatARS(paid - suggestedRetained)}.\n` +
+            `Cancelar → dar el 100% de crédito igual, sin retener nada (${formatARS(paid)}).`
+          );
+        }
+        const credit = applyPenalty ? Math.round(paid * (1 - penaltyPct / 100)) : paid;
+
+        const confirmMsg = paid <= 0
+          ? `¿Marcar como "No vino" y cancelar la reserva de ${guest}?\n\nNo tenía pagos, no hay nota de crédito que generar.`
+          : `¿Marcar como "No vino" y cancelar la reserva de ${guest}?\n\nQueda una Nota de Crédito por ${formatARS(credit)}${applyPenalty ? ` (se retienen ${formatARS(paid - credit)})` : ''}.`;
+        if (!confirm(confirmMsg)) return;
+
+        const today = new Date().toLocaleDateString('es-AR');
+        const todayISO = new Date().toISOString().slice(0, 10);
+        const cancelNote = credit > 0
+          ? `🔄NC:${credit}:${todayISO} — No vino, nota de crédito por ${formatARS(credit)} (${today})`
+          : `❌ No vino (${today})`;
+
+        const { error } = await this.db.from('bookings')
+          .update({ status: 'cancelled', notes: [b.notes, cancelNote].filter(Boolean).join(' · ') })
+          .eq('id', bookingId);
+        if (error) throw error;
+
+        await logAction('CANCEL', 'booking', bookingId, `No vino: ${guest}${credit > 0 ? ` — NC ${formatARS(credit)}` : ''}`);
+        Bus.emit(EVENTS.BOOKING_CANCELLED, {
+          hotelId: this.ctx.hotelId,
+          checkIn: b.check_in,
+          checkOut: b.check_in, // no llegó a ocupar ninguna noche
+          unitIds: (b.booking_units ?? []).map(bu => bu.unit_id),
+        });
+
+        const row = document.getElementById(rowId);
+        row?.remove(); // ya no es una "llegada de hoy" real, se cancela y se saca de la lista
+
+        showToast(`❌ ${guest} marcado como "No vino"${credit > 0 ? ` — NC ${formatARS(credit)}` : ''}`, 'info');
+        document.dispatchEvent(new CustomEvent('booking:changed'));
+        this.load?.();
+      } catch (err) {
+        showToast('Error: ' + (err?.message ?? err), 'error');
       }
     };
 
@@ -844,8 +908,12 @@ export class Dashboard {
         ? '<span style="font-size:.65rem;padding:1px 7px;border-radius:3px;background:var(--state-green-bg);color:var(--state-green-txt);font-weight:700">✓ Check-in</span>'
         : '<span style="font-size:.65rem;padding:1px 7px;border-radius:3px;background:var(--state-yellow-bg);color:var(--state-yellow-txt);font-weight:700">Pendiente</span>';
       actionBtn = !done
-        ? '<button class="btn btn-primary btn-sm" style="flex-shrink:0;font-size:.72rem;padding:5px 10px" ' +
-          'onclick="window._dashCheckIn(\'' + b.id + '\',\'arr-' + b.id + '\',\'' + guest.replace(/'/g,'&#39;') + '\')">✅ Check-in</button>'
+        ? '<div style="display:flex;gap:5px;flex-shrink:0">' +
+          '<button class="btn btn-primary btn-sm" style="font-size:.72rem;padding:5px 10px" ' +
+          'onclick="window._dashCheckIn(\'' + b.id + '\',\'arr-' + b.id + '\',\'' + guest.replace(/'/g,'&#39;') + '\')">✅ Check-in</button>' +
+          '<button class="btn btn-outline btn-sm" title="No vino / Cancelar" aria-label="No vino / Cancelar" style="font-size:.72rem;padding:5px 8px;color:var(--state-red-txt);border-color:var(--state-red-txt)" ' +
+          'onclick="window._dashNoShow(\'' + b.id + '\',\'arr-' + b.id + '\',\'' + guest.replace(/'/g,'&#39;') + '\')">❌</button>' +
+          '</div>'
         : '';
     } else if (mode === 'departure') {
       const done = !!b.checked_out_at;
