@@ -2253,13 +2253,21 @@ ${notes ? `
       // ── Validar superposición de unidades ────────────
       const selectedUnits = [...this._selectedUnitIds];
       if (selectedUnits.length > 0 && ci && co) {
-        const { data: conflicts } = await this.db
-          .from('booking_units')
-          .select('unit_id, bookings!inner(id, check_in, check_out, status, guests!bookings_guest_id_fkey(first_name,last_name))')
-          .in('unit_id', selectedUnits)
-          .not('bookings.status', 'in', '(cancelled,blocked)')
-          .lt('bookings.check_in', co)
-          .gt('bookings.check_out', ci);
+        // Esta consulta era la única del guardado que NO tenía el resguardo
+        // de tiempo límite (_withTimeout) que sí tienen todas las demás —
+        // si por algo se colgaba (conexión lenta/inestable, típico en
+        // celular), el botón se quedaba en "Guardando..." para siempre,
+        // porque el código nunca llegaba al finally que lo resetea.
+        const { data: conflicts } = await this._withTimeout(
+          this.db
+            .from('booking_units')
+            .select('unit_id, bookings!inner(id, check_in, check_out, status, guests!bookings_guest_id_fkey(first_name,last_name))')
+            .in('unit_id', selectedUnits)
+            .not('bookings.status', 'in', '(cancelled,blocked)')
+            .lt('bookings.check_in', co)
+            .gt('bookings.check_out', ci),
+          'validar disponibilidad'
+        );
 
         const realConflicts = (conflicts ?? []).filter(c =>
           !this._editingId || c.bookings?.id !== this._editingId
@@ -2277,10 +2285,13 @@ ${notes ? `
       // ── Capturar estado ANTES (para audit log) ────────
       let bookingBefore = null;
       if (this._editingId) {
-        const { data: prev } = await this.db
-          .from('bookings')
-          .select('check_in,check_out,price_per_night,total_amount,status,source,notes')
-          .eq('id', this._editingId).single();
+        const { data: prev } = await this._withTimeout(
+          this.db
+            .from('bookings')
+            .select('check_in,check_out,price_per_night,total_amount,status,source,notes')
+            .eq('id', this._editingId).single(),
+          'leer estado anterior'
+        );
         bookingBefore = prev;
       }
 
