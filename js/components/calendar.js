@@ -84,10 +84,14 @@ export class Calendar {
       this._dateRange   = this._buildDateRange(this._windowStart, this._visibleDays);
       this._updateTitle();
 
-      const [bookings, reminders] = await Promise.all([
+      const [bookings, reminders, cancelledNC] = await Promise.all([
         this._fetchBookings(this._windowStart, lastISO),
         this._fetchReminders(this._windowStart, lastISO).catch(err => {
           console.warn('[Calendar] reminders fetch failed:', err?.message ?? err);
+          return [];
+        }),
+        this._fetchCancelledWithOpenNC(this._windowStart, lastISO).catch(err => {
+          console.warn('[Calendar] cancelledNC fetch failed:', err?.message ?? err);
           return [];
         }),
       ]);
@@ -95,7 +99,8 @@ export class Calendar {
       this._lastRenderedBookings = bookings;
       const cellMap     = this._buildCellMap(bookings);
       const reminderMap = this._buildReminderMap(reminders);
-      this._render(cellMap, reminderMap);
+      const ncPendingDays = this._buildNcPendingDays(bookings, cancelledNC);
+      this._render(cellMap, reminderMap, ncPendingDays);
 
     // ── 5. Barra de resumen superior ──
     this._renderSummaryBar(bookings);
@@ -201,6 +206,43 @@ export class Calendar {
     return bookings;
   }
 
+  // Reservas canceladas ("No vino" / Reprogramar) que dejaron una Nota de
+  // Crédito todavía sin usar ni anular — mismo tag 🔄NC:<monto>:<fecha>
+  // que usan guests.js y mila-data.js.
+  async _fetchCancelledWithOpenNC(firstDay, lastDay) {
+    const { data } = await this.db
+      .from('bookings')
+      .select('id, check_in, check_out, notes, booking_units(unit_id)')
+      .eq('hotel_id', this.ctx.hotelId)
+      .eq('status', 'cancelled')
+      .like('notes', '%🔄NC:%')
+      .lte('check_in', lastDay)
+      .gt('check_out', firstDay);
+    return (data ?? []).filter(b => !b.notes?.includes('✅NCUSED') && !b.notes?.includes('❌NCVOID'));
+  }
+
+  // Para cada unidad+día que pertenecía a una reserva cancelada con NC
+  // abierta, revisa si una reserva ACTIVA ya "pisó" ese día en esa misma
+  // unidad. Si nadie lo pisó todavía, esa noche queda marcada como
+  // "pendiente de NC" (se pinta marrón) — apenas alguien reserva esas
+  // fechas, deja de marcarse solo, porque ya hay una reserva real ahí.
+  _buildNcPendingDays(activeBookings, cancelledNC) {
+    const pending = new Set(); // `${unitId}|${iso}`
+    cancelledNC.forEach(cb => {
+      const unitIds = (cb.booking_units ?? []).map(bu => bu.unit_id);
+      for (let d = cb.check_in; d < cb.check_out; d = this._addDays(d, 1)) {
+        unitIds.forEach(unitId => {
+          const covered = activeBookings.some(b =>
+            b.check_in <= d && b.check_out > d &&
+            (b.booking_units ?? []).some(bu => bu.unit_id === unitId)
+          );
+          if (!covered) pending.add(`${unitId}|${d}`);
+        });
+      }
+    });
+    return pending;
+  }
+
   async _fetchReminders(firstDay, lastDay) {
     const { data, error } = await this.db
       .from('reminders')
@@ -270,7 +312,7 @@ export class Calendar {
   // ══════════════════════════════════════════════════
   // RENDERIZADO PRINCIPAL
   // ══════════════════════════════════════════════════
-  _render(cellMap, reminderMap) {
+  _render(cellMap, reminderMap, ncPendingDays = new Set()) {
     const grid    = document.getElementById('calendar-grid');
     const today   = localToday();
     const isMob   = window.innerWidth <= 768;
@@ -436,6 +478,15 @@ export class Calendar {
         if (cellHol) cell.title = cellHol.label;
 
         if (bookings.length === 0) {
+          // Noche que pertenecía a una reserva cancelada con Nota de
+          // Crédito todavía sin usar, y que nadie volvió a reservar — se
+          // marca en marrón para no perderla de vista. Apenas otra reserva
+          // ocupe este día, deja de calcularse como pendiente (se lo
+          // "pisa" la reserva nueva, como corresponde).
+          if (ncPendingDays.has(`${unit.id}|${iso}`)) {
+            cell.classList.add('cal-cell-nc-pending');
+            cell.title = (cell.title ? cell.title + ' · ' : '') + '🔄 Noche de una nota de crédito sin usar';
+          }
           this._bindEmptyCell(cell, unit.id, iso);
         } else if (bookings.length === 1) {
           this._renderBar(cell, bookings[0], today);

@@ -379,6 +379,29 @@
   cursor: pointer;
   position: relative;
 }
+/* Noche de una reserva cancelada con Nota de Crédito todavía sin usar —
+   sigue siendo reservable (por eso conserva el cursor y el hint de +),
+   pero se destaca en marrón para no perderla de vista hasta que alguien
+   la use o la reserve de nuevo. */
+.cal-cell-nc-pending {
+  background: repeating-linear-gradient(
+    135deg,
+    rgba(146, 92, 43, .16),
+    rgba(146, 92, 43, .16) 6px,
+    rgba(146, 92, 43, .07) 6px,
+    rgba(146, 92, 43, .07) 12px
+  ) !important;
+}
+.cal-cell-nc-pending:hover { background: rgba(146, 92, 43, .28) !important; }
+[data-theme="dark"] .cal-cell-nc-pending {
+  background: repeating-linear-gradient(
+    135deg,
+    rgba(194, 138, 79, .22),
+    rgba(194, 138, 79, .22) 6px,
+    rgba(194, 138, 79, .1) 6px,
+    rgba(194, 138, 79, .1) 12px
+  ) !important;
+}
 .cal-cell-empty:hover::after {
   content: '+';
   position: absolute;

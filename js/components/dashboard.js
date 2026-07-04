@@ -65,7 +65,7 @@ export class Dashboard {
         if (!b) { showToast('No se encontró la reserva', 'error'); return; }
         if (b.status === 'cancelled') {
           showToast(`Esta reserva ya estaba cancelada — no hay nada más que hacer acá. Si necesitás corregir la nota de crédito, hacelo desde Reservas.`, 'warning');
-          document.getElementById(rowId)?.remove();
+          await this.load?.();
           return;
         }
 
@@ -121,12 +121,9 @@ export class Dashboard {
           unitIds: (b.booking_units ?? []).map(bu => bu.unit_id),
         });
 
-        const row = document.getElementById(rowId);
-        row?.remove(); // ya no es una "llegada de hoy" real, se cancela y se saca de la lista
-
         showToast(`❌ ${guest} marcado como "No vino"${credit > 0 ? ` — NC ${formatARS(credit)}` : ''}`, 'info');
         document.dispatchEvent(new CustomEvent('booking:changed'));
-        this.load?.();
+        await this.load?.(); // recarga y vuelve a pintar la fila tachada/gris, no se borra
       } catch (err) {
         showToast('Error: ' + (err?.message ?? err), 'error');
       }
@@ -310,17 +307,18 @@ export class Dashboard {
       .lte('check_in',  today)
       .gt('check_out', today);
 
-    // Check-ins hoy
+    // Check-ins hoy — incluye canceladas (así una reserva marcada
+    // "No vino" sigue viéndose tachada en gris, en vez de desaparecer
+    // como si nunca hubiera existido)
     const { data: checkins } = await this.db
       .from('bookings')
       .select(`
-        id, check_in, check_out, checked_in_at, total_amount, total_paid, balance,
+        id, check_in, check_out, checked_in_at, total_amount, total_paid, balance, status, notes,
         guests!bookings_guest_id_fkey(first_name, last_name, phone),
         booking_units(unit_id, units(name, color, sort_order))
       `)
       .eq('hotel_id', hotelId)
       .eq('check_in', today)
-      .neq('status', 'cancelled')
       .neq('status', 'blocked');
 
     // Check-outs hoy
@@ -365,7 +363,7 @@ export class Dashboard {
     const recambios = [];
     if (checkins && checkouts) {
       const checkinByUnit  = new Map(); // unitId -> { unitName, guestName, bookingId }
-      checkins.forEach(b => {
+      checkins.filter(b => b.status !== 'cancelled').forEach(b => {
         const guestName = b.guests ? `${b.guests.first_name ?? ''} ${b.guests.last_name ?? ''}`.trim() : '—';
         (b.booking_units ?? []).forEach(bu => {
           checkinByUnit.set(bu.unit_id, { unitName: bu.units?.name ?? '—', guestName, bookingId: b.id });
@@ -466,24 +464,27 @@ export class Dashboard {
     };
 
     // ── Check-ins ──
+    // El contador de arriba NO debe sumar canceladas ("No vino") — pero la
+    // lista de abajo (_renderArrivals) sí las muestra, tachadas en gris.
+    const activeCheckins = kpis.checkins.filter(b => b.status !== 'cancelled');
     const ciEl = document.getElementById('kpi-checkins-val');
-    this._setKPI('kpi-checkins-val', kpis.checkins.length);
-    this._animateCounter(ciEl, kpis.checkins.length);
-    if (kpis.checkins.length === 1) {
-      const b = kpis.checkins[0];
+    this._setKPI('kpi-checkins-val', activeCheckins.length);
+    this._animateCounter(ciEl, activeCheckins.length);
+    if (activeCheckins.length === 1) {
+      const b = activeCheckins[0];
       const col = uColor(b) ?? 'var(--color-primary)';
       setSec('kpi-checkins',
         '<span style="display:inline-flex;align-items:center;gap:4px">' +
         '<span style="width:6px;height:6px;border-radius:50%;background:' + col + ';flex-shrink:0"></span>' +
         '<span style="font-size:.68rem;color:var(--color-text-2);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:120px">' +
         (gName(b) || '—') + ' · ' + (uName(b) || '—') + '</span></span>');
-    } else if (kpis.checkins.length > 1) {
-      setSec('kpi-checkins', '<span style="font-size:.68rem;color:var(--color-text-3)">' + kpis.checkins.map(b => uName(b) ?? '—').join(' · ') + '</span>');
+    } else if (activeCheckins.length > 1) {
+      setSec('kpi-checkins', '<span style="font-size:.68rem;color:var(--color-text-3)">' + activeCheckins.map(b => uName(b) ?? '—').join(' · ') + '</span>');
     } else {
       setSec('kpi-checkins', '<span style="font-size:.68rem;color:var(--color-text-3)">Sin llegadas hoy 😭</span>');
     }
     this._bindKpiTooltip('kpi-checkins', { emptyText: 'No hay ingresos para hoy.',
-      lines: kpis.checkins.map(b => (uName(b) ?? '—') + ' — ' + (gName(b) || '—')) });
+      lines: activeCheckins.map(b => (uName(b) ?? '—') + ' — ' + (gName(b) || '—')) });
 
     // ── Check-outs ──
     const coEl = document.getElementById('kpi-checkouts-val');
@@ -539,7 +540,7 @@ export class Dashboard {
 
     // Nuevos widgets
     const _totalUnits = this.ctx.units?.length || 7;
-    this._applyKpiState('kpi-checkins',  kpis.checkins.length,  { total: _totalUnits });
+    this._applyKpiState('kpi-checkins',  activeCheckins.length,  { total: _totalUnits });
     this._applyKpiState('kpi-checkouts', kpis.checkouts.length, { total: _totalUnits });
     this._applyKpiState('kpi-recambios', kpis.recambios.length, { total: _totalUnits });
     this._applyKpiState('kpi-guests',    kpis.occupiedUnits,    { total: _totalUnits });
@@ -927,9 +928,35 @@ export class Dashboard {
     const color    = unit?.color ?? 'var(--color-primary)';
     const unitName = (b.booking_units ?? []).map(bu => bu.units?.name ?? '').filter(Boolean).join(', ') || '—';
     const nights   = Math.round((new Date(b.check_out+'T12:00:00') - new Date(b.check_in+'T12:00:00')) / 86400000);
+    const isCancelled = b.status === 'cancelled';
 
     let statusChip = '';
     let actionBtn  = '';
+
+    // Cancelada ("No vino" / reprogramada) — se sigue mostrando, tachada y
+    // en gris, para que quede claro que existió pero no se concretó. No
+    // tiene botones de acción (ya está resuelta).
+    if (isCancelled) {
+      const ncMatch = b.notes?.match(/🔄NC:(\d+):/);
+      const ncAmount = ncMatch ? parseInt(ncMatch[1]) : 0;
+      const ncUsed = b.notes?.includes('✅NCUSED');
+      statusChip = ncAmount > 0
+        ? `<span style="font-size:.65rem;padding:1px 7px;border-radius:3px;background:var(--color-surface-2);color:var(--color-text-3);font-weight:700">${ncUsed ? '✓ NC usada' : '🔄 NC abierta'}</span>`
+        : '<span style="font-size:.65rem;padding:1px 7px;border-radius:3px;background:var(--color-surface-2);color:var(--color-text-3);font-weight:700">❌ No vino</span>';
+
+      const idAttr = mode === 'arrival' ? ('arr-' + b.id) : mode === 'departure' ? ('dep-' + b.id) : '';
+      return '<div id="' + idAttr + '" style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--color-border);opacity:.55">' +
+        '<div style="width:3px;min-height:44px;border-radius:2px;background:var(--color-text-3);flex-shrink:0;align-self:stretch"></div>' +
+        '<div style="flex:1;min-width:0">' +
+          '<div style="display:flex;align-items:center;gap:6px;margin-bottom:2px">' +
+            '<span style="font-size:.72rem;font-weight:700;color:var(--color-text-3);text-decoration:line-through;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + unitName + '</span>' +
+            statusChip +
+          '</div>' +
+          '<div style="font-size:.82rem;font-weight:600;color:var(--color-text-3);text-decoration:line-through;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + guest + '</div>' +
+          '<div style="font-size:.72rem;color:var(--color-text-3)">' + nights + ' noche' + (nights !== 1 ? 's' : '') + (ncAmount > 0 ? ' · NC ' + formatARS(ncAmount) : '') + '</div>' +
+        '</div>' +
+      '</div>';
+    }
 
     if (mode === 'arrival') {
       const done = !!b.checked_in_at;
