@@ -597,7 +597,7 @@ export class BookingList {
                   : isRecurring ? `<span class="guest-flag flag-recurring" title="Ya se hospedó ${prevStays} vez${prevStays > 1 ? 'ces' : ''} antes">↩ Cliente</span>`
                   : '';
 
-    const isToday  = b.check_in === today || b.check_out === today;
+    const isToday  = (b.check_in === today || b.check_out === today) && b.status !== 'cancelled';
     const statusCls = STATUS_CLASSES[b.status] ?? '';
     const statusLbl = STATUS_LABELS[b.status]  ?? b.status;
     const nights   = b.nights ?? Math.round((new Date(b.check_out) - new Date(b.check_in)) / 86400000);
@@ -647,7 +647,7 @@ export class BookingList {
                        ⚠️ NC vieja (${ageDays}d) · anular</span>`
                   : `<span class="status-badge" style="background:rgba(124,58,237,.1);color:#7c3aed;border:1px solid rgba(124,58,237,.2)" title="Nota de crédito abierta de ${formatARS(amount)}">🔄 NC abierta</span>`;
               })()}
-              ${b.balance > 0 ? `<button data-action="pay-full" class="bl-action-btn bl-payfull-btn"
+              ${b.balance > 0 && b.status !== 'cancelled' ? `<button data-action="pay-full" class="bl-action-btn bl-payfull-btn"
                 onclick="event.stopPropagation()">✅ Cobrar</button>` : ''}
             </div>
             <div class="booking-actions-cell" onclick="event.stopPropagation()">
