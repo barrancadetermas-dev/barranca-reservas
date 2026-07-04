@@ -64,9 +64,18 @@ export function getPrefs() {
 // ── Guardar UNA preferencia (se llama al tocar cada control) ──
 export async function setPref(name, value) {
   const key = KEYS[name];
-  if (!key || !_db || !_hotelId) return;
-  AppContext.config[key] = String(value); // aplicar ya, sin esperar la respuesta de la base
+  if (!key) return;
+  // Aplicar SIEMPRE de una, incluso si todavía no está lista la conexión
+  // a la base (_db/_hotelId) — antes, si esas 2 cosas no estaban listas,
+  // toda la función se cortaba acá mismo y ni siquiera llegaba a prender
+  // la lupa/lo que fuera: se guardaba (o no) PERO tampoco se aplicaba
+  // nada visualmente, quedando como si el interruptor no hiciera nada.
+  AppContext.config[key] = String(value);
   applyAll();
+  if (!_db || !_hotelId) {
+    console.warn('[Accesibilidad] preferencia aplicada pero no guardada todavía (conexión no lista):', name);
+    return;
+  }
   try {
     await _db.from('hotel_config').upsert(
       { hotel_id: _hotelId, key, value: String(value), updated_at: new Date().toISOString() },

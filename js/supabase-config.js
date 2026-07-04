@@ -136,6 +136,24 @@ const NATIONALITY_FLAGS = {
   'Venezuela': '🇻🇪', 'Ecuador': '🇪🇨', 'España': '🇪🇸', 'México': '🇲🇽',
   'EE.UU.': '🇺🇸',
 };
+// bookings.notes tiene un límite duro de 200 caracteres en la base
+// (CHECK char_length(notes) <= 200) — sin este resguardo, agregarle texto
+// a una reserva que ya viene con notas de vueltas anteriores (reprogramada,
+// dividida, etc.) puede pasarse del límite y la base rechaza TODO el
+// guardado con "violates check constraint bookings_notes_check", sin
+// avisar de forma clara qué pasó. Prioriza lo NUEVO (la parte crítica,
+// como el tag de nota de crédito que se parsea después) sobre lo viejo —
+// si no entra todo, se recorta lo viejo, nunca lo nuevo.
+export function appendNote(oldNotes, newPart, maxLen = 200) {
+  const parts = [oldNotes, newPart].filter(Boolean);
+  let combined = parts.join(' · ');
+  if (combined.length <= maxLen) return combined;
+  const sep = oldNotes && newPart ? ' · ' : '';
+  const room = maxLen - newPart.length - sep.length;
+  if (room > 0 && oldNotes) return `${oldNotes.slice(0, room)}${sep}${newPart}`;
+  return newPart.slice(0, maxLen); // ni recortando lo viejo entra — priorizar lo nuevo igual
+}
+
 export function getNationalityFlag(nationality) {
   if (!nationality || nationality === 'Otro' || nationality === 'Otros') return '';
   return NATIONALITY_FLAGS[nationality] ?? '';

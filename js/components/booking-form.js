@@ -7,7 +7,7 @@
 // ══════════════════════════════════════════════════
 
 import { can, isDemo } from '../auth/permissions.js';
-import { formatARS, toISODate, showToast, getUnitLabel, getUnitColor, getUnitChipHTML, SOURCE_CONFIG, AppContext } from '../supabase-config.js';
+import { formatARS, toISODate, showToast, getUnitLabel, getUnitColor, getUnitChipHTML, SOURCE_CONFIG, AppContext, appendNote } from '../supabase-config.js';
 import { logAction } from '../services/audit-service.js';
 import { DateRangePicker } from './date-range-picker.js';
 import { Bus, EVENTS } from '../services/event-bus.js';
@@ -764,7 +764,7 @@ export class BookingForm {
     // Marcar en notas que esto es la Parte 1/2
     const notesEl = document.getElementById('f-notes');
     if (notesEl && !notesEl.value.includes('🔗 Parte 1/2')) {
-      notesEl.value = [notesEl.value, `🔗 Parte 1/2 — estadía dividida con ${unitBName} del ${missing.from} al ${missing.to}`].filter(Boolean).join(' · ');
+      notesEl.value = appendNote(notesEl.value, `🔗 Parte 1/2 — estadía dividida con ${unitBName} del ${missing.from} al ${missing.to}`);
       document.getElementById('notes-count').textContent = String(notesEl.value.length);
     }
 
@@ -1499,7 +1499,7 @@ export class BookingForm {
       const { data: orig } = await this.db.from('bookings').select('notes').eq('id', sourceBookingId).single();
       if (!orig || orig.notes?.includes('✅NCUSED')) return;
       await this.db.from('bookings')
-        .update({ notes: [orig.notes, '✅NCUSED'].filter(Boolean).join(' · ') })
+        .update({ notes: appendNote(orig.notes, '✅NCUSED') })
         .eq('id', sourceBookingId);
     } catch (_) { /* no crítico */ }
   }
@@ -2233,7 +2233,11 @@ ${notes ? `
       const surch = parseFloat(document.getElementById('f-surcharge').value) || 0;
       const freeN = parseInt(document.getElementById('f-free-nights').value) || 0;
       const dep   = parseFloat(document.getElementById('f-deposit').value) || 0;
-      const notes = document.getElementById('f-notes').value.trim();
+      // 200 = mismo límite que el CHECK de la base (bookings_notes_check) —
+      // recortar acá antes de mandarlo evita el rechazo silencioso de todo
+      // el guardado si alguien escribió (o se le fue acumulando de vueltas
+      // anteriores) una nota más larga que eso.
+      const notes = document.getElementById('f-notes').value.trim().slice(0, 200);
       const source = document.querySelector('input[name="booking-source"]:checked')?.value ?? 'direct';
 
       const nights   = Math.round((new Date(co) - new Date(ci)) / 86400000);

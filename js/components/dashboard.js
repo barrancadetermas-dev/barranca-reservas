@@ -4,7 +4,7 @@ import { isDemo } from "../auth/permissions.js";
 // KPIs, Ocupación, Dólar, Llegadas, Recordatorios
 // ═══════════════════════════════════════════════════
 
-import { formatARS, formatDate, toISODate, showToast, localToday, localDateISO, AppContext } from '../supabase-config.js';
+import { formatARS, formatDate, toISODate, showToast, localToday, localDateISO, AppContext, appendNote } from '../supabase-config.js';
 import { fetchDollarRates } from '../services/dollar-api.js';
 import { recordDailyRateSnapshot, getUsdConversionRate } from '../services/usd-rate-history.js';
 import { Bus, EVENTS } from '../services/event-bus.js';
@@ -103,7 +103,7 @@ export class Dashboard {
         // silencio), lo detectamos acá en vez de festejar un éxito falso.
         const { data: updated, error } = await _withTimeout(
           this.db.from('bookings')
-            .update({ status: 'cancelled', notes: [b.notes, cancelNote].filter(Boolean).join(' · ') })
+            .update({ status: 'cancelled', notes: appendNote(b.notes, cancelNote) })
             .eq('id', bookingId)
             .select('id'),
           'cancelar la reserva'

@@ -6,7 +6,7 @@ import { can, isDemo } from "../auth/permissions.js";
 // + Exportar PDF y Excel desde la lista
 // ═══════════════════════════════════════════════════
 
-import { formatARS, formatDate, showToast, getUnitChipHTML, getSourceBadgeHTML, getBookingBarColor, getUnitLabel, getUnitColor, SOURCE_CONFIG, localToday, localDateISO, AppContext, getNationalityFlag } from '../supabase-config.js';
+import { formatARS, formatDate, showToast, getUnitChipHTML, getSourceBadgeHTML, getBookingBarColor, getUnitLabel, getUnitColor, SOURCE_CONFIG, localToday, localDateISO, AppContext, getNationalityFlag, appendNote } from '../supabase-config.js';
 import { logAction } from '../services/audit-service.js';
 import { Bus, EVENTS } from '../services/event-bus.js';
 
@@ -908,7 +908,7 @@ export class BookingList {
 
     try {
       const { data: updated, error } = await this.db.from('bookings')
-        .update({ status: 'cancelled', notes: [b.notes, cancelNote].filter(Boolean).join(' · ') })
+        .update({ status: 'cancelled', notes: appendNote(b.notes, cancelNote) })
         .eq('id', id)
         .select('id');
       if (error) throw error;
@@ -959,7 +959,7 @@ export class BookingList {
 
     try {
       const { error } = await this.db.from('bookings')
-        .update({ notes: [b.notes, '❌NCVOID'].filter(Boolean).join(' · ') })
+        .update({ notes: appendNote(b.notes, '❌NCVOID') })
         .eq('id', id);
       if (error) throw error;
       await logAction('UPDATE', 'booking', id, `Nota de crédito anulada manualmente: ${guest} — ${formatARS(amount)}`);
