@@ -9,6 +9,21 @@
 import { supabase, AppContext } from '../supabase-config.js';
 import { isDemo } from '../auth/permissions.js';
 
+// Envoltorio de tiempo límite — audit-service.js no tiene acceso al
+// _withTimeout() de booking-form.js (son archivos distintos), así que acá
+// va su propia versión chica. Sin esto, logAction() era la ÚNICA consulta
+// de todo el guardado de una reserva sin ningún límite — si el insert a
+// audit_log se colgaba por lo que sea (conexión, alguna política RLS
+// rara), TODO el guardado se quedaba esperando para siempre en
+// "Guardando...", sin mostrar ningún error, porque el código nunca
+// llegaba al finally que resetea el botón.
+function _withTimeout(promise, ms = 8000) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error('audit_log tardó demasiado')), ms)),
+  ]);
+}
+
 /**
  * Registra una acción en el audit log.
  * No hace nada en modo demo ni si falta hotelId.
@@ -34,19 +49,19 @@ export async function logAction(action, entityType, entityId, summary, changes =
       description: summary, // alias — por si el schema usa description
       changes:     changes ? JSON.parse(JSON.stringify(changes)) : null,
     };
-    const { error } = await supabase.from('audit_log').insert(row);
+    const { error } = await _withTimeout(supabase.from('audit_log').insert(row));
     if (error) throw error;
   } catch (err) {
     // Si falla por columna no existente, reintentar sin la columna problemática
     if (err?.message?.includes('description') || err?.message?.includes('summary')) {
       try {
-        const { error: err2 } = await supabase.from('audit_log').insert({
+        const { error: err2 } = await _withTimeout(supabase.from('audit_log').insert({
           hotel_id:   AppContext.hotelId,
           user_id:    AppContext.user?.id    ?? null,
           user_email: AppContext.user?.email ?? null,
           role:       AppContext.role        ?? 'staff',
           action, entity_type: entityType, entity_id: entityId ?? null,
-        });
+        }));
         if (err2) console.warn('[Audit] insert falló (reintento):', err2.message);
       } catch (e2) { console.warn('[Audit] insert falló (reintento):', e2.message); }
     } else {
