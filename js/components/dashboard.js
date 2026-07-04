@@ -1230,6 +1230,9 @@ export class Dashboard {
   _renderCobros(stats) {
     if (!stats) return;
     const fmt = n => '$' + Math.round(n).toLocaleString('es-AR');
+    const monthLabel = new Date().toLocaleDateString('es-AR', { month: 'long', year: 'numeric' });
+    const subtitleEl = document.getElementById('dash-cobros-subtitle');
+    if (subtitleEl) subtitleEl.textContent = `${monthLabel.charAt(0).toUpperCase()}${monthLabel.slice(1)} · mes completo`;
     const valEl  = document.getElementById('dash-cobros-val');
     if (valEl) valEl.textContent = fmt(stats.totalBal);
     const badge  = document.getElementById('dash-cobros-badge');

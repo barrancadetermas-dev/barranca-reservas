@@ -517,10 +517,11 @@
               <h3>💰 Cobros del mes</h3>
               <span id="dash-cobros-badge" style="font-size:.65rem;background:var(--color-surface-2);color:var(--color-text-2);padding:2px 8px;border-radius:4px;font-weight:700">—</span>
             </div>
+            <div id="dash-cobros-subtitle" style="font-size:.68rem;color:var(--color-text-3);margin-bottom:6px">Reservas con check-in este mes · mes completo</div>
             <div style="font-size:1.5rem;font-weight:800;color:var(--color-text)" id="dash-cobros-val">—</div>
             <div style="font-size:.72rem;color:var(--color-text-3);margin-bottom:8px">pendiente de cobro</div>
             <div style="display:flex;justify-content:space-between;font-size:.78rem;margin-bottom:4px">
-              <span style="color:var(--color-text-3)">Cobrado</span>
+              <span style="color:var(--color-text-3)" title="Suma señas y pagos parciales, no solo reservas 100% pagadas">Cobrado (seña + total) ⓘ</span>
               <span style="font-weight:700;color:#16a34a" id="dash-cobrado-val">—</span>
             </div>
             <div style="display:flex;justify-content:space-between;font-size:.78rem;margin-bottom:8px">
@@ -537,12 +538,13 @@
           <!-- CARD: Dinero asegurado -->
           <div class="card dash-card-uniform" data-card-id="dinero-asegurado">
             <div class="card-header">
-              <h3>🔐 Dinero asegurado</h3>
+              <h3>🔐 Por cobrar — hoy en adelante</h3>
             </div>
+            <div style="font-size:.68rem;color:var(--color-text-3);margin-bottom:6px">Estadías en curso + reservas futuras (no se limita al mes)</div>
             <div id="dash-dinero-val" style="font-size:1.5rem;font-weight:800;color:var(--color-text)">—</div>
             <div style="display:flex;flex-direction:column;gap:4px;margin-top:auto">
               <div style="display:flex;justify-content:space-between;font-size:.78rem">
-                <span style="color:var(--color-text-3)">Ya cobrado</span>
+                <span style="color:var(--color-text-3)" title="Suma señas y pagos parciales, no solo reservas 100% pagadas">Cobrado (seña + total) ⓘ</span>
                 <span style="font-weight:700;color:#16a34a" id="dash-dinero-cobrado">—</span>
               </div>
               <div style="display:flex;justify-content:space-between;font-size:.78rem">
