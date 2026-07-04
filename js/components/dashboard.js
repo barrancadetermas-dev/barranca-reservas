@@ -1298,7 +1298,7 @@ export class Dashboard {
       const prevLast  = new Date(prevD.getFullYear(), prevD.getMonth()+1, 0);
       const prevLastStr = prevD.getFullYear() + '-' + String(prevD.getMonth()+1).padStart(2,'0') + '-' + String(prevLast.getDate()).padStart(2,'0');
 
-      const [bkRes, prevRes] = await Promise.all([
+      const [bkRes, prevRes, cancelledNCRes] = await Promise.all([
         this.db.from('bookings')
           .select('id, total_amount, total_paid, balance, nights, check_in, check_out, status')
           .eq('hotel_id', this.ctx.hotelId)
@@ -1309,11 +1309,28 @@ export class Dashboard {
           .eq('hotel_id', this.ctx.hotelId)
           .not('status', 'in', '(cancelled,blocked)')
           .gte('check_in', prevFirst).lte('check_in', prevLastStr),
+        this.db.from('bookings')
+          .select('id, total_paid, notes')
+          .eq('hotel_id', this.ctx.hotelId)
+          .eq('status', 'cancelled')
+          .gt('total_paid', 0)
+          .gte('check_in', firstDay).lte('check_in', lastDay),
       ]);
 
       const bks         = bkRes.data ?? [];
-      const totalRev    = bks.reduce((s,b) => s + (b.total_amount ?? 0), 0);
-      const totalPaid   = bks.reduce((s,b) => s + (b.total_paid  ?? 0), 0);
+      // Reservas canceladas este mes con Nota de Crédito ABIERTA — la
+      // seña que ya cobraron sigue siendo plata real, cuenta como
+      // "cobrado" y como parte de lo "facturado" (ajustado a lo que
+      // efectivamente se cobró, no el monto original completo). No suma
+      // a noches/ocupación/ticket promedio — eso sigue siendo solo de
+      // reservas activas, como corresponde.
+      const cancelledOpenNC = (cancelledNCRes.data ?? []).filter(b =>
+        b.notes?.includes('🔄NC:') && !b.notes?.includes('✅NCUSED') && !b.notes?.includes('❌NCVOID')
+      );
+      const ncCollected = cancelledOpenNC.reduce((s,b) => s + (b.total_paid ?? 0), 0);
+
+      const totalRev    = bks.reduce((s,b) => s + (b.total_amount ?? 0), 0) + ncCollected;
+      const totalPaid   = bks.reduce((s,b) => s + (b.total_paid  ?? 0), 0) + ncCollected;
       const totalBal    = bks.reduce((s,b) => s + (b.balance     ?? 0), 0);
       const totalNights = bks.reduce((s,b) => s + (b.nights      ?? 0), 0);
       const units       = this.ctx.units?.length ?? 1;
@@ -1597,19 +1614,37 @@ export class Dashboard {
   // ══════════════════════════════════════════════════
   async _fetchDineroAsegurado(today) {
     try {
-      const { data: bks, error } = await this.db
-        .from('bookings')
-        .select('id, total_amount, total_paid, status')
-        .eq('hotel_id', this.ctx.hotelId)
-        .gte('check_out', today)
-        .not('status', 'in', '(cancelled,blocked)');
+      const [activeRes, cancelledRes] = await Promise.all([
+        this.db.from('bookings')
+          .select('id, total_amount, total_paid, status')
+          .eq('hotel_id', this.ctx.hotelId)
+          .gte('check_out', today)
+          .not('status', 'in', '(cancelled,blocked)'),
+        this.db.from('bookings')
+          .select('id, total_paid, notes')
+          .eq('hotel_id', this.ctx.hotelId)
+          .eq('status', 'cancelled')
+          .gt('total_paid', 0),
+      ]);
+      if (activeRes.error) throw activeRes.error;
 
-      if (error) throw error;
-      const rows      = bks ?? [];
-      const totalVend = rows.reduce((s,b) => s + (b.total_amount ?? 0), 0);
-      const totalCobr = rows.reduce((s,b) => s + (b.total_paid  ?? 0), 0);
-      const totalPend = rows.reduce((s,b) => s + Math.max(0, (b.total_amount ?? 0) - (b.total_paid ?? 0)), 0);
-      return { totalVend, totalCobr, totalPend, count: rows.length };
+      const activeRows = activeRes.data ?? [];
+      // Una reserva cancelada con Nota de Crédito ABIERTA (no usada, no
+      // anulada) sigue teniendo plata real cobrada — esa seña entró al
+      // complejo y no se le devuelve a nadie. Cuenta como "cobrado" y
+      // como parte de lo "facturado", pero el resto del monto original
+      // (lo que nunca se llegó a cobrar) no cuenta para nada — no hay
+      // saldo pendiente de una reserva cancelada.
+      const cancelledOpenNC = (cancelledRes.data ?? []).filter(b =>
+        b.notes?.includes('🔄NC:') && !b.notes?.includes('✅NCUSED') && !b.notes?.includes('❌NCVOID')
+      );
+
+      const totalVend = activeRows.reduce((s,b) => s + (b.total_amount ?? 0), 0)
+                       + cancelledOpenNC.reduce((s,b) => s + (b.total_paid ?? 0), 0);
+      const totalCobr = activeRows.reduce((s,b) => s + (b.total_paid  ?? 0), 0)
+                       + cancelledOpenNC.reduce((s,b) => s + (b.total_paid ?? 0), 0);
+      const totalPend = activeRows.reduce((s,b) => s + Math.max(0, (b.total_amount ?? 0) - (b.total_paid ?? 0)), 0);
+      return { totalVend, totalCobr, totalPend, count: activeRows.length };
     } catch (err) {
       console.warn('[Dashboard] _fetchDineroAsegurado:', err?.message ?? err);
       return { totalVend: 0, totalCobr: 0, totalPend: 0, count: 0 };

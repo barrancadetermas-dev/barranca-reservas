@@ -100,8 +100,6 @@ export class Calendar {
       const cellMap     = this._buildCellMap(bookings);
       const reminderMap = this._buildReminderMap(reminders);
       const ncPendingDays = this._buildNcPendingDays(bookings, cancelledNC);
-      console.log('[Calendar DEBUG] cancelledNC encontradas:', cancelledNC.length, cancelledNC);
-      console.log('[Calendar DEBUG] ncPendingDays calculadas:', [...ncPendingDays]);
       this._render(cellMap, reminderMap, ncPendingDays);
 
     // ── 5. Barra de resumen superior ──
@@ -212,15 +210,23 @@ export class Calendar {
   // Crédito todavía sin usar ni anular — mismo tag 🔄NC:<monto>:<fecha>
   // que usan guests.js y mila-data.js.
   async _fetchCancelledWithOpenNC(firstDay, lastDay) {
-    const { data } = await this.db
+    // Antes filtraba por notas ('%🔄NC:%') directo en la consulta — daba
+    // 0 resultados siempre, aunque la reserva sí tuviera el tag guardado.
+    // Probablemente un problema de cómo el emoji se codifica en el filtro
+    // LIKE de PostgREST. Se saca ese filtro de la consulta y se hace en
+    // JS después de traer los datos — mismo patrón que ya funciona bien
+    // en fetchNotasCreditoAbiertas() (mila-data.js).
+    const { data, error } = await this.db
       .from('bookings')
       .select('id, check_in, check_out, notes, booking_units(unit_id)')
       .eq('hotel_id', this.ctx.hotelId)
       .eq('status', 'cancelled')
-      .like('notes', '%🔄NC:%')
       .lte('check_in', lastDay)
       .gt('check_out', firstDay);
-    return (data ?? []).filter(b => !b.notes?.includes('✅NCUSED') && !b.notes?.includes('❌NCVOID'));
+    if (error) { console.warn('[Calendar] cancelledNC fetch error:', error.message); return []; }
+    return (data ?? []).filter(b =>
+      b.notes?.includes('🔄NC:') && !b.notes?.includes('✅NCUSED') && !b.notes?.includes('❌NCVOID')
+    );
   }
 
   // Para cada unidad+día que pertenecía a una reserva cancelada con NC

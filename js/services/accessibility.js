@@ -161,6 +161,12 @@ function _refreshLensClone() {
 
   _lensCloneEl.innerHTML = '';
   _lensCloneEl.appendChild(bodyClone);
+
+  console.log('[Lupa DEBUG] ancho real de la página:', document.documentElement.scrollWidth, 'x', document.documentElement.scrollHeight);
+  console.log('[Lupa DEBUG] el clon tiene contenido adentro?', bodyClone.children.length, 'elementos hijos directos');
+  console.log('[Lupa DEBUG] rect del clon:', JSON.stringify(_lensCloneEl.getBoundingClientRect()));
+  console.log('[Lupa DEBUG] rect de la lupa:', _lensEl ? JSON.stringify(_lensEl.getBoundingClientRect()) : 'no existe _lensEl');
+
   _positionLensClone(_lastMouse.x, _lastMouse.y);
 }
 
@@ -185,6 +191,7 @@ function _positionLensClone(x, y) {
 }
 
 export function enableMagnifier() {
+  console.log('[Lupa DEBUG] enableMagnifier() llamada. _lensEl ya existía?', !!_lensEl);
   if (_lensEl) return; // ya está activa
   _lensEl = document.createElement('div');
   _lensEl.id = 'a11y-magnifier-lens';
