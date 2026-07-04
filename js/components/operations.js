@@ -161,8 +161,8 @@ export class OperationsModule {
             <button class="btn btn-ghost btn-xs reminder-edit-btn"
               data-id="${r.id}" data-title="${r.title.replace(/"/g,'&quot;')}"
               data-date="${r.scheduled_date}" data-desc="${(r.description??'').replace(/"/g,'&quot;')}"
-              data-units="${(r.unit_ids ?? []).join(',')}" data-is-note="1" data-icon="${r.icon ?? '📌'}" title="Editar">✏️</button>
-            <button class="btn btn-ghost btn-xs reminder-del-ops-btn" data-id="${r.id}" title="Eliminar">🗑️</button>
+              data-units="${(r.unit_ids ?? []).join(',')}" data-is-note="1" data-icon="${r.icon ?? '📌'}" title="Editar" aria-label="Editar">✏️</button>
+            <button class="btn btn-ghost btn-xs reminder-del-ops-btn" data-id="${r.id}" title="Eliminar" aria-label="Eliminar">🗑️</button>
           </div>
         </div>`;
       }
@@ -183,8 +183,8 @@ export class OperationsModule {
           <button class="btn btn-ghost btn-xs reminder-edit-btn"
             data-id="${r.id}" data-title="${r.title.replace(/"/g,'&quot;')}"
             data-date="${r.scheduled_date}" data-desc="${(r.description??'').replace(/"/g,'&quot;')}"
-            data-units="${(r.unit_ids ?? []).join(',')}" data-is-note="0" title="Editar">✏️</button>
-          <button class="btn btn-ghost btn-xs reminder-del-ops-btn" data-id="${r.id}" title="Eliminar">🗑️</button>
+            data-units="${(r.unit_ids ?? []).join(',')}" data-is-note="0" title="Editar" aria-label="Editar">✏️</button>
+          <button class="btn btn-ghost btn-xs reminder-del-ops-btn" data-id="${r.id}" title="Eliminar" aria-label="Eliminar">🗑️</button>
         </div>
       </div>`;
     }).join('')}</div>`;
@@ -391,9 +391,9 @@ export class OperationsModule {
             <button class="btn btn-primary btn-xs cleaning-status-btn"
                     data-id="${task.id}" data-status="completed">✓ Listo</button>` : ''}
           <button class="btn btn-ghost btn-xs cleaning-edit-btn"
-                  data-id="${task.id}" title="Editar">✏️</button>
+                  data-id="${task.id}" title="Editar" aria-label="Editar">✏️</button>
           <button class="btn btn-ghost btn-xs cleaning-delete-btn"
-                  data-id="${task.id}" title="Eliminar">🗑️</button>
+                  data-id="${task.id}" title="Eliminar" aria-label="Eliminar">🗑️</button>
         </div>
       </div>`;
   }
@@ -695,7 +695,7 @@ export class OperationsModule {
         </div>
         <div class="ops-row-right">
           <button class="btn btn-ghost btn-xs maint-block-delete-btn"
-                  data-booking-id="${block.id}" title="Eliminar bloqueo">🗑️</button>
+                  data-booking-id="${block.id}" title="Eliminar bloqueo" aria-label="Eliminar bloqueo">🗑️</button>
         </div>
       </div>`;
   }
@@ -728,8 +728,8 @@ export class OperationsModule {
           ${isOpen
             ? `<button class="btn btn-primary btn-xs maint-resolve-btn" data-id="${issue.id}">✓ Resolver</button>`
             : `<span style="font-size:.72rem;color:var(--color-text-3)">Resuelto</span>`}
-          <button class="btn btn-ghost btn-xs maint-edit-btn" data-id="${issue.id}" title="Editar" style="font-size:.85rem;">✏️</button>
-          <button class="btn btn-ghost btn-xs maint-delete-btn" data-id="${issue.id}" title="Eliminar">🗑️</button>
+          <button class="btn btn-ghost btn-xs maint-edit-btn" data-id="${issue.id}" title="Editar" aria-label="Editar" style="font-size:.85rem;">✏️</button>
+          <button class="btn btn-ghost btn-xs maint-delete-btn" data-id="${issue.id}" title="Eliminar" aria-label="Eliminar">🗑️</button>
         </div>
       </div>`;
   }
@@ -1276,8 +1276,8 @@ export class OperationsModule {
         </button>
         <div class="expense-actions">
           <button class="expense-action-btn ops-exp-recurring ${e.is_recurring ? 'active' : ''}" data-exp-id="${e.id}" data-recurring="${e.is_recurring ? '1' : '0'}" title="${e.is_recurring ? 'Repetición mensual activada (se va a cargar solo el mes que viene)' : 'Repetir todos los meses'}">🔁</button>
-          <button class="expense-action-btn ops-exp-edit" data-exp-id="${e.id}" title="Editar">✏️</button>
-          <button class="expense-action-btn ops-exp-del" data-exp-id="${e.id}" title="Eliminar">🗑️</button>
+          <button class="expense-action-btn ops-exp-edit" data-exp-id="${e.id}" title="Editar" aria-label="Editar">✏️</button>
+          <button class="expense-action-btn ops-exp-del" data-exp-id="${e.id}" title="Eliminar" aria-label="Eliminar">🗑️</button>
         </div>
       </div>
     `).join('');

@@ -4,6 +4,7 @@ import { cache } from './services/supabase-cache.js';
 import { Sound } from './services/sound-service.js';
 import { NotificationService } from './services/notification-service.js';
 import { initWaitlistService } from './services/waitlist-service.js';
+import { initAccessibility } from './services/accessibility.js';
 // ═══════════════════════════════════════════════════
 // app.js v5.0 — MILA Sistema Inteligente para Alojamientos
 // + Roles (admin/staff/demo) + Demo banner
@@ -265,6 +266,7 @@ async function initApp(user) {
   try {
     await loadHotelContext();
     AppContext.user = user;
+    initAccessibility(supabase, AppContext.hotelId);
 
     // ── Cargar rol del usuario ──
     const { data: hotelUser } = await supabase

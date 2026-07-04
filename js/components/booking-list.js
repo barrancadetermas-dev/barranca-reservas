@@ -653,7 +653,7 @@ export class BookingList {
             <div class="booking-actions-cell" onclick="event.stopPropagation()">
               <button data-action="edit"
                 class="bl-action-btn"
-                title="Editar reserva">
+                title="Editar reserva" aria-label="Editar reserva">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15">
                   <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
                   <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
@@ -661,31 +661,32 @@ export class BookingList {
               </button>
               <button data-action="whatsapp"
                 class="bl-action-btn whatsapp"
-                title="Enviar por WhatsApp">
+                title="Enviar por WhatsApp" aria-label="Enviar comprobante por WhatsApp">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15">
                   <path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z"/>
                 </svg>
               </button>
               <button data-action="flag"
                 class="bl-action-btn ${isBad ? 'danger' : ''}"
-                title="${isBad ? 'Huésped marcado como conflictivo' : 'Marcar huésped'}">
+                title="${isBad ? 'Huésped marcado como conflictivo' : 'Marcar huésped'}"
+                aria-label="${isBad ? 'Huésped marcado como conflictivo' : 'Marcar huésped'}">
                 <svg viewBox="0 0 24 24" fill="${isBad ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2" width="14" height="14">
                   <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/>
                 </svg>
               </button>
-              ${b.status !== 'cancelled' ? `<button data-action="reprogram" class="bl-action-btn" title="Reprogramar — cancela esta reserva y abre una nueva con nota de crédito">
+              ${b.status !== 'cancelled' ? `<button data-action="reprogram" class="bl-action-btn" title="Reprogramar — cancela esta reserva y abre una nueva con nota de crédito" aria-label="Reprogramar reserva">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
                     <polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 014-4h14"/>
                     <polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 01-4 4H3"/>
                   </svg>
                 </button>` : ''}
               ${b.check_out === today && b.status !== 'cancelled'
-                ? `<button data-action="checkout" class="bl-action-btn" title="Registrar check-out"
+                ? `<button data-action="checkout" class="bl-action-btn" title="Registrar check-out" aria-label="Registrar check-out"
                      style="color:#22c55e;border-color:#22c55e;background:rgba(34,197,94,.08)">
                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="14" height="14"><polyline points="20 6 9 17 4 12"/></svg>
                    </button>`
                 : ''}
-              ${can('deleteBooking') ? `<button data-action="delete" class="bl-action-btn danger" title="Eliminar reserva">
+              ${can('deleteBooking') ? `<button data-action="delete" class="bl-action-btn danger" title="Eliminar reserva" aria-label="Eliminar reserva">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
                   <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a1 1 0 011-1h4a1 1 0 011 1v2"/>
                 </svg>

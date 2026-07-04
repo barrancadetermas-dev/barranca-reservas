@@ -112,7 +112,7 @@ export class WaitlistPanel {
                 <button class="btn btn-outline btn-sm wl-whatsapp-btn" data-id="${w.id}" title="Avisar por WhatsApp">💬 Avisar</button>` : ''}
               ${w._effectiveStatus === 'open' || w._effectiveStatus === 'notified' ? `
                 <button class="btn btn-outline btn-sm wl-convert-btn" data-id="${w.id}" title="Se convirtió en reserva">✅ Convertida</button>` : ''}
-              <button class="btn btn-ghost btn-sm wl-delete-btn" data-id="${w.id}" title="Eliminar">🗑️</button>
+              <button class="btn btn-ghost btn-sm wl-delete-btn" data-id="${w.id}" title="Eliminar" aria-label="Eliminar de la lista de espera">🗑️</button>
             </div>
           </div>
         </div>`;

@@ -1445,8 +1445,8 @@ export class BookingForm {
   }
 
   _updatePaymentSummary() {
-    const total   = this._cachedTotal ?? 0;
-    const paid    = this._getTotalPaid();
+    const total   = Math.round(this._cachedTotal ?? 0);
+    const paid    = Math.round(this._getTotalPaid());
     const balance = total - paid;
     const set = (id, text) => { const el = document.getElementById(id); if (el) el.textContent = text; };
     set('ps-total',   formatARS(total));
@@ -1764,8 +1764,8 @@ export class BookingForm {
     const billable   = Math.max(0, nightsN - freeNights);
     const subtotal   = billable * price;
     const discount   = subtotal * discPct / 100;
-    const total      = subtotal - discount + surcharge;
-    const paid       = this._getTotalPaid();
+    const total      = Math.round(subtotal - discount + surcharge);
+    const paid       = Math.round(this._getTotalPaid());
     const balance    = total - paid;
     const fmt = n => '$' + Math.round(n).toLocaleString('es-AR');
     const fmtDate = d => d ? new Date(d + 'T12:00:00').toLocaleDateString('es-AR', {weekday:'short',day:'numeric',month:'short'}) : '—';
@@ -1941,8 +1941,8 @@ export class BookingForm {
     const billable   = Math.max(0, nightsN - freeNights);
     const subtotal   = billable * price;
     const discount   = subtotal * discPct / 100;
-    const total      = subtotal - discount + surcharge;
-    const paid       = this._getTotalPaid();
+    const total      = Math.round(subtotal - discount + surcharge);
+    const paid       = Math.round(this._getTotalPaid());
     const balance    = Math.max(0, total - paid);
 
     const fmt  = n => '$\u00a0' + Math.round(n).toLocaleString('es-AR');
@@ -2181,8 +2181,8 @@ ${notes ? `
     const billable = Math.max(0, nightsN - freeNights);
     const subtotal = billable * price;
     const discount = subtotal * discPct / 100;
-    const total    = subtotal - discount + surcharge;
-    const paid     = this._getTotalPaid();
+    const total    = Math.round(subtotal - discount + surcharge);
+    const paid     = Math.round(this._getTotalPaid());
     const balance  = Math.max(0, total - paid);
 
     // Origen/canal
@@ -2240,9 +2240,15 @@ ${notes ? `
       const billable = Math.max(0, nights - freeN);
       const subtotal = price * billable;
       const discAmt  = subtotal * (disc / 100);
-      const total    = Math.max(0, subtotal - discAmt + surch);
-      const paid     = this._getTotalPaid();
-      const balance  = total - paid;
+      // Redondear total/paid a pesos enteros antes de comparar — sin esto,
+      // un descuento o recargo en % puede dejar un resto de centavos por
+      // error de coma flotante (ej: saldo = $0.00000003 en vez de $0
+      // exacto), y como eso NO es "≤ 0", la reserva nunca se marcaba sola
+      // como Pagada aunque se hubiera cargado el pago completo — quedaba
+      // en "Señada" hasta que alguien forzaba el estado a mano.
+      const total    = Math.round(Math.max(0, subtotal - discAmt + surch));
+      const paid     = Math.round(this._getTotalPaid());
+      const balance  = Math.max(0, total - paid);
 
       // ── Validar superposición de unidades ────────────
       const selectedUnits = [...this._selectedUnitIds];
@@ -2427,7 +2433,7 @@ ${notes ? `
             booking_id:   bookingId,
             hotel_id:     this.ctx.hotelId,
             method:       meth,
-            amount:       isCc ? amt * 1.10 : amt,
+            amount:       Math.round(isCc ? amt * 1.10 : amt),
             payment_date: date || toISODate(new Date()),
             notes:        note,
             unit_id:      unitId,

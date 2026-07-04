@@ -11,6 +11,7 @@ import { AdminUsers } from '../services/admin-users.js';
 import { fetchMonthlyRates, fetchCustomColumns, upsertMonthlyRate, upsertCustomColumn,
          deleteCustomColumn, upsertCustomPrice, MONTH_NAMES } from '../services/tariff-service.js';
 import { DateRangePicker } from './date-range-picker.js';
+import { getPrefs, setPref } from '../services/accessibility.js';
 
 
 // Definición completa de la configuración
@@ -349,6 +350,95 @@ export class ConfigPanel {
           <div id="cfg-inactive-results" style="margin-top:14px"></div>
         </div>
 
+        <!-- ── Accesibilidad ── -->
+        <div style="background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--r-xl);padding:18px;margin-top:16px">
+          <div class="card-header" style="margin-bottom:6px">
+            <h3>♿ Accesibilidad</h3>
+          </div>
+          <div style="font-size:.78rem;color:var(--color-text-3);margin-bottom:6px">
+            Activá lo que necesites — queda guardado y se aplica solo cada vez que entrás, en cualquier
+            dispositivo.
+          </div>
+
+          <div class="a11y-panel-row">
+            <div class="a11y-panel-label">
+              <span>Aa</span>
+              <div>Tamaño de letra<small>Agranda todo el texto de la app, parejo</small></div>
+            </div>
+            <div class="a11y-font-controls">
+              <button type="button" class="a11y-font-btn" id="a11y-font-minus">−</button>
+              <span class="a11y-font-value" id="a11y-font-value">100%</span>
+              <button type="button" class="a11y-font-btn" id="a11y-font-plus">+</button>
+            </div>
+          </div>
+
+          <div class="a11y-panel-row">
+            <div class="a11y-panel-label">
+              <span>🌓</span>
+              <div>Alto contraste<small>Colores al máximo, para leer mejor</small></div>
+            </div>
+            <label class="a11y-toggle">
+              <input type="checkbox" id="a11y-toggle-highContrast">
+              <span class="a11y-toggle-slider"></span>
+            </label>
+          </div>
+
+          <div class="a11y-panel-row">
+            <div class="a11y-panel-label">
+              <span>🎨</span>
+              <div>Modo daltónico<small>Suma símbolos (✓ ◐ ✕) además del color rojo/amarillo/verde</small></div>
+            </div>
+            <label class="a11y-toggle">
+              <input type="checkbox" id="a11y-toggle-colorblind">
+              <span class="a11y-toggle-slider"></span>
+            </label>
+          </div>
+
+          <div class="a11y-panel-row">
+            <div class="a11y-panel-label">
+              <span>🔍</span>
+              <div>Lupa flotante<small>Sigue el cursor y amplía 2x lo que hay debajo</small></div>
+            </div>
+            <label class="a11y-toggle">
+              <input type="checkbox" id="a11y-toggle-magnifier">
+              <span class="a11y-toggle-slider"></span>
+            </label>
+          </div>
+
+          <div class="a11y-panel-row">
+            <div class="a11y-panel-label">
+              <span>🔊</span>
+              <div>Narración por voz<small>Seleccioná cualquier texto y aparece un botón para escucharlo</small></div>
+            </div>
+            <label class="a11y-toggle">
+              <input type="checkbox" id="a11y-toggle-narration">
+              <span class="a11y-toggle-slider"></span>
+            </label>
+          </div>
+
+          <div class="a11y-panel-row">
+            <div class="a11y-panel-label">
+              <span>🎬</span>
+              <div>Reducir animaciones<small>Apaga transiciones y efectos de movimiento</small></div>
+            </div>
+            <label class="a11y-toggle">
+              <input type="checkbox" id="a11y-toggle-reduceMotion">
+              <span class="a11y-toggle-slider"></span>
+            </label>
+          </div>
+
+          <div class="a11y-panel-row">
+            <div class="a11y-panel-label">
+              <span>⌨️</span>
+              <div>Resaltar foco de teclado<small>Contorno bien visible al navegar con Tab</small></div>
+            </div>
+            <label class="a11y-toggle">
+              <input type="checkbox" id="a11y-toggle-focusVisible">
+              <span class="a11y-toggle-slider"></span>
+            </label>
+          </div>
+        </div>
+
 
         <!-- ── MILA Info ── -->
         <div style="background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--r-xl);padding:18px">
@@ -593,6 +683,9 @@ export class ConfigPanel {
     // ── Limpieza de huéspedes inactivos ──
     container.querySelector('#cfg-find-inactive')?.addEventListener('click', () => this._findInactiveGuests(container));
 
+    // ── Accesibilidad ──
+    this._bindAccessibilityPanel(container);
+
     // ── Reportes PDF ──────────────────────────────────
     container.querySelector('#cfg-exp-toggle-pdf')?.addEventListener('click', (e) => {
       const btn = e.currentTarget;
@@ -791,6 +884,42 @@ export class ConfigPanel {
       showToast('Error al eliminar: ' + (err.message ?? err), 'error');
       if (btn) { btn.disabled = false; btn.textContent = '🗑️ Eliminar seleccionados'; }
     }
+  }
+
+  // ── Accesibilidad ──────────────────────────────────
+  // Refleja el estado guardado en cada control al abrir la pantalla, y
+  // guarda apenas se toca cada uno (no hace falta apretar "Guardar" acá,
+  // cada control se guarda solo — son cosas que uno quiere ver aplicadas
+  // al toque, no después de un paso extra).
+  _bindAccessibilityPanel(container) {
+    const prefs = getPrefs();
+
+    // Tamaño de letra
+    const fontValueEl = container.querySelector('#a11y-font-value');
+    const renderFontValue = () => {
+      const current = parseFloat(getPrefs().fontScale) || 1;
+      if (fontValueEl) fontValueEl.textContent = `${Math.round(current * 100)}%`;
+    };
+    renderFontValue();
+    container.querySelector('#a11y-font-minus')?.addEventListener('click', () => {
+      const next = Math.max(0.8, (parseFloat(getPrefs().fontScale) || 1) - 0.1);
+      setPref('fontScale', next.toFixed(2));
+      renderFontValue();
+    });
+    container.querySelector('#a11y-font-plus')?.addEventListener('click', () => {
+      const next = Math.min(1.6, (parseFloat(getPrefs().fontScale) || 1) + 0.1);
+      setPref('fontScale', next.toFixed(2));
+      renderFontValue();
+    });
+
+    // Los 6 interruptores — mismo patrón para todos
+    const toggles = ['highContrast', 'colorblind', 'magnifier', 'narration', 'reduceMotion', 'focusVisible'];
+    toggles.forEach(name => {
+      const el = container.querySelector(`#a11y-toggle-${name}`);
+      if (!el) return;
+      el.checked = !!prefs[name];
+      el.addEventListener('change', () => setPref(name, el.checked));
+    });
   }
 
   async _save(container) {

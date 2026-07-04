@@ -473,7 +473,7 @@ export class GuestsCRM {
             margin-top:1px"
           onmouseenter="this.style.opacity='1';this.style.background='var(--color-primary-l)';this.style.color='var(--color-primary)'"
           onmouseleave="this.style.opacity='.3';this.style.background='transparent';this.style.color='var(--color-text-3)'"
-          title="Editar datos">✏️</button>
+          title="Editar datos" aria-label="Editar datos">✏️</button>
 
         <!-- Botón borrar -->
         <button class="btn-delete-guest"
@@ -484,7 +484,7 @@ export class GuestsCRM {
             margin-top:1px"
           onmouseenter="this.style.opacity='1';this.style.background='#FEE2E2';this.style.color='#DC2626'"
           onmouseleave="this.style.opacity='.3';this.style.background='transparent';this.style.color='var(--color-text-3)'"
-          title="Eliminar huésped">🗑️</button>
+          title="Eliminar huésped" aria-label="Eliminar huésped">🗑️</button>
 
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"
           style="color:var(--color-text-3);flex-shrink:0;margin-top:5px">
@@ -1179,7 +1179,7 @@ export class GuestsCRM {
           <span class="gnc-icon">${icon}</span>
           <span class="gnc-author">${n.author_name ?? 'Staff'}</span>
           <span class="gnc-date">${date}</span>
-          <button class="gnc-delete btn btn-ghost btn-xs" data-id="${n.id}" title="Eliminar nota">🗑️</button>
+          <button class="gnc-delete btn btn-ghost btn-xs" data-id="${n.id}" title="Eliminar nota" aria-label="Eliminar nota">🗑️</button>
         </div>
         <div class="gnc-body">${n.body}</div>
       </div>`;
