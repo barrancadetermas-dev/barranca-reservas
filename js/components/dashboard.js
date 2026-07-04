@@ -12,6 +12,16 @@ import { logAction } from '../services/audit-service.js';
 // ↑ Sin import de app.js — evita dependencia circular.
 // El badge se actualiza via CustomEvent que app.js escucha.
 
+// Envoltorio de tiempo límite — mismo criterio que ya usamos en
+// booking-form.js y audit-service.js. Sin esto, si una consulta puntual
+// se cuelga, la acción se queda esperando para siempre sin avisar nada.
+function _withTimeout(promise, label = 'operación', ms = 10000) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error(`${label} tardó demasiado — revisá tu conexión`)), ms)),
+  ]);
+}
+
 export class Dashboard {
   constructor(supabase, ctx, bookingForm) {
     this.db          = supabase;
@@ -46,10 +56,18 @@ export class Dashboard {
     // misma lógica que "Reprogramar" (retención opcional, no automática).
     window._dashNoShow = async (bookingId, rowId, guest) => {
       try {
-        const { data: b } = await this.db.from('bookings')
-          .select('check_in, notes, total_paid, booking_units(unit_id)')
-          .eq('id', bookingId).single();
+        const { data: b } = await _withTimeout(
+          this.db.from('bookings')
+            .select('check_in, notes, total_paid, status, booking_units(unit_id)')
+            .eq('id', bookingId).single(),
+          'buscar la reserva'
+        );
         if (!b) { showToast('No se encontró la reserva', 'error'); return; }
+        if (b.status === 'cancelled') {
+          showToast(`Esta reserva ya estaba cancelada — no hay nada más que hacer acá. Si necesitás corregir la nota de crédito, hacelo desde Reservas.`, 'warning');
+          document.getElementById(rowId)?.remove();
+          return;
+        }
 
         const paid = Math.round(b.total_paid ?? 0);
         const freeDays   = parseFloat(AppContext.config?.cancel_free_days   ?? 3)  || 0;
@@ -79,10 +97,21 @@ export class Dashboard {
           ? `🔄NC:${credit}:${todayISO} — No vino, nota de crédito por ${formatARS(credit)} (${today})`
           : `❌ No vino (${today})`;
 
-        const { error } = await this.db.from('bookings')
-          .update({ status: 'cancelled', notes: [b.notes, cancelNote].filter(Boolean).join(' · ') })
-          .eq('id', bookingId);
+        // .select() al final del update — así la respuesta nos dice
+        // explícitamente qué fila(s) se modificaron. Si viniera vacío sin
+        // error (ej: una política de permisos bloqueando el cambio en
+        // silencio), lo detectamos acá en vez de festejar un éxito falso.
+        const { data: updated, error } = await _withTimeout(
+          this.db.from('bookings')
+            .update({ status: 'cancelled', notes: [b.notes, cancelNote].filter(Boolean).join(' · ') })
+            .eq('id', bookingId)
+            .select('id'),
+          'cancelar la reserva'
+        );
         if (error) throw error;
+        if (!updated?.length) {
+          throw new Error('La reserva no se modificó — probablemente un permiso de la base de datos lo está bloqueando en silencio. Revisá las políticas de RLS de la tabla "bookings" para UPDATE.');
+        }
 
         await logAction('CANCEL', 'booking', bookingId, `No vino: ${guest}${credit > 0 ? ` — NC ${formatARS(credit)}` : ''}`);
         Bus.emit(EVENTS.BOOKING_CANCELLED, {
@@ -911,7 +940,7 @@ export class Dashboard {
         ? '<div style="display:flex;gap:5px;flex-shrink:0">' +
           '<button class="btn btn-primary btn-sm" style="font-size:.72rem;padding:5px 10px" ' +
           'onclick="window._dashCheckIn(\'' + b.id + '\',\'arr-' + b.id + '\',\'' + guest.replace(/'/g,'&#39;') + '\')">✅ Check-in</button>' +
-          '<button class="btn btn-outline btn-sm" title="No vino / Cancelar" aria-label="No vino / Cancelar" style="font-size:.72rem;padding:5px 8px;color:var(--state-red-txt);border-color:var(--state-red-txt)" ' +
+          '<button class="btn btn-primary btn-sm" title="No vino / Cancelar" aria-label="No vino / Cancelar" style="font-size:.72rem;padding:5px 10px" ' +
           'onclick="window._dashNoShow(\'' + b.id + '\',\'arr-' + b.id + '\',\'' + guest.replace(/'/g,'&#39;') + '\')">❌</button>' +
           '</div>'
         : '';

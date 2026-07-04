@@ -907,10 +907,14 @@ export class BookingList {
       : `🔄 Reprogramada (${today})`;
 
     try {
-      const { error } = await this.db.from('bookings')
+      const { data: updated, error } = await this.db.from('bookings')
         .update({ status: 'cancelled', notes: [b.notes, cancelNote].filter(Boolean).join(' · ') })
-        .eq('id', id);
+        .eq('id', id)
+        .select('id');
       if (error) throw error;
+      if (!updated?.length) {
+        throw new Error('La reserva no se modificó — probablemente un permiso de la base de datos lo está bloqueando en silencio.');
+      }
 
       await logAction('CANCEL', 'booking', id, `Reprogramada: ${guest} (${dates})${credit > 0 ? ` — NC ${formatARS(credit)}` : ''}`);
       Bus.emit(EVENTS.BOOKING_CANCELLED, {
