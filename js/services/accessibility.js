@@ -148,8 +148,19 @@ function _positionLensClone(x, y) {
   if (!_lensEl || !_lensCloneEl) return;
   _lensEl.style.left = `${x - LENS_SIZE / 2}px`;
   _lensEl.style.top  = `${y - LENS_SIZE / 2}px`;
-  const offsetX = -x * ZOOM + LENS_SIZE / 2;
-  const offsetY = -y * ZOOM + LENS_SIZE / 2;
+  // El clon representa el <body> entero SIN scroll aplicado (arranca
+  // siempre desde arriba de todo) — pero el cursor (x,y) es relativo a lo
+  // que se ve en pantalla, que en esta app se desplaza adentro de
+  // .main-content (el body en sí no se mueve). Sin sumar ese scroll acá,
+  // la lupa mostraba una parte distinta de la página a medida que
+  // navegabas — como si "estuviera corrida". Sumamos el scroll de
+  // CUALQUIER contenedor que se haya desplazado (no solo .main-content
+  // por si el menú lateral u otra zona también scrollea).
+  let scrollX = window.scrollX, scrollY = window.scrollY;
+  const mainContent = document.querySelector('.main-content');
+  if (mainContent) { scrollX += mainContent.scrollLeft; scrollY += mainContent.scrollTop; }
+  const offsetX = -(x + scrollX) * ZOOM + LENS_SIZE / 2;
+  const offsetY = -(y + scrollY) * ZOOM + LENS_SIZE / 2;
   _lensCloneEl.style.transform = `translate(${offsetX}px, ${offsetY}px) scale(${ZOOM})`;
 }
 
@@ -234,6 +245,8 @@ let _narrationBtn = null;
 let _selectionHandler = null;
 let _selectionChangeHandler = null;
 
+let _currentUtterance = null; // referencia viva — algunos navegadores cortan la voz si se pierde antes de tiempo
+
 function _showNarrationButton(text, x, y) {
   _hideNarrationButton();
   const btn = document.createElement('button');
@@ -245,10 +258,15 @@ function _showNarrationButton(text, x, y) {
   btn.addEventListener('mousedown', (e) => e.preventDefault()); // no perder la selección al tocar
   btn.addEventListener('click', () => {
     try {
+      if (!('speechSynthesis' in window)) {
+        console.warn('[Accesibilidad] este navegador no tiene síntesis de voz');
+        return;
+      }
       window.speechSynthesis.cancel();
-      const utter = new SpeechSynthesisUtterance(text);
-      utter.lang = 'es-AR';
-      window.speechSynthesis.speak(utter);
+      _currentUtterance = new SpeechSynthesisUtterance(text);
+      _currentUtterance.lang = 'es-AR';
+      _currentUtterance.rate = 1;
+      window.speechSynthesis.speak(_currentUtterance);
     } catch (err) {
       console.warn('[Accesibilidad] narración no disponible:', err?.message ?? err);
     }
@@ -265,7 +283,13 @@ function _hideNarrationButton() {
 
 export function enableNarration() {
   if (_selectionHandler) return; // ya está activa
-  _selectionHandler = () => {
+  _selectionHandler = (e) => {
+    // Si el evento vino del propio botón "Escuchar" (tocarlo/soltarlo
+    // también dispara mouseup/touchend en el documento), no lo
+    // reprocesamos — si no, el botón se borraba a sí mismo antes de que
+    // le llegara a funcionar su propio click, y por eso "no hacía nada"
+    // al tocarlo.
+    if (e?.target && _narrationBtn && _narrationBtn.contains(e.target)) return;
     const sel = window.getSelection();
     const text = sel?.toString().trim();
     if (!text || text.length < 2) { _hideNarrationButton(); return; }

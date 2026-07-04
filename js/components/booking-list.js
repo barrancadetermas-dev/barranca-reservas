@@ -843,7 +843,23 @@ export class BookingList {
     if (!b) return;
     const guest  = b.guests ? `${b.guests.first_name} ${b.guests.last_name}` : 'este huésped';
     const dates  = `${b.check_in} → ${b.check_out}`;
-    const paid   = Math.round(b.total_paid ?? 0);
+
+    // Pedimos el total_paid FRESCO acá, en vez de confiar en el que ya
+    // tenía la lista en memoria (this._allBookings) — esa lista solo se
+    // refresca sola si la pestaña de Reservas estaba activa en pantalla
+    // en el momento justo en que se guardó un pago. Si editaste/cargaste
+    // el pago desde el Calendario u otra pantalla, quedaba vieja, y acá
+    // se terminaba calculando la nota de crédito con un monto pagado
+    // desactualizado (a veces $0 aunque en la base sí hubiera plata
+    // cargada) — el motivo exacto de "me quedó sin saldo en la NC".
+    let freshPaid = b.total_paid ?? 0;
+    try {
+      const { data: freshRow } = await this.db.from('bookings').select('total_paid').eq('id', id).single();
+      if (freshRow) freshPaid = freshRow.total_paid ?? 0;
+    } catch (err) {
+      console.warn('[Reprogramar] no se pudo refrescar total_paid, uso el valor en memoria:', err?.message ?? err);
+    }
+    const paid   = Math.round(freshPaid);
 
     // Política de cancelación configurada (Configuración → Política de
     // cancelación): si falta menos de X días para el check-in, se retiene
