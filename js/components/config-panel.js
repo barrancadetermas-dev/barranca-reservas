@@ -351,10 +351,12 @@ export class ConfigPanel {
         </div>
 
         <!-- ── Accesibilidad ── -->
-        <details style="background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--r-xl);padding:18px;margin-top:16px" id="cfg-a11y-details">
-          <summary class="card-header" style="cursor:pointer;list-style:none">
-            <h3 style="display:inline">♿ Accesibilidad</h3>
-          </summary>
+        <div class="config-group" id="cfg-acc-a11y">
+          <button class="config-acc-header" data-acc="a11y">
+            <span><span class="config-acc-icon">♿</span> Accesibilidad</span>
+            <svg class="config-acc-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="14" height="14"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+          <div class="config-acc-body" id="cfg-body-a11y">
           <div style="font-size:.78rem;color:var(--color-text-3);margin-bottom:6px;margin-top:10px">
             Activá lo que necesites — queda guardado y se aplica solo cada vez que entrás, en cualquier
             dispositivo.
@@ -437,7 +439,8 @@ export class ConfigPanel {
               <span class="a11y-toggle-slider"></span>
             </label>
           </div>
-        </details>
+          </div>
+        </div>
 
         <!-- ── MILA Info ── -->
         <div style="background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--r-xl);padding:18px">

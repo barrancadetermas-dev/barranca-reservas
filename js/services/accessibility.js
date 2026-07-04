@@ -139,6 +139,17 @@ function _refreshLensClone() {
   bodyClone.removeAttribute('id');
   bodyClone.querySelectorAll('[id]').forEach(el => el.removeAttribute('id'));
   bodyClone.style.cssText = 'margin:0;pointer-events:none;';
+
+  // CRÍTICO: el contenedor de la lupa (#a11y-magnifier-clone) es chiquito
+  // y no tiene ancho/alto propio — sin esto, todo lo que dentro de la
+  // página use medidas relativas al ancho de pantalla (100%, 100vw, etc.)
+  // colapsa a 0 al clonarse ahí adentro, y la lupa queda en blanco (no
+  // porque el clon esté vacío, sino porque su contenido "se aplasta").
+  // Fijamos el mismo ancho/alto real de la página para que todo se
+  // renderice con las proporciones correctas antes de escalarlo.
+  _lensCloneEl.style.width  = `${document.documentElement.scrollWidth}px`;
+  _lensCloneEl.style.height = `${document.documentElement.scrollHeight}px`;
+
   _lensCloneEl.innerHTML = '';
   _lensCloneEl.appendChild(bodyClone);
   _positionLensClone(_lastMouse.x, _lastMouse.y);

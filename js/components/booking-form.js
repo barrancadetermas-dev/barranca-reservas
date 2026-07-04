@@ -2570,6 +2570,8 @@ ${notes ? `
       const raw = err?.message ?? String(err) ?? 'Error desconocido';
       const userMsg = raw.includes('violates foreign key')
         ? 'ID de unidad o huésped inválido. Recargá la página.'
+        : raw.includes('invalid input value for enum payment_method')
+        ? 'Ese método de pago no existe todavía en la base de datos — correr migration_payment_method_enum.sql en Supabase.'
         : raw.includes('violates not-null')
         ? 'Falta un campo requerido en la base de datos.'
         : raw.includes('duplicate')

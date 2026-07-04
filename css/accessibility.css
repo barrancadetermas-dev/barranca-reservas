@@ -175,10 +175,6 @@ html.a11y-focus-visible *:focus {
   display: flex; align-items: center; justify-content: space-between;
   gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--color-border);
 }
-#cfg-a11y-details summary::-webkit-details-marker { display: none; }
-#cfg-a11y-details summary::before { content: '▸ '; color: var(--color-text-3); font-size: .8rem; }
-#cfg-a11y-details[open] summary::before { content: '▾ '; }
-#cfg-a11y-details summary:hover h3 { color: var(--color-primary); }
 .a11y-panel-row:last-child { border-bottom: none; }
 .a11y-panel-label { display: flex; align-items: center; gap: 10px; font-size: .86rem; color: var(--color-text); }
 .a11y-panel-label small { display: block; font-size: .72rem; color: var(--color-text-3); font-weight: 400; margin-top: 2px; }
