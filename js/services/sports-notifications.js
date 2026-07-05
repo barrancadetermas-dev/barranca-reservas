@@ -1,0 +1,131 @@
+// ═══════════════════════════════════════════════════
+// sports-notifications.js — Resumen de Selección Argentina
+// y River Plate, + avisos casi en vivo de goles.
+//
+// Usa TheSportsDB (thesportsdb.com) con la clave de prueba
+// pública "123" — no requiere que crees ninguna cuenta ni
+// clave propia, es la misma que cualquiera puede usar.
+//
+// 2 mecanismos separados:
+//  1. checkSportsSummary() — resumen (último resultado +
+//     próximo partido), cada 4 horas. Categoría "deportes".
+//  2. Si alguno de los 2 equipos juega HOY, se activa un
+//     seguimiento más seguido (cada ~3 min) para detectar
+//     cambios de marcador y avisar apenas se note un gol.
+//     Categoría separada "deportes_vivo", para que se pueda
+//     silenciar aparte del resumen diario.
+//
+// Aviso honesto: la capa gratuita de esta fuente NO tiene
+// marcador en vivo segundo a segundo (eso es pago en
+// cualquier proveedor) — lo que hacemos es revisar seguido
+// mientras hay un partido en curso, así que un gol se nota
+// con unos minutos de demora, no al instante. Es el mejor
+// resultado posible sin pagar nada.
+// ═══════════════════════════════════════════════════
+
+import { addNotification } from './notification-center.js';
+
+const SUMMARY_INTERVAL_MS = 4 * 60 * 60 * 1000;  // 4 horas
+const LIVE_POLL_MS         = 3 * 60 * 1000;       // 3 minutos, solo si hay partido hoy
+const LASTRUN_KEY  = 'mila_sports_notif_lastrun';
+const LIVE_SCORE_KEY = 'mila_sports_live_scores'; // último marcador visto por evento, para detectar cambios
+
+const API_KEY = '123'; // clave de prueba pública de TheSportsDB — no es nuestra, es compartida
+
+const TEAMS = [
+  { id: '134509', name: 'Selección Argentina', icon: '🇦🇷' },
+  { id: '135171', name: 'River Plate',          icon: '🔴⚪' },
+];
+
+let _liveTimer = null;
+
+async function _fetchLastNext(team) {
+  const [lastRes, nextRes] = await Promise.all([
+    fetch(`https://www.thesportsdb.com/api/v1/json/${API_KEY}/eventslast.php?id=${team.id}`),
+    fetch(`https://www.thesportsdb.com/api/v1/json/${API_KEY}/eventsnext.php?id=${team.id}`),
+  ]);
+  const lastData = lastRes.ok ? await lastRes.json() : null;
+  const nextData = nextRes.ok ? await nextRes.json() : null;
+  return { last: lastData?.results?.[0] ?? null, next: nextData?.events?.[0] ?? null };
+}
+
+function _loadLiveScores() {
+  try { return JSON.parse(localStorage.getItem(LIVE_SCORE_KEY)) ?? {}; } catch { return {}; }
+}
+function _saveLiveScores(obj) {
+  try { localStorage.setItem(LIVE_SCORE_KEY, JSON.stringify(obj)); } catch {}
+}
+
+// ── Resumen cada 4 horas (último resultado + próximo partido) ──
+export async function checkSportsSummary() {
+  const now = Date.now();
+  const lastRun = parseInt(localStorage.getItem(LASTRUN_KEY) ?? '0', 10);
+  if (now - lastRun < SUMMARY_INTERVAL_MS) return; // todavía no pasaron las 4 horas
+
+  let anySucceeded = false;
+  for (const team of TEAMS) {
+    try {
+      const { last, next } = await _fetchLastNext(team);
+      const lines = [];
+      if (last) lines.push(`Último: ${last.strHomeTeam} ${last.intHomeScore ?? '?'} - ${last.intAwayScore ?? '?'} ${last.strAwayTeam}`);
+      if (next) {
+        const d = next.dateEvent ? new Date(next.dateEvent + 'T00:00:00').toLocaleDateString('es-AR', { day: '2-digit', month: 'short' }) : '';
+        lines.push(`Próximo: ${next.strHomeTeam} vs ${next.strAwayTeam}${d ? ` — ${d}` : ''}`);
+      }
+      if (lines.length) {
+        addNotification({
+          type: 'sports_summary', category: 'deportes', icon: team.icon, color: '#F59E0B',
+          title: team.name, message: lines.join('\n'), data: { teamId: team.id },
+        });
+        anySucceeded = true;
+      }
+    } catch (err) {
+      console.warn(`[Sports] no se pudo obtener el resumen de ${team.name}:`, err?.message ?? err);
+    }
+  }
+  if (anySucceeded) localStorage.setItem(LASTRUN_KEY, String(now));
+}
+
+// ── Seguimiento casi en vivo — solo si alguno juega HOY ──
+async function _pollLiveScores() {
+  const todayISO = new Date().toISOString().slice(0, 10);
+  const scores = _loadLiveScores();
+
+  for (const team of TEAMS) {
+    try {
+      const { last } = await _fetchLastNext(team);
+      if (!last || last.dateEvent !== todayISO) continue; // no juega hoy, nada que revisar
+
+      const key = last.idEvent;
+      const newScoreStr = `${last.intHomeScore ?? ''}-${last.intAwayScore ?? ''}`;
+      const prevScoreStr = scores[key];
+
+      if (prevScoreStr !== undefined && prevScoreStr !== newScoreStr && last.intHomeScore != null) {
+        addNotification({
+          type: 'sports_live', category: 'deportes_vivo', icon: '⚽', color: '#EF4444',
+          title: `¡Gol! ${team.name}`,
+          message: `${last.strHomeTeam} ${last.intHomeScore} - ${last.intAwayScore} ${last.strAwayTeam}`,
+          data: { teamId: team.id, eventId: key },
+        });
+      }
+      scores[key] = newScoreStr;
+    } catch (err) {
+      console.warn(`[Sports] error revisando en vivo (${team.name}):`, err?.message ?? err);
+    }
+  }
+  _saveLiveScores(scores);
+}
+
+/**
+ * Llamar una vez al iniciar la app. Arranca el resumen de 4 horas y,
+ * además, revisa si hay partido HOY — si lo hay, prende el sondeo cada
+ * 3 minutos automáticamente mientras dure la sesión abierta.
+ */
+export function initSportsNotifications() {
+  checkSportsSummary();
+  setInterval(checkSportsSummary, SUMMARY_INTERVAL_MS);
+
+  if (_liveTimer) return; // ya está corriendo
+  _pollLiveScores(); // primer chequeo ya mismo
+  _liveTimer = setInterval(_pollLiveScores, LIVE_POLL_MS);
+}

@@ -16,13 +16,13 @@ const TOAST_MS      = 5000;
 // Categorías disponibles — el usuario las prende/apaga desde el panel.
 // "sistema" no se puede apagar (avisos internos de la propia app).
 export const CATEGORIES = {
-  reservas:  { label: '🏠 Reservas',            togglable: true },
-  deportes:  { label: '⚽ Deportes',            togglable: true },
-  clima:     { label: '🌤️ Clima',               togglable: true },
-  economia:  { label: '💵 Economía',            togglable: true },
-  feriados:  { label: '📅 Feriados',             togglable: true },
-  turismo:   { label: '🧭 Eventos turísticos',   togglable: true },
-  sistema:   { label: '⚙️ Sistema',              togglable: false },
+  reservas:      { label: '🏠 Reservas',              togglable: true },
+  deportes:      { label: '⚽ Deportes (resumen)',     togglable: true },
+  deportes_vivo: { label: '🔴 Deportes (en vivo)',     togglable: true },
+  clima:         { label: '🌤️ Clima',                  togglable: true },
+  economia:      { label: '💵 Economía',               togglable: true },
+  feriados:      { label: '📅 Feriados',                togglable: true },
+  sistema:       { label: '⚙️ Sistema',                 togglable: false },
 };
 
 let _listeners = []; // callbacks livianos para refrescar la UI (badge/panel)

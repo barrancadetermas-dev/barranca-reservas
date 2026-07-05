@@ -7,6 +7,8 @@ import { initWaitlistService } from './services/waitlist-service.js';
 import { initAccessibility } from './services/accessibility.js';
 import { initNotificationCenterUI } from './components/notification-center-ui.js';
 import { checkUpcomingHolidays } from './services/holiday-notifications.js';
+import { checkTodayWeather } from './services/weather-notifications.js';
+import { initSportsNotifications } from './services/sports-notifications.js';
 import { initMilaEventNotifications } from './services/mila-event-notifications.js';
 import { initEventEngine } from './services/event-engine.js';
 // ═══════════════════════════════════════════════════
@@ -274,6 +276,8 @@ async function initApp(user) {
     initNotificationCenterUI();
     initMilaEventNotifications();
     checkUpcomingHolidays();
+    checkTodayWeather();
+    initSportsNotifications();
     initEventEngine(supabase, AppContext.hotelId);
 
     // ── Cargar rol del usuario ──
