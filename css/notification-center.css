@@ -163,6 +163,17 @@
   white-space: pre-line; line-height: 1.4;
 }
 .notifcenter-item-time { font-size: .68rem; color: var(--color-text-3); margin-top: 5px; }
+.notifcenter-item-delete {
+  flex-shrink: 0;
+  width: 22px; height: 22px; border-radius: 6px;
+  border: none; background: transparent; color: var(--color-text-3);
+  cursor: pointer; font-size: .7rem;
+  display: flex; align-items: center; justify-content: center;
+  opacity: 0; transition: opacity .15s ease, background .15s ease, color .15s ease;
+  align-self: flex-start;
+}
+.notifcenter-item:hover .notifcenter-item-delete { opacity: 1; }
+.notifcenter-item-delete:hover { background: rgba(0,0,0,.08); color: var(--state-red-txt, #dc2626); }
 
 /* ══════════════════════════════════════════════════
    TOAST — arriba a la derecha, con barra de progreso

@@ -11,7 +11,7 @@
 const STORAGE_KEY   = 'mila_notifications_v1';
 const CATEGORY_KEY  = 'mila_notif_categories_v1';
 const MAX_STORED    = 200; // no crecer para siempre en localStorage
-const TOAST_MS      = 5000;
+const TOAST_MS      = 10000;
 
 // Categorías disponibles — el usuario las prende/apaga desde el panel.
 // "sistema" no se puede apagar (avisos internos de la propia app).
@@ -19,6 +19,8 @@ export const CATEGORIES = {
   reservas:      { label: '🏠 Reservas',              togglable: true },
   deportes:      { label: '⚽ Deportes (resumen)',     togglable: true },
   deportes_vivo: { label: '🔴 Deportes (en vivo)',     togglable: true },
+  f1:            { label: '🏎️ F1 (resumen)',          togglable: true },
+  f1_vivo:       { label: '🔴 F1 (en vivo)',           togglable: true },
   clima:         { label: '🌤️ Clima',                  togglable: true },
   economia:      { label: '💵 Economía',               togglable: true },
   feriados:      { label: '📅 Feriados',                togglable: true },
@@ -115,6 +117,11 @@ export function markAllRead() {
 }
 export function clearAll() {
   _saveAll([]);
+  _notifyListeners();
+}
+export function deleteNotification(id) {
+  const all = _loadAll().filter(n => n.id !== id);
+  _saveAll(all);
   _notifyListeners();
 }
 export function getCategoryPrefs() { return { ..._categoryPrefs }; }

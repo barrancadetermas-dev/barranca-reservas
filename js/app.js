@@ -9,6 +9,7 @@ import { initNotificationCenterUI } from './components/notification-center-ui.js
 import { checkUpcomingHolidays } from './services/holiday-notifications.js';
 import { checkTodayWeather } from './services/weather-notifications.js';
 import { initSportsNotifications } from './services/sports-notifications.js';
+import { initF1Notifications } from './services/f1-notifications.js';
 import { initMilaEventNotifications } from './services/mila-event-notifications.js';
 import { initEventEngine } from './services/event-engine.js';
 // ═══════════════════════════════════════════════════
@@ -278,6 +279,7 @@ async function initApp(user) {
     checkUpcomingHolidays();
     checkTodayWeather();
     initSportsNotifications();
+    initF1Notifications();
     initEventEngine(supabase, AppContext.hotelId);
 
     // ── Cargar rol del usuario ──

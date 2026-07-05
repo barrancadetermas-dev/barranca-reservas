@@ -12,8 +12,33 @@
 
 import {
   CATEGORIES, getNotifications, getUnreadCount, markAllRead,
-  clearAll, getCategoryPrefs, setCategoryEnabled, onNotificationsChanged,
+  clearAll, deleteNotification, getCategoryPrefs, setCategoryEnabled, onNotificationsChanged,
 } from '../services/notification-center.js';
+
+// Colores pastel de fondo por categoría, para distinguir de un vistazo
+// en el historial (ej: economía verde, clima amarillo).
+const CATEGORY_BG = {
+  reservas:      '#DBEAFE', // celeste pastel
+  deportes:      '#FFE4CC', // naranja pastel
+  deportes_vivo: '#FFD6D6', // rojo pastel
+  f1:            '#D6F0FF', // celeste F1 pastel
+  f1_vivo:       '#FFD6D6', // rojo pastel
+  clima:         '#FFF3C4', // amarillo pastel
+  economia:      '#D6F5DD', // verde pastel
+  feriados:      '#E8DDFF', // lila pastel
+  sistema:       '#E5E7EB', // gris pastel
+};
+const CATEGORY_BG_DARK = {
+  reservas:      'rgba(96,165,250,.16)',
+  deportes:      'rgba(251,146,60,.16)',
+  deportes_vivo: 'rgba(248,113,113,.16)',
+  f1:            'rgba(56,189,248,.16)',
+  f1_vivo:       'rgba(248,113,113,.16)',
+  clima:         'rgba(250,204,21,.16)',
+  economia:      'rgba(74,222,128,.16)',
+  feriados:      'rgba(196,181,253,.16)',
+  sistema:       'rgba(148,163,184,.16)',
+};
 
 let _panelOpen = false;
 
@@ -44,15 +69,28 @@ function _renderList() {
     list.innerHTML = `<div class="notifcenter-empty">🔕 Sin notificaciones todavía</div>`;
     return;
   }
-  list.innerHTML = notifs.map(n => `
-    <div class="notifcenter-item ${n.read ? '' : 'unread'}" style="${n.color ? `--notif-accent:${n.color}` : ''}">
+  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+  const bgMap = isDark ? CATEGORY_BG_DARK : CATEGORY_BG;
+  list.innerHTML = notifs.map(n => {
+    const catBg = bgMap[n.category] ?? (isDark ? CATEGORY_BG_DARK.sistema : CATEGORY_BG.sistema);
+    return `
+    <div class="notifcenter-item ${n.read ? '' : 'unread'}" style="${n.color ? `--notif-accent:${n.color};` : ''}background:${catBg}">
       <div class="notifcenter-item-icon">${n.icon}</div>
       <div class="notifcenter-item-body">
         <div class="notifcenter-item-title">${n.title}</div>
         ${n.message ? `<div class="notifcenter-item-msg">${n.message}</div>` : ''}
         <div class="notifcenter-item-time">${_fmtWhen(n.createdAt)}</div>
       </div>
-    </div>`).join('');
+      <button class="notifcenter-item-delete" data-id="${n.id}" title="Eliminar" aria-label="Eliminar notificación">✕</button>
+    </div>`;
+  }).join('');
+
+  list.querySelectorAll('.notifcenter-item-delete').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      deleteNotification(btn.dataset.id);
+    });
+  });
 }
 
 function _renderCategoryToggles() {
