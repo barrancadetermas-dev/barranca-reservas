@@ -2436,22 +2436,37 @@ ${notes ? `
       const newPayRowEls  = []; // referencia paralela a newPayRows (mismo índice) para asignar el ID real después del insert
       const updatePayRows = [];
       document.querySelectorAll('.payment-row').forEach(row => {
-        const amt  = parseFloat(row.querySelector('.pay-amount')?.value) || 0;
-        const meth = row.querySelector('.pay-method')?.value;
-        const date = row.querySelector('.pay-date')?.value;
-        const note = row.querySelector('.pay-note')?.value?.trim() || null;
+        const rawAmt = parseFloat(row.querySelector('.pay-amount')?.value) || 0;
+        const meth   = row.querySelector('.pay-method')?.value;
+        const date   = row.querySelector('.pay-date')?.value;
+        const note   = row.querySelector('.pay-note')?.value?.trim() || null;
         const existingId = row.dataset.paymentId || null;
         const unitId = row.dataset.unitId || null; // null = General
-        if (amt > 0) {
+        const cur    = row.dataset?.currency ?? 'ARS';
+        const rate   = parseFloat(row.querySelector('.pay-rate')?.value) || 1;
+        if (rawAmt > 0) {
           const isCc = meth === 'credit_card';
+          // amount_ars es la columna que el trigger de la base realmente
+          // suma para calcular "cuánto se pagó" (total_paid) — antes acá
+          // nunca se completaba (solo se mandaba "amount"), así que el
+          // total pagado de CUALQUIER pago (no solo notas de crédito)
+          // nunca se actualizaba de verdad, aunque el pago se guardara
+          // bien en la tabla. De paso, esto también aplica la conversión
+          // USD→ARS al guardar — antes esa conversión solo se usaba para
+          // mostrar el resumen en pantalla, nunca llegaba a guardarse.
+          const arsBase = cur === 'USD' ? rawAmt * rate : rawAmt;
+          const arsFinal = Math.round(isCc ? arsBase * 1.10 : arsBase);
           const payload = {
-            booking_id:   bookingId,
-            hotel_id:     this.ctx.hotelId,
-            method:       meth,
-            amount:       Math.round(isCc ? amt * 1.10 : amt),
-            payment_date: date || toISODate(new Date()),
-            notes:        note,
-            unit_id:      unitId,
+            booking_id:    bookingId,
+            hotel_id:      this.ctx.hotelId,
+            method:        meth,
+            amount:        Math.round(rawAmt),
+            currency:      cur,
+            exchange_rate: cur === 'USD' ? rate : null,
+            amount_ars:    arsFinal,
+            payment_date:  date || toISODate(new Date()),
+            notes:         note,
+            unit_id:       unitId,
           };
           if (existingId) {
             updatePayRows.push({ id: existingId, ...payload });
