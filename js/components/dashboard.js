@@ -1395,6 +1395,8 @@ export class Dashboard {
       const stateColor = cobPct < 30 ? 'var(--state-red)' : cobPct < 70 ? 'var(--state-yellow)' : 'var(--state-green)';
       fill.style.background = stateColor;
       if (cobEl) cobEl.style.color = stateColor;
+      const pctEl = document.getElementById('dash-cobros-pct');
+      if (pctEl) pctEl.textContent = cobPct + '% cobrado';
     }
   }
 
