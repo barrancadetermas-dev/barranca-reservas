@@ -2541,6 +2541,32 @@ ${notes ? `
       showToast(this._editingId ? 'Reserva actualizada ✓' : 'Reserva creada ✓', 'success');
       Sound?.[this._editingId ? 'success' : 'newBooking']?.();
 
+      // Notificación automática al Centro de Notificaciones — solo en
+      // reservas NUEVAS (no al editar), usando los datos que ya tenemos
+      // de la propia reserva recién guardada. No depende de ninguna API.
+      if (!this._editingId) {
+        try {
+          const { addNotification } = await import('../services/notification-center.js');
+          const guestName = `${document.getElementById('f-firstname')?.value?.trim() ?? ''} ${document.getElementById('f-lastname')?.value?.trim() ?? ''}`.trim() || 'Huésped';
+          const unitNames = selectedUnits
+            .map(uid => this.ctx.units?.find(u => String(u.id) === String(uid))?.name)
+            .filter(Boolean)
+            .join(', ') || '—';
+          const fmtDMY = (iso) => { const [y,m,d] = iso.split('-'); return `${d}/${m}/${y}`; };
+          addNotification({
+            type: 'booking_created',
+            category: 'reservas',
+            icon: '🏠',
+            color: '#3B82F6',
+            title: 'Nueva reserva creada',
+            message: `👤 ${guestName}\n🏡 ${unitNames}\n📅 ${fmtDMY(ci)} → ${fmtDMY(co)}\n👥 ${pax} huésped${pax !== 1 ? 'es' : ''}\n💲 Total: ${formatARS(total)}`,
+            data: { bookingId },
+          });
+        } catch (err) {
+          console.warn('[BookingForm] no se pudo generar la notificación:', err?.message ?? err);
+        }
+      }
+
       // Estadía dividida: si esta reserva era la "Parte 1/2", abrir ahora
       // automáticamente la "Parte 2/2" con la otra unidad y el resto de
       // las fechas, con el mismo huésped precargado.
