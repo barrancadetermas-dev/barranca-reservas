@@ -5,6 +5,10 @@ import { Sound } from './services/sound-service.js';
 import { NotificationService } from './services/notification-service.js';
 import { initWaitlistService } from './services/waitlist-service.js';
 import { initAccessibility } from './services/accessibility.js';
+import { initNotificationCenterUI } from './components/notification-center-ui.js';
+import { checkUpcomingHolidays } from './services/holiday-notifications.js';
+import { initMilaEventNotifications } from './services/mila-event-notifications.js';
+import { initEventEngine } from './services/event-engine.js';
 // ═══════════════════════════════════════════════════
 // app.js v5.0 — MILA Sistema Inteligente para Alojamientos
 // + Roles (admin/staff/demo) + Demo banner
@@ -267,6 +271,10 @@ async function initApp(user) {
     await loadHotelContext();
     AppContext.user = user;
     initAccessibility(supabase, AppContext.hotelId);
+    initNotificationCenterUI();
+    initMilaEventNotifications();
+    checkUpcomingHolidays();
+    initEventEngine(supabase, AppContext.hotelId);
 
     // ── Cargar rol del usuario ──
     const { data: hotelUser } = await supabase

@@ -2485,6 +2485,7 @@ ${notes ? `
       // escribe de inmediato en cada fila del DOM: así, si _submit() se
       // dispara de nuevo más adelante (doble clic, reapertura, etc.), esa
       // misma fila ya tiene paymentId y se va a ACTUALIZAR, nunca duplicar.
+      const _payGuestName = `${document.getElementById('f-firstname')?.value?.trim() ?? ''} ${document.getElementById('f-lastname')?.value?.trim() ?? ''}`.trim() || 'Huésped';
       if (newPayRows.length) {
         const { data: insertedRows, error: pmErr } = await this._withTimeout(
           this.db.from('payments').insert(newPayRows).select('id'),
@@ -2494,6 +2495,9 @@ ${notes ? `
         (insertedRows ?? []).forEach((rec, i) => {
           if (newPayRowEls[i] && rec?.id) newPayRowEls[i].dataset.paymentId = rec.id;
         });
+        newPayRows.forEach(p => Bus.emit(EVENTS.PAYMENT_REGISTERED, {
+          bookingId: p.booking_id, guestName: _payGuestName, amount: p.amount_ars ?? p.amount, method: p.method,
+        }));
       }
 
       // UPDATE — pagos existentes que el usuario modificó
@@ -2504,6 +2508,9 @@ ${notes ? `
           'Actualizar pago'
         );
         if (upErr) throw new Error('Error actualizando pago: ' + upErr.message);
+        Bus.emit(EVENTS.PAYMENT_UPDATED, {
+          bookingId: fields.booking_id, guestName: _payGuestName, amount: fields.amount_ars ?? fields.amount, method: fields.method,
+        });
       }
 
       // DELETE — pagos que el usuario quitó del formulario
@@ -2540,6 +2547,22 @@ ${notes ? `
 
       showToast(this._editingId ? 'Reserva actualizada ✓' : 'Reserva creada ✓', 'success');
       Sound?.[this._editingId ? 'success' : 'newBooking']?.();
+
+      // El formulario no sabe nada de notificaciones — solo avisa que
+      // "esto pasó" con los datos reales. El motor de eventos
+      // (mila-event-notifications.js) es quien decide qué mostrar.
+      try {
+        const guestName = `${document.getElementById('f-firstname')?.value?.trim() ?? ''} ${document.getElementById('f-lastname')?.value?.trim() ?? ''}`.trim() || 'Huésped';
+        const unitNames = selectedUnits
+          .map(uid => this.ctx.units?.find(u => String(u.id) === String(uid))?.name)
+          .filter(Boolean)
+          .join(', ') || '—';
+        Bus.emit(this._editingId ? EVENTS.BOOKING_UPDATED : EVENTS.BOOKING_CREATED, {
+          bookingId, guestName, unitNames, checkIn: ci, checkOut: co, pax, total,
+        });
+      } catch (err) {
+        console.warn('[BookingForm] no se pudo emitir el evento de reserva:', err?.message ?? err);
+      }
 
       // Estadía dividida: si esta reserva era la "Parte 1/2", abrir ahora
       // automáticamente la "Parte 2/2" con la otra unidad y el resto de

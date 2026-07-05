@@ -1320,6 +1320,7 @@ export class Calendar {
       if (buErr) throw buErr;
       await this._createMaintenanceForBlock(bk.id, unitId, checkIn, checkOut, reason);
       showToast(`🔒 ${name} bloqueado — ${checkIn} → ${checkOut}`, 'success');
+      Bus.emit(EVENTS.BLOCK_CREATED, { unitName: name, checkIn, checkOut, reason });
       cache.invalidate('bookings');
       await this.load();
     } catch (err) {
@@ -1544,6 +1545,8 @@ export class Calendar {
       this._pendingPulse.add(booking.id);
       cache.invalidate('bookings');
       Bus.emit(EVENTS.BOOKING_DRAG_DONE, { bookingId: booking.id, oldCI: booking.check_in, newCI });
+      const _dragUnitName = this.ctx.units?.find(u => u.id === targetUnitId)?.name ?? '';
+      Bus.emit(EVENTS.AVAILABILITY_CHANGED, { unitName: _dragUnitName, checkIn: newCI, checkOut: newCO });
       showToast(`✓ Reserva movida a ${this._fmtShort(newCI)} → ${this._fmtShort(newCO)}`, 'success');
       this.load();
     };
@@ -2539,6 +2542,7 @@ export class Calendar {
         const { error } = await this.db.from('bookings').delete().eq('id', bookingId);
         if (error) throw error;
         showToast('Bloqueo eliminado ✓', 'success');
+        Bus.emit(EVENTS.BLOCK_DELETED, { unitName, checkIn: bookingData.check_in, checkOut: bookingData.check_out });
         cache.invalidate('bookings');
         close();
         await this.load();
@@ -2568,6 +2572,8 @@ export class Calendar {
         await this._createMaintenanceForBlock(bk.id, unitId, dateISO, checkOut, reason);
       }
       showToast('Día bloqueado ✓', 'success');
+      const _blockedUnitName = this.ctx.units?.find(u => u.id === unitId)?.name ?? 'unidad';
+      Bus.emit(EVENTS.BLOCK_CREATED, { unitName: _blockedUnitName, checkIn: dateISO, checkOut, reason });
       cache.invalidate('bookings');
       this.load();
     } catch (err) {

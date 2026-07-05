@@ -46,6 +46,7 @@ export class Dashboard {
         document.dispatchEvent(new CustomEvent('show:toast', { detail: { msg: `✅ Check-in: ${guest}`, type: 'success' } }));
         document.dispatchEvent(new CustomEvent('booking:changed'));
         if (typeof Sound !== 'undefined') Sound?.checkIn?.();
+        Bus.emit(EVENTS.CHECKIN_DONE, { bookingId, guestName: guest, unitName: '' });
       } catch (e) {
         document.dispatchEvent(new CustomEvent('show:toast', { detail: { msg: 'Error: ' + e.message, type: 'error' } }));
       }
@@ -186,6 +187,9 @@ export class Dashboard {
               priority:       'high',
             });
           }
+
+          Bus.emit(EVENTS.CHECKOUT_DONE, { bookingId, guestName: guest, unitName });
+          Bus.emit(EVENTS.UNIT_FREED, { unitName, guestName: guest });
         }
 
         // 4. Actualizar UI

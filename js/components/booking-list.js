@@ -1019,6 +1019,12 @@ export class BookingList {
       showToast('Reserva eliminada ✓', 'success');
       await logAction('DELETE', 'booking', id, `Eliminada desde lista: ${guest}${dates}`);
       if (booking) {
+        const unitNames = (booking.booking_units ?? [])
+          .map(bu => bu.units?.name).filter(Boolean).join(', ') || '—';
+        Bus.emit(EVENTS.BOOKING_DELETED, {
+          bookingId: id, guestName: guest, unitNames,
+          checkIn: booking.check_in, checkOut: booking.check_out,
+        });
         Bus.emit(EVENTS.BOOKING_CANCELLED, {
           hotelId: this.ctx.hotelId,
           checkIn: booking.check_in,

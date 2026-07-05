@@ -37,6 +37,29 @@ export async function recordDailyRateSnapshot(db, hotelId, sellRate) {
 
     if (history[history.length - 1]?.date === today) return; // ya registrado hoy
 
+    // Avisar si el dólar se movió significativo desde el último registro
+    // — mismo dato que ya se guarda acá, solo se le suma el aviso. Si no
+    // había historial previo (primera vez que corre), no hay contra qué
+    // comparar, así que no se avisa nada la primera vez.
+    const prevEntry = history[history.length - 1];
+    if (prevEntry?.sell) {
+      const diffPct = ((sellRate - prevEntry.sell) / prevEntry.sell) * 100;
+      if (Math.abs(diffPct) >= 1) {
+        try {
+          const { addNotification } = await import('./notification-center.js');
+          const up = diffPct > 0;
+          addNotification({
+            type: 'dollar_change',
+            category: 'economia',
+            icon: up ? '📈' : '📉',
+            color: up ? '#EF4444' : '#22C55E',
+            title: `Dólar ${up ? 'subió' : 'bajó'} ${Math.abs(diffPct).toFixed(1)}%`,
+            message: `$${prevEntry.sell.toLocaleString('es-AR')} → $${sellRate.toLocaleString('es-AR')} (oficial venta)`,
+          });
+        } catch (_) { /* no crítico — el historial se guarda igual */ }
+      }
+    }
+
     history.push({ date: today, sell: Math.round(sellRate * 100) / 100 });
     if (history.length > MAX_ENTRIES) history = history.slice(-MAX_ENTRIES);
 

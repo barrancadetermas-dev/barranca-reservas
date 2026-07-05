@@ -88,15 +88,29 @@ export const Bus = new EventBus();
 export const EVENTS = Object.freeze({
   // Reservas
   BOOKING_CHANGED:     'booking:changed',
-  BOOKING_CREATED:     'booking:created',
-  BOOKING_UPDATED:     'booking:updated',
-  BOOKING_DELETED:     'booking:deleted',
+  BOOKING_CREATED:     'booking:created',     // { bookingId, guestName, unitNames, checkIn, checkOut, pax, total }
+  BOOKING_UPDATED:     'booking:updated',     // { bookingId, guestName, unitNames, checkIn, checkOut }
+  BOOKING_DELETED:     'booking:deleted',     // { bookingId, guestName, unitNames, checkIn, checkOut }
   BOOKING_CANCELLED:   'booking:cancelled',    // { hotelId, checkIn, checkOut, unitIds } — libera capacidad, dispara chequeo de lista de espera
   BOOKING_FULLY_PAID:  'booking:fullypaid',
   BOOKING_DRAG_DONE:   'booking:drag_done',   // { bookingId, oldCI, newCI }
 
   // Pagos
   PAYMENT_CHANGED:     'payment:changed',
+  PAYMENT_REGISTERED:  'payment:registered',  // { bookingId, guestName, amount, method }
+  PAYMENT_UPDATED:     'payment:updated',     // { bookingId, guestName, amount, method }
+
+  // Check-in / Check-out / Unidades
+  CHECKIN_DONE:        'stay:checkin_done',        // { bookingId, guestName, unitName }
+  CHECKOUT_DONE:       'stay:checkout_done',        // { bookingId, guestName, unitName }
+  UNIT_FREED:          'unit:freed',                // { unitName, guestName }
+
+  // Bloqueos
+  BLOCK_CREATED:       'block:created',       // { unitName, checkIn, checkOut, reason }
+  BLOCK_DELETED:       'block:deleted',       // { unitName, checkIn, checkOut }
+
+  // Disponibilidad
+  AVAILABILITY_CHANGED: 'availability:changed', // { unitName, checkIn, checkOut }
 
   // Navegación
   SECTION_CHANGED:     'section:changed',      // { section }
