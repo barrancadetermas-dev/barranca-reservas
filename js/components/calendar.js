@@ -100,8 +100,6 @@ export class Calendar {
       const cellMap     = this._buildCellMap(bookings);
       const reminderMap = this._buildReminderMap(reminders);
       const ncPendingDays = this._buildNcPendingDays(bookings, cancelledNC);
-      console.log('[Calendar DEBUG] cancelledNC encontradas:', cancelledNC.length, cancelledNC);
-      console.log('[Calendar DEBUG] ncPendingDays calculadas:', [...ncPendingDays]);
       this._render(cellMap, reminderMap, ncPendingDays);
 
     // ── 5. Barra de resumen superior ──
