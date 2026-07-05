@@ -84,7 +84,7 @@ export class Calendar {
       this._dateRange   = this._buildDateRange(this._windowStart, this._visibleDays);
       this._updateTitle();
 
-      const [bookings, reminders, cancelledNC] = await Promise.all([
+      const [bookings, reminders, cancelledNC, lastCheckoutByUnit] = await Promise.all([
         this._fetchBookings(this._windowStart, lastISO),
         this._fetchReminders(this._windowStart, lastISO).catch(err => {
           console.warn('[Calendar] reminders fetch failed:', err?.message ?? err);
@@ -94,13 +94,17 @@ export class Calendar {
           console.warn('[Calendar] cancelledNC fetch failed:', err?.message ?? err);
           return [];
         }),
+        this._fetchLastCheckoutByUnit().catch(err => {
+          console.warn('[Calendar] lastCheckoutByUnit fetch failed:', err?.message ?? err);
+          return new Map();
+        }),
       ]);
 
       this._lastRenderedBookings = bookings;
       const cellMap     = this._buildCellMap(bookings);
       const reminderMap = this._buildReminderMap(reminders);
       const ncPendingDays = this._buildNcPendingDays(bookings, cancelledNC);
-      this._render(cellMap, reminderMap, ncPendingDays);
+      this._render(cellMap, reminderMap, ncPendingDays, lastCheckoutByUnit);
 
     // ── 5. Barra de resumen superior ──
     this._renderSummaryBar(bookings);
@@ -209,6 +213,29 @@ export class Calendar {
   // Reservas canceladas ("No vino" / Reprogramar) que dejaron una Nota de
   // Crédito todavía sin usar ni anular — mismo tag 🔄NC:<monto>:<fecha>
   // que usan guests.js y mila-data.js.
+  // Para cada unidad, la fecha de checkout más reciente hasta hoy — se usa
+  // para el tooltip "hace cuántos días no se alquila" en celdas vacías.
+  // Se trae todo de una vez (no una consulta por unidad) y se reduce acá.
+  async _fetchLastCheckoutByUnit() {
+    const today = localToday();
+    const { data, error } = await this.db
+      .from('bookings')
+      .select('check_out, booking_units(unit_id)')
+      .eq('hotel_id', this.ctx.hotelId)
+      .not('status', 'in', '(cancelled,blocked)')
+      .lte('check_out', today);
+    if (error) { console.warn('[Calendar] lastCheckoutByUnit error:', error.message); return new Map(); }
+
+    const lastByUnit = new Map(); // unitId -> fecha (string) más reciente
+    (data ?? []).forEach(b => {
+      (b.booking_units ?? []).forEach(bu => {
+        const prev = lastByUnit.get(bu.unit_id);
+        if (!prev || b.check_out > prev) lastByUnit.set(bu.unit_id, b.check_out);
+      });
+    });
+    return lastByUnit;
+  }
+
   async _fetchCancelledWithOpenNC(firstDay, lastDay) {
     // Antes filtraba por notas ('%🔄NC:%') directo en la consulta — daba
     // 0 resultados siempre, aunque la reserva sí tuviera el tag guardado.
@@ -321,7 +348,7 @@ export class Calendar {
   // ══════════════════════════════════════════════════
   // RENDERIZADO PRINCIPAL
   // ══════════════════════════════════════════════════
-  _render(cellMap, reminderMap, ncPendingDays = new Map()) {
+  _render(cellMap, reminderMap, ncPendingDays = new Map(), lastCheckoutByUnit = new Map()) {
     const grid    = document.getElementById('calendar-grid');
     const today   = localToday();
     const isMob   = window.innerWidth <= 768;
@@ -498,6 +525,19 @@ export class Calendar {
             const guestName = ncPendingDays.get(`${unit.id}|${iso}`);
             this._renderNcPendingBar(cell, guestName);
             cell.title = `🔄 Noche de una nota de crédito${guestName ? ` de ${guestName}` : ''} sin usar — todavía se puede reservar`;
+          } else if (iso <= today) {
+            // "Hace cuántos días no se alquila" — solo tiene sentido para
+            // hoy/pasado (a futuro todavía no pasó nada que contar). Si la
+            // celda ya tenía un título (ej: "Vacaciones de Invierno"), NO
+            // se lo pisa — se combinan los dos, para no tapar esa info.
+            const lastCo = lastCheckoutByUnit.get(unit.id);
+            if (lastCo && lastCo <= iso) {
+              const daysVacant = this._dayDiff(lastCo, iso);
+              if (daysVacant > 0) {
+                const vacantMsg = `#${_unitNum} sin alquilar hace ${daysVacant} día${daysVacant !== 1 ? 's' : ''}`;
+                cell.title = cell.title ? `${cell.title} · ${vacantMsg}` : vacantMsg;
+              }
+            }
           }
           this._bindEmptyCell(cell, unit.id, iso);
         } else if (bookings.length === 1) {
