@@ -80,10 +80,10 @@ async function _fetchLocationForecast(loc) {
  * puntual no avisa ese día, en silencio, sin afectar a la otra.
  */
 let _weatherRunning = false;
-export async function checkTodayWeather() {
+export async function checkTodayWeather(force = false) {
   if (_weatherRunning) return; // ya está corriendo — evita duplicar si se llama 2 veces seguidas
   const todayISO = new Date().toISOString().slice(0, 10);
-  if (localStorage.getItem(LASTRUN_KEY) === todayISO) return; // ya se avisó hoy
+  if (!force && localStorage.getItem(LASTRUN_KEY) === todayISO) return; // ya se avisó hoy (salvo que sea forzado)
   _weatherRunning = true;
 
   try {
