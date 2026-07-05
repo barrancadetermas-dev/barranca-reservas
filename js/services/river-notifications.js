@@ -72,7 +72,10 @@ export async function checkRiverLevel() {
   }
 }
 
+let _riverInitialized = false;
 export function initRiverNotifications() {
+  if (_riverInitialized) return; // ya está corriendo — evita duplicar el temporizador
+  _riverInitialized = true;
   checkRiverLevel();
   setInterval(checkRiverLevel, CHECK_INTERVAL_MS);
 }

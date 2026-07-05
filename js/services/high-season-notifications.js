@@ -76,11 +76,13 @@ async function _getOccupancyPct(supabase, hotelId, start, end, totalUnits) {
   return Math.round((avgOccupied / totalUnits) * 100);
 }
 
+let _running = false;
 export async function checkHighSeasonOccupancy(supabase, hotelId, totalUnits) {
-  if (!supabase || !hotelId || !totalUnits) return;
+  if (!supabase || !hotelId || !totalUnits || _running) return;
   const now = Date.now();
   const lastRun = parseInt(localStorage.getItem(LASTRUN_KEY) ?? '0', 10);
   if (now - lastRun < CHECK_INTERVAL_MS) return;
+  _running = true;
 
   let notified = [];
   try { notified = JSON.parse(localStorage.getItem(NOTIFIED_KEY) ?? '[]'); } catch { notified = []; }
@@ -113,4 +115,5 @@ export async function checkHighSeasonOccupancy(supabase, hotelId, totalUnits) {
 
   try { localStorage.setItem(NOTIFIED_KEY, JSON.stringify(notified.slice(-30))); } catch {}
   localStorage.setItem(LASTRUN_KEY, String(now));
+  _running = false;
 }

@@ -12,11 +12,13 @@
 import { addNotification } from './notification-center.js';
 
 const LASTRUN_KEY = 'mila_reservas_notif_lastrun';
+let _running = false;
 
 export async function checkTomorrowArrivalsWithoutDeposit(supabase, hotelId) {
-  if (!supabase || !hotelId) return;
+  if (!supabase || !hotelId || _running) return;
   const todayISO = new Date().toISOString().slice(0, 10);
   if (localStorage.getItem(LASTRUN_KEY) === todayISO) return; // ya se revisó hoy
+  _running = true;
 
   try {
     const tomorrow = new Date();
@@ -47,5 +49,7 @@ export async function checkTomorrowArrivalsWithoutDeposit(supabase, hotelId) {
     localStorage.setItem(LASTRUN_KEY, todayISO);
   } catch (err) {
     console.warn('[Reservas] no se pudo revisar llegadas de mañana:', err?.message ?? err);
+  } finally {
+    _running = false;
   }
 }

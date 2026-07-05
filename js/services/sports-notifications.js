@@ -151,11 +151,13 @@ async function _pollLiveScores() {
  * además, revisa si hay partido HOY — si lo hay, prende el sondeo cada
  * 3 minutos automáticamente mientras dure la sesión abierta.
  */
+let _sportsInitialized = false;
 export function initSportsNotifications() {
+  if (_sportsInitialized) return; // ya está corriendo — evita duplicar el temporizador
+  _sportsInitialized = true;
   checkSportsSummary();
   setInterval(checkSportsSummary, SUMMARY_INTERVAL_MS);
 
-  if (_liveTimer) return; // ya está corriendo
   _pollLiveScores(); // primer chequeo ya mismo
   _liveTimer = setInterval(_pollLiveScores, LIVE_POLL_MS);
 }

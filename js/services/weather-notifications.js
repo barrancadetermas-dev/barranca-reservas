@@ -65,27 +65,34 @@ async function _fetchLocationWeather(loc) {
  * internet, servicio caído, etc.) no rompe nada — esa ubicación
  * puntual no avisa ese día, en silencio, sin afectar a la otra.
  */
+let _weatherRunning = false;
 export async function checkTodayWeather() {
+  if (_weatherRunning) return; // ya está corriendo — evita duplicar si se llama 2 veces seguidas
   const todayISO = new Date().toISOString().slice(0, 10);
   if (localStorage.getItem(LASTRUN_KEY) === todayISO) return; // ya se avisó hoy
+  _weatherRunning = true;
 
-  let anySucceeded = false;
-  for (const loc of LOCATIONS) {
-    try {
-      const { icon, message, data } = await _fetchLocationWeather(loc);
-      addNotification({
-        type: 'weather_today',
-        category: 'clima',
-        icon,
-        color: '#0EA5E9',
-        title: `Clima de hoy — ${loc.label}`,
-        message,
-        data: { location: loc.key, ...data },
-      });
-      anySucceeded = true;
-    } catch (err) {
-      console.warn(`[Weather] no se pudo obtener el clima de ${loc.label}:`, err?.message ?? err);
+  try {
+    let anySucceeded = false;
+    for (const loc of LOCATIONS) {
+      try {
+        const { icon, message, data } = await _fetchLocationWeather(loc);
+        addNotification({
+          type: 'weather_today',
+          category: 'clima',
+          icon,
+          color: '#0EA5E9',
+          title: `Clima de hoy — ${loc.label}`,
+          message,
+          data: { location: loc.key, ...data },
+        });
+        anySucceeded = true;
+      } catch (err) {
+        console.warn(`[Weather] no se pudo obtener el clima de ${loc.label}:`, err?.message ?? err);
+      }
     }
+    if (anySucceeded) localStorage.setItem(LASTRUN_KEY, todayISO);
+  } finally {
+    _weatherRunning = false;
   }
-  if (anySucceeded) localStorage.setItem(LASTRUN_KEY, todayISO);
 }

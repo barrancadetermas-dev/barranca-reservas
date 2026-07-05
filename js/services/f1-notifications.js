@@ -145,11 +145,13 @@ async function _checkSessionAndToggleLivePolling() {
  * hay, prende el seguimiento de posición cada 2 minutos automáticamente
  * mientras dure, y lo apaga solo cuando termina.
  */
+let _f1Initialized = false;
 export function initF1Notifications() {
+  if (_f1Initialized) return; // ya está corriendo — evita duplicar el temporizador
+  _f1Initialized = true;
   checkF1Summary();
   setInterval(checkF1Summary, SUMMARY_INTERVAL_MS);
 
-  if (_sessionCheckTimer) return; // ya está corriendo
   _checkSessionAndToggleLivePolling();
   _sessionCheckTimer = setInterval(_checkSessionAndToggleLivePolling, SESSION_CHECK_MS);
 }
