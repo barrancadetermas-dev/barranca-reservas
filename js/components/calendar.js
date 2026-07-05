@@ -525,11 +525,13 @@ export class Calendar {
             const guestName = ncPendingDays.get(`${unit.id}|${iso}`);
             this._renderNcPendingBar(cell, guestName);
             cell.title = `🔄 Noche de una nota de crédito${guestName ? ` de ${guestName}` : ''} sin usar — todavía se puede reservar`;
-          } else if (iso <= today) {
-            // "Hace cuántos días no se alquila" — solo tiene sentido para
-            // hoy/pasado (a futuro todavía no pasó nada que contar). Si la
-            // celda ya tenía un título (ej: "Vacaciones de Invierno"), NO
-            // se lo pisa — se combinan los dos, para no tapar esa info.
+          } else {
+            // "Hace cuántos días no se alquila", contado desde el último
+            // checkout de esa unidad hasta ESTA celda (sea pasada, hoy, o
+            // futura — si estás por cargar una reserva en agosto, te sirve
+            // saber que esa unidad viene sin moverse desde tal fecha). Si
+            // la celda ya tenía un título (ej: "Vacaciones de Invierno"),
+            // NO se lo pisa — se combinan los dos, para no tapar esa info.
             const lastCo = lastCheckoutByUnit.get(unit.id);
             if (lastCo && lastCo <= iso) {
               const daysVacant = this._dayDiff(lastCo, iso);
