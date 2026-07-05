@@ -10,6 +10,9 @@ import { checkUpcomingHolidays } from './services/holiday-notifications.js';
 import { checkTodayWeather } from './services/weather-notifications.js';
 import { initSportsNotifications } from './services/sports-notifications.js';
 import { initF1Notifications } from './services/f1-notifications.js';
+import { initSystemNotifications } from './services/system-notifications.js';
+import { checkTomorrowArrivalsWithoutDeposit } from './services/reservas-notifications.js';
+import { initRiverNotifications } from './services/river-notifications.js';
 import { initMilaEventNotifications } from './services/mila-event-notifications.js';
 import { initEventEngine } from './services/event-engine.js';
 // ═══════════════════════════════════════════════════
@@ -280,6 +283,9 @@ async function initApp(user) {
     checkTodayWeather();
     initSportsNotifications();
     initF1Notifications();
+    initSystemNotifications();
+    checkTomorrowArrivalsWithoutDeposit(supabase, AppContext.hotelId);
+    initRiverNotifications();
     initEventEngine(supabase, AppContext.hotelId);
 
     // ── Cargar rol del usuario ──

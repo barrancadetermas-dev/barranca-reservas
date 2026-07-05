@@ -26,6 +26,7 @@ const CATEGORY_BG = {
   clima:         '#FFF3C4', // amarillo pastel
   economia:      '#D6F5DD', // verde pastel
   feriados:      '#E8DDFF', // lila pastel
+  rio:           '#CFF4F0', // turquesa pastel
   sistema:       '#E5E7EB', // gris pastel
 };
 const CATEGORY_BG_DARK = {
@@ -37,6 +38,7 @@ const CATEGORY_BG_DARK = {
   clima:         'rgba(250,204,21,.16)',
   economia:      'rgba(74,222,128,.16)',
   feriados:      'rgba(196,181,253,.16)',
+  rio:           'rgba(45,212,191,.16)',
   sistema:       'rgba(148,163,184,.16)',
 };
 

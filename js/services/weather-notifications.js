@@ -6,15 +6,20 @@
 //
 // Corre una vez por día (mismo criterio que feriados y
 // el recordatorio automático de saldo pendiente).
+//
+// Cubre 2 ubicaciones fijas (San José/Colón y Rosario) —
+// cada notificación aclara de qué ciudad es, para no
+// confundirse cuando estás viajando entre las dos.
 // ═══════════════════════════════════════════════════
 
 import { addNotification } from './notification-center.js';
 
 const LASTRUN_KEY = 'mila_weather_notif_lastrun';
 
-// San José, Colón, Entre Ríos (ubicación de Barranca de Termas)
-const LAT = -32.2124;
-const LON = -58.2191;
+const LOCATIONS = [
+  { key: 'colon',   label: 'SAN JOSÉ (COLÓN) | ENTRE RÍOS', lat: -32.2124, lon: -58.2191 },
+  { key: 'rosario', label: 'ROSARIO | SANTA FE',            lat: -32.9468, lon: -60.6393 },
+];
 
 // Códigos de clima (estándar WMO, los mismos que usa Open-Meteo)
 const WEATHER_CODES = {
@@ -31,49 +36,56 @@ function _describeCode(code) {
   return WEATHER_CODES[code] ?? ['🌡️', 'Sin datos'];
 }
 
+async function _fetchLocationWeather(loc) {
+  const url = `https://api.open-meteo.com/v1/forecast?latitude=${loc.lat}&longitude=${loc.lon}` +
+    `&current=temperature_2m,weather_code` +
+    `&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max` +
+    `&timezone=America%2FArgentina%2FBuenos_Aires`;
+
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const data = await res.json();
+
+  const tempNow = Math.round(data.current?.temperature_2m ?? 0);
+  const code    = data.current?.weather_code;
+  const [icon, label] = _describeCode(code);
+  const tMax     = Math.round(data.daily?.temperature_2m_max?.[0] ?? tempNow);
+  const tMin     = Math.round(data.daily?.temperature_2m_min?.[0] ?? tempNow);
+  const rainProb = data.daily?.precipitation_probability_max?.[0];
+
+  let message = `📍 ${loc.label}\n${label} · ${tempNow}°C ahora (mín ${tMin}° / máx ${tMax}°)`;
+  if (rainProb != null && rainProb >= 40) message += `\n☔ ${rainProb}% de probabilidad de lluvia`;
+
+  return { icon, message, data: { code, tempNow, tMax, tMin, rainProb } };
+}
+
 /**
- * Trae el clima de hoy desde Open-Meteo y genera una notificación una
- * vez por día. Si falla (sin internet, servicio caído, etc.) no rompe
- * nada — solo no avisa ese día, en silencio.
+ * Trae el clima de hoy de las 2 ubicaciones fijas y genera una
+ * notificación por cada una, una vez por día. Si alguna falla (sin
+ * internet, servicio caído, etc.) no rompe nada — esa ubicación
+ * puntual no avisa ese día, en silencio, sin afectar a la otra.
  */
 export async function checkTodayWeather() {
   const todayISO = new Date().toISOString().slice(0, 10);
   if (localStorage.getItem(LASTRUN_KEY) === todayISO) return; // ya se avisó hoy
 
-  try {
-    const url = `https://api.open-meteo.com/v1/forecast?latitude=${LAT}&longitude=${LON}` +
-      `&current=temperature_2m,weather_code` +
-      `&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max` +
-      `&timezone=America%2FArgentina%2FBuenos_Aires`;
-
-    const res = await fetch(url);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
-
-    const tempNow   = Math.round(data.current?.temperature_2m ?? 0);
-    const code      = data.current?.weather_code;
-    const [icon, label] = _describeCode(code);
-    const tMax      = Math.round(data.daily?.temperature_2m_max?.[0] ?? tempNow);
-    const tMin      = Math.round(data.daily?.temperature_2m_min?.[0] ?? tempNow);
-    const rainProb  = data.daily?.precipitation_probability_max?.[0];
-
-    let message = `${label} · ${tempNow}°C ahora (mín ${tMin}° / máx ${tMax}°)`;
-    if (rainProb != null && rainProb >= 40) message += `\n☔ ${rainProb}% de probabilidad de lluvia`;
-
-    addNotification({
-      type: 'weather_today',
-      category: 'clima',
-      icon,
-      color: '#0EA5E9',
-      title: 'Clima de hoy',
-      message,
-      data: { code, tempNow, tMax, tMin, rainProb },
-    });
-
-    localStorage.setItem(LASTRUN_KEY, todayISO);
-  } catch (err) {
-    console.warn('[Weather] no se pudo obtener el clima:', err?.message ?? err);
-    // No guardamos LASTRUN_KEY si falló — así reintenta la próxima vez
-    // que se abra la app, en vez de quedarse sin avisar todo el día.
+  let anySucceeded = false;
+  for (const loc of LOCATIONS) {
+    try {
+      const { icon, message, data } = await _fetchLocationWeather(loc);
+      addNotification({
+        type: 'weather_today',
+        category: 'clima',
+        icon,
+        color: '#0EA5E9',
+        title: `Clima de hoy — ${loc.label}`,
+        message,
+        data: { location: loc.key, ...data },
+      });
+      anySucceeded = true;
+    } catch (err) {
+      console.warn(`[Weather] no se pudo obtener el clima de ${loc.label}:`, err?.message ?? err);
+    }
   }
+  if (anySucceeded) localStorage.setItem(LASTRUN_KEY, todayISO);
 }

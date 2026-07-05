@@ -33,8 +33,9 @@ const LIVE_SCORE_KEY = 'mila_sports_live_scores'; // último marcador visto por 
 const API_KEY = '123'; // clave de prueba pública de TheSportsDB — no es nuestra, es compartida
 
 const TEAMS = [
-  { id: '134509', name: 'Selección Argentina', icon: '🇦🇷' },
-  { id: '135171', name: 'River Plate',          icon: '🔴⚪' },
+  { id: '134509', name: 'Selección Argentina (Fútbol)', icon: '🇦🇷' },
+  { id: '135171', name: 'River Plate',                  icon: '🔴⚪' },
+  { id: '136736', name: 'Selección Argentina (Básquet)', icon: '🏀' },
 ];
 
 let _liveTimer = null;

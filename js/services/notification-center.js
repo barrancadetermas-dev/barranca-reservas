@@ -24,6 +24,7 @@ export const CATEGORIES = {
   clima:         { label: '🌤️ Clima',                  togglable: true },
   economia:      { label: '💵 Economía',               togglable: true },
   feriados:      { label: '📅 Feriados',                togglable: true },
+  rio:           { label: '🌊 Río Uruguay',             togglable: true },
   sistema:       { label: '⚙️ Sistema',                 togglable: false },
 };
 
