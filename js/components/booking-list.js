@@ -603,7 +603,7 @@ export class BookingList {
     const nights   = b.nights ?? Math.round((new Date(b.check_out) - new Date(b.check_in)) / 86400000);
 
     return `
-      <div class="booking-row ${isBad ? 'booking-row-bad' : ''}" data-booking-id="${b.id}"
+      <div class="booking-row ${isBad ? 'booking-row-bad' : ''} ${b.status === 'cancelled' ? 'booking-row-cancelled' : ''}" data-booking-id="${b.id}"
            style="cursor:pointer">
         <div class="booking-row-accent" style="background:${accentBg}" title="${units.map(bu => bu.units?.name).filter(Boolean).join(' · ') || barLabel}"></div>
         <div class="booking-row-body">

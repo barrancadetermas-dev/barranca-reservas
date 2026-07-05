@@ -5472,6 +5472,28 @@ select.field-error {
 }
 .booking-row:last-child { border-bottom: none; }
 .booking-row:hover { background: var(--color-surface-2); box-shadow: inset 0 0 0 1px var(--color-border); }
+/* Reserva cancelada — mismo lenguaje visual (rayas diagonales tenues) que
+   ya usamos en el calendario para "noches de una NC sin usar". Muy sutil
+   a propósito — es solo una pista visual de "esto quedó tachado", no debe
+   competir con el resto de la info de la fila. */
+.booking-row-cancelled {
+  background: repeating-linear-gradient(
+    135deg,
+    rgba(148, 163, 184, .07),
+    rgba(148, 163, 184, .07) 6px,
+    transparent 6px,
+    transparent 12px
+  );
+}
+.booking-row-cancelled:hover {
+  background: repeating-linear-gradient(
+    135deg,
+    rgba(148, 163, 184, .12),
+    rgba(148, 163, 184, .12) 6px,
+    var(--color-surface-2) 6px,
+    var(--color-surface-2) 12px
+  );
+}
 .bl-row-main { display:grid; grid-template-columns:2fr 160px 180px 120px auto; align-items:start; padding:10px 14px; min-height:54px; }
 .bl-unit-chips-grid { display:grid; grid-template-columns:repeat(2, auto); gap:3px 6px; margin-top:2px; }
 .bl-col-guest { display:flex; align-items:center; gap:10px; min-width:0; padding-right:8px; }
