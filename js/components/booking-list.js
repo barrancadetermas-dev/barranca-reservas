@@ -620,17 +620,31 @@ export class BookingList {
               <span class="bl-nights">${nights} ${nights === 1 ? 'noche' : 'noches'}</span>
             </div>
             <div class="bl-col-amount">
-              <div class="bl-amount-total">${formatARS(b.total_amount)}</div>
-              ${b.total_paid > 0 && b.balance > 0
-                ? `<div class="bl-amount-breakdown">
-                    <span class="bl-paid">−${formatARS(b.total_paid)}</span>
-                    <span class="bl-sep">=</span>
-                    <span class="bl-balance">${formatARS(b.balance)}</span>
-                   </div>`
-                : b.balance <= 0
-                  ? `<div class="bl-amount-paid">✓ Pagado</div>`
-                  : ''
-              }
+              ${(() => {
+                const ncMatch = b.status === 'cancelled' ? b.notes?.match(/🔄NC:(\d+):/) : null;
+                const ncUsed  = b.notes?.includes('✅NCUSED') || b.notes?.includes('❌NCVOID');
+                if (ncMatch && !ncUsed) {
+                  const ncAmount = parseInt(ncMatch[1]);
+                  return `
+                    <div class="bl-amount-total" style="text-decoration:line-through;opacity:.45">${formatARS(b.total_amount)}</div>
+                    <div class="bl-amount-breakdown" style="opacity:.45">
+                      <span class="bl-balance" style="text-decoration:line-through">${formatARS(b.balance)}</span>
+                    </div>
+                    <div style="font-size:.78rem;font-weight:700;color:#7c3aed;margin-top:2px">🔄 NC ${formatARS(ncAmount)}</div>`;
+                }
+                return `
+                  <div class="bl-amount-total">${formatARS(b.total_amount)}</div>
+                  ${b.total_paid > 0 && b.balance > 0
+                    ? `<div class="bl-amount-breakdown">
+                        <span class="bl-paid">−${formatARS(b.total_paid)}</span>
+                        <span class="bl-sep">=</span>
+                        <span class="bl-balance">${formatARS(b.balance)}</span>
+                       </div>`
+                    : b.balance <= 0
+                      ? `<div class="bl-amount-paid">✓ Pagado</div>`
+                      : ''
+                  }`;
+              })()}
             </div>
             <div class="bl-col-status">
               <span class="status-badge ${statusCls}">${statusLbl}</span>

@@ -218,7 +218,7 @@ export class Calendar {
     // en fetchNotasCreditoAbiertas() (mila-data.js).
     const { data, error } = await this.db
       .from('bookings')
-      .select('id, check_in, check_out, notes, booking_units(unit_id)')
+      .select('id, check_in, check_out, notes, booking_units(unit_id), guests!bookings_guest_id_fkey(first_name, last_name)')
       .eq('hotel_id', this.ctx.hotelId)
       .eq('status', 'cancelled')
       .lte('check_in', lastDay)
@@ -235,16 +235,17 @@ export class Calendar {
   // "pendiente de NC" (se pinta marrón) — apenas alguien reserva esas
   // fechas, deja de marcarse solo, porque ya hay una reserva real ahí.
   _buildNcPendingDays(activeBookings, cancelledNC) {
-    const pending = new Set(); // `${unitId}|${iso}`
+    const pending = new Map(); // `${unitId}|${iso}` -> nombre del huésped
     cancelledNC.forEach(cb => {
       const unitIds = (cb.booking_units ?? []).map(bu => bu.unit_id);
+      const guestName = cb.guests ? `${cb.guests.first_name ?? ''} ${cb.guests.last_name ?? ''}`.trim() : '';
       for (let d = cb.check_in; d < cb.check_out; d = this._addDays(d, 1)) {
         unitIds.forEach(unitId => {
           const covered = activeBookings.some(b =>
             b.check_in <= d && b.check_out > d &&
             (b.booking_units ?? []).some(bu => bu.unit_id === unitId)
           );
-          if (!covered) pending.add(`${unitId}|${d}`);
+          if (!covered) pending.set(`${unitId}|${d}`, guestName);
         });
       }
     });
@@ -320,7 +321,7 @@ export class Calendar {
   // ══════════════════════════════════════════════════
   // RENDERIZADO PRINCIPAL
   // ══════════════════════════════════════════════════
-  _render(cellMap, reminderMap, ncPendingDays = new Set()) {
+  _render(cellMap, reminderMap, ncPendingDays = new Map()) {
     const grid    = document.getElementById('calendar-grid');
     const today   = localToday();
     const isMob   = window.innerWidth <= 768;
@@ -489,13 +490,14 @@ export class Calendar {
           // Noche que pertenecía a una reserva cancelada con Nota de
           // Crédito todavía sin usar, y que nadie volvió a reservar — se
           // muestra como una barra más (mismo peso visual que una reserva
-          // real), en marrón apagado, para que se note de un vistazo sin
+          // real), en gris apagado, para que se note de un vistazo sin
           // tener que pasar el mouse. Apenas otra reserva ocupe este día,
           // deja de calcularse como pendiente (se lo "pisa" la reserva
           // nueva, como corresponde).
           if (ncPendingDays.has(`${unit.id}|${iso}`)) {
-            this._renderNcPendingBar(cell);
-            cell.title = '🔄 Noche de una nota de crédito sin usar — todavía se puede reservar';
+            const guestName = ncPendingDays.get(`${unit.id}|${iso}`);
+            this._renderNcPendingBar(cell, guestName);
+            cell.title = `🔄 Noche de una nota de crédito${guestName ? ` de ${guestName}` : ''} sin usar — todavía se puede reservar`;
           }
           this._bindEmptyCell(cell, unit.id, iso);
         } else if (bookings.length === 1) {
@@ -551,21 +553,21 @@ export class Calendar {
   // con Nota de Crédito sin usar — mismo peso visual que una barra real
   // (se nota de un vistazo, sin pasar el mouse), pero en marrón apagado y
   // con rayas, para que se distinga claramente de una ocupación real.
-  _renderNcPendingBar(cell) {
+  _renderNcPendingBar(cell, guestName) {
     const bar = document.createElement('div');
     bar.className = 'nc-pending-bar';
     bar.style.cssText = `
       position:absolute;top:6px;bottom:6px;left:4px;right:4px;
       border-radius:6px;
       background:repeating-linear-gradient(135deg,
-        rgba(146,92,43,.55), rgba(146,92,43,.55) 6px,
-        rgba(146,92,43,.32) 6px, rgba(146,92,43,.32) 12px);
-      border:1px dashed rgba(146,92,43,.6);
+        rgba(148,163,184,.35), rgba(148,163,184,.35) 6px,
+        rgba(148,163,184,.18) 6px, rgba(148,163,184,.18) 12px);
+      border:1px dashed rgba(148,163,184,.45);
       z-index:2;
       display:flex;align-items:center;justify-content:center;
       font-size:.72rem;pointer-events:none;
     `;
-    bar.innerHTML = '<span style="opacity:.75">🔄</span>';
+    bar.innerHTML = '<span style="opacity:.7">🔄</span>';
     cell.appendChild(bar);
   }
 
