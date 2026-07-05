@@ -24,6 +24,7 @@
 // ═══════════════════════════════════════════════════
 
 import { addNotification } from './notification-center.js';
+import { Bus, EVENTS } from './event-bus.js';
 
 const SUMMARY_INTERVAL_MS = 4 * 60 * 60 * 1000;  // 4 horas
 const LIVE_POLL_MS         = 3 * 60 * 1000;       // 3 minutos, solo si hay partido hoy
@@ -33,9 +34,9 @@ const LIVE_SCORE_KEY = 'mila_sports_live_scores'; // último marcador visto por 
 const API_KEY = '123'; // clave de prueba pública de TheSportsDB — no es nuestra, es compartida
 
 const TEAMS = [
-  { id: '134509', name: 'Selección Argentina (Fútbol)', icon: '🇦🇷' },
-  { id: '135171', name: 'River Plate',                  icon: '🔴⚪' },
-  { id: '136736', name: 'Selección Argentina (Básquet)', icon: '🏀' },
+  { id: '134509', name: 'Selección Argentina (Fútbol)', icon: '🇦🇷', confetti: ['#75AADB', '#FFFFFF'] },
+  { id: '135171', name: 'River Plate',                  icon: '🔴⚪', confetti: ['#DC2626', '#FFFFFF'] },
+  { id: '136736', name: 'Selección Argentina (Básquet)', icon: '🏀', confetti: ['#75AADB', '#FFFFFF'] },
 ];
 
 let _liveTimer = null;
@@ -87,6 +88,29 @@ export async function checkSportsSummary() {
   if (anySucceeded) localStorage.setItem(LASTRUN_KEY, String(now));
 }
 
+// Intenta traer quién hizo el gol y en qué minuto — endpoint gratis
+// (con límite bajo, por eso solo se llama cuando YA se detectó que hubo
+// un gol, no en cada sondeo). Si no hay datos disponibles (pasa seguido
+// con partidos amistosos o ligas menos cubiertas), se devuelve null y
+// el mensaje sigue funcionando igual, solo sin el nombre del goleador.
+async function _fetchLastScorer(eventId) {
+  try {
+    const res = await fetch(`https://www.thesportsdb.com/api/v1/json/123/lookuptimeline.php?id=${eventId}`);
+    if (!res.ok) return null;
+    const data = await res.json();
+    const timeline = data?.timeline ?? [];
+    const goals = timeline.filter(t => (t.strTimeline ?? t.strEvent ?? '').toLowerCase().includes('goal'));
+    const lastGoal = goals[goals.length - 1];
+    if (!lastGoal) return null;
+    return {
+      player: lastGoal.strPlayer ?? null,
+      minute: lastGoal.intTime ?? lastGoal.strTime ?? null,
+    };
+  } catch {
+    return null;
+  }
+}
+
 // ── Seguimiento casi en vivo — solo si alguno juega HOY ──
 async function _pollLiveScores() {
   const todayISO = new Date().toISOString().slice(0, 10);
@@ -102,12 +126,17 @@ async function _pollLiveScores() {
       const prevScoreStr = scores[key];
 
       if (prevScoreStr !== undefined && prevScoreStr !== newScoreStr && last.intHomeScore != null) {
+        const scorer = await _fetchLastScorer(key);
+        const detail = scorer?.player
+          ? ` (${team.icon === '🇦🇷' ? 'Arg' : team.name.slice(0, 3)}= ${scorer.player.toUpperCase()}${scorer.minute ? ` ${scorer.minute}'` : ''})`
+          : '';
         addNotification({
           type: 'sports_live', category: 'deportes_vivo', icon: '⚽', color: '#EF4444',
-          title: `¡Gol! ${team.name}`,
+          title: `¡GOOOOOOL!!! ⚽${detail}`,
           message: `${last.strHomeTeam} ${last.intHomeScore} - ${last.intAwayScore} ${last.strAwayTeam}`,
           data: { teamId: team.id, eventId: key },
         });
+        Bus.emit(EVENTS.GOAL_SCORED, { team: team.name, colors: team.confetti });
       }
       scores[key] = newScoreStr;
     } catch (err) {

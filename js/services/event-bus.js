@@ -112,6 +112,9 @@ export const EVENTS = Object.freeze({
   // Disponibilidad
   AVAILABILITY_CHANGED: 'availability:changed', // { unitName, checkIn, checkOut }
 
+  // Deportes
+  GOAL_SCORED:         'sports:goal_scored', // { team: 'river'|'argentina', colors: [...] }
+
   // Navegación
   SECTION_CHANGED:     'section:changed',      // { section }
 

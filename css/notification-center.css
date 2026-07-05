@@ -7,25 +7,7 @@
    ═══════════════════════════════════════════════════ */
 
 /* ── Campana en el header ─────────────────────────── */
-.notifcenter-bell-wrap { display: inline-flex; align-items: center; margin-right: 4px; }
-.notifcenter-bell-btn {
-  position: relative;
-  display: flex; align-items: center; justify-content: center;
-  width: 36px; height: 36px;
-  border-radius: 10px;
-  border: 1px solid var(--color-border);
-  background: var(--color-surface);
-  color: var(--color-text-2);
-  cursor: pointer;
-  transition: background .15s ease, transform .15s ease, border-color .15s ease;
-}
-.notifcenter-bell-btn:hover {
-  background: var(--color-surface-2);
-  border-color: var(--color-primary);
-  color: var(--color-primary);
-  transform: translateY(-1px);
-}
-.notifcenter-bell-btn:active { transform: translateY(0) scale(.96); }
+.notifcenter-bell-wrap { display: inline-flex; align-items: center; }
 .notifcenter-badge {
   position: absolute; top: -4px; right: -4px;
   min-width: 17px; height: 17px; padding: 0 4px;
@@ -103,6 +85,14 @@
   padding: 7px 0; font-size: .82rem; color: var(--color-text-2); cursor: pointer;
 }
 .notifcenter-cat-row.locked { opacity: .55; cursor: default; }
+.notifcenter-live-check {
+  display: flex; align-items: center; gap: 4px;
+  font-size: .7rem; color: var(--color-text-3); cursor: pointer;
+  padding: 3px 7px; border-radius: 999px; border: 1px solid var(--color-border);
+  white-space: nowrap;
+}
+.notifcenter-live-check input { width: 12px; height: 12px; accent-color: #ef4444; cursor: pointer; }
+.notifcenter-live-check:hover { border-color: #ef4444; color: var(--color-text-2); }
 .notifcenter-toggle { position: relative; display: inline-block; width: 36px; height: 20px; flex-shrink: 0; }
 .notifcenter-toggle input { opacity: 0; width: 0; height: 0; }
 .notifcenter-toggle-slider {

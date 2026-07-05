@@ -18,28 +18,28 @@ import {
 // Colores pastel de fondo por categoría, para distinguir de un vistazo
 // en el historial (ej: economía verde, clima amarillo).
 const CATEGORY_BG = {
-  reservas:      '#DBEAFE', // celeste pastel
-  deportes:      '#FFE4CC', // naranja pastel
-  deportes_vivo: '#FFD6D6', // rojo pastel
-  f1:            '#D6F0FF', // celeste F1 pastel
-  f1_vivo:       '#FFD6D6', // rojo pastel
-  clima:         '#FFF3C4', // amarillo pastel
-  economia:      '#D6F5DD', // verde pastel
-  feriados:      '#E8DDFF', // lila pastel
-  rio:           '#CFF4F0', // turquesa pastel
-  sistema:       '#E5E7EB', // gris pastel
+  reservas:      'rgba(59,130,246,.07)',  // celeste apenas
+  deportes:      'rgba(249,115,22,.07)',  // naranja apenas
+  deportes_vivo: 'rgba(239,68,68,.07)',   // rojo apenas
+  f1:            'rgba(14,165,233,.07)',  // celeste F1 apenas
+  f1_vivo:       'rgba(239,68,68,.07)',   // rojo apenas
+  clima:         'rgba(234,179,8,.07)',   // amarillo apenas
+  economia:      'rgba(34,197,94,.07)',   // verde apenas
+  feriados:      'rgba(168,85,247,.07)',  // lila apenas
+  rio:           'rgba(20,184,166,.07)',  // turquesa apenas
+  sistema:       'rgba(107,114,128,.07)', // gris apenas
 };
 const CATEGORY_BG_DARK = {
-  reservas:      'rgba(96,165,250,.16)',
-  deportes:      'rgba(251,146,60,.16)',
-  deportes_vivo: 'rgba(248,113,113,.16)',
-  f1:            'rgba(56,189,248,.16)',
-  f1_vivo:       'rgba(248,113,113,.16)',
-  clima:         'rgba(250,204,21,.16)',
-  economia:      'rgba(74,222,128,.16)',
-  feriados:      'rgba(196,181,253,.16)',
-  rio:           'rgba(45,212,191,.16)',
-  sistema:       'rgba(148,163,184,.16)',
+  reservas:      'rgba(96,165,250,.09)',
+  deportes:      'rgba(251,146,60,.09)',
+  deportes_vivo: 'rgba(248,113,113,.09)',
+  f1:            'rgba(56,189,248,.09)',
+  f1_vivo:       'rgba(248,113,113,.09)',
+  clima:         'rgba(250,204,21,.09)',
+  economia:      'rgba(74,222,128,.09)',
+  feriados:      'rgba(196,181,253,.09)',
+  rio:           'rgba(45,212,191,.09)',
+  sistema:       'rgba(148,163,184,.09)',
 };
 
 let _panelOpen = false;
@@ -99,14 +99,26 @@ function _renderCategoryToggles() {
   const wrap = document.getElementById('notifcenter-categories');
   if (!wrap) return;
   const prefs = getCategoryPrefs();
-  wrap.innerHTML = Object.entries(CATEGORIES).map(([key, cat]) => `
-    <label class="notifcenter-cat-row ${cat.togglable === false ? 'locked' : ''}">
-      <span>${cat.label}</span>
-      <span class="notifcenter-toggle">
-        <input type="checkbox" data-cat="${key}" ${prefs[key] !== false ? 'checked' : ''} ${cat.togglable === false ? 'disabled' : ''}>
-        <span class="notifcenter-toggle-slider"></span>
-      </span>
-    </label>`).join('');
+  wrap.innerHTML = Object.entries(CATEGORIES)
+    .filter(([, cat]) => !cat.hidden)
+    .map(([key, cat]) => {
+      const liveHtml = cat.liveKey ? `
+        <label class="notifcenter-live-check" title="Avisos en vivo (goles, posición en pista, etc.)">
+          <input type="checkbox" data-cat="${cat.liveKey}" ${prefs[cat.liveKey] !== false ? 'checked' : ''}>
+          <span>🔴 en vivo</span>
+        </label>` : '';
+      return `
+      <div class="notifcenter-cat-row ${cat.togglable === false ? 'locked' : ''}">
+        <span>${cat.label}</span>
+        <div style="display:flex;align-items:center;gap:10px">
+          ${liveHtml}
+          <label class="notifcenter-toggle">
+            <input type="checkbox" data-cat="${key}" ${prefs[key] !== false ? 'checked' : ''} ${cat.togglable === false ? 'disabled' : ''}>
+            <span class="notifcenter-toggle-slider"></span>
+          </label>
+        </div>
+      </div>`;
+    }).join('');
 
   wrap.querySelectorAll('input[data-cat]').forEach(input => {
     input.addEventListener('change', () => setCategoryEnabled(input.dataset.cat, input.checked));
@@ -146,10 +158,11 @@ function _buildDom() {
     const bellWrap = document.createElement('div');
     bellWrap.className = 'notifcenter-bell-wrap';
     bellWrap.innerHTML = `
-      <button id="notifcenter-bell-btn" class="notifcenter-bell-btn" title="Notificaciones" aria-label="Notificaciones">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="19" height="19">
-          <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/>
-          <path d="M13.73 21a2 2 0 01-3.46 0"/>
+      <button id="notifcenter-bell-btn" class="header-icon-btn" title="Avisos" aria-label="Avisos"
+        style="display:flex;align-items:center;justify-content:center;width:34px;height:34px;border:none;background:transparent;border-radius:8px;color:var(--color-text-2,#94a3b8);cursor:pointer;flex-shrink:0;position:relative">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+          <path d="M3 11l18-5v12L3 13v-2z"/>
+          <path d="M11.6 16.8a2 2 0 11-3.2 2.4"/>
         </svg>
         <span id="notifcenter-badge" class="notifcenter-badge" style="display:none">0</span>
       </button>`;

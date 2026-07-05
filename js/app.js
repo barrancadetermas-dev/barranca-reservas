@@ -13,6 +13,7 @@ import { initF1Notifications } from './services/f1-notifications.js';
 import { initSystemNotifications } from './services/system-notifications.js';
 import { checkTomorrowArrivalsWithoutDeposit } from './services/reservas-notifications.js';
 import { initRiverNotifications } from './services/river-notifications.js';
+import { checkHighSeasonOccupancy } from './services/high-season-notifications.js';
 import { initMilaEventNotifications } from './services/mila-event-notifications.js';
 import { initEventEngine } from './services/event-engine.js';
 // ═══════════════════════════════════════════════════
@@ -286,6 +287,7 @@ async function initApp(user) {
     initSystemNotifications();
     checkTomorrowArrivalsWithoutDeposit(supabase, AppContext.hotelId);
     initRiverNotifications();
+    checkHighSeasonOccupancy(supabase, AppContext.hotelId, AppContext.units?.length);
     initEventEngine(supabase, AppContext.hotelId);
 
     // ── Cargar rol del usuario ──
@@ -418,6 +420,7 @@ async function initApp(user) {
 
     document.addEventListener('reminders:badge', (e) => updateReminderBadge(e.detail.count));
     document.addEventListener('booking:fullypaid', () => { launchConfetti(); Sound?.newBooking(); });
+    Bus.on(EVENTS.GOAL_SCORED, ({ colors } = {}) => { launchConfetti(colors); Sound?.newBooking?.(); });
     document.addEventListener('show:toast', (e) => showToast(e.detail.msg, e.detail.type));
 
     // ── Recargar la sección activa cuando cambia una reserva (debounced) ──
@@ -1355,13 +1358,12 @@ function handleReminderChange(payload) {
 // ══════════════════════════════════════════════════
 // CONFETTI
 // ══════════════════════════════════════════════════
-export function launchConfetti() {
+export function launchConfetti(colors = ['#6366F1','#34D399','#F59E0B','#FB7185','#8B5CF6','#06B6D4']) {
   const canvas = document.getElementById('confetti-canvas');
   if (!canvas) return;
   canvas.style.display = 'block';
   canvas.width = window.innerWidth; canvas.height = window.innerHeight;
   const ctx    = canvas.getContext('2d');
-  const colors = ['#6366F1','#34D399','#F59E0B','#FB7185','#8B5CF6','#06B6D4'];
   const parts  = Array.from({length:90}, () => ({
     x: Math.random()*canvas.width, y: -20 - Math.random()*120,
     vx:(Math.random()-.5)*5, vy:2.5+Math.random()*4,
