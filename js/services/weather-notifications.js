@@ -1,11 +1,14 @@
 // ═══════════════════════════════════════════════════
-// weather-notifications.js — Aviso de clima diario
+// weather-notifications.js — Pronóstico de 7 días
 // Usa Open-Meteo (open-meteo.com): API gratis de verdad,
 // sin necesidad de clave ni registro — no requiere que
 // hagas nada de tu lado, ni ahora ni en el futuro.
 //
 // Corre una vez por día (mismo criterio que feriados y
-// el recordatorio automático de saldo pendiente).
+// el recordatorio automático de saldo pendiente), pero en
+// vez de mostrar solo el clima de HOY, arma un resumen de
+// los próximos 7 días (hoy + 6 más) en una sola notificación
+// por ubicación — así con un vistazo ves toda la semana.
 //
 // Cubre 2 ubicaciones fijas (San José/Colón y Rosario) —
 // cada notificación aclara de qué ciudad es, para no
@@ -15,6 +18,7 @@
 import { addNotification } from './notification-center.js';
 
 const LASTRUN_KEY = 'mila_weather_notif_lastrun';
+const FORECAST_DAYS = 7;
 
 const LOCATIONS = [
   { key: 'colon',   label: 'SAN JOSÉ (COLÓN) | ENTRE RÍOS', lat: -32.2124, lon: -58.2191 },
@@ -36,31 +40,41 @@ function _describeCode(code) {
   return WEATHER_CODES[code] ?? ['🌡️', 'Sin datos'];
 }
 
-async function _fetchLocationWeather(loc) {
+const DAY_NAMES = ['Hoy', 'Mañana'];
+
+async function _fetchLocationForecast(loc) {
   const url = `https://api.open-meteo.com/v1/forecast?latitude=${loc.lat}&longitude=${loc.lon}` +
-    `&current=temperature_2m,weather_code` +
-    `&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max` +
+    `&current=weather_code` +
+    `&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max` +
+    `&forecast_days=${FORECAST_DAYS}` +
     `&timezone=America%2FArgentina%2FBuenos_Aires`;
 
   const res = await fetch(url);
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const data = await res.json();
 
-  const tempNow = Math.round(data.current?.temperature_2m ?? 0);
-  const code    = data.current?.weather_code;
-  const [icon, label] = _describeCode(code);
-  const tMax     = Math.round(data.daily?.temperature_2m_max?.[0] ?? tempNow);
-  const tMin     = Math.round(data.daily?.temperature_2m_min?.[0] ?? tempNow);
-  const rainProb = data.daily?.precipitation_probability_max?.[0];
+  const daily = data.daily;
+  if (!daily?.time?.length) throw new Error('sin datos diarios');
 
-  let message = `📍 ${loc.label}\n${label} · ${tempNow}°C ahora (mín ${tMin}° / máx ${tMax}°)`;
-  if (rainProb != null && rainProb >= 40) message += `\n☔ ${rainProb}% de probabilidad de lluvia`;
+  const currentCode = data.current?.weather_code;
+  const [mainIcon] = _describeCode(currentCode);
 
-  return { icon, message, data: { code, tempNow, tMax, tMin, rainProb } };
+  const lines = daily.time.slice(0, FORECAST_DAYS).map((dateISO, i) => {
+    const [icon, label] = _describeCode(daily.weather_code?.[i]);
+    const tMax = Math.round(daily.temperature_2m_max?.[i] ?? 0);
+    const tMin = Math.round(daily.temperature_2m_min?.[i] ?? 0);
+    const rain = daily.precipitation_probability_max?.[i];
+    const dayLabel = DAY_NAMES[i] ?? new Date(dateISO + 'T12:00:00').toLocaleDateString('es-AR', { weekday: 'short' });
+    const rainTxt = rain != null && rain >= 40 ? ` ☔${rain}%` : '';
+    return `${icon} ${dayLabel}: ${tMin}°/${tMax}° — ${label}${rainTxt}`;
+  });
+
+  const message = `📍 ${loc.label}\n${lines.join('\n')}`;
+  return { icon: mainIcon, message, data: { days: daily.time.length } };
 }
 
 /**
- * Trae el clima de hoy de las 2 ubicaciones fijas y genera una
+ * Trae el pronóstico de 7 días de las 2 ubicaciones fijas y genera una
  * notificación por cada una, una vez por día. Si alguna falla (sin
  * internet, servicio caído, etc.) no rompe nada — esa ubicación
  * puntual no avisa ese día, en silencio, sin afectar a la otra.
@@ -76,19 +90,19 @@ export async function checkTodayWeather() {
     let anySucceeded = false;
     for (const loc of LOCATIONS) {
       try {
-        const { icon, message, data } = await _fetchLocationWeather(loc);
+        const { icon, message, data } = await _fetchLocationForecast(loc);
         addNotification({
-          type: 'weather_today',
+          type: 'weather_forecast',
           category: 'clima',
           icon,
           color: '#0EA5E9',
-          title: `Clima de hoy — ${loc.label}`,
+          title: `Pronóstico 7 días — ${loc.label}`,
           message,
           data: { location: loc.key, ...data },
         });
         anySucceeded = true;
       } catch (err) {
-        console.warn(`[Weather] no se pudo obtener el clima de ${loc.label}:`, err?.message ?? err);
+        console.warn(`[Weather] no se pudo obtener el pronóstico de ${loc.label}:`, err?.message ?? err);
       }
     }
     if (anySucceeded) localStorage.setItem(LASTRUN_KEY, todayISO);

@@ -95,6 +95,9 @@ export const EVENTS = Object.freeze({
   BOOKING_FULLY_PAID:  'booking:fullypaid',
   BOOKING_DRAG_DONE:   'booking:drag_done',   // { bookingId, oldCI, newCI }
 
+  // Huéspedes
+  GUEST_DELETED:       'guest:deleted',       // { guestName }
+
   // Pagos
   PAYMENT_CHANGED:     'payment:changed',
   PAYMENT_REGISTERED:  'payment:registered',  // { bookingId, guestName, amount, method }

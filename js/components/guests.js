@@ -6,6 +6,7 @@
 
 import { formatARS, formatDate, showToast, getUnitChipHTML, getUnitLabel } from '../supabase-config.js';
 import { fetchNotasCreditoAbiertas } from '../modules/mila-assistant/mila-data.js';
+import { Bus, EVENTS } from '../services/event-bus.js';
 
 // Escapa texto para insertarlo seguro dentro de atributos/HTML (el modal de
 // edición inyecta valores de huésped directamente en el markup).
@@ -502,6 +503,7 @@ export class GuestsCRM {
         return;
       }
       showToast(`${name} eliminado ✓`, 'success');
+      Bus.emit(EVENTS.GUEST_DELETED, { guestName: name });
       const row = document.querySelector(`.guest-row-item[data-guest-id="${guestId}"]`);
       if (row) row.remove();
     } catch (err) {

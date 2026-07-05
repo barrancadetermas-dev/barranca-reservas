@@ -61,6 +61,15 @@ export function initMilaEventNotifications() {
     });
   });
 
+  Bus.on(EVENTS.GUEST_DELETED, (d = {}) => {
+    addNotification({
+      type: 'guest_deleted', category: 'reservas', icon: '👤', color: '#6B7280',
+      title: 'Huésped eliminado',
+      message: d.guestName ?? '—',
+      data: d,
+    });
+  });
+
   Bus.on(EVENTS.PAYMENT_REGISTERED, (d = {}) => {
     addNotification({
       type: 'payment_registered', category: 'reservas', icon: '💲', color: '#22C55E',
