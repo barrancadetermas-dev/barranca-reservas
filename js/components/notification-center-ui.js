@@ -15,7 +15,7 @@ import {
   clearAll, deleteNotification, getCategoryPrefs, setCategoryEnabled, onNotificationsChanged,
   isMasterEnabled, setMasterEnabled,
 } from '../services/notification-center.js';
-import { checkTodayWeather } from '../services/weather-notifications.js';
+import { checkTodayWeather, getWeatherLocations, getLocationPrefs, setLocationEnabled } from '../services/weather-notifications.js';
 
 // Colores pastel de fondo por categoría, para distinguir de un vistazo
 // en el historial (ej: economía verde, clima amarillo).
@@ -122,6 +122,7 @@ function _renderCategoryToggles() {
           <input type="checkbox" data-cat="${cat.liveKey}" ${liveOn ? 'checked' : ''} ${!masterOn || !catOn ? 'disabled' : ''}>
           <span>🔴 en vivo</span>
         </label>` : '';
+      const climaLocationsHtml = key === 'clima' ? _renderClimaLocationRow(masterOn, catOn) : '';
       return `
       <div class="notifcenter-cat-row ${cat.togglable === false ? 'locked' : ''} ${rowOff ? 'off' : ''}">
         <span class="notifcenter-cat-label">${cat.label}</span>
@@ -132,12 +133,29 @@ function _renderCategoryToggles() {
             <span class="notifcenter-toggle-slider"></span>
           </label>
         </div>
-      </div>`;
+      </div>${climaLocationsHtml}`;
     }).join('');
 
   wrap.querySelectorAll('input[data-cat]').forEach(input => {
     input.addEventListener('change', () => setCategoryEnabled(input.dataset.cat, input.checked));
   });
+  wrap.querySelectorAll('input[data-loc]').forEach(input => {
+    input.addEventListener('change', () => setLocationEnabled(input.dataset.loc, input.checked));
+  });
+}
+
+// Fila chica debajo de "Clima" para elegir qué ubicación(es) querés
+// recibir — útil si estás viajando y solo te interesa la de donde estás.
+function _renderClimaLocationRow(masterOn, catOn) {
+  const locs = getWeatherLocations();
+  const prefs = getLocationPrefs();
+  const disabled = !masterOn || !catOn;
+  const items = locs.map(loc => `
+    <label class="notifcenter-live-check" title="${loc.label}">
+      <input type="checkbox" data-loc="${loc.key}" ${prefs[loc.key] !== false ? 'checked' : ''} ${disabled ? 'disabled' : ''}>
+      <span>📍 ${loc.label.split('|')[0].trim()}</span>
+    </label>`).join('');
+  return `<div class="notifcenter-subrow ${disabled ? 'off' : ''}">${items}</div>`;
 }
 
 function _renderAll() {

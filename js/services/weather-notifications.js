@@ -1,43 +1,83 @@
 // ═══════════════════════════════════════════════════
-// weather-notifications.js — Pronóstico de 7 días
+// weather-notifications.js — Pronóstico de 3 días, con
+// onda (una frase graciosa según el clima del día).
 // Usa Open-Meteo (open-meteo.com): API gratis de verdad,
-// sin necesidad de clave ni registro — no requiere que
-// hagas nada de tu lado, ni ahora ni en el futuro.
+// sin necesidad de clave ni registro.
 //
-// Corre una vez por día (mismo criterio que feriados y
-// el recordatorio automático de saldo pendiente), pero en
-// vez de mostrar solo el clima de HOY, arma un resumen de
-// los próximos 7 días (hoy + 6 más) en una sola notificación
-// por ubicación — así con un vistazo ves toda la semana.
+// Corre una vez por día (o forzado, cada vez que se abren
+// los Avisos), y arma un resumen de HOY + 2 días más — así
+// no queda pesado de leer.
 //
-// Cubre 2 ubicaciones fijas (San José/Colón y Rosario) —
-// cada notificación aclara de qué ciudad es, para no
-// confundirse cuando estás viajando entre las dos.
+// Cubre 2 ubicaciones — San José/Colón y Rosario — pero
+// cada una se puede prender/apagar por separado desde el
+// panel (guardado acá mismo, en localStorage), para el caso
+// de estar viajando entre las dos y solo querer la de donde
+// estás parado.
 // ═══════════════════════════════════════════════════
 
 import { addNotification } from './notification-center.js';
 
-const LASTRUN_KEY = 'mila_weather_notif_lastrun';
-const FORECAST_DAYS = 7;
+const LASTRUN_KEY  = 'mila_weather_notif_lastrun';
+const LOC_PREFS_KEY = 'mila_weather_locations_v1';
+const FORECAST_DAYS = 3;
 
 const LOCATIONS = [
   { key: 'colon',   label: 'SAN JOSÉ (COLÓN) | ENTRE RÍOS', lat: -32.2124, lon: -58.2191 },
   { key: 'rosario', label: 'ROSARIO | SANTA FE',            lat: -32.9468, lon: -60.6393 },
 ];
 
-// Códigos de clima (estándar WMO, los mismos que usa Open-Meteo)
+export function getWeatherLocations() { return LOCATIONS.map(l => ({ key: l.key, label: l.label })); }
+
+function _loadLocationPrefs() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(LOC_PREFS_KEY)) ?? {};
+    const merged = {};
+    LOCATIONS.forEach(l => { merged[l.key] = saved[l.key] ?? true; }); // las 2 prendidas por default
+    return merged;
+  } catch {
+    const all = {};
+    LOCATIONS.forEach(l => { all[l.key] = true; });
+    return all;
+  }
+}
+let _locationPrefs = _loadLocationPrefs();
+export function getLocationPrefs() { return { ..._locationPrefs }; }
+export function setLocationEnabled(key, enabled) {
+  _locationPrefs[key] = enabled;
+  try { localStorage.setItem(LOC_PREFS_KEY, JSON.stringify(_locationPrefs)); } catch {}
+}
+
+// Códigos de clima (estándar WMO, los mismos que usa Open-Meteo) — cada
+// uno con 2-3 frases con onda, se elige una al azar cada vez.
 const WEATHER_CODES = {
-  0: ['☀️', 'Despejado'], 1: ['🌤️', 'Mayormente despejado'], 2: ['⛅', 'Parcialmente nublado'], 3: ['☁️', 'Nublado'],
-  45: ['🌫️', 'Niebla'], 48: ['🌫️', 'Niebla con escarcha'],
-  51: ['🌦️', 'Llovizna leve'], 53: ['🌦️', 'Llovizna'], 55: ['🌦️', 'Llovizna intensa'],
-  61: ['🌧️', 'Lluvia leve'], 63: ['🌧️', 'Lluvia'], 65: ['🌧️', 'Lluvia intensa'],
-  71: ['🌨️', 'Nevada leve'], 73: ['🌨️', 'Nevada'], 75: ['🌨️', 'Nevada intensa'],
-  80: ['🌦️', 'Chubascos leves'], 81: ['🌧️', 'Chubascos'], 82: ['⛈️', 'Chubascos fuertes'],
-  95: ['⛈️', 'Tormenta'], 96: ['⛈️', 'Tormenta con granizo'], 99: ['⛈️', 'Tormenta fuerte con granizo'],
+  0: { icon: '☀️', label: 'Despejado', phrases: ['Está para la pileta 🏊', 'Día de mate afuera, ni lo dudes', 'Protector solar y a disfrutar'] },
+  1: { icon: '🌤️', label: 'Mayormente despejado', phrases: ['Está para la pileta 🏊', 'Día de mate afuera, ni lo dudes', 'Protector solar y a disfrutar'] },
+  2: { icon: '⛅', label: 'Parcialmente nublado', phrases: ['Día comodín — ni para pileta ni para paraguas', 'Buen día para las termas, sin quemarte de sol', 'Ideal para una caminata por Colón'] },
+  3: { icon: '☁️', label: 'Nublado', phrases: ['Día comodín — ni para pileta ni para paraguas', 'Buen día para las termas, sin quemarte de sol', 'Ideal para una caminata por Colón'] },
+  45: { icon: '🌫️', label: 'Niebla', phrases: ['Ojo con la ruta, visibilidad bajita', 'Día misterioso, bien de película', 'Si salís temprano, luces prendidas'] },
+  48: { icon: '🌫️', label: 'Niebla con escarcha', phrases: ['Ojo con la ruta, visibilidad bajita', 'Día misterioso, bien de película', 'Si salís temprano, luces prendidas'] },
+  51: { icon: '🌦️', label: 'Llovizna leve', phrases: ['Paraguas por las dudas, nada grave', 'Buen día para las termas techadas', 'No dejes la ropa colgada afuera'] },
+  53: { icon: '🌦️', label: 'Llovizna', phrases: ['Paraguas por las dudas, nada grave', 'Buen día para las termas techadas', 'No dejes la ropa colgada afuera'] },
+  55: { icon: '🌦️', label: 'Llovizna intensa', phrases: ['Paraguas por las dudas, nada grave', 'Buen día para las termas techadas', 'No dejes la ropa colgada afuera'] },
+  61: { icon: '🌧️', label: 'Lluvia leve', phrases: ['¡Entrá la ropa, ya! 🏃💨', 'Día de peli, manta y mate', 'Las termas cubiertas son la posta hoy'] },
+  63: { icon: '🌧️', label: 'Lluvia', phrases: ['¡Entrá la ropa, ya! 🏃💨', 'Día de peli, manta y mate', 'Las termas cubiertas son la posta hoy'] },
+  65: { icon: '🌧️', label: 'Lluvia intensa', phrases: ['¡Entrá la ropa, ya! 🏃💨', 'Día de peli, manta y mate', 'Las termas cubiertas son la posta hoy'] },
+  71: { icon: '🌨️', label: 'Nevada leve', phrases: ['¿Nieve en Entre Ríos?? Mandame la foto posta', 'Raro total, pero abrigate igual'] },
+  73: { icon: '🌨️', label: 'Nevada', phrases: ['¿Nieve en Entre Ríos?? Mandame la foto posta', 'Raro total, pero abrigate igual'] },
+  75: { icon: '🌨️', label: 'Nevada intensa', phrases: ['¿Nieve en Entre Ríos?? Mandame la foto posta', 'Raro total, pero abrigate igual'] },
+  80: { icon: '🌦️', label: 'Chubascos leves', phrases: ['¡Entrá la ropa, ya! 🏃💨', 'Día de peli, manta y mate'] },
+  81: { icon: '🌧️', label: 'Chubascos', phrases: ['¡Entrá la ropa, ya! 🏃💨', 'Día de peli, manta y mate'] },
+  82: { icon: '⛈️', label: 'Chubascos fuertes', phrases: ['Ojo con sombrillas y reposeras sueltas', 'Mejor cancelá los planes al aire libre', 'Truenos afuera, asado adentro'] },
+  95: { icon: '⛈️', label: 'Tormenta', phrases: ['Ojo con sombrillas y reposeras sueltas', 'Mejor cancelá los planes al aire libre', 'Truenos afuera, asado adentro'] },
+  96: { icon: '⛈️', label: 'Tormenta con granizo', phrases: ['Ojo con sombrillas y reposeras sueltas', 'Mejor cancelá los planes al aire libre', 'Truenos afuera, asado adentro'] },
+  99: { icon: '⛈️', label: 'Tormenta fuerte con granizo', phrases: ['Ojo con sombrillas y reposeras sueltas', 'Mejor cancelá los planes al aire libre', 'Truenos afuera, asado adentro'] },
 };
 
 function _describeCode(code) {
-  return WEATHER_CODES[code] ?? ['🌡️', 'Sin datos'];
+  return WEATHER_CODES[code] ?? { icon: '🌡️', label: 'Sin datos', phrases: [] };
+}
+function _randomPhrase(phrases) {
+  return phrases.length ? phrases[Math.floor(Math.random() * phrases.length)] : '';
 }
 
 const DAY_NAMES = ['Hoy', 'Mañana'];
@@ -57,38 +97,41 @@ async function _fetchLocationForecast(loc) {
   if (!daily?.time?.length) throw new Error('sin datos diarios');
 
   const currentCode = data.current?.weather_code;
-  const [mainIcon] = _describeCode(currentCode);
+  const mainInfo = _describeCode(currentCode);
 
   const lines = daily.time.slice(0, FORECAST_DAYS).map((dateISO, i) => {
-    const [icon, label] = _describeCode(daily.weather_code?.[i]);
+    const info = _describeCode(daily.weather_code?.[i]);
     const tMax = Math.round(daily.temperature_2m_max?.[i] ?? 0);
     const tMin = Math.round(daily.temperature_2m_min?.[i] ?? 0);
     const rain = daily.precipitation_probability_max?.[i];
     const dayLabel = DAY_NAMES[i] ?? new Date(dateISO + 'T12:00:00').toLocaleDateString('es-AR', { weekday: 'short' });
     const rainTxt = rain != null && rain >= 40 ? ` ☔${rain}%` : '';
-    return `${icon} ${dayLabel}: ${tMin}°/${tMax}° — ${label}${rainTxt}`;
+    const phrase = i === 0 ? ` — ${_randomPhrase(info.phrases)}` : ''; // la frase con onda solo en el día de hoy, para no saturar
+    return `${info.icon} ${dayLabel}: ${tMin}°/${tMax}° — ${info.label}${rainTxt}${phrase}`;
   });
 
   const message = `📍 ${loc.label}\n${lines.join('\n')}`;
-  return { icon: mainIcon, message, data: { days: daily.time.length } };
+  return { icon: mainInfo.icon, message, data: { days: daily.time.length } };
 }
 
 /**
- * Trae el pronóstico de 7 días de las 2 ubicaciones fijas y genera una
- * notificación por cada una, una vez por día. Si alguna falla (sin
- * internet, servicio caído, etc.) no rompe nada — esa ubicación
- * puntual no avisa ese día, en silencio, sin afectar a la otra.
+ * Trae el pronóstico de 3 días de las ubicaciones habilitadas y genera
+ * una notificación por cada una. `force=true` salta el límite de una
+ * vez por día (se usa al abrir el panel de Avisos, para que siempre se
+ * vea fresco). Si alguna ubicación falla no rompe nada — esa puntual no
+ * avisa, en silencio, sin afectar a la otra.
  */
 let _weatherRunning = false;
 export async function checkTodayWeather(force = false) {
-  if (_weatherRunning) return; // ya está corriendo — evita duplicar si se llama 2 veces seguidas
+  if (_weatherRunning) return;
   const todayISO = new Date().toISOString().slice(0, 10);
-  if (!force && localStorage.getItem(LASTRUN_KEY) === todayISO) return; // ya se avisó hoy (salvo que sea forzado)
+  if (!force && localStorage.getItem(LASTRUN_KEY) === todayISO) return;
   _weatherRunning = true;
 
   try {
     let anySucceeded = false;
     for (const loc of LOCATIONS) {
+      if (_locationPrefs[loc.key] === false) continue; // ubicación apagada, se la saltea
       try {
         const { icon, message, data } = await _fetchLocationForecast(loc);
         addNotification({
@@ -96,7 +139,7 @@ export async function checkTodayWeather(force = false) {
           category: 'clima',
           icon,
           color: '#0EA5E9',
-          title: `Pronóstico 7 días — ${loc.label}`,
+          title: `Pronóstico — ${loc.label}`,
           message,
           data: { location: loc.key, ...data },
         });
