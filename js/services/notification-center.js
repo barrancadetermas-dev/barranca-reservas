@@ -95,10 +95,10 @@ export function addNotification({ type = 'generic', title, message = '', icon, c
     _saveAll(all);
   }
 
-  // Si la categoría está apagada, no se muestra el toast ni se cuenta en
-  // el badge — pero si era persistente, igual quedó guardada en el
-  // historial por si el usuario la prende más adelante.
-  if (_categoryPrefs[category] === false) return notif;
+  // Si la categoría está apagada (o el interruptor maestro), no se
+  // muestra el toast ni se cuenta en el badge — pero si era persistente,
+  // igual quedó guardada en el historial por si se prende más adelante.
+  if (_categoryPrefs[category] === false || !_masterEnabled) return notif;
 
   _showToast(notif);
   _notifyListeners();
@@ -109,6 +109,7 @@ export function getNotifications() {
   return _loadAll().filter(n => _categoryPrefs[n.category] !== false);
 }
 export function getUnreadCount() {
+  if (!_masterEnabled) return 0;
   return getNotifications().filter(n => !n.read).length;
 }
 export function markAllRead() {
@@ -130,6 +131,18 @@ export function setCategoryEnabled(category, enabled) {
   if (CATEGORIES[category]?.togglable === false) return; // "sistema" no se puede apagar
   _categoryPrefs[category] = enabled;
   _saveCategoryPrefs(_categoryPrefs);
+  _notifyListeners();
+}
+
+// ── Interruptor maestro — silencia/habilita TODO de una sola vez ──
+const MASTER_KEY = 'mila_notif_master_v1';
+let _masterEnabled = (() => {
+  try { return localStorage.getItem(MASTER_KEY) !== 'false'; } catch { return true; }
+})();
+export function isMasterEnabled() { return _masterEnabled; }
+export function setMasterEnabled(enabled) {
+  _masterEnabled = enabled;
+  try { localStorage.setItem(MASTER_KEY, String(enabled)); } catch {}
   _notifyListeners();
 }
 

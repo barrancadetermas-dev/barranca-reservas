@@ -13,6 +13,7 @@
 import {
   CATEGORIES, getNotifications, getUnreadCount, markAllRead,
   clearAll, deleteNotification, getCategoryPrefs, setCategoryEnabled, onNotificationsChanged,
+  isMasterEnabled, setMasterEnabled,
 } from '../services/notification-center.js';
 
 // Colores pastel de fondo por categoría, para distinguir de un vistazo
@@ -95,25 +96,38 @@ function _renderList() {
   });
 }
 
+// Orden explícito — lo esencial de MILA arriba, después lo técnico,
+// después las fuentes externas agrupadas por tema.
+const CATEGORY_ORDER = ['reservas', 'sistema', 'clima', 'rio', 'economia', 'feriados', 'deportes', 'f1'];
+
 function _renderCategoryToggles() {
   const wrap = document.getElementById('notifcenter-categories');
   if (!wrap) return;
   const prefs = getCategoryPrefs();
-  wrap.innerHTML = Object.entries(CATEGORIES)
-    .filter(([, cat]) => !cat.hidden)
+  const masterOn = isMasterEnabled();
+
+  const masterToggle = document.getElementById('notifcenter-master-toggle');
+  if (masterToggle) masterToggle.checked = masterOn;
+
+  wrap.innerHTML = CATEGORY_ORDER
+    .map(key => [key, CATEGORIES[key]])
+    .filter(([, cat]) => cat && !cat.hidden)
     .map(([key, cat]) => {
+      const catOn = prefs[key] !== false;
+      const rowOff = !masterOn || !catOn; // gris+tachado si está apagada individualmente O por el maestro
+      const liveOn = cat.liveKey ? prefs[cat.liveKey] !== false : false;
       const liveHtml = cat.liveKey ? `
         <label class="notifcenter-live-check" title="Avisos en vivo (goles, posición en pista, etc.)">
-          <input type="checkbox" data-cat="${cat.liveKey}" ${prefs[cat.liveKey] !== false ? 'checked' : ''}>
+          <input type="checkbox" data-cat="${cat.liveKey}" ${liveOn ? 'checked' : ''} ${!masterOn || !catOn ? 'disabled' : ''}>
           <span>🔴 en vivo</span>
         </label>` : '';
       return `
-      <div class="notifcenter-cat-row ${cat.togglable === false ? 'locked' : ''}">
-        <span>${cat.label}</span>
+      <div class="notifcenter-cat-row ${cat.togglable === false ? 'locked' : ''} ${rowOff ? 'off' : ''}">
+        <span class="notifcenter-cat-label">${cat.label}</span>
         <div style="display:flex;align-items:center;gap:10px">
           ${liveHtml}
           <label class="notifcenter-toggle">
-            <input type="checkbox" data-cat="${key}" ${prefs[key] !== false ? 'checked' : ''} ${cat.togglable === false ? 'disabled' : ''}>
+            <input type="checkbox" data-cat="${key}" ${catOn ? 'checked' : ''} ${cat.togglable === false || !masterOn ? 'disabled' : ''}>
             <span class="notifcenter-toggle-slider"></span>
           </label>
         </div>
@@ -188,7 +202,13 @@ function _buildDom() {
     panel.innerHTML = `
       <div class="notifcenter-panel-header">
         <h3>🔔 Notificaciones</h3>
-        <button id="notifcenter-close-btn" class="notifcenter-close-btn" aria-label="Cerrar">✕</button>
+        <div style="display:flex;align-items:center;gap:10px">
+          <label class="notifcenter-toggle" title="Silenciar/habilitar todas">
+            <input type="checkbox" id="notifcenter-master-toggle">
+            <span class="notifcenter-toggle-slider"></span>
+          </label>
+          <button id="notifcenter-close-btn" class="notifcenter-close-btn" aria-label="Cerrar">✕</button>
+        </div>
       </div>
       <div class="notifcenter-panel-actions">
         <button id="notifcenter-clear-btn" class="notifcenter-clear-btn">🗑️ Borrar historial</button>
@@ -198,6 +218,12 @@ function _buildDom() {
       <div id="notifcenter-list" class="notifcenter-list"></div>
     `;
     document.body.appendChild(panel);
+
+    document.getElementById('notifcenter-master-toggle')?.addEventListener('change', (e) => {
+      setMasterEnabled(e.target.checked);
+      _renderCategoryToggles();
+      _renderBadge();
+    });
 
     document.getElementById('notifcenter-close-btn')?.addEventListener('click', _closePanel);
     document.getElementById('notifcenter-clear-btn')?.addEventListener('click', () => {

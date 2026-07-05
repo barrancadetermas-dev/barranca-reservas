@@ -85,6 +85,12 @@
   padding: 7px 0; font-size: .82rem; color: var(--color-text-2); cursor: pointer;
 }
 .notifcenter-cat-row.locked { opacity: .55; cursor: default; }
+.notifcenter-cat-row.off .notifcenter-cat-label {
+  color: var(--color-text-3);
+  text-decoration: line-through;
+  opacity: .6;
+}
+.notifcenter-cat-row.off .notifcenter-live-check { opacity: .45; }
 .notifcenter-live-check {
   display: flex; align-items: center; gap: 4px;
   font-size: .7rem; color: var(--color-text-3); cursor: pointer;

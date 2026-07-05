@@ -280,14 +280,19 @@ async function initApp(user) {
     initAccessibility(supabase, AppContext.hotelId);
     initNotificationCenterUI();
     initMilaEventNotifications();
-    checkUpcomingHolidays();
-    checkTodayWeather();
-    initSportsNotifications();
-    initF1Notifications();
     initSystemNotifications();
-    checkTomorrowArrivalsWithoutDeposit(supabase, AppContext.hotelId);
-    initRiverNotifications();
-    checkHighSeasonOccupancy(supabase, AppContext.hotelId, AppContext.units?.length);
+    checkUpcomingHolidays(); // sin red, es cálculo local — puede ir ya mismo
+
+    // El resto sí pega a internet (clima, deportes, F1, río, etc.) — se
+    // escalonan con una demora chica cada uno, para no mandar 6-7
+    // pedidos a la vez justo cuando la app recién está cargando tus
+    // propias reservas del día. No cambia el resultado, solo el momento.
+    setTimeout(() => checkTodayWeather(), 300);
+    setTimeout(() => initSportsNotifications(), 800);
+    setTimeout(() => initF1Notifications(), 1300);
+    setTimeout(() => initRiverNotifications(), 1800);
+    setTimeout(() => checkTomorrowArrivalsWithoutDeposit(supabase, AppContext.hotelId), 2300);
+    setTimeout(() => checkHighSeasonOccupancy(supabase, AppContext.hotelId, AppContext.units?.length), 2800);
     initEventEngine(supabase, AppContext.hotelId);
 
     // ── Cargar rol del usuario ──
