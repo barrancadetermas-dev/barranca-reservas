@@ -488,12 +488,14 @@ export class Calendar {
         if (bookings.length === 0) {
           // Noche que pertenecía a una reserva cancelada con Nota de
           // Crédito todavía sin usar, y que nadie volvió a reservar — se
-          // marca en marrón para no perderla de vista. Apenas otra reserva
-          // ocupe este día, deja de calcularse como pendiente (se lo
-          // "pisa" la reserva nueva, como corresponde).
+          // muestra como una barra más (mismo peso visual que una reserva
+          // real), en marrón apagado, para que se note de un vistazo sin
+          // tener que pasar el mouse. Apenas otra reserva ocupe este día,
+          // deja de calcularse como pendiente (se lo "pisa" la reserva
+          // nueva, como corresponde).
           if (ncPendingDays.has(`${unit.id}|${iso}`)) {
-            cell.classList.add('cal-cell-nc-pending');
-            cell.title = (cell.title ? cell.title + ' · ' : '') + '🔄 Noche de una nota de crédito sin usar';
+            this._renderNcPendingBar(cell);
+            cell.title = '🔄 Noche de una nota de crédito sin usar — todavía se puede reservar';
           }
           this._bindEmptyCell(cell, unit.id, iso);
         } else if (bookings.length === 1) {
@@ -545,6 +547,28 @@ export class Calendar {
   // ══════════════════════════════════════════════════
   // RENDERIZADO DE BARRAS
   // ══════════════════════════════════════════════════
+  // Barra "fantasma" para una noche que perteneció a una reserva cancelada
+  // con Nota de Crédito sin usar — mismo peso visual que una barra real
+  // (se nota de un vistazo, sin pasar el mouse), pero en marrón apagado y
+  // con rayas, para que se distinga claramente de una ocupación real.
+  _renderNcPendingBar(cell) {
+    const bar = document.createElement('div');
+    bar.className = 'nc-pending-bar';
+    bar.style.cssText = `
+      position:absolute;top:6px;bottom:6px;left:4px;right:4px;
+      border-radius:6px;
+      background:repeating-linear-gradient(135deg,
+        rgba(146,92,43,.55), rgba(146,92,43,.55) 6px,
+        rgba(146,92,43,.32) 6px, rgba(146,92,43,.32) 12px);
+      border:1px dashed rgba(146,92,43,.6);
+      z-index:2;
+      display:flex;align-items:center;justify-content:center;
+      font-size:.72rem;pointer-events:none;
+    `;
+    bar.innerHTML = '<span style="opacity:.75">🔄</span>';
+    cell.appendChild(bar);
+  }
+
   _renderBar(cell, booking, todayISO) {
     if (booking._cellType !== 'start' && booking._cellType !== 'solo') return;
 
