@@ -853,6 +853,16 @@ export class BookingList {
   // crédito queda "abierta" (tag 🔄NC: en las notas) y se ofrece sola la
   // próxima vez que se busque a ese huésped para cualquier reserva nueva.
   async _reprogramBooking(id) {
+    if (this._reprogramInProgress?.has(id)) return; // ya está corriendo para esta reserva, ignorar el segundo click
+    (this._reprogramInProgress ??= new Set()).add(id);
+    try {
+      await this._reprogramBookingInner(id);
+    } finally {
+      this._reprogramInProgress.delete(id); // pase lo que pase, liberar
+    }
+  }
+
+  async _reprogramBookingInner(id) {
     const b = this._allBookings?.find(x => x.id === id);
     if (!b) return;
     const guest  = b.guests ? `${b.guests.first_name} ${b.guests.last_name}` : 'este huésped';

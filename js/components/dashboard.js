@@ -54,7 +54,10 @@ export class Dashboard {
     // "No vino" — el huésped no llegó y se cancela la reserva desde acá
     // mismo, sin tener que ir a Reservas. Ofrece nota de crédito con la
     // misma lógica que "Reprogramar" (retención opcional, no automática).
+    const _noShowInProgress = new Set(); // bookingIds con el flujo "No vino" corriendo — evita duplicar la nota si se toca 2 veces seguidas
     window._dashNoShow = async (bookingId, rowId, guest) => {
+      if (_noShowInProgress.has(bookingId)) return; // ya está corriendo para esta reserva, ignorar el segundo click
+      _noShowInProgress.add(bookingId);
       try {
         const { data: b } = await _withTimeout(
           this.db.from('bookings')
@@ -126,6 +129,8 @@ export class Dashboard {
         await this.load?.(); // recarga y vuelve a pintar la fila tachada/gris, no se borra
       } catch (err) {
         showToast('Error: ' + (err?.message ?? err), 'error');
+      } finally {
+        _noShowInProgress.delete(bookingId); // pase lo que pase, liberar — así un próximo click sí puede volver a intentarlo
       }
     };
 
