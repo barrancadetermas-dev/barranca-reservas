@@ -80,6 +80,17 @@ function _randomPhrase(phrases) {
   return phrases.length ? phrases[Math.floor(Math.random() * phrases.length)] : '';
 }
 
+// Frase por TEMPERATURA — independiente de la condición (lluvia/sol/etc).
+// Las dos pueden aparecer juntas (ej: lluvia + frío = "entrá la ropa" Y
+// "fresco pa' chomba"), porque son cosas distintas que igual importan.
+function _tempPhrase(tMax) {
+  if (tMax <= 5)  return { icon: '🥶', phrase: _randomPhrase(['¡Está fresco pa\' chomba!', 'Frío que cala los huesos, abrigate bien', 'Día de campera gruesa, no la subestimes']) };
+  if (tMax <= 10) return { icon: '🧊', phrase: _randomPhrase(['Fresquito — campera aunque sea', 'Bufanda no viene mal hoy']) };
+  if (tMax >= 33) return { icon: '🥵', phrase: _randomPhrase(['¡CALORAZO!', 'Ventilador a full, ni lo dudes', 'Hidratate que hoy aprieta']) };
+  if (tMax >= 28) return { icon: '😅', phrase: _randomPhrase(['Empieza a apretar el calor', 'Buen día de pileta, aprovechá']) };
+  return null; // temperatura normal, no hace falta ninguna frase extra
+}
+
 const DAY_NAMES = ['Hoy', 'Mañana'];
 
 async function _fetchLocationForecast(loc) {
@@ -99,6 +110,8 @@ async function _fetchLocationForecast(loc) {
   const currentCode = data.current?.weather_code;
   const mainInfo = _describeCode(currentCode);
 
+  let phrase = '';
+  let tempPhraseInfo = null;
   const lines = daily.time.slice(0, FORECAST_DAYS).map((dateISO, i) => {
     const info = _describeCode(daily.weather_code?.[i]);
     const tMax = Math.round(daily.temperature_2m_max?.[i] ?? 0);
@@ -106,11 +119,16 @@ async function _fetchLocationForecast(loc) {
     const rain = daily.precipitation_probability_max?.[i];
     const dayLabel = DAY_NAMES[i] ?? new Date(dateISO + 'T12:00:00').toLocaleDateString('es-AR', { weekday: 'short' });
     const rainTxt = rain != null && rain >= 40 ? ` ☔${rain}%` : '';
-    const phrase = i === 0 ? ` — ${_randomPhrase(info.phrases)}` : ''; // la frase con onda solo en el día de hoy, para no saturar
-    return `${info.icon} ${dayLabel}: ${tMin}°/${tMax}° — ${info.label}${rainTxt}${phrase}`;
+    if (i === 0) {
+      phrase = _randomPhrase(info.phrases); // frase por condición (lluvia/sol/etc), del día de hoy
+      tempPhraseInfo = _tempPhrase(tMax);   // frase por temperatura, independiente — las 2 pueden aparecer juntas
+    }
+    const tempIcon = i === 0 && tempPhraseInfo ? tempPhraseInfo.icon + ' ' : '';
+    return `${info.icon} ${dayLabel}: ${tempIcon}${tMin}°/${tMax}° — ${info.label}${rainTxt}`;
   });
 
-  const message = `📍 ${loc.label}\n${lines.join('\n')}`;
+  const extraLines = [phrase, tempPhraseInfo?.phrase].filter(Boolean).map(p => `<em>${p}</em>`);
+  const message = `📍 ${loc.label}\n${lines.join('\n')}${extraLines.length ? `\n\n${extraLines.join('\n')}` : ''}`;
   return { icon: mainInfo.icon, message, data: { days: daily.time.length } };
 }
 
