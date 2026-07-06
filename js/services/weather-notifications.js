@@ -84,10 +84,10 @@ function _randomPhrase(phrases) {
 // Las dos pueden aparecer juntas (ej: lluvia + frío = "entrá la ropa" Y
 // "fresco pa' chomba"), porque son cosas distintas que igual importan.
 function _tempPhrase(tMax) {
-  if (tMax <= 5)  return { icon: '🥶', phrase: _randomPhrase(['¡Está fresco pa\' chomba!', 'Frío que cala los huesos, abrigate bien', 'Día de campera gruesa, no la subestimes']) };
-  if (tMax <= 10) return { icon: '🧊', phrase: _randomPhrase(['Fresquito — campera aunque sea', 'Bufanda no viene mal hoy']) };
-  if (tMax >= 33) return { icon: '🥵', phrase: _randomPhrase(['¡CALORAZO!', 'Ventilador a full, ni lo dudes', 'Hidratate que hoy aprieta']) };
-  if (tMax >= 28) return { icon: '😅', phrase: _randomPhrase(['Empieza a apretar el calor', 'Buen día de pileta, aprovechá']) };
+  if (tMax <= 5)  return { icon: '🥶', phrase: _randomPhrase(['Hace un frío que hasta el pingüino pide un saquito.', 'Hoy la frazada gana por goleada.', 'Está para unos buenos mates.']) };
+  if (tMax <= 10) return { icon: '🧊', phrase: _randomPhrase(['Hoy los bolsillos vienen con las manos incluidas.', 'Hoy salí abrigado o prepará los pañuelitos.', 'Dos cuadras sin abrigo y ya empezás a arrepentirte.']) };
+  if (tMax >= 33) return { icon: '🥵', phrase: _randomPhrase(['Hoy transpirás hasta pensando.', 'Está para una fresquita bien helada!!!', 'Hoy el desodorante entra en modo héroe.']) };
+  if (tMax >= 28) return { icon: '😅', phrase: _randomPhrase(['Se empiezan a derretir los helados.', 'El ventilador ya está pidiendo horas extras.', 'Todavía zafa... pero no te alejes mucho de la sombra.']) };
   return null; // temperatura normal, no hace falta ninguna frase extra
 }
 
