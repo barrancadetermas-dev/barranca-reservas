@@ -122,7 +122,7 @@ function _renderCategoryToggles() {
       const liveHtml = cat.liveKey ? `
         <label class="notifcenter-live-check" title="Avisos en vivo (goles, posición en pista, etc.)">
           <input type="checkbox" data-cat="${cat.liveKey}" ${liveOn ? 'checked' : ''} ${!masterOn || !catOn ? 'disabled' : ''}>
-          <span>🔴 en vivo</span>
+          <span>🟢 en vivo</span>
         </label>` : '';
       const climaLocationsHtml = key === 'clima' ? _renderClimaLocationRow(masterOn, catOn) : '';
       return `
@@ -204,7 +204,15 @@ function _buildDom() {
       </button>`;
     // Se inserta como PRIMER hijo de header-right, para que quede visible
     // y no dependa de dónde estén los otros elementos.
-    headerRight.insertBefore(bellWrap, headerRight.firstChild);
+    // Se inserta justo después del indicador de conexión ("Conectado"),
+    // antes del botón de Sonido — así queda ordenado con el resto de los
+    // íconos del header, no antes de todo.
+    const connIndicator = headerRight.querySelector('#conn-indicator');
+    if (connIndicator?.nextSibling) {
+      headerRight.insertBefore(bellWrap, connIndicator.nextSibling);
+    } else {
+      headerRight.insertBefore(bellWrap, headerRight.firstChild);
+    }
     document.getElementById('notifcenter-bell-btn')?.addEventListener('click', () => {
       _panelOpen ? _closePanel() : _openPanel();
     });

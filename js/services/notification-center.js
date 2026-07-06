@@ -18,9 +18,9 @@ const TOAST_MS      = 10000;
 export const CATEGORIES = {
   reservas:      { label: '🏠 Reservas',   togglable: true },
   deportes:      { label: '⚽ Deportes',   togglable: true, liveKey: 'deportes_vivo' },
-  deportes_vivo: { label: '🔴 En vivo',    togglable: true, hidden: true },
+  deportes_vivo: { label: '🟢 En vivo',    togglable: true, hidden: true },
   f1:            { label: '🏎️ F1',        togglable: true, liveKey: 'f1_vivo' },
-  f1_vivo:       { label: '🔴 En vivo',    togglable: true, hidden: true },
+  f1_vivo:       { label: '🟢 En vivo',    togglable: true, hidden: true },
   clima:         { label: '🌤️ Clima',      togglable: true },
   economia:      { label: '💵 Economía',  togglable: true },
   feriados:      { label: '📅 Feriados',   togglable: true },
