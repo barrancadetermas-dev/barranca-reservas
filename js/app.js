@@ -14,6 +14,7 @@ import { initSystemNotifications } from './services/system-notifications.js';
 import { checkTomorrowArrivalsWithoutDeposit } from './services/reservas-notifications.js';
 import { initRiverNotifications } from './services/river-notifications.js';
 import { checkHighSeasonOccupancy } from './services/high-season-notifications.js';
+import { checkDollarVariants } from './services/dollar-variants-notifications.js';
 import { initMilaEventNotifications } from './services/mila-event-notifications.js';
 import { initEventEngine } from './services/event-engine.js';
 // ═══════════════════════════════════════════════════
@@ -293,6 +294,7 @@ async function initApp(user) {
     setTimeout(() => initRiverNotifications(), 1800);
     setTimeout(() => checkTomorrowArrivalsWithoutDeposit(supabase, AppContext.hotelId), 2300);
     setTimeout(() => checkHighSeasonOccupancy(supabase, AppContext.hotelId, AppContext.units?.length), 2800);
+    setTimeout(() => checkDollarVariants(), 3300);
     initEventEngine(supabase, AppContext.hotelId);
 
     // ── Cargar rol del usuario ──

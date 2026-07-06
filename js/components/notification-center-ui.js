@@ -219,6 +219,7 @@ function _buildDom() {
     const panel = document.createElement('div');
     panel.id = 'notifcenter-panel';
     panel.className = 'notifcenter-panel';
+    panel.addEventListener('click', (e) => e.stopPropagation()); // resguardo — ningún toque adentro del panel debe poder "escaparse" y cerrarlo
     panel.innerHTML = `
       <div class="notifcenter-panel-header">
         <h3>✈️ Avisos</h3>
