@@ -737,11 +737,17 @@ export class BookingList {
               </button>` : ''}
             </div>
           </div>
-          ${isToday ? `<div class="booking-today-banner" style="background:${barColor}18;border-color:${barColor}">
-            ${b.check_in === today ? '🟢 CHECK-IN HOY' : '🔵 CHECK-OUT HOY'}
-          </div>` : isStaying ? `<div class="booking-today-banner" style="background:#8B5CF618;border-color:#8B5CF6;color:#8B5CF6">
-            🟣 ALOJADA
-          </div>` : ''}
+          ${(() => {
+            // El círculo cambia de color según el estado ECONÓMICO de la
+            // reserva (pagó todo / solo señó / no pagó nada) — el texto
+            // (CHECK-IN / ALOJADA / CHECK-OUT) sigue indicando la
+            // situación real, en los 3 casos.
+            const payDot = b.status === 'paid' ? '🟢' : b.status === 'partial' ? '🔴' : '🟡';
+            if (isToday && b.check_in === today)  return `<div class="booking-today-banner" style="background:${barColor}18;border-color:${barColor}">${payDot} CHECK-IN HOY</div>`;
+            if (isToday && b.check_out === today) return `<div class="booking-today-banner" style="background:${barColor}18;border-color:${barColor}">${payDot} CHECK-OUT HOY</div>`;
+            if (isStaying) return `<div class="booking-today-banner" style="background:#8B5CF618;border-color:#8B5CF6;color:#8B5CF6">${payDot} ALOJADA</div>`;
+            return '';
+          })()}
         </div>
           ${b.notes ? `<div class="bl-notes-row">💬 ${b.notes.length > 100 ? b.notes.slice(0,100)+'…' : b.notes}</div>` : ''}
       </div>`;
