@@ -219,6 +219,7 @@ async function handlePaymentSubmit(bookingId, supabase, onSuccess) {
   const payload = {
     booking_id:     bookingId,
     amount:         amount,
+    amount_ars:     amount,
     payment_type:   paymentType,
     payment_method: paymentMethod,
     payment_date:   paymentDate || new Date().toISOString().slice(0, 10),
