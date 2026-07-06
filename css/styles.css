@@ -1279,6 +1279,12 @@ select { appearance: auto; cursor: pointer; }
 @media (max-width: 768px) {
   body { overflow: auto; }
   .app-shell { position: relative; }
+  /* El botón de Disponibilidad del header es SOLO para mobile — en
+     desktop ya existe el mismo acceso en la barra del calendario. */
+  .header-avail-btn-mobile { display: flex !important; }
+  /* El "+" (nueva reserva) resaltado en verde, solo en mobile, para que
+     se note más de un vistazo entre los demás íconos del menú inferior. */
+  .bnav-fab { background: #16a34a !important; border-color: #16a34a !important; color: #fff !important; }
   .sidebar {
     position: fixed; top: 0; left: 0; height: 100dvh;
     transform: translateX(-100%); z-index: 200;
@@ -4301,6 +4307,10 @@ input[type="color"].unit-color-input::-webkit-color-swatch { border: none; borde
 .header-icon-btn:active { background: var(--color-surface-3, var(--color-border)); }
 #btn-sound.icon-muted   { color: var(--color-text-3); opacity: .55; }
 #btn-sound.icon-muted:hover { opacity: 1; color: var(--color-text); }
+/* Botón de Disponibilidad del header: oculto por defecto (desktop ya
+   tiene el mismo acceso en la barra del calendario) — el media query de
+   mobile lo vuelve a mostrar con !important. */
+.header-avail-btn-mobile { display: none; }
 
 /* ── Notification badge ─────────────────────────── */
 .notif-badge {

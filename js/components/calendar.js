@@ -213,29 +213,27 @@ export class Calendar {
   // Reservas canceladas ("No vino" / Reprogramar) que dejaron una Nota de
   // Crédito todavía sin usar ni anular — mismo tag 🔄NC:<monto>:<fecha>
   // que usan guests.js y mila-data.js.
-  // Para cada unidad, TODOS los checkouts (pasados y futuros) — se usa
+  // Para cada unidad, la fecha de checkout más reciente hasta hoy — se usa
   // para el tooltip "hace cuántos días no se alquila" en celdas vacías.
-  // Al renderizar cada celda se busca el checkout más reciente ANTERIOR
-  // a esa celda, sin importar si ya ocurrió o todavía no.
+  // Se trae todo de una vez (no una consulta por unidad) y se reduce acá.
   async _fetchLastCheckoutByUnit() {
+    const today = localToday();
     const { data, error } = await this.db
       .from('bookings')
       .select('check_out, booking_units(unit_id)')
       .eq('hotel_id', this.ctx.hotelId)
-      .not('status', 'in', '(cancelled,blocked)');
+      .not('status', 'in', '(cancelled,blocked)')
+      .lte('check_out', today);
     if (error) { console.warn('[Calendar] lastCheckoutByUnit error:', error.message); return new Map(); }
 
-    // unitId -> array de fechas de checkout (strings ISO)
-    const allByUnit = new Map();
+    const lastByUnit = new Map(); // unitId -> fecha (string) más reciente
     (data ?? []).forEach(b => {
       (b.booking_units ?? []).forEach(bu => {
-        if (!allByUnit.has(bu.unit_id)) allByUnit.set(bu.unit_id, []);
-        allByUnit.get(bu.unit_id).push(b.check_out);
+        const prev = lastByUnit.get(bu.unit_id);
+        if (!prev || b.check_out > prev) lastByUnit.set(bu.unit_id, b.check_out);
       });
     });
-    // Ordenar cada array ascendente para que la búsqueda sea eficiente
-    allByUnit.forEach(dates => dates.sort());
-    return allByUnit;
+    return lastByUnit;
   }
 
   async _fetchCancelledWithOpenNC(firstDay, lastDay) {
@@ -534,11 +532,8 @@ export class Calendar {
             // saber que esa unidad viene sin moverse desde tal fecha). Si
             // la celda ya tenía un título (ej: "Vacaciones de Invierno"),
             // NO se lo pisa — se combinan los dos, para no tapar esa info.
-            // Buscar el checkout más reciente ESTRICTAMENTE antes de esta celda
-            // (puede ser pasado o futuro — lo que importa es que sea previo a iso)
-            const allCos = lastCheckoutByUnit.get(unit.id) ?? [];
-            const lastCo = allCos.filter(d => d <= iso).at(-1); // array ya ordenado asc
-            if (lastCo) {
+            const lastCo = lastCheckoutByUnit.get(unit.id);
+            if (lastCo && lastCo <= iso) {
               const daysVacant = this._dayDiff(lastCo, iso);
               if (daysVacant > 0) {
                 const vacantMsg = `#${_unitNum} sin alquilar hace ${daysVacant} día${daysVacant !== 1 ? 's' : ''}`;

@@ -1387,12 +1387,7 @@
 }
 
 /* ── 6. BOTTOM NAV: ítem Disponibilidad ─────────────────────── */
-#bnav-search.active {
-  color: var(--color-primary) !important;
-}
-#bnav-search.active svg {
-  transform: scale(1.15);
-}
+/* (Se movió al header — ver .header-avail-btn-mobile en styles.css) */
 
 /* ═══════════════════════════════════════════════════════════════
    MOBILE FIXES vF — z-index, toolbar sticky, wizard steps

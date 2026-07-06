@@ -48,22 +48,15 @@ const CATEGORY_BG_DARK = {
 
 let _panelOpen = false;
 
-function _fmtWhen(iso, read = false) {
+function _fmtWhen(iso) {
   const d = new Date(iso);
   const today = new Date();
   const sameDay = d.toDateString() === today.toDateString();
   const time = d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
-  const ticks = read
-    ? `<span class="notif-ticks" aria-label="Visto" title="Visto">` +
-      `<svg viewBox="0 0 18 11" fill="none" xmlns="http://www.w3.org/2000/svg" width="16" height="10" style="display:inline-block;vertical-align:middle;margin-left:4px">` +
-      `<path d="M1 5.5L5.5 10L12 2" stroke="#4FC3F7" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>` +
-      `<path d="M5 5.5L9.5 10L17 1" stroke="#4FC3F7" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>` +
-      `</svg></span>`
-    : '';
-  if (sameDay) return `Hoy · ${time}${ticks}`;
+  if (sameDay) return `Hoy · ${time}`;
   const y = new Date(today); y.setDate(y.getDate() - 1);
-  if (d.toDateString() === y.toDateString()) return `Ayer · ${time}${ticks}`;
-  return `${d.toLocaleDateString('es-AR', { day: '2-digit', month: 'short' })} · ${time}${ticks}`;
+  if (d.toDateString() === y.toDateString()) return `Ayer · ${time}`;
+  return `${d.toLocaleDateString('es-AR', { day: '2-digit', month: 'short' })} · ${time}`;
 }
 
 function _renderBadge() {
@@ -92,7 +85,7 @@ function _renderList() {
       <div class="notifcenter-item-body">
         <div class="notifcenter-item-title">${n.title}</div>
         ${n.message ? `<div class="notifcenter-item-msg">${n.message}</div>` : ''}
-        <div class="notifcenter-item-time">${_fmtWhen(n.createdAt, n.read)}</div>
+        <div class="notifcenter-item-time">${_fmtWhen(n.createdAt)}</div>
       </div>
       <button class="notifcenter-item-delete" data-id="${n.id}" title="Eliminar" aria-label="Eliminar notificación">✕</button>
     </div>`;

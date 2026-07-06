@@ -383,7 +383,7 @@ async function initApp(user) {
     });
 
     // ── Disponibilidad mobile (lupa en bottom nav) ──
-    document.getElementById('bnav-search')?.addEventListener('click', () => {
+    document.getElementById('header-avail-btn')?.addEventListener('click', () => {
       openMobileAvailPanel();
     });
 
