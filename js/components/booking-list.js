@@ -622,6 +622,11 @@ export class BookingList {
                   : '';
 
     const isToday  = (b.check_in === today || b.check_out === today) && b.status !== 'cancelled';
+    // "Alojada" — el huésped ya hizo check-in y todavía no hizo check-out,
+    // y no es ninguno de los 2 días especiales (llegada/salida) de hoy —
+    // es una estadía que ya está en curso.
+    const isStaying = !isToday && b.status !== 'cancelled' && !!b.checked_in_at && !b.checked_out_at
+                     && b.check_in < today && b.check_out > today;
     const statusCls = STATUS_CLASSES[b.status] ?? '';
     const statusLbl = STATUS_LABELS[b.status]  ?? b.status;
     const nights   = b.nights ?? Math.round((new Date(b.check_out) - new Date(b.check_in)) / 86400000);
@@ -733,6 +738,8 @@ export class BookingList {
           </div>
           ${isToday ? `<div class="booking-today-banner" style="background:${barColor}18;border-color:${barColor}">
             ${b.check_in === today ? '🟢 CHECK-IN HOY' : '🔵 CHECK-OUT HOY'}
+          </div>` : isStaying ? `<div class="booking-today-banner" style="background:#8B5CF618;border-color:#8B5CF6;color:#8B5CF6">
+            🟣 ALOJADA
           </div>` : ''}
         </div>
           ${b.notes ? `<div class="bl-notes-row">💬 ${b.notes.length > 100 ? b.notes.slice(0,100)+'…' : b.notes}</div>` : ''}
