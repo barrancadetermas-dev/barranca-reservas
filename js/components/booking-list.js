@@ -909,11 +909,15 @@ export class BookingList {
     )) return;
     try {
       const newNotes = appendNote(booking?.notes, `🚪ANTICIPADO:${originalCheckOut}`);
-      await this.db.from('bookings').update({
+      const { data: updated, error } = await this.db.from('bookings').update({
         checked_out_at: new Date().toISOString(),
         check_out: todayISO,
         notes: newNotes,
-      }).eq('id', id);
+      }).eq('id', id).select('id');
+      if (error) throw error;
+      if (!updated?.length) {
+        throw new Error('La reserva no se modificó — probablemente un permiso de la base de datos lo está bloqueando en silencio.');
+      }
       if (booking) {
         const { OperationsModule } = await import('./operations.js');
         await OperationsModule.createCheckoutCleaningTask(this.db, this.ctx, { ...booking, check_out: todayISO });
