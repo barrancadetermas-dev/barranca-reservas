@@ -474,10 +474,34 @@ export class BookingList {
     // Sort tabs
     html += this._renderSortTabs();
 
-    // Header con conteo y exportar
-    html += `<div class="list-header-bar" style="display:flex;align-items:center;justify-content:space-between">
-      <div style="display:flex;align-items:center;gap:8px">
-        <span class="list-count">${filtered.length} reserva${filtered.length !== 1 ? 's' : ''}</span>`;
+    // Header con conteo, totales y exportar
+    // Mismo criterio que ya usamos en el Dashboard: una reserva cancelada
+    // con nota de crédito ABIERTA sigue sumando lo que ya cobró (esa
+    // plata es real), pero no aporta nada a "por cobrar" — ese saldo ya
+    // no se va a cobrar nunca.
+    const nonCancelled = filtered.filter(b => b.status !== 'cancelled');
+    const cancelledWithNC = filtered.filter(b =>
+      b.status === 'cancelled' && b.notes?.includes('🔄NC:') &&
+      !b.notes?.includes('✅NCUSED') && !b.notes?.includes('❌NCVOID')
+    );
+    const totalVendido  = nonCancelled.reduce((s,b) => s + (b.total_amount ?? 0), 0)
+                         + cancelledWithNC.reduce((s,b) => s + (b.total_paid ?? 0), 0);
+    const senasCobradas = nonCancelled.reduce((s,b) => s + (b.total_paid ?? 0), 0)
+                         + cancelledWithNC.reduce((s,b) => s + (b.total_paid ?? 0), 0);
+    const porCobrar      = nonCancelled.reduce((s,b) => s + (b.balance ?? 0), 0);
+
+    html += `<div class="list-header-bar" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
+      <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+        <span class="list-count">${filtered.length} reserva${filtered.length !== 1 ? 's' : ''}</span>
+        <span style="display:flex;align-items:center;gap:5px;font-size:.78rem;color:var(--color-text-3)">
+          Total vendido <b style="color:var(--color-text)">${formatARS(totalVendido)}</b>
+        </span>
+        <span style="display:flex;align-items:center;gap:5px;font-size:.78rem;color:var(--color-text-3)">
+          Señas cobradas <b style="color:#16a34a">${formatARS(senasCobradas)}</b>
+        </span>
+        <span style="display:flex;align-items:center;gap:5px;font-size:.78rem;color:var(--color-text-3)">
+          Por cobrar <b style="color:var(--state-yellow-txt,#b45309)">${formatARS(porCobrar)}</b>
+        </span>`;
 
     if (can('exportData')) {
       html += `<button class="btn btn-outline btn-sm" id="btn-export-list" style="gap:5px">
