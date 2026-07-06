@@ -59,6 +59,14 @@ function _fmtWhen(iso) {
   return `${d.toLocaleDateString('es-AR', { day: '2-digit', month: 'short' })} · ${time}`;
 }
 
+// Doble tilde azul, estilo "leído" de WhatsApp — se dibuja a mano en SVG
+// para que las 2 marcas queden parejas y bien alineadas con el texto.
+const READ_CHECKMARKS_SVG = `
+  <svg viewBox="0 0 16 10" width="15" height="9" style="margin-left:4px;vertical-align:-1px" fill="none" stroke="#4FC3F7" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M1 5.5L4 8.5L10 1.5"/>
+    <path d="M6 5.5L9 8.5L15 1.5"/>
+  </svg>`;
+
 function _renderBadge() {
   const badge = document.getElementById('notifcenter-badge');
   if (!badge) return;
@@ -85,7 +93,7 @@ function _renderList() {
       <div class="notifcenter-item-body">
         <div class="notifcenter-item-title">${n.title}</div>
         ${n.message ? `<div class="notifcenter-item-msg">${n.message}</div>` : ''}
-        <div class="notifcenter-item-time">${_fmtWhen(n.createdAt)}</div>
+        <div class="notifcenter-item-time">${_fmtWhen(n.createdAt)}${n.read ? READ_CHECKMARKS_SVG : ''}</div>
       </div>
       <button class="notifcenter-item-delete" data-id="${n.id}" title="Eliminar" aria-label="Eliminar notificación">✕</button>
     </div>`;

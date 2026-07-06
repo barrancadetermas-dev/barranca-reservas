@@ -218,27 +218,41 @@ export class Calendar {
   // Reservas canceladas ("No vino" / Reprogramar) que dejaron una Nota de
   // Crédito todavía sin usar ni anular — mismo tag 🔄NC:<monto>:<fecha>
   // que usan guests.js y mila-data.js.
-  // Para cada unidad, la fecha de checkout más reciente hasta hoy — se usa
-  // para el tooltip "hace cuántos días no se alquila" en celdas vacías.
-  // Se trae todo de una vez (no una consulta por unidad) y se reduce acá.
+  // Para cada unidad, TODAS las fechas de checkout (pasadas y futuras) —
+  // antes solo se traían las <= hoy, entonces si una unidad tenía una
+  // reserva FUTURA con checkout antes de la celda que estás mirando, se
+  // ignoraba y el tooltip mostraba el último checkout REAL (a veces 40+
+  // días atrás) en vez del más cercano a esa celda puntual. Ahora se
+  // guardan todas, y en el momento de pintar cada celda se busca la más
+  // reciente anterior a ESA celda específica (ver _render).
   async _fetchLastCheckoutByUnit() {
-    const today = localToday();
     const { data, error } = await this.db
       .from('bookings')
       .select('check_out, booking_units(unit_id)')
       .eq('hotel_id', this.ctx.hotelId)
-      .not('status', 'in', '(cancelled,blocked)')
-      .lte('check_out', today);
+      .not('status', 'in', '(cancelled,blocked)');
     if (error) { console.warn('[Calendar] lastCheckoutByUnit error:', error.message); return new Map(); }
 
-    const lastByUnit = new Map(); // unitId -> fecha (string) más reciente
+    const byUnit = new Map(); // unitId -> [fechas de checkout, sin ordenar todavía]
     (data ?? []).forEach(b => {
       (b.booking_units ?? []).forEach(bu => {
-        const prev = lastByUnit.get(bu.unit_id);
-        if (!prev || b.check_out > prev) lastByUnit.set(bu.unit_id, b.check_out);
+        if (!byUnit.has(bu.unit_id)) byUnit.set(bu.unit_id, []);
+        byUnit.get(bu.unit_id).push(b.check_out);
       });
     });
-    return lastByUnit;
+    byUnit.forEach(dates => dates.sort());
+    return byUnit;
+  }
+
+  // Busca, dentro de la lista de checkouts de una unidad, el más reciente
+  // que sea ANTERIOR a la fecha de la celda puntual que se está pintando
+  // (no simplemente "el último de todos" ni "el último hasta hoy").
+  _lastCheckoutBefore(dates, iso) {
+    let last = null;
+    for (const d of dates) {
+      if (d < iso) last = d; else break; // dates ya viene ordenado, se puede cortar apenas se pasa
+    }
+    return last;
   }
 
   async _fetchCancelledWithOpenNC(firstDay, lastDay) {
@@ -585,8 +599,9 @@ export class Calendar {
             // saber que esa unidad viene sin moverse desde tal fecha). Si
             // la celda ya tenía un título (ej: "Vacaciones de Invierno"),
             // NO se lo pisa — se combinan los dos, para no tapar esa info.
-            const lastCo = lastCheckoutByUnit.get(unit.id);
-            if (lastCo && lastCo <= iso) {
+            const unitDates = lastCheckoutByUnit.get(unit.id);
+            const lastCo = unitDates ? this._lastCheckoutBefore(unitDates, iso) : null;
+            if (lastCo) {
               const daysVacant = this._dayDiff(lastCo, iso);
               if (daysVacant > 0) {
                 const vacantMsg = `#${_unitNum} sin alquilar hace ${daysVacant} día${daysVacant !== 1 ? 's' : ''}`;
