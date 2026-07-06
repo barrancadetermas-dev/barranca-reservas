@@ -19,6 +19,76 @@ const fmtDate = s => s ? s.split('-').reverse().join('/') : '';
 const dateTag = () => new Date().toISOString().slice(0,10);
 
 // ══════════════════════════════════════════════════
+// ESTILO COMPARTIDO PARA EXCEL — título, header de color,
+// filas alternadas (zebra), pie con totales, encabezado
+// congelado (freeze panes) y autofiltro. Todas las
+// exportaciones a Excel pasan por acá, para que se vean
+// todas con el mismo diseño prolijo, en vez de listas
+// simples sin formato.
+// ══════════════════════════════════════════════════
+const XSTY = {
+  title:  { font:{ bold:true, sz:14, color:{ rgb:'1A3A90' } }, alignment:{ horizontal:'left', vertical:'center' } },
+  subtitle: { font:{ italic:true, sz:9, color:{ rgb:'64748B' } } },
+  header: {
+    font:{ bold:true, color:{ rgb:'FFFFFF' }, sz:10 },
+    fill:{ fgColor:{ rgb:'1A3A90' } },
+    alignment:{ horizontal:'center', vertical:'center', wrapText:true },
+    border:{ bottom:{ style:'thin', color:{ rgb:'FFFFFF' } } },
+  },
+  evenRow: { fill:{ fgColor:{ rgb:'F0F4FA' } } },
+  footer: {
+    font:{ bold:true, color:{ rgb:'1A3A90' }, sz:10 },
+    fill:{ fgColor:{ rgb:'DDEAFF' } },
+    border:{ top:{ style:'medium', color:{ rgb:'1A3A90' } } },
+  },
+};
+
+/**
+ * Aplica el "traje" completo a una hoja ya creada con aoa_to_sheet.
+ * @param {object} ws       - la hoja (worksheet) de SheetJS
+ * @param {object} XLSX     - referencia a la librería ya cargada
+ * @param {object} opts
+ *   titleRow    - índice de fila (0-based) del título general (o null si no hay)
+ *   headerRow   - índice de fila (0-based) de los encabezados de columna
+ *   dataStart   - índice de la primera fila de datos
+ *   dataEnd     - índice de la última fila de datos (inclusive)
+ *   numCols     - cantidad de columnas totales
+ *   footerRow   - índice de fila del pie/totales (o null si no hay)
+ *   colWidths   - array de anchos de columna (en caracteres)
+ */
+function _styleWorksheet(ws, XLSX, { titleRow = 0, headerRow, dataStart, dataEnd, numCols, footerRow = null, colWidths }) {
+  const cell = (r, c) => XLSX.utils.encode_cell({ r, c });
+  const setStyle = (r, c, style) => {
+    const ref = cell(r, c);
+    if (!ws[ref]) ws[ref] = { t:'s', v:'' };
+    ws[ref].s = style;
+  };
+
+  if (titleRow != null && ws[cell(titleRow, 0)]) setStyle(titleRow, 0, XSTY.title);
+
+  for (let c = 0; c < numCols; c++) setStyle(headerRow, c, XSTY.header);
+
+  for (let r = dataStart; r <= dataEnd; r++) {
+    if ((r - dataStart) % 2 === 1) {
+      for (let c = 0; c < numCols; c++) {
+        const ref = cell(r, c);
+        if (ws[ref]) ws[ref].s = XSTY.evenRow;
+      }
+    }
+  }
+
+  if (footerRow != null) {
+    for (let c = 0; c < numCols; c++) setStyle(footerRow, c, XSTY.footer);
+  }
+
+  // Encabezado siempre visible al scrollear, y autofiltro para poder
+  // ordenar/filtrar cada columna sin tener que armarlo a mano.
+  ws['!freeze'] = { xSplit: 0, ySplit: headerRow + 1 };
+  ws['!autofilter'] = { ref: XLSX.utils.encode_range({ s:{r:headerRow,c:0}, e:{r:dataEnd,c:numCols-1} }) };
+  if (colWidths) ws['!cols'] = colWidths.map(w => ({ wch: w }));
+}
+
+// ══════════════════════════════════════════════════
 // DROPDOWN HELPER — muestra panel de filtros
 // ══════════════════════════════════════════════════
 export function showExportDropdown({ anchorEl, type, data, onExport }) {
@@ -213,40 +283,43 @@ export async function exportBookingsExcel(bookings, filename = 'reservas', range
     });
 
     const headers = ['Huésped','DNI','Teléfono','Email','Unidades','Check-in','Check-out','Noches','Canal','Estado','Precio/noche','Total','Abonado','Saldo','Notas'];
+    const numCols = headers.length;
+    const now   = new Date();
+    const title = `MILA PMS · Reservas${range ? ' · ' + range : ''} · Generado el ${now.toLocaleDateString('es-AR')}`;
 
-    // Fila 1: título (merged visual via valor largo)
-    const now    = new Date();
-    const title  = `MILA PMS · Reservas${range ? ' · ' + range : ''} · ${now.toLocaleDateString('es-AR')}`;
-    const ws     = XLSX.utils.aoa_to_sheet([[title], [''], headers, ...dataRows]);
+    // Fila de totales al pie — antes esta exportación no sumaba nada
+    const totalRow = new Array(numCols).fill('');
+    totalRow[9]  = 'TOTALES →';
+    totalRow[11] = bookings.reduce((s,b) => s + (b.total_amount ?? 0), 0);
+    totalRow[12] = bookings.reduce((s,b) => s + (b.total_paid  ?? 0), 0);
+    totalRow[13] = bookings.reduce((s,b) => s + (b.balance     ?? 0), 0);
 
-    // Estilos (requiere XLSX Pro o workaround via cell styles — usamos comentarios de celda para notas)
-    const boldBlue = { font:{ bold:true, color:{ rgb:'FFFFFF' } }, fill:{ fgColor:{ rgb:'1A3A90' } }, alignment:{ horizontal:'center' } };
-    const hdrStyle = { font:{ bold:true, color:{ rgb:'FFFFFF' }, sz:10 }, fill:{ fgColor:{ rgb:'1A3A90' } }, alignment:{ horizontal:'center' } };
-    const titleStyle = { font:{ bold:true, sz:14, color:{ rgb:'1A3A90' } }, alignment:{ horizontal:'left' } };
-    const evenRow  = { fill:{ fgColor:{ rgb:'F0F4FA' } } };
+    const HEADER_ROW = 2; // fila 0: título, fila 1: subtítulo, fila 2: headers
+    const subtitle = `${bookings.length} reserva${bookings.length !== 1 ? 's' : ''} · Barranca de Termas`;
+    const ws = XLSX.utils.aoa_to_sheet([[title], [subtitle], headers, ...dataRows, totalRow]);
 
-    // Aplicar estilos a header row (fila 3 = index 2)
-    headers.forEach((_, ci) => {
-      const ref = XLSX.utils.encode_cell({ r:2, c:ci });
-      if (!ws[ref]) ws[ref] = {};
-      ws[ref].s = hdrStyle;
+    const dataStart = HEADER_ROW + 1;
+    const dataEnd   = dataStart + dataRows.length - 1;
+    const footerRow = dataEnd + 1;
+
+    _styleWorksheet(ws, XLSX, {
+      titleRow: 0, headerRow: HEADER_ROW, dataStart, dataEnd, footerRow, numCols,
+      colWidths: [22,12,14,22,18,11,11,7,12,10,13,12,12,12,28],
     });
-    // Título
-    if (ws['A1']) ws['A1'].s = titleStyle;
-    // Filas de datos — alternar color
-    dataRows.forEach((_, ri) => {
-      if (ri % 2 === 1) {
-        headers.forEach((__, ci) => {
-          const ref = XLSX.utils.encode_cell({ r:ri+3, c:ci });
-          if (ws[ref]) ws[ref].s = evenRow;
-        });
+    if (ws['A2']) ws['A2'].s = XSTY.subtitle;
+
+    // Formato moneda en las columnas de precio/total/abonado/saldo
+    [10,11,12,13].forEach(c => {
+      for (let r = dataStart; r <= footerRow; r++) {
+        const ref = XLSX.utils.encode_cell({ r, c });
+        if (ws[ref] && typeof ws[ref].v === 'number') ws[ref].z = '$#,##0';
       }
     });
 
-    // Merge del título
-    ws['!merges'] = [{ s:{r:0,c:0}, e:{r:0,c:headers.length-1} }];
-    // Anchos de columna
-    ws['!cols'] = [22,12,14,22,18,11,11,7,12,10,13,12,12,12,28].map(w => ({ wch:w }));
+    ws['!merges'] = [
+      { s:{r:0,c:0}, e:{r:0,c:numCols-1} },
+      { s:{r:1,c:0}, e:{r:1,c:numCols-1} },
+    ];
 
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Reservas');
@@ -490,15 +563,41 @@ export async function exportExpensesExcel(expenses, filename = 'gastos', range =
   const XLSX = window.XLSX;
 
   const headers = ['Categoría','Descripción','Monto','Vencimiento','Pagado','Fecha de pago'];
+  const numCols = headers.length;
   const rows = expenses.map(e => [
     _capitalize(e.category ?? ''), e.description ?? '', e.amount ?? 0,
     e.due_date ?? '', e.paid ? 'Sí' : 'No', e.paid_at ? e.paid_at.slice(0,10) : '',
   ]);
   const total = expenses.reduce((s, e) => s + (e.amount ?? 0), 0);
-  rows.push(['', 'TOTAL', total, '', '', '']);
+  const totalRow = ['', 'TOTAL →', total, '', '', ''];
 
-  const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-  ws['!cols'] = [16, 32, 13, 13, 9, 13].map(w => ({ wch: w }));
+  const now = new Date();
+  const title = `MILA PMS · Gastos${range ? ' · ' + range : ''} · Generado el ${now.toLocaleDateString('es-AR')}`;
+  const subtitle = `${expenses.length} gasto${expenses.length !== 1 ? 's' : ''} · Barranca de Termas`;
+
+  const HEADER_ROW = 2;
+  const ws = XLSX.utils.aoa_to_sheet([[title], [subtitle], headers, ...rows, totalRow]);
+
+  const dataStart = HEADER_ROW + 1;
+  const dataEnd    = dataStart + rows.length - 1;
+  const footerRow  = dataEnd + 1;
+
+  _styleWorksheet(ws, XLSX, {
+    titleRow: 0, headerRow: HEADER_ROW, dataStart, dataEnd, footerRow, numCols,
+    colWidths: [16, 32, 13, 13, 9, 13],
+  });
+  if (ws['A2']) ws['A2'].s = XSTY.subtitle;
+
+  for (let r = dataStart; r <= footerRow; r++) {
+    const ref = XLSX.utils.encode_cell({ r, c: 2 });
+    if (ws[ref] && typeof ws[ref].v === 'number') ws[ref].z = '$#,##0';
+  }
+
+  ws['!merges'] = [
+    { s:{r:0,c:0}, e:{r:0,c:numCols-1} },
+    { s:{r:1,c:0}, e:{r:1,c:numCols-1} },
+  ];
+
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Gastos');
   XLSX.writeFile(wb, `${filename}_${range || dateTag()}.xlsx`);
@@ -702,9 +801,12 @@ export async function exportFullBackup(db, hotelId) {
     ]);
 
     const wb = XLSX.utils.book_new();
+    const now = new Date();
+    const genLabel = `Generado el ${now.toLocaleDateString('es-AR')}`;
 
     // ── Hoja Reservas ──
     const bkHeaders = ['Huésped','DNI','Teléfono','Email','Unidades','Check-in','Check-out','Noches','Canal','Estado','Precio/noche','Total','Abonado','Saldo','Notas','Creada'];
+    const bkNumCols = bkHeaders.length;
     const bkRows = (bookings ?? []).map(b => {
       const g = b.guests;
       return [
@@ -716,29 +818,78 @@ export async function exportFullBackup(db, hotelId) {
         (b.notes ?? '').replace(/\n/g, ' '), (b.created_at ?? '').slice(0, 10),
       ];
     });
-    const wsBk = XLSX.utils.aoa_to_sheet([bkHeaders, ...bkRows]);
-    wsBk['!cols'] = [20,12,14,22,18,11,11,7,12,10,13,12,12,12,28,11].map(w => ({ wch: w }));
+    const bkTotalRow = new Array(bkNumCols).fill('');
+    bkTotalRow[9] = 'TOTALES →';
+    bkTotalRow[11] = bkRows.reduce((s,r) => s + (r[11] || 0), 0);
+    bkTotalRow[12] = bkRows.reduce((s,r) => s + (r[12] || 0), 0);
+    bkTotalRow[13] = bkRows.reduce((s,r) => s + (r[13] || 0), 0);
+
+    const wsBk = XLSX.utils.aoa_to_sheet([
+      [`MILA PMS · Reservas · ${genLabel}`],
+      [`${bkRows.length} reserva${bkRows.length !== 1 ? 's' : ''} · Barranca de Termas`],
+      bkHeaders, ...bkRows, bkTotalRow,
+    ]);
+    const bkDataStart = 3, bkDataEnd = bkDataStart + bkRows.length - 1, bkFooter = bkDataEnd + 1;
+    _styleWorksheet(wsBk, XLSX, {
+      titleRow: 0, headerRow: 2, dataStart: bkDataStart, dataEnd: bkDataEnd, footerRow: bkFooter, numCols: bkNumCols,
+      colWidths: [20,12,14,22,18,11,11,7,12,10,13,12,12,12,28,11],
+    });
+    if (wsBk['A2']) wsBk['A2'].s = XSTY.subtitle;
+    [10,11,12,13].forEach(c => {
+      for (let r = bkDataStart; r <= bkFooter; r++) {
+        const ref = XLSX.utils.encode_cell({ r, c });
+        if (wsBk[ref] && typeof wsBk[ref].v === 'number') wsBk[ref].z = '$#,##0';
+      }
+    });
+    wsBk['!merges'] = [{ s:{r:0,c:0}, e:{r:0,c:bkNumCols-1} }, { s:{r:1,c:0}, e:{r:1,c:bkNumCols-1} }];
     XLSX.utils.book_append_sheet(wb, wsBk, 'Reservas');
 
     // ── Hoja Huéspedes ──
     const gHeaders = ['Nombre','Apellido','DNI','Teléfono','Email','Localidad','Edad','Auto','Patente','Nacionalidad','Alta'];
+    const gNumCols = gHeaders.length;
     const gRows = (guests ?? []).map(g => [
       g.first_name ?? '', g.last_name ?? '', g.dni ?? '', g.phone ?? '', g.email ?? '',
       g.locality ?? '', g.age ?? '', g.car_model ?? '', g.car_plate ?? '', g.nationality ?? '',
       (g.created_at ?? '').slice(0, 10),
     ]);
-    const wsG = XLSX.utils.aoa_to_sheet([gHeaders, ...gRows]);
-    wsG['!cols'] = [16,16,12,14,22,18,7,18,10,14,11].map(w => ({ wch: w }));
+    const wsG = XLSX.utils.aoa_to_sheet([
+      [`MILA PMS · Huéspedes · ${genLabel}`],
+      [`${gRows.length} huésped${gRows.length !== 1 ? 'es' : ''} · Barranca de Termas`],
+      gHeaders, ...gRows,
+    ]);
+    const gDataStart = 3, gDataEnd = gDataStart + gRows.length - 1;
+    _styleWorksheet(wsG, XLSX, {
+      titleRow: 0, headerRow: 2, dataStart: gDataStart, dataEnd: gDataEnd, footerRow: null, numCols: gNumCols,
+      colWidths: [16,16,12,14,22,18,7,18,10,14,11],
+    });
+    if (wsG['A2']) wsG['A2'].s = XSTY.subtitle;
+    wsG['!merges'] = [{ s:{r:0,c:0}, e:{r:0,c:gNumCols-1} }, { s:{r:1,c:0}, e:{r:1,c:gNumCols-1} }];
     XLSX.utils.book_append_sheet(wb, wsG, 'Huéspedes');
 
     // ── Hoja Gastos ──
     const eHeaders = ['Categoría','Descripción','Monto','Vencimiento','Pagado','Fecha de pago','Creado'];
+    const eNumCols = eHeaders.length;
     const eRows = (expenses ?? []).map(e => [
       e.category ?? '', e.description ?? '', e.amount ?? 0,
       e.due_date ?? '', e.paid ? 'Sí' : 'No', (e.paid_at ?? '').slice(0, 10), (e.created_at ?? '').slice(0, 10),
     ]);
-    const wsE = XLSX.utils.aoa_to_sheet([eHeaders, ...eRows]);
-    wsE['!cols'] = [16,32,12,13,9,13,11].map(w => ({ wch: w }));
+    const eTotalRow = ['', 'TOTAL →', eRows.reduce((s,r) => s + (r[2] || 0), 0), '', '', '', ''];
+    const wsE = XLSX.utils.aoa_to_sheet([
+      [`MILA PMS · Gastos · ${genLabel}`],
+      [`${eRows.length} gasto${eRows.length !== 1 ? 's' : ''} · Barranca de Termas`],
+      eHeaders, ...eRows, eTotalRow,
+    ]);
+    const eDataStart = 3, eDataEnd = eDataStart + eRows.length - 1, eFooter = eDataEnd + 1;
+    _styleWorksheet(wsE, XLSX, {
+      titleRow: 0, headerRow: 2, dataStart: eDataStart, dataEnd: eDataEnd, footerRow: eFooter, numCols: eNumCols,
+      colWidths: [16,32,12,13,9,13,11],
+    });
+    if (wsE['A2']) wsE['A2'].s = XSTY.subtitle;
+    for (let r = eDataStart; r <= eFooter; r++) {
+      const ref = XLSX.utils.encode_cell({ r, c: 2 });
+      if (wsE[ref] && typeof wsE[ref].v === 'number') wsE[ref].z = '$#,##0';
+    }
+    wsE['!merges'] = [{ s:{r:0,c:0}, e:{r:0,c:eNumCols-1} }, { s:{r:1,c:0}, e:{r:1,c:eNumCols-1} }];
     XLSX.utils.book_append_sheet(wb, wsE, 'Gastos');
 
     XLSX.writeFile(wb, `MILA_backup_completo_${dateTag()}.xlsx`);
@@ -753,7 +904,12 @@ export async function exportFullBackup(db, hotelId) {
 async function _loadSheetJS() {
   return new Promise((res, rej) => {
     const s = document.createElement('script');
-    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+    // xlsx-js-style: mismo API que la versión gratuita común (XLSX.utils,
+    // XLSX.writeFile, etc.) pero con soporte real para estilos de celda
+    // (colores, negrita, bordes) — la versión "full.min.js" de siempre
+    // los ignoraba en silencio al guardar, por eso los Excel salían sin
+    // ningún diseño aunque el código ya intentara aplicarlo.
+    s.src = 'https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js';
     s.onload = res; s.onerror = rej;
     document.head.appendChild(s);
   });
