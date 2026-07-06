@@ -76,7 +76,7 @@ export function onNotificationsChanged(fn) {
 //             toast fugaz, no queda guardada (para avisos sin importancia)
 // data:       cualquier dato extra asociado (ej: bookingId) — opcional
 // category:   una de CATEGORIES (default 'sistema')
-export function addNotification({ type = 'generic', title, message = '', icon, color, persistent = true, data = null, category = 'sistema' }) {
+export function addNotification({ type = 'generic', title, message = '', icon, color, persistent = true, data = null, category = 'sistema', skipToast = false }) {
   const catInfo = CATEGORIES[category] ?? CATEGORIES.sistema;
   const notif = {
     id:        `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -100,7 +100,13 @@ export function addNotification({ type = 'generic', title, message = '', icon, c
   // igual quedó guardada en el historial por si se prende más adelante.
   if (_categoryPrefs[category] === false || !_masterEnabled) return notif;
 
-  _showToast(notif);
+  // skipToast: para cuando ya estás mirando el panel de Avisos (ej: se
+  // refresca el clima al abrirlo) — no tiene sentido un toast flotante
+  // encima del panel que ya tenés abierto; alcanza con que aparezca en
+  // la lista. En mobile esto además evitaba un lío real: el toast
+  // quedaba tapando al panel, y al intentar cerrarlo el toque se le
+  // escapaba al fondo y cerraba el panel de atrás sin querer.
+  if (!skipToast) _showToast(notif);
   _notifyListeners();
   return notif;
 }

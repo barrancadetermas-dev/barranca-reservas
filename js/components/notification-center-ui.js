@@ -174,7 +174,7 @@ function _openPanel() {
   _panelOpen = true;
   markAllRead();
   setTimeout(_renderBadge, 300); // se lee al abrir, el badge baja a 0 con una mini demora
-  checkTodayWeather(true); // clima siempre fresco cada vez que se abren los Avisos, sin esperar al límite de una vez por día
+  checkTodayWeather(true, true); // clima siempre fresco al abrir Avisos, sin toast flotante (ya estás mirando el panel)
 }
 function _closePanel() {
   const panel = document.getElementById('notifcenter-panel');

@@ -140,33 +140,42 @@ async function _fetchLocationForecast(loc) {
  * avisa, en silencio, sin afectar a la otra.
  */
 let _weatherRunning = false;
-export async function checkTodayWeather(force = false) {
+const ROTATION_KEY = 'mila_weather_last_location';
+
+export async function checkTodayWeather(force = false, skipToast = false) {
   if (_weatherRunning) return;
   const todayISO = new Date().toISOString().slice(0, 10);
   if (!force && localStorage.getItem(LASTRUN_KEY) === todayISO) return;
   _weatherRunning = true;
 
   try {
-    let anySucceeded = false;
-    for (const loc of LOCATIONS) {
-      if (_locationPrefs[loc.key] === false) continue; // ubicación apagada, se la saltea
-      try {
-        const { icon, message, data } = await _fetchLocationForecast(loc);
-        addNotification({
-          type: 'weather_forecast',
-          category: 'clima',
-          icon,
-          color: '#0EA5E9',
-          title: `Pronóstico — ${loc.label}`,
-          message,
-          data: { location: loc.key, ...data },
-        });
-        anySucceeded = true;
-      } catch (err) {
-        console.warn(`[Weather] no se pudo obtener el pronóstico de ${loc.label}:`, err?.message ?? err);
-      }
+    // Una sola notificación por vez, no una por cada ubicación habilitada
+    // — se turnan entre las que tengas activas, así no se amontonan 2-3
+    // avisos juntos cada vez que abrís los Avisos.
+    const enabledLocs = LOCATIONS.filter(l => _locationPrefs[l.key] !== false);
+    if (!enabledLocs.length) return;
+
+    const lastKey = localStorage.getItem(ROTATION_KEY);
+    const lastIdx = enabledLocs.findIndex(l => l.key === lastKey);
+    const nextLoc = enabledLocs[(lastIdx + 1) % enabledLocs.length];
+
+    try {
+      const { icon, message, data } = await _fetchLocationForecast(nextLoc);
+      addNotification({
+        type: 'weather_forecast',
+        category: 'clima',
+        icon,
+        color: '#0EA5E9',
+        title: `Pronóstico — ${nextLoc.label}`,
+        message,
+        data: { location: nextLoc.key, ...data },
+        skipToast,
+      });
+      localStorage.setItem(ROTATION_KEY, nextLoc.key);
+      localStorage.setItem(LASTRUN_KEY, todayISO);
+    } catch (err) {
+      console.warn(`[Weather] no se pudo obtener el pronóstico de ${nextLoc.label}:`, err?.message ?? err);
     }
-    if (anySucceeded) localStorage.setItem(LASTRUN_KEY, todayISO);
   } finally {
     _weatherRunning = false;
   }
