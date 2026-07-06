@@ -59,15 +59,28 @@ function _saveLiveScores(obj) {
 }
 
 // ── Resumen cada 4 horas (último resultado + próximo partido) ──
+const LAST_SEEN_KEY = 'mila_sports_last_seen'; // por equipo: último partido (jugado + próximo) ya avisado
+
 export async function checkSportsSummary() {
   const now = Date.now();
   const lastRun = parseInt(localStorage.getItem(LASTRUN_KEY) ?? '0', 10);
   if (now - lastRun < SUMMARY_INTERVAL_MS) return; // todavía no pasaron las 4 horas
 
-  let anySucceeded = false;
+  let lastSeen = {};
+  try { lastSeen = JSON.parse(localStorage.getItem(LAST_SEEN_KEY) ?? '{}'); } catch { lastSeen = {}; }
+
+  let anyAttemptSucceeded = false;
   for (const team of TEAMS) {
     try {
       const { last, next } = await _fetchLastNext(team);
+      anyAttemptSucceeded = true;
+      // Se arma una "huella" del estado actual (qué partido jugó + cuál
+      // es el próximo) — si es IGUAL a la última vez que se avisó este
+      // equipo, no se repite la misma info de nuevo, aunque hayan
+      // pasado las 4 horas. Solo avisa si de verdad cambió algo.
+      const fingerprint = `${last?.idEvent ?? ''}:${last?.intHomeScore ?? ''}-${last?.intAwayScore ?? ''}|${next?.idEvent ?? ''}`;
+      if (fingerprint === lastSeen[team.id]) continue; // nada nuevo para este equipo, se saltea
+
       const lines = [];
       if (last) lines.push(`Último: ${last.strHomeTeam} ${last.intHomeScore ?? '?'} - ${last.intAwayScore ?? '?'} ${last.strAwayTeam}`);
       if (next) {
@@ -79,13 +92,17 @@ export async function checkSportsSummary() {
           type: 'sports_summary', category: 'deportes', icon: team.icon, color: '#F59E0B',
           title: team.name, message: lines.join('\n'), data: { teamId: team.id },
         });
-        anySucceeded = true;
+        lastSeen[team.id] = fingerprint;
       }
     } catch (err) {
       console.warn(`[Sports] no se pudo obtener el resumen de ${team.name}:`, err?.message ?? err);
     }
   }
-  if (anySucceeded) localStorage.setItem(LASTRUN_KEY, String(now));
+  try { localStorage.setItem(LAST_SEEN_KEY, JSON.stringify(lastSeen)); } catch {}
+  // Solo se marca "ya revisado" si al menos un equipo respondió de
+  // verdad — así, si la fuente estuvo caída, se reintenta en la próxima
+  // apertura de la app en vez de esperar 4 horas de más por un fallo.
+  if (anyAttemptSucceeded) localStorage.setItem(LASTRUN_KEY, String(now));
 }
 
 // Intenta traer quién hizo el gol y en qué minuto — endpoint gratis

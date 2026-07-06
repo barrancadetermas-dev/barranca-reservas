@@ -23,6 +23,7 @@ const SESSION_CHECK_MS    = 5 * 60 * 1000;        // cada 5 min revisa si arranc
 
 const LASTRUN_KEY    = 'mila_f1_notif_lastrun';
 const LAST_RACE_KEY  = 'mila_f1_last_race_seen';
+const LAST_NEXT_RACE_KEY = 'mila_f1_last_next_race_seen';
 const LAST_POS_KEY   = 'mila_f1_last_position';
 
 const DRIVER_NUMBER = 43; // Franco Colapinto
@@ -64,8 +65,15 @@ export async function checkF1Summary() {
       const todayISO = new Date().toISOString().slice(0, 10);
       const next = races.find(r => r.date >= todayISO);
       if (next) {
-        const d = new Date(next.date + 'T00:00:00').toLocaleDateString('es-AR', { day: '2-digit', month: 'short' });
-        lines.push(`Próxima carrera: ${next.raceName} — ${d}`);
+        // Mismo criterio que el resultado: si es la MISMA próxima carrera
+        // que ya habías visto, no se repite cada 4 horas sin necesidad.
+        const nextKey = `${next.season}-${next.round}`;
+        const lastNextSeen = localStorage.getItem(LAST_NEXT_RACE_KEY);
+        if (nextKey !== lastNextSeen) {
+          const d = new Date(next.date + 'T00:00:00').toLocaleDateString('es-AR', { day: '2-digit', month: 'short' });
+          lines.push(`Próxima carrera: ${next.raceName} — ${d}`);
+          localStorage.setItem(LAST_NEXT_RACE_KEY, nextKey);
+        }
       }
     }
 
