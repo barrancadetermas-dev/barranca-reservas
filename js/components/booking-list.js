@@ -422,6 +422,7 @@ export class BookingList {
         hotel_id:     this.ctx.hotelId,
         amount:       balance,
         currency:     'ARS',
+        amount_ars:   balance,
         payment_type: 'balance',
         method:       document.getElementById('pf-method').value,
         payment_date: document.getElementById('pf-date').value,
