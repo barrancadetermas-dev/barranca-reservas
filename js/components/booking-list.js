@@ -125,6 +125,7 @@ export class BookingList {
           id, check_in, check_out, nights, status, source,
           total_amount, total_paid, balance, price_per_night,
           notes, is_blocked, block_reason, created_at, adults, children, pax,
+          checked_in_at, checked_out_at,
           guests!bookings_guest_id_fkey(
             id, first_name, last_name, dni, phone,
             bad_experience, bad_experience_note, tags, age, car_model, car_plate, nationality
