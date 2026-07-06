@@ -29,6 +29,7 @@ const CATEGORY_BG = {
   economia:      'rgba(34,197,94,.07)',   // verde apenas
   feriados:      'rgba(168,85,247,.07)',  // lila apenas
   rio:           'rgba(20,184,166,.07)',  // turquesa apenas
+  noticias:      'rgba(99,102,241,.07)',  // índigo apenas
   sistema:       'rgba(107,114,128,.07)', // gris apenas
 };
 const CATEGORY_BG_DARK = {
@@ -41,6 +42,7 @@ const CATEGORY_BG_DARK = {
   economia:      'rgba(74,222,128,.09)',
   feriados:      'rgba(196,181,253,.09)',
   rio:           'rgba(45,212,191,.09)',
+  noticias:      'rgba(129,140,248,.09)',
   sistema:       'rgba(148,163,184,.09)',
 };
 
@@ -99,7 +101,7 @@ function _renderList() {
 
 // Orden explícito — lo esencial de MILA arriba, después lo técnico,
 // después las fuentes externas agrupadas por tema.
-const CATEGORY_ORDER = ['reservas', 'sistema', 'clima', 'rio', 'economia', 'feriados', 'deportes', 'f1'];
+const CATEGORY_ORDER = ['reservas', 'sistema', 'clima', 'rio', 'economia', 'feriados', 'noticias', 'deportes', 'f1'];
 
 function _renderCategoryToggles() {
   const wrap = document.getElementById('notifcenter-categories');

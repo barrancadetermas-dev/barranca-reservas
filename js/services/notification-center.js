@@ -25,6 +25,7 @@ export const CATEGORIES = {
   economia:      { label: '💵 Economía',  togglable: true },
   feriados:      { label: '📅 Feriados',   togglable: true },
   rio:           { label: '🌊 Río Uruguay', togglable: true },
+  noticias:      { label: '📰 Noticias',   togglable: true },
   sistema:       { label: '⚙️ Sistema',    togglable: false },
 };
 
