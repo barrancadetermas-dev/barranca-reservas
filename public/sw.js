@@ -7,7 +7,7 @@
 // (causaba "Response body is already used").
 // ═══════════════════════════════════════════════════
 
-const CACHE_NAME  = 'mila-v9';
+const CACHE_NAME  = 'mila-v10';
 const OFFLINE_URL = '/offline.html';
 
 const STATIC_ASSETS = [
