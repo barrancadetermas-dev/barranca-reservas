@@ -744,9 +744,17 @@ export class BookingList {
             // (CHECK-IN / ALOJADA / CHECK-OUT) sigue indicando la
             // situación real, en los 3 casos.
             const payDot = b.status === 'paid' ? '🟢' : b.status === 'partial' ? '🔴' : '🟡';
-            if (isToday && b.check_in === today)  return `<div class="booking-today-banner" style="background:${barColor}18;border-color:${barColor}">${payDot} CHECK-IN HOY</div>`;
-            if (isToday && b.check_out === today) return `<div class="booking-today-banner" style="background:${barColor}18;border-color:${barColor}">${payDot} CHECK-OUT HOY</div>`;
-            if (isStaying) return `<div class="booking-today-banner" style="background:#8B5CF618;border-color:#8B5CF6;color:#8B5CF6">${payDot} ALOJADA</div>`;
+            const payBg  = b.status === 'paid' ? 'rgba(22,163,74,.10)'  : b.status === 'partial' ? 'rgba(220,38,38,.10)'  : 'rgba(202,138,4,.10)';
+            const payBd  = b.status === 'paid' ? 'rgba(22,163,74,.35)'  : b.status === 'partial' ? 'rgba(220,38,38,.35)'  : 'rgba(202,138,4,.35)';
+            const payClr = b.status === 'paid' ? '#15803d'              : b.status === 'partial' ? '#b91c1c'              : '#92400e';
+            if (isToday && b.check_in === today && b.check_out !== today) {
+              if (b.status === 'paid' || b.status === 'partial') {
+                return `<div class="booking-today-banner" style="background:${payBg};border-color:${payBd};color:${payClr}">${payDot} ALOJADA</div>`;
+              }
+              return `<div class="booking-today-banner" style="background:${payBg};border-color:${payBd};color:${payClr}">${payDot} CHECK-IN HOY</div>`;
+            }
+            if (isToday && b.check_out === today) return `<div class="booking-today-banner" style="background:${payBg};border-color:${payBd};color:${payClr}">${payDot} CHECK-OUT HOY</div>`;
+            if (isStaying) return `<div class="booking-today-banner" style="background:${payBg};border-color:${payBd};color:${payClr}">${payDot} ALOJADA</div>`;
             return '';
           })()}
         </div>
