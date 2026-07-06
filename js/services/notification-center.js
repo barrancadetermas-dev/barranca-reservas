@@ -167,6 +167,11 @@ function _ensureToastContainer() {
 }
 
 function _showToast(notif) {
+  // Mismo criterio que la campana/panel: en mobile esto se deja afuera
+  // por ahora (se veía borroso y con problemas de toque). El aviso
+  // igual queda guardado en el historial para cuando lo mires desde PC.
+  if (window.innerWidth < 768) return;
+
   const container = _ensureToastContainer();
   const toast = document.createElement('div');
   toast.className = 'notifcenter-toast';

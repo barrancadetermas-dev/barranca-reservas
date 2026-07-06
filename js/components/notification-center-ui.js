@@ -258,6 +258,14 @@ function _buildDom() {
 
 /** Llamar una vez al iniciar la app. */
 export function initNotificationCenterUI() {
+  // Por ahora, esta función solo anda bien en PC — en el celular seguía
+  // viéndose borroso incluso después de sacar el efecto de vidrio
+  // esmerilado, así que se deja completamente afuera en mobile hasta
+  // resolverlo bien (no tiene sentido mostrar algo que se ve mal).
+  // Los chequeos de fondo (clima, deportes, etc.) siguen corriendo igual
+  // en mobile — solo no se arma la campana ni el panel ni los toasts.
+  if (window.innerWidth < 768) return;
+
   _buildDom();
   _renderBadge();
   onNotificationsChanged(() => {
