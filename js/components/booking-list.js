@@ -72,6 +72,7 @@ export class BookingList {
       if (action === 'whatsapp')  this._sendWhatsApp(id);
       if (action === 'delete')    this._deleteBooking(id);
       if (action === 'checkout')  this._doCheckout(id);
+      if (action === 'early-checkout') this._doEarlyCheckout(id);
       if (action === 'flag')      this._openFlagModal(id, row);
       if (action === 'duplicate') this._duplicateBooking(id);
       if (action === 'pay-full')  this._payFull(id);
@@ -730,6 +731,14 @@ export class BookingList {
                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="14" height="14"><polyline points="20 6 9 17 4 12"/></svg>
                    </button>`
                 : ''}
+              ${isStaying
+                ? `<button data-action="early-checkout" class="bl-action-btn" title="Check-out anticipado — se va antes de la fecha prevista" aria-label="Check-out anticipado"
+                     style="color:#8B5CF6;border-color:#8B5CF6;background:rgba(139,92,246,.08)">
+                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                       <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
+                     </svg>
+                   </button>`
+                : ''}
               ${can('deleteBooking') ? `<button data-action="delete" class="bl-action-btn danger" title="Eliminar reserva" aria-label="Eliminar reserva">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
                   <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a1 1 0 011-1h4a1 1 0 011 1v2"/>
@@ -847,14 +856,50 @@ export class BookingList {
   async _doCheckout(id) {
     if (!confirm('¿Confirmar check-out de esta reserva?')) return;
     try {
-      await this.db.from('bookings').update({ status: 'paid' }).eq('id', id);
+      await this.db.from('bookings').update({ status: 'paid', checked_out_at: new Date().toISOString() }).eq('id', id);
       // Crear tarea de limpieza automáticamente
       const booking = this._allBookings.find(b => b.id === id);
       if (booking) {
         const { OperationsModule } = await import('./operations.js');
         await OperationsModule.createCheckoutCleaningTask(this.db, this.ctx, booking);
+        const guestName = booking.guests ? `${booking.guests.first_name} ${booking.guests.last_name}` : '—';
+        const unitName  = (booking.booking_units ?? []).map(bu => bu.units?.name).filter(Boolean).join(', ');
+        Bus.emit(EVENTS.CHECKOUT_DONE, { bookingId: id, guestName, unitName });
+        Bus.emit(EVENTS.UNIT_FREED, { unitName, guestName });
       }
       showToast('Check-out realizado ✓', 'success');
+      this.load();
+    } catch (err) {
+      showToast('Error: ' + err.message, 'error');
+    }
+  }
+
+  // ── Check-out ANTICIPADO — el huésped se va antes de la fecha de
+  // salida que tenía reservada. A propósito, esto NO toca la fecha de
+  // check_out ni el precio de la reserva — solo deja registrado que el
+  // huésped ya se fue hoy (para limpieza, estadísticas, y que deje de
+  // figurar como "alojada"). Si además querés liberar la unidad para una
+  // reserva nueva desde hoy, o ajustar el precio por las noches que no
+  // se usaron, eso se hace aparte, editando la reserva a mano — es una
+  // decisión de negocio (cobrar igual o no) que no toca asumir sola.
+  async _doEarlyCheckout(id) {
+    const booking = this._allBookings.find(b => b.id === id);
+    const guestName = booking?.guests ? `${booking.guests.first_name} ${booking.guests.last_name}` : 'este huésped';
+    if (!confirm(
+      `¿Registrar el check-out anticipado de ${guestName}?\n\n` +
+      `La reserva tenía salida prevista para el ${formatDate(booking?.check_out)}, pero se va hoy.\n\n` +
+      `Esto NO cambia la fecha de salida ni el precio de la reserva — solo queda registrado que ya se fue. Si querés liberar la unidad para otra reserva desde hoy, o ajustar el cobro por las noches que no se usaron, hacelo aparte editando la reserva.`
+    )) return;
+    try {
+      await this.db.from('bookings').update({ checked_out_at: new Date().toISOString() }).eq('id', id);
+      if (booking) {
+        const { OperationsModule } = await import('./operations.js');
+        await OperationsModule.createCheckoutCleaningTask(this.db, this.ctx, booking);
+        const unitName = (booking.booking_units ?? []).map(bu => bu.units?.name).filter(Boolean).join(', ');
+        Bus.emit(EVENTS.CHECKOUT_DONE, { bookingId: id, guestName, unitName });
+        Bus.emit(EVENTS.UNIT_FREED, { unitName, guestName });
+      }
+      showToast('Check-out anticipado registrado ✓', 'success');
       this.load();
     } catch (err) {
       showToast('Error: ' + err.message, 'error');
