@@ -623,12 +623,21 @@ export class BookingList {
                   : isRecurring ? `<span class="guest-flag flag-recurring" title="Ya se hospedó ${prevStays} vez${prevStays > 1 ? 'ces' : ''} antes">↩ Cliente</span>`
                   : '';
 
-    const isToday  = (b.check_in === today || b.check_out === today) && b.status !== 'cancelled';
-    // "Alojada" — el huésped ya hizo check-in y todavía no hizo check-out,
-    // y no es ninguno de los 2 días especiales (llegada/salida) de hoy —
-    // es una estadía que ya está en curso.
-    const isStaying = !isToday && b.status !== 'cancelled' && !!b.checked_in_at && !b.checked_out_at
-                     && b.check_in < today && b.check_out > today;
+    // Detecta salida anticipada — se guarda la fecha ORIGINAL de salida en
+    // las notas (tag 🚪ANTICIPADO:fecha) al momento de hacerla. Se sigue
+    // mostrando el aviso hasta que llegue esa fecha original.
+    const earlyMatch = b.notes?.match(/🚪ANTICIPADO:(\d{4}-\d{2}-\d{2})/);
+    const originalCheckOut = earlyMatch?.[1];
+    const isEarlyDeparture = !!b.checked_out_at && originalCheckOut && originalCheckOut > today && b.status !== 'cancelled';
+
+    // Orden de prioridad: primero lo que necesita ACCIÓN hoy (check-in o
+    // check-out pendientes), después "alojada" (ya hizo check-in, no
+    // importa si fue hoy o antes — deja de decir "check-in hoy" apenas
+    // se hace el check-in, no espera a que termine el día).
+    const isCheckInPending  = !b.checked_in_at && b.check_in === today && b.status !== 'cancelled';
+    const isCheckOutPending = !b.checked_out_at && b.check_out === today && b.status !== 'cancelled';
+    const isToday  = isCheckInPending || isCheckOutPending;
+    const isStaying = !isToday && !isEarlyDeparture && !!b.checked_in_at && !b.checked_out_at && b.status !== 'cancelled';
     const statusCls = STATUS_CLASSES[b.status] ?? '';
     const statusLbl = STATUS_LABELS[b.status]  ?? b.status;
     const nights   = b.nights ?? Math.round((new Date(b.check_out) - new Date(b.check_in)) / 86400000);
@@ -732,8 +741,7 @@ export class BookingList {
                    </button>`
                 : ''}
               ${isStaying
-                ? `<button data-action="early-checkout" class="bl-action-btn" title="Check-out anticipado — se va antes de la fecha prevista" aria-label="Check-out anticipado"
-                     style="color:#8B5CF6;border-color:#8B5CF6;background:rgba(139,92,246,.08)">
+                ? `<button data-action="early-checkout" class="bl-action-btn" title="Check-out anticipado — se va antes de la fecha prevista" aria-label="Check-out anticipado">
                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
                        <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
                      </svg>
@@ -750,11 +758,18 @@ export class BookingList {
             // El círculo cambia de color según el estado ECONÓMICO de la
             // reserva (pagó todo / solo señó / no pagó nada) — el texto
             // (CHECK-IN / ALOJADA / CHECK-OUT) sigue indicando la
-            // situación real, en los 3 casos.
-            const payDot = b.status === 'paid' ? '🟢' : b.status === 'partial' ? '🔴' : '🟡';
-            if (isToday && b.check_in === today)  return `<div class="booking-today-banner" style="background:${barColor}18;border-color:${barColor}">${payDot} CHECK-IN HOY</div>`;
-            if (isToday && b.check_out === today) return `<div class="booking-today-banner" style="background:${barColor}18;border-color:${barColor}">${payDot} CHECK-OUT HOY</div>`;
-            if (isStaying) return `<div class="booking-today-banner" style="background:#8B5CF618;border-color:#8B5CF6;color:#8B5CF6">${payDot} ALOJADA</div>`;
+            // situación real. El fondito del cartel ahora es del MISMO
+            // color que el círculo (bien tenue), no del color de la
+            // unidad como antes.
+            const payColor = b.status === 'paid' ? '#22c55e' : b.status === 'partial' ? '#ef4444' : '#eab308';
+            const payDot   = b.status === 'paid' ? '🟢' : b.status === 'partial' ? '🔴' : '🟡';
+            const banner = (dot, text, color) =>
+              `<div class="booking-today-banner" style="background:${color}18;border-color:${color};color:${color}">${dot} ${text}</div>`;
+
+            if (isCheckInPending)  return banner(payDot, 'CHECK-IN HOY', payColor);
+            if (isCheckOutPending) return banner(payDot, 'CHECK-OUT HOY', payColor);
+            if (isStaying)         return banner(payDot, 'ALOJADA', payColor);
+            if (isEarlyDeparture)  return banner('🟣', 'SE RETIRÓ ANTES', '#8B5CF6');
             return '';
           })()}
         </div>
@@ -875,31 +890,39 @@ export class BookingList {
   }
 
   // ── Check-out ANTICIPADO — el huésped se va antes de la fecha de
-  // salida que tenía reservada. A propósito, esto NO toca la fecha de
-  // check_out ni el precio de la reserva — solo deja registrado que el
-  // huésped ya se fue hoy (para limpieza, estadísticas, y que deje de
-  // figurar como "alojada"). Si además querés liberar la unidad para una
-  // reserva nueva desde hoy, o ajustar el precio por las noches que no
-  // se usaron, eso se hace aparte, editando la reserva a mano — es una
-  // decisión de negocio (cobrar igual o no) que no toca asumir sola.
+  // salida que tenía reservada. Ahora SÍ corrige la fecha de salida (a
+  // hoy) para liberar el calendario desde esta noche — la noche original
+  // reservada que queda "de más" (entre hoy y la fecha real de salida)
+  // se pinta gris en el calendario con una puerta 🚪, igual que una nota
+  // de crédito: se puede volver a alquilar por encima sin problema. La
+  // reserva conserva la fecha original en las notas, para poder mostrar
+  // ese tramo en el calendario.
   async _doEarlyCheckout(id) {
     const booking = this._allBookings.find(b => b.id === id);
     const guestName = booking?.guests ? `${booking.guests.first_name} ${booking.guests.last_name}` : 'este huésped';
+    const originalCheckOut = booking?.check_out;
+    const todayISO = localToday();
     if (!confirm(
       `¿Registrar el check-out anticipado de ${guestName}?\n\n` +
-      `La reserva tenía salida prevista para el ${formatDate(booking?.check_out)}, pero se va hoy.\n\n` +
-      `Esto NO cambia la fecha de salida ni el precio de la reserva — solo queda registrado que ya se fue. Si querés liberar la unidad para otra reserva desde hoy, o ajustar el cobro por las noches que no se usaron, hacelo aparte editando la reserva.`
+      `La reserva tenía salida prevista para el ${formatDate(originalCheckOut)}, pero se va hoy.\n\n` +
+      `Se corrige la fecha de salida a hoy (${formatDate(todayISO)}) — la unidad queda libre desde esta noche. Las noches que no se van a usar quedan marcadas en el calendario (se pueden volver a alquilar).`
     )) return;
     try {
-      await this.db.from('bookings').update({ checked_out_at: new Date().toISOString() }).eq('id', id);
+      const newNotes = appendNote(booking?.notes, `🚪ANTICIPADO:${originalCheckOut}`);
+      await this.db.from('bookings').update({
+        checked_out_at: new Date().toISOString(),
+        check_out: todayISO,
+        notes: newNotes,
+      }).eq('id', id);
       if (booking) {
         const { OperationsModule } = await import('./operations.js');
-        await OperationsModule.createCheckoutCleaningTask(this.db, this.ctx, booking);
+        await OperationsModule.createCheckoutCleaningTask(this.db, this.ctx, { ...booking, check_out: todayISO });
         const unitName = (booking.booking_units ?? []).map(bu => bu.units?.name).filter(Boolean).join(', ');
         Bus.emit(EVENTS.CHECKOUT_DONE, { bookingId: id, guestName, unitName });
         Bus.emit(EVENTS.UNIT_FREED, { unitName, guestName });
+        Bus.emit(EVENTS.AVAILABILITY_CHANGED, { unitName, checkIn: todayISO, checkOut: originalCheckOut });
       }
-      showToast('Check-out anticipado registrado ✓', 'success');
+      showToast('Check-out anticipado registrado ✓ — calendario actualizado', 'success');
       this.load();
     } catch (err) {
       showToast('Error: ' + err.message, 'error');

@@ -84,7 +84,7 @@ export class Calendar {
       this._dateRange   = this._buildDateRange(this._windowStart, this._visibleDays);
       this._updateTitle();
 
-      const [bookings, reminders, cancelledNC, lastCheckoutByUnit] = await Promise.all([
+      const [bookings, reminders, cancelledNC, lastCheckoutByUnit, earlyDepartures] = await Promise.all([
         this._fetchBookings(this._windowStart, lastISO),
         this._fetchReminders(this._windowStart, lastISO).catch(err => {
           console.warn('[Calendar] reminders fetch failed:', err?.message ?? err);
@@ -98,13 +98,18 @@ export class Calendar {
           console.warn('[Calendar] lastCheckoutByUnit fetch failed:', err?.message ?? err);
           return new Map();
         }),
+        this._fetchEarlyDepartures(this._windowStart, lastISO).catch(err => {
+          console.warn('[Calendar] earlyDepartures fetch failed:', err?.message ?? err);
+          return [];
+        }),
       ]);
 
       this._lastRenderedBookings = bookings;
       const cellMap     = this._buildCellMap(bookings);
       const reminderMap = this._buildReminderMap(reminders);
       const ncPendingDays = this._buildNcPendingDays(bookings, cancelledNC);
-      this._render(cellMap, reminderMap, ncPendingDays, lastCheckoutByUnit);
+      const earlyDepartureDays = this._buildEarlyDepartureDays(bookings, earlyDepartures);
+      this._render(cellMap, reminderMap, ncPendingDays, lastCheckoutByUnit, earlyDepartureDays);
 
     // ── 5. Barra de resumen superior ──
     this._renderSummaryBar(bookings);
@@ -279,6 +284,50 @@ export class Calendar {
     return pending;
   }
 
+  // Reservas ACTIVAS (no canceladas) que tuvieron una salida anticipada
+  // — se detectan por el tag 🚪ANTICIPADO:<fecha original> en las notas.
+  // Mismo criterio que con las notas de crédito: no se filtra por texto
+  // en la consulta a la base (el emoji dio problemas antes), se trae un
+  // rango amplio y se filtra acá en JS.
+  async _fetchEarlyDepartures(firstDay, lastDay) {
+    const { data, error } = await this.db
+      .from('bookings')
+      .select('id, check_out, notes, booking_units(unit_id), guests!bookings_guest_id_fkey(first_name, last_name)')
+      .eq('hotel_id', this.ctx.hotelId)
+      .not('status', 'in', '(cancelled,blocked)')
+      .lte('check_out', lastDay);
+    if (error) { console.warn('[Calendar] earlyDepartures fetch error:', error.message); return []; }
+    return (data ?? [])
+      .map(b => {
+        const m = b.notes?.match(/🚪ANTICIPADO:(\d{4}-\d{2}-\d{2})/);
+        return m ? { ...b, originalCheckOut: m[1] } : null;
+      })
+      .filter(b => b && b.originalCheckOut > firstDay);
+  }
+
+  // Para cada unidad+día entre la salida REAL (ya acortada) y la fecha
+  // ORIGINAL de salida, revisa si una reserva ACTIVA ya "pisó" ese día —
+  // igual que con las notas de crédito, si nadie lo pisó todavía, esa
+  // noche queda marcada como "de salida anticipada" (se pinta gris con
+  // puerta 🚪) y se puede volver a reservar por encima sin problema.
+  _buildEarlyDepartureDays(activeBookings, earlyDepartures) {
+    const pending = new Map(); // `${unitId}|${iso}` -> nombre del huésped
+    earlyDepartures.forEach(eb => {
+      const unitIds = (eb.booking_units ?? []).map(bu => bu.unit_id);
+      const guestName = eb.guests ? `${eb.guests.first_name ?? ''} ${eb.guests.last_name ?? ''}`.trim() : '';
+      for (let d = eb.check_out; d < eb.originalCheckOut; d = this._addDays(d, 1)) {
+        unitIds.forEach(unitId => {
+          const covered = activeBookings.some(b =>
+            b.id !== eb.id && b.check_in <= d && b.check_out > d &&
+            (b.booking_units ?? []).some(bu => bu.unit_id === unitId)
+          );
+          if (!covered) pending.set(`${unitId}|${d}`, guestName);
+        });
+      }
+    });
+    return pending;
+  }
+
   async _fetchReminders(firstDay, lastDay) {
     const { data, error } = await this.db
       .from('reminders')
@@ -348,7 +397,7 @@ export class Calendar {
   // ══════════════════════════════════════════════════
   // RENDERIZADO PRINCIPAL
   // ══════════════════════════════════════════════════
-  _render(cellMap, reminderMap, ncPendingDays = new Map(), lastCheckoutByUnit = new Map()) {
+  _render(cellMap, reminderMap, ncPendingDays = new Map(), lastCheckoutByUnit = new Map(), earlyDepartureDays = new Map()) {
     const grid    = document.getElementById('calendar-grid');
     const today   = localToday();
     const isMob   = window.innerWidth <= 768;
@@ -525,6 +574,10 @@ export class Calendar {
             const guestName = ncPendingDays.get(`${unit.id}|${iso}`);
             this._renderNcPendingBar(cell, guestName);
             cell.title = `🔄 Noche de una nota de crédito${guestName ? ` de ${guestName}` : ''} sin usar — todavía se puede reservar`;
+          } else if (earlyDepartureDays.has(`${unit.id}|${iso}`)) {
+            const guestName = earlyDepartureDays.get(`${unit.id}|${iso}`);
+            this._renderEarlyDepartureBar(cell, guestName);
+            cell.title = `🚪 Noche libre por salida anticipada${guestName ? ` de ${guestName}` : ''} — todavía se puede reservar`;
           } else {
             // "Hace cuántos días no se alquila", contado desde el último
             // checkout de esa unidad hasta ESTA celda (sea pasada, hoy, o
@@ -610,6 +663,27 @@ export class Calendar {
       font-size:.72rem;pointer-events:none;
     `;
     bar.innerHTML = '<span style="opacity:.7">🔄</span>';
+    cell.appendChild(bar);
+  }
+
+  // Misma idea y mismo gris que la barra de nota de crédito sin usar —
+  // el usuario pidió específicamente el mismo estilo, solo cambia el
+  // ícono (puerta en vez de flechitas) para distinguir el motivo.
+  _renderEarlyDepartureBar(cell, guestName) {
+    const bar = document.createElement('div');
+    bar.className = 'early-departure-bar';
+    bar.style.cssText = `
+      position:absolute;top:6px;bottom:6px;left:4px;right:4px;
+      border-radius:6px;
+      background:repeating-linear-gradient(135deg,
+        rgba(148,163,184,.35), rgba(148,163,184,.35) 6px,
+        rgba(148,163,184,.18) 6px, rgba(148,163,184,.18) 12px);
+      border:1px dashed rgba(148,163,184,.45);
+      z-index:2;
+      display:flex;align-items:center;justify-content:center;
+      font-size:.72rem;pointer-events:none;
+    `;
+    bar.innerHTML = '<span style="opacity:.7">🚪</span>';
     cell.appendChild(bar);
   }
 
