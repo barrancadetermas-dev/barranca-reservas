@@ -520,6 +520,7 @@ export class Calendar {
         }
       }
     });
+    console.log('[HeatMap] gapMap size:', gapMap.size, 'sample:', [...gapMap.entries()].slice(0,5));
 
     // ── Filas de unidades ─────────────────────────
     this.ctx.units.forEach((unit, rowIdx) => {
