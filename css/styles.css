@@ -1285,6 +1285,13 @@ select { appearance: auto; cursor: pointer; }
   /* El "+" (nueva reserva) resaltado en verde, solo en mobile, para que
      se note más de un vistazo entre los demás íconos del menú inferior. */
   .bnav-fab { background: #16a34a !important; border-color: #16a34a !important; color: #fff !important; }
+  /* En mobile, la sección de Reservas muestra solo el buscador + los tabs.
+     Los filtros de estado, unidad, período y origen desaparecen — hay poco
+     espacio y confunden más de lo que ayudan en pantalla chica. */
+  #section-bookings .filter-row,
+  #section-bookings .date-preset-row,
+  #section-bookings .source-filter-row,
+  #section-bookings .filter-date-wrap { display: none !important; }
   .sidebar {
     position: fixed; top: 0; left: 0; height: 100dvh;
     transform: translateX(-100%); z-index: 200;
