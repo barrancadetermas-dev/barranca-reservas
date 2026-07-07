@@ -249,40 +249,41 @@ export class GuestsCRM {
     if (!area) return;
     const limit = this._guestLimit ?? 25;
     area.innerHTML = `<div style="padding:16px;text-align:center;color:var(--color-text-3)">⟳ Cargando...</div>`;
-    const { data: guests } = await this.db
-      .from('guests')
-      .select(`id, first_name, last_name, phone, email, dni, nationality, tags, bad_experience, created_at, locality, age, car_model, car_plate, linked_guest_id,
-        linked:guests!linked_guest_id(id, first_name, last_name,
+    // Traer TODOS los IDs que son "secundarios" (linked_guest_id de otro),
+    // sin límite — así la página actual no afecta quién se oculta.
+    const [guestsRes, allLinkedRes] = await Promise.all([
+      this.db.from('guests')
+        .select(`id, first_name, last_name, phone, email, dni, nationality, tags, bad_experience, created_at, locality, age, car_model, car_plate, linked_guest_id,
+          linked:guests!linked_guest_id(id, first_name, last_name,
+            bookings!bookings_guest_id_fkey(id, total_paid, check_in, check_out, status, notes,
+              booking_units(units(name, color)))),
           bookings!bookings_guest_id_fkey(id, total_paid, check_in, check_out, status, notes,
-            booking_units(units(name, color)))),
-        bookings!bookings_guest_id_fkey(id, total_paid, check_in, check_out, status, notes,
-          booking_units(units(name, color))),
-        guest_notes!guest_notes_guest_id_fkey(body, category, created_at)`)
-      .eq('hotel_id', this.ctx.hotelId)
-      .order('created_at', { ascending: false })
-      .limit(limit);
+            booking_units(units(name, color))),
+          guest_notes!guest_notes_guest_id_fkey(body, category, created_at)`)
+        .eq('hotel_id', this.ctx.hotelId)
+        .order('created_at', { ascending: false })
+        .limit(limit),
+      this.db.from('guests')
+        .select('linked_guest_id')
+        .eq('hotel_id', this.ctx.hotelId)
+        .not('linked_guest_id', 'is', null),
+    ]);
+    const guests = guestsRes.data ?? [];
+    // Set de todos los IDs que son el "lado vinculado" (secondary) — se ocultan de la lista
+    const allLinkedIds = new Set((allLinkedRes.data ?? []).map(r => r.linked_guest_id));
     if (!guests?.length) {
       area.innerHTML = '<div class="empty-state"><span class="empty-state-icon">👤</span><p>Sin huéspedes aún.</p></div>';
       return;
     }
-    // Los huéspedes que son el linked_guest_id de otro se ocultan de la lista
-    // principal — aparecen dentro de la ficha del huésped principal.
-    const linkedIds = new Set(guests.filter(g => g.linked_guest_id).map(g => g.linked_guest_id));
-    const primaryGuests = guests.filter(g => !linkedIds.has(g.id));
+    const primaryGuests = guests.filter(g => !allLinkedIds.has(g.id));
 
-    this._allGuestsData = guests; // cache para exportar
+    this._allGuestsData = guests;
     primaryGuests.forEach(g => {
       const bks = (g.bookings ?? []).filter(b => b.status !== 'blocked' && b.status !== 'cancelled');
-      // Incluir reservas del vinculado en totales
       const linkedBks = g.linked ? (g.linked.bookings ?? []).filter(b => b.status !== 'blocked' && b.status !== 'cancelled') : [];
       const allBks = [...bks, ...linkedBks];
-      g.total_bookings = bks.length;
-      g.total_spent    = bks.reduce((s, b) => s + (b.total_paid ?? 0), 0);
-      const sorted     = bks.sort((a,b) => b.check_in.localeCompare(a.check_in));
-      g.last_checkin   = sorted[0]?.check_in ?? null;
-      g.last_checkout  = sorted[0]?.check_out ?? null;
-      // TODAS las unidades de la última reserva (no solo la primera) — fix bug "1 unidad" cuando son 4
       g.total_bookings = allBks.length;
+      g.own_bookings   = bks.length; // para mostrar en la tarjeta cuántas son propias
       g.total_spent    = allBks.reduce((s, b) => s + (b.total_paid ?? 0), 0);
       const bksSorted  = allBks.sort((a,b) => b.check_in.localeCompare(a.check_in));
       g.last_checkin   = bksSorted[0]?.check_in ?? null;
@@ -496,16 +497,25 @@ export class GuestsCRM {
 
       </div>
       ${g.linked ? `
-      <div onclick="event.stopPropagation();window._guestsCRM?._openProfile('${g.linked.id}')"
-        style="display:flex;align-items:center;gap:7px;padding:6px 10px 6px 52px;
-          font-size:.72rem;color:var(--color-text-3);cursor:pointer;
-          border-top:1px dashed var(--color-border);
-          transition:background .12s;border-radius:0 0 6px 6px"
-        onmouseenter="this.style.background='var(--color-surface-2)'"
-        onmouseleave="this.style.background=''">
-        <span>👫</span>
-        <span style="color:var(--color-text-2);font-weight:500">${esc(g.linked.first_name)} ${esc(g.linked.last_name)}</span>
-        <span style="opacity:.5">· ${(g.linked.bookings ?? []).filter(b=>b.status!='cancelled'&&b.status!='blocked').length} estadía${(g.linked.bookings ?? []).filter(b=>b.status!='cancelled'&&b.status!='blocked').length!==1?'s':''}</span>
+      <div style="border-top:1px dashed var(--color-border);padding:6px 10px 6px 10px">
+        <div style="font-size:.68rem;color:var(--color-text-3);font-weight:600;margin-bottom:4px;display:flex;align-items:center;gap:6px">
+          <span>👫</span>
+          <span>Reservas de <span style="color:var(--color-text-2)">${esc(g.linked.first_name)} ${esc(g.linked.last_name)}</span></span>
+          <button onclick="event.stopPropagation();window._guestsCRM?._openProfile('${g.linked.id}')"
+            style="font-size:.65rem;color:var(--color-primary);background:none;border:none;cursor:pointer;padding:1px 6px;border-radius:4px;border:1px solid var(--color-primary)">ver ficha →</button>
+        </div>
+        ${(g.linked.bookings ?? []).filter(b=>b.status!='cancelled'&&b.status!='blocked').sort((a,b)=>b.check_in.localeCompare(a.check_in)).map(b => {
+          const unitName = b.booking_units?.[0]?.units?.name ?? '—';
+          const unitColor = b.booking_units?.[0]?.units?.color ?? '#999';
+          const ci = b.check_in ? b.check_in.split('-').reverse().join('/') : '';
+          const co = b.check_out ? b.check_out.split('-').reverse().join('/') : '';
+          return `<div style="display:flex;align-items:center;gap:6px;padding:3px 0;font-size:.72rem;color:var(--color-text-2)">
+            <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${unitColor};flex-shrink:0"></span>
+            <span style="font-weight:500">${unitName}</span>
+            <span style="color:var(--color-text-3)">${ci} → ${co}</span>
+            <span style="margin-left:auto;color:var(--color-success);font-weight:600;font-size:.69rem">${formatARS(b.total_paid ?? 0)}</span>
+          </div>`;
+        }).join('')}
       </div>` : ''}
 
         <!-- Botón borrar -->
