@@ -520,7 +520,6 @@ export class Calendar {
         }
       }
     });
-    console.log('[HeatMap] gapMap size:', gapMap.size, 'sample:', [...gapMap.entries()].slice(0,5));
 
     // ── Filas de unidades ─────────────────────────
     this.ctx.units.forEach((unit, rowIdx) => {
@@ -625,7 +624,7 @@ export class Calendar {
             // con las barras de reserva.
             const gapSize   = gapMap.get(`${unit.id}|${iso}`) ?? null;
             const heatColor = this._heatmapColor(iso, today, !!cellHol && cellHol.type !== 'vacation', cellHol?.type, gapSize);
-            if (heatColor) cell.style.backgroundColor = heatColor;
+            if (heatColor) cell.style.setProperty('background-color', heatColor, 'important');
           }
           this._bindEmptyCell(cell, unit.id, iso);
         } else if (bookings.length === 1) {
