@@ -254,9 +254,6 @@ export class GuestsCRM {
     const [guestsRes, allLinkedRes] = await Promise.all([
       this.db.from('guests')
         .select(`id, first_name, last_name, phone, email, dni, nationality, tags, bad_experience, created_at, locality, age, car_model, car_plate, linked_guest_id,
-          linked:guests!linked_guest_id(id, first_name, last_name,
-            bookings!bookings_guest_id_fkey(id, total_paid, check_in, check_out, status, notes,
-              booking_units(units(name, color)))),
           bookings!bookings_guest_id_fkey(id, total_paid, check_in, check_out, status, notes,
             booking_units(units(name, color))),
           guest_notes!guest_notes_guest_id_fkey(body, category, created_at)`)
@@ -295,6 +292,28 @@ export class GuestsCRM {
       return;
     }
     const primaryGuests = guests.filter(g => !secondaryIds.has(g.id));
+
+    // Traer los datos del vinculado para cada primario que tenga linked_guest_id
+    // apuntando a alguien que no sea secundario (o sea, el secundario del par).
+    // Se hace una sola consulta para todos los IDs vinculados de una vez.
+    const linkedGuestIds = [...new Set(primaryGuests
+      .filter(g => g.linked_guest_id)
+      .map(g => g.linked_guest_id))];
+
+    let linkedGuestsMap = new Map(); // id → guest data con bookings
+    if (linkedGuestIds.length) {
+      const { data: linkedData } = await this.db.from('guests')
+        .select(`id, first_name, last_name,
+          bookings!bookings_guest_id_fkey(id, total_paid, check_in, check_out, status, notes,
+            booking_units(units(name, color)))`)
+        .in('id', linkedGuestIds);
+      (linkedData ?? []).forEach(lg => linkedGuestsMap.set(lg.id, lg));
+    }
+
+    // Inyectar el objeto `linked` en cada primario
+    primaryGuests.forEach(g => {
+      g.linked = g.linked_guest_id ? linkedGuestsMap.get(g.linked_guest_id) ?? null : null;
+    });
 
     this._allGuestsData = guests;
     primaryGuests.forEach(g => {
