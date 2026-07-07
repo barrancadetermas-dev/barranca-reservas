@@ -638,16 +638,19 @@ export class BookingList {
     const isCheckInPending  = !b.checked_in_at && b.check_in <= today && b.check_in >= today && b.status !== 'cancelled';
     const isCheckOutPending = !b.checked_out_at && b.check_out === today && b.status !== 'cancelled';
     const isToday  = isCheckInPending || isCheckOutPending;
-    // "Alojada" — la reserva está en curso HOY (check_in ya pasó, check_out
-    // todavía no) y no está cancelada. No requiere que se haya apretado el
-    // botón de check-in antes — una reserva de hace 2 días que nunca tuvo
-    // el botón disponible igualmente debe poder hacerle salida anticipada.
-    const isStaying = !isEarlyDeparture && b.status !== 'cancelled' && !b.checked_out_at
-                     && b.check_in < today && b.check_out > today;
-    // Reservas con check_in pasado sin check-in registrado — necesitan
-    // el botón de Check-in para poder pasar a "alojada" y habilitar la
-    // salida anticipada.
-    const needsLateCheckIn = !b.checked_in_at && b.check_in < today && b.check_out >= today && b.status !== 'cancelled';
+    // "Alojada" = reserva en curso: ya llegó la fecha de check_in (hoy o
+    // antes) y todavía no llegó la de check_out, y no está cancelada ni
+    // ya hizo salida anticipada. Es la condición para mostrar el botón de
+    // salida anticipada — independientemente de si se registró el check-in
+    // o no, y del estado de pago.
+    const isStaying = !isEarlyDeparture
+                     && b.status !== 'cancelled'
+                     && !b.checked_out_at
+                     && b.check_in <= today
+                     && b.check_out > today;
+
+    // Check-in tardío: reserva alojada que nunca tuvo el check-in registrado
+    const needsLateCheckIn = isStaying && !b.checked_in_at;
     const statusCls = STATUS_CLASSES[b.status] ?? '';
     const statusLbl = STATUS_LABELS[b.status]  ?? b.status;
     const nights   = b.nights ?? Math.round((new Date(b.check_out) - new Date(b.check_in)) / 86400000);
@@ -745,16 +748,14 @@ export class BookingList {
                   </svg>
                 </button>` : ''}
               ${needsLateCheckIn
-                ? `<button data-action="late-checkin" class="bl-action-btn" title="Registrar check-in (llegó antes y no se registró)" aria-label="Registrar check-in tardío"
-                     style="color:#22c55e;border-color:#22c55e;background:rgba(34,197,94,.08)">
+                ? `<button data-action="late-checkin" class="bl-action-btn" title="Registrar check-in" aria-label="Registrar check-in">
                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
                        <path d="M15 3h4a2 2 0 012 2v14a2 2 0 01-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/>
                      </svg>
                    </button>`
                 : ''}
               ${b.check_out === today && b.status !== 'cancelled'
-                ? `<button data-action="checkout" class="bl-action-btn" title="Registrar check-out" aria-label="Registrar check-out"
-                     style="color:#22c55e;border-color:#22c55e;background:rgba(34,197,94,.08)">
+                ? `<button data-action="checkout" class="bl-action-btn" title="Registrar check-out" aria-label="Registrar check-out">
                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="14" height="14"><polyline points="20 6 9 17 4 12"/></svg>
                    </button>`
                 : ''}
