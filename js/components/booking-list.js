@@ -301,7 +301,10 @@ export class BookingList {
   // ── Filtros aplicados ─────────────────────────────
   _applyFilters(bookings, today) {
     return bookings.filter(b => {
-      const isArchive = b.check_out < today;
+      // Una reserva va al Historial si su fecha de check-out ya pasó,
+      // O si se registró el check-out hoy (aunque la fecha de salida
+      // sea hoy o incluso futura en el caso de salida anticipada).
+      const isArchive = b.check_out < today || !!b.checked_out_at;
       if (this._tab === 'active'  && isArchive)  return false;
       if (this._tab === 'archive' && !isArchive) return false;
 
