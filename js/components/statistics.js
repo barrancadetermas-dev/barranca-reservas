@@ -71,9 +71,32 @@ export class Statistics {
     if (!monthSel || !yearSel) return;
     MONTH_NAMES.forEach((m, i) => { monthSel.innerHTML += `<option value="${i}">${m}</option>`; });
     const now = new Date(), curYear = now.getFullYear();
-    for (let y = 2026; y <= curYear + 1; y++) {
-      yearSel.innerHTML += `<option value="${y}" ${y === curYear ? 'selected' : ''}>${y}</option>`;
-    }
+    // El año de inicio lo determinamos dinámicamente buscando la reserva más
+    // antigua en la base — antes arrancaba de 2026 hardcodeado, lo que
+    // dejaba sin acceso a todos los datos históricos importados desde 2023.
+    this.db.from('bookings')
+      .select('check_in')
+      .eq('hotel_id', this.ctx.hotelId)
+      .order('check_in', { ascending: true })
+      .limit(1)
+      .then(({ data }) => {
+        const firstYear = data?.[0]?.check_in
+          ? new Date(data[0].check_in).getFullYear()
+          : curYear;
+        yearSel.innerHTML = '';
+        for (let y = firstYear; y <= curYear + 1; y++) {
+          yearSel.innerHTML += `<option value="${y}" ${y === curYear ? 'selected' : ''}>${y}</option>`;
+        }
+        // Restaurar selección guardada si el año sigue siendo válido
+        const saved = JSON.parse(localStorage.getItem('mila_stats_period') ?? 'null');
+        if (saved?.year && saved.year >= firstYear) yearSel.value = saved.year;
+      })
+      .catch(() => {
+        yearSel.innerHTML = '';
+        for (let y = 2023; y <= curYear + 1; y++) {
+          yearSel.innerHTML += `<option value="${y}" ${y === curYear ? 'selected' : ''}>${y}</option>`;
+        }
+      });
     // Persistir selección al cambiar
     const savePeriod = () => {
       try {

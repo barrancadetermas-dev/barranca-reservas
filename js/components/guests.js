@@ -251,7 +251,10 @@ export class GuestsCRM {
     area.innerHTML = `<div style="padding:16px;text-align:center;color:var(--color-text-3)">⟳ Cargando...</div>`;
     const { data: guests } = await this.db
       .from('guests')
-      .select(`id, first_name, last_name, phone, email, dni, nationality, tags, bad_experience, created_at, locality, age, car_model, car_plate,
+      .select(`id, first_name, last_name, phone, email, dni, nationality, tags, bad_experience, created_at, locality, age, car_model, car_plate, linked_guest_id,
+        linked:guests!linked_guest_id(id, first_name, last_name,
+          bookings!bookings_guest_id_fkey(id, total_paid, check_in, check_out, status, notes,
+            booking_units(units(name, color)))),
         bookings!bookings_guest_id_fkey(id, total_paid, check_in, check_out, status, notes,
           booking_units(units(name, color))),
         guest_notes!guest_notes_guest_id_fkey(body, category, created_at)`)
@@ -262,29 +265,41 @@ export class GuestsCRM {
       area.innerHTML = '<div class="empty-state"><span class="empty-state-icon">👤</span><p>Sin huéspedes aún.</p></div>';
       return;
     }
+    // Los huéspedes que son el linked_guest_id de otro se ocultan de la lista
+    // principal — aparecen dentro de la ficha del huésped principal.
+    const linkedIds = new Set(guests.filter(g => g.linked_guest_id).map(g => g.linked_guest_id));
+    const primaryGuests = guests.filter(g => !linkedIds.has(g.id));
+
     this._allGuestsData = guests; // cache para exportar
-    guests.forEach(g => {
+    primaryGuests.forEach(g => {
       const bks = (g.bookings ?? []).filter(b => b.status !== 'blocked' && b.status !== 'cancelled');
+      // Incluir reservas del vinculado en totales
+      const linkedBks = g.linked ? (g.linked.bookings ?? []).filter(b => b.status !== 'blocked' && b.status !== 'cancelled') : [];
+      const allBks = [...bks, ...linkedBks];
       g.total_bookings = bks.length;
       g.total_spent    = bks.reduce((s, b) => s + (b.total_paid ?? 0), 0);
       const sorted     = bks.sort((a,b) => b.check_in.localeCompare(a.check_in));
       g.last_checkin   = sorted[0]?.check_in ?? null;
       g.last_checkout  = sorted[0]?.check_out ?? null;
       // TODAS las unidades de la última reserva (no solo la primera) — fix bug "1 unidad" cuando son 4
-      g.last_units     = (sorted[0]?.booking_units ?? []).map(bu => bu.units).filter(Boolean);
-      g.last_unit      = g.last_units[0] ?? null; // compat con código que use last_unit singular
-      g.prev_units     = [...new Set(sorted.slice(1,4).flatMap(b => (b.booking_units ?? []).map(bu => bu.units?.name)).filter(Boolean))];
-      // Nota más reciente
+      g.total_bookings = allBks.length;
+      g.total_spent    = allBks.reduce((s, b) => s + (b.total_paid ?? 0), 0);
+      const bksSorted  = allBks.sort((a,b) => b.check_in.localeCompare(a.check_in));
+      g.last_checkin   = bksSorted[0]?.check_in ?? null;
+      g.last_checkout  = bksSorted[0]?.check_out ?? null;
+      g.last_units     = (bksSorted[0]?.booking_units ?? []).map(bu => bu.units).filter(Boolean);
+      g.last_unit      = g.last_units[0] ?? null;
+      g.prev_units     = [...new Set(bksSorted.slice(1,4).flatMap(b => (b.booking_units ?? []).map(bu => bu.units?.name)).filter(Boolean))];
       const allNotes   = (g.guest_notes ?? []).sort((a,b) => b.created_at.localeCompare(a.created_at));
       g.latest_note    = allNotes[0]?.body ?? null;
       this._attachOpenCreditNote(g);
     });
-    const sorted = this._sortGuests(guests);
-    area.innerHTML = sorted.map(g => this._renderGuestCard(g)).join('');
+    const sortedGuests = this._sortGuests(primaryGuests);
+    area.innerHTML = sortedGuests.map(g => this._renderGuestCard(g)).join('');
     area.querySelectorAll('.guest-row-item').forEach(card =>
       card.addEventListener('click', () => this._openProfile(card.dataset.guestId)));
     const lbl = document.getElementById('bl-total-label');
-    if (lbl) lbl.textContent = guests.length >= limit ? `Mostrando los últimos ${limit}` : `${guests.length} huéspedes`;
+    if (lbl) lbl.textContent = primaryGuests.length >= limit ? `Mostrando los últimos ${limit}` : `${primaryGuests.length} huéspedes`;
     this._updateLimitButtons(limit);
   }
 
@@ -479,6 +494,20 @@ export class GuestsCRM {
           onmouseleave="this.style.opacity='.3';this.style.background='transparent';this.style.color='var(--color-text-3)'"
           title="Editar datos" aria-label="Editar datos">✏️</button>
 
+      </div>
+      ${g.linked ? `
+      <div onclick="event.stopPropagation();window._guestsCRM?._openProfile('${g.linked.id}')"
+        style="display:flex;align-items:center;gap:7px;padding:6px 10px 6px 52px;
+          font-size:.72rem;color:var(--color-text-3);cursor:pointer;
+          border-top:1px dashed var(--color-border);
+          transition:background .12s;border-radius:0 0 6px 6px"
+        onmouseenter="this.style.background='var(--color-surface-2)'"
+        onmouseleave="this.style.background=''">
+        <span>👫</span>
+        <span style="color:var(--color-text-2);font-weight:500">${esc(g.linked.first_name)} ${esc(g.linked.last_name)}</span>
+        <span style="opacity:.5">· ${(g.linked.bookings ?? []).filter(b=>b.status!='cancelled'&&b.status!='blocked').length} estadía${(g.linked.bookings ?? []).filter(b=>b.status!='cancelled'&&b.status!='blocked').length!==1?'s':''}</span>
+      </div>` : ''}
+
         <!-- Botón borrar -->
         <button class="btn-delete-guest"
           onclick="event.stopPropagation();window._guestsCRM?._confirmDelete('${g.id}','${g.first_name} ${g.last_name}')"
@@ -517,9 +546,17 @@ export class GuestsCRM {
   // ── Editar datos del huésped (modal liviano) ──────
   async _openEditModal(guestId) {
     const { data: g, error } = await this.db.from('guests')
-      .select('id, first_name, last_name, dni, phone, email, locality, age, car_model, car_plate')
+      .select('id, first_name, last_name, dni, phone, email, locality, age, car_model, car_plate, linked_guest_id')
       .eq('id', guestId).single();
     if (error || !g) { showToast('No se pudo cargar el huésped', 'error'); return; }
+
+    // Cargar huésped vinculado si existe
+    let linkedGuest = null;
+    if (g.linked_guest_id) {
+      const { data: lg } = await this.db.from('guests')
+        .select('id, first_name, last_name').eq('id', g.linked_guest_id).single();
+      linkedGuest = lg;
+    }
 
     document.getElementById('guest-edit-modal-overlay')?.remove();
     const overlay = document.createElement('div');
@@ -546,6 +583,22 @@ export class GuestsCRM {
           <div class="form-group"><label>Patente</label><input type="text" id="ge-plate" value="${esc(g.car_plate ?? '')}" style="text-transform:uppercase">
           </div>
         </div>
+
+        <!-- Vínculo familiar -->
+        <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--color-border)">
+          <label style="font-size:.78rem;font-weight:600;color:var(--color-text-2);display:block;margin-bottom:6px">👫 Vincular con otro huésped</label>
+          ${linkedGuest ? `
+            <div style="display:flex;align-items:center;gap:8px;background:var(--color-surface-2);border-radius:8px;padding:8px 10px">
+              <span style="font-size:.82rem;flex:1">🔗 ${esc(linkedGuest.first_name)} ${esc(linkedGuest.last_name)}</span>
+              <button id="ge-unlink" style="font-size:.7rem;color:var(--state-red-txt);background:none;border:none;cursor:pointer;padding:2px 6px">✕ Desvincular</button>
+            </div>` : `
+            <div style="display:flex;gap:6px">
+              <input type="text" id="ge-link-search" placeholder="Buscar huésped para vincular..." style="flex:1;padding:6px 10px;border:1px solid var(--color-border);border-radius:8px;font-size:.8rem;background:var(--color-surface-2)">
+            </div>
+            <div id="ge-link-results" style="margin-top:4px;max-height:120px;overflow-y:auto"></div>`}
+          <p style="font-size:.68rem;color:var(--color-text-3);margin-top:5px">El vinculado aparece dentro de esta ficha y se oculta de la lista principal.</p>
+        </div>
+
         <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
           <button class="btn btn-outline" id="ge-cancel">Cancelar</button>
           <button class="btn btn-primary" id="ge-save">💾 Guardar</button>
@@ -556,10 +609,54 @@ export class GuestsCRM {
     const close = () => overlay.remove();
     overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
     overlay.querySelector('#ge-cancel').addEventListener('click', close);
-    overlay.querySelector('#ge-save').addEventListener('click', () => this._saveGuestEdit(guestId, close));
+    overlay.querySelector('#ge-save').addEventListener('click', () => this._saveGuestEdit(guestId, close, g));
+
+    // Búsqueda para vincular
+    const linkSearch = overlay.querySelector('#ge-link-search');
+    const linkResults = overlay.querySelector('#ge-link-results');
+    if (linkSearch && linkResults) {
+      linkSearch.addEventListener('input', async () => {
+        const q = linkSearch.value.trim();
+        if (q.length < 2) { linkResults.innerHTML = ''; return; }
+        const { data } = await this.db.from('guests')
+          .select('id, first_name, last_name')
+          .eq('hotel_id', this.ctx.hotelId)
+          .or(`first_name.ilike.%${q}%,last_name.ilike.%${q}%`)
+          .neq('id', guestId).limit(6);
+        linkResults.innerHTML = (data ?? []).map(lg =>
+          `<div data-lid="${lg.id}" style="padding:6px 10px;cursor:pointer;border-radius:6px;font-size:.8rem;
+            background:var(--color-surface-2);margin-bottom:3px;transition:background .1s"
+            onmouseenter="this.style.background='var(--color-surface-3,var(--color-border))'"
+            onmouseleave="this.style.background='var(--color-surface-2)'">
+            🔗 ${esc(lg.first_name)} ${esc(lg.last_name)}
+          </div>`).join('');
+        linkResults.querySelectorAll('[data-lid]').forEach(el => {
+          el.addEventListener('click', async () => {
+            const lid = el.dataset.lid;
+            const name = el.textContent.trim();
+            // Vincular bidireccional
+            await this.db.from('guests').update({ linked_guest_id: lid }).eq('id', guestId);
+            await this.db.from('guests').update({ linked_guest_id: guestId }).eq('id', lid);
+            showToast(`Vinculado con ${name} ✓`, 'success');
+            close();
+            this._loadAll();
+          });
+        });
+      });
+    }
+
+    // Desvincular
+    overlay.querySelector('#ge-unlink')?.addEventListener('click', async () => {
+      if (!confirm('¿Desvincular a estos huéspedes?')) return;
+      await this.db.from('guests').update({ linked_guest_id: null }).eq('id', guestId);
+      if (g.linked_guest_id) await this.db.from('guests').update({ linked_guest_id: null }).eq('id', g.linked_guest_id);
+      showToast('Vínculo eliminado', 'success');
+      close();
+      this._loadAll();
+    });
   }
 
-  async _saveGuestEdit(guestId, close) {
+  async _saveGuestEdit(guestId, close, currentGuest = {}) {
     const val = (id) => document.getElementById(id)?.value?.trim() || null;
     const payload = {
       first_name: val('ge-fn'),
@@ -578,10 +675,48 @@ export class GuestsCRM {
       if (error) throw error;
       showToast('Datos actualizados ✓', 'success');
       close();
+      // Fuzzy: si cambió el nombre, buscar parecidos y ofrecer fusión
+      const nameChanged = payload.first_name !== currentGuest.first_name || payload.last_name !== currentGuest.last_name;
+      if (nameChanged) await this._checkFuzzySimilar(guestId, payload.first_name, payload.last_name);
       await this._loadAll();
     } catch (err) {
       showToast('Error al guardar: ' + (err.message ?? err), 'error');
     }
+  }
+
+  // Calcula similitud entre 2 strings (0-1). Usa distancia de Levenshtein
+  // normalizada — funciona bien para detectar errores de tipeo.
+  _similarity(a, b) {
+    a = a.toLowerCase().trim(); b = b.toLowerCase().trim();
+    if (a === b) return 1;
+    const m = a.length, n = b.length;
+    if (!m || !n) return 0;
+    const dp = Array.from({length:m+1}, (_,i) => Array.from({length:n+1}, (_,j) => i ? j ? 0 : i : j));
+    for (let i=1;i<=m;i++) for (let j=1;j<=n;j++)
+      dp[i][j] = a[i-1]===b[j-1] ? dp[i-1][j-1] : 1+Math.min(dp[i-1][j],dp[i][j-1],dp[i-1][j-1]);
+    return 1 - dp[m][n]/Math.max(m,n);
+  }
+
+  async _checkFuzzySimilar(guestId, firstName, lastName) {
+    const fullName = `${firstName} ${lastName}`.toLowerCase();
+    const { data: all } = await this.db.from('guests')
+      .select('id, first_name, last_name')
+      .eq('hotel_id', this.ctx.hotelId)
+      .neq('id', guestId);
+    const similar = (all ?? []).filter(g => {
+      const candidate = `${g.first_name} ${g.last_name}`.toLowerCase();
+      return this._similarity(fullName, candidate) >= 0.82; // umbral: 82% similitud
+    });
+    if (!similar.length) return;
+    const names = similar.map(g => `• ${g.first_name} ${g.last_name}`).join('\n');
+    const msg = `Encontré huéspedes con nombre muy similar al nuevo nombre "${firstName} ${lastName}":\n\n${names}\n\n¿Es la misma persona? (Se fusionarán todas sus reservas)`;
+    if (!confirm(msg)) return;
+    // Fusionar: reasignar reservas de los similares a este guest
+    for (const dup of similar) {
+      await this.db.from('bookings').update({ guest_id: guestId }).eq('guest_id', dup.id);
+      await this.db.from('guests').delete().eq('id', dup.id);
+    }
+    showToast(`✓ ${similar.length} huésped${similar.length>1?'es':''} fusionado${similar.length>1?'s':''}`, 'success');
   }
 
   // ── Descargar voucher PDF de una estadía específica ──
