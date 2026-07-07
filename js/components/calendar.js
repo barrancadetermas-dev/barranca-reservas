@@ -84,7 +84,7 @@ export class Calendar {
       this._dateRange   = this._buildDateRange(this._windowStart, this._visibleDays);
       this._updateTitle();
 
-      const [bookings, reminders, cancelledNC, lastCheckoutByUnit, earlyDepartures] = await Promise.all([
+      const [bookings, reminders, cancelledNC, earlyDepartures] = await Promise.all([
         this._fetchBookings(this._windowStart, lastISO),
         this._fetchReminders(this._windowStart, lastISO).catch(err => {
           console.warn('[Calendar] reminders fetch failed:', err?.message ?? err);
@@ -93,10 +93,6 @@ export class Calendar {
         this._fetchCancelledWithOpenNC(this._windowStart, lastISO).catch(err => {
           console.warn('[Calendar] cancelledNC fetch failed:', err?.message ?? err);
           return [];
-        }),
-        this._fetchLastCheckoutByUnit().catch(err => {
-          console.warn('[Calendar] lastCheckoutByUnit fetch failed:', err?.message ?? err);
-          return new Map();
         }),
         this._fetchEarlyDepartures(this._windowStart, lastISO).catch(err => {
           console.warn('[Calendar] earlyDepartures fetch failed:', err?.message ?? err);
@@ -109,7 +105,7 @@ export class Calendar {
       const reminderMap = this._buildReminderMap(reminders);
       const ncPendingDays = this._buildNcPendingDays(bookings, cancelledNC);
       const earlyDepartureDays = this._buildEarlyDepartureDays(bookings, earlyDepartures);
-      this._render(cellMap, reminderMap, ncPendingDays, lastCheckoutByUnit, earlyDepartureDays);
+      this._render(cellMap, reminderMap, ncPendingDays, earlyDepartureDays);
 
     // ── 5. Barra de resumen superior ──
     this._renderSummaryBar(bookings);
@@ -411,7 +407,7 @@ export class Calendar {
   // ══════════════════════════════════════════════════
   // RENDERIZADO PRINCIPAL
   // ══════════════════════════════════════════════════
-  _render(cellMap, reminderMap, ncPendingDays = new Map(), lastCheckoutByUnit = new Map(), earlyDepartureDays = new Map()) {
+  _render(cellMap, reminderMap, ncPendingDays = new Map(), earlyDepartureDays = new Map()) {
     const grid    = document.getElementById('calendar-grid');
     const today   = localToday();
     const isMob   = window.innerWidth <= 768;
@@ -593,21 +589,12 @@ export class Calendar {
             this._renderEarlyDepartureBar(cell, guestName);
             cell.title = `🚪 Noche libre por salida anticipada${guestName ? ` de ${guestName}` : ''} — todavía se puede reservar`;
           } else {
-            // "Hace cuántos días no se alquila", contado desde el último
-            // checkout de esa unidad hasta ESTA celda (sea pasada, hoy, o
-            // futura — si estás por cargar una reserva en agosto, te sirve
-            // saber que esa unidad viene sin moverse desde tal fecha). Si
-            // la celda ya tenía un título (ej: "Vacaciones de Invierno"),
-            // NO se lo pisa — se combinan los dos, para no tapar esa info.
-            const unitDates = lastCheckoutByUnit.get(unit.id);
-            const lastCo = unitDates ? this._lastCheckoutBefore(unitDates, iso) : null;
-            if (lastCo) {
-              const daysVacant = this._dayDiff(lastCo, iso);
-              if (daysVacant > 0) {
-                const vacantMsg = `#${_unitNum} sin alquilar hace ${daysVacant} día${daysVacant !== 1 ? 's' : ''}`;
-                cell.title = cell.title ? `${cell.title} · ${vacantMsg}` : vacantMsg;
-              }
-            }
+            // Tooltip simple: número de unidad + fecha completa legible
+            const d = new Date(iso + 'T12:00:00');
+            const dayNames = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
+            const dayLabel = `${dayNames[d.getDay()]} ${d.getDate()}/${d.getMonth()+1}`;
+            const simpleMsg = `#${_unitNum} — ${dayLabel}`;
+            cell.title = cell.title ? `${cell.title} · ${simpleMsg}` : simpleMsg;
           }
           this._bindEmptyCell(cell, unit.id, iso);
         } else if (bookings.length === 1) {

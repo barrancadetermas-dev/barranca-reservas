@@ -2495,9 +2495,18 @@ ${notes ? `
         (insertedRows ?? []).forEach((rec, i) => {
           if (newPayRowEls[i] && rec?.id) newPayRowEls[i].dataset.paymentId = rec.id;
         });
-        newPayRows.forEach(p => Bus.emit(EVENTS.PAYMENT_REGISTERED, {
-          bookingId: p.booking_id, guestName: _payGuestName, amount: p.amount_ars ?? p.amount, method: p.method,
-        }));
+        newPayRows.forEach(p => {
+          // Si es una reserva NUEVA, no emitir notificación de pago por separado —
+          // la notificación de "Reserva creada" que viene inmediatamente después
+          // ya comunica todo el evento. Emitir las 2 juntas parece spam repetido.
+          // Solo emitir la notificación de pago si es un cobro sobre una reserva
+          // que ya existía (edición, o pago registrado más tarde).
+          if (this._editingId) {
+            Bus.emit(EVENTS.PAYMENT_REGISTERED, {
+              bookingId: p.booking_id, guestName: _payGuestName, amount: p.amount_ars ?? p.amount, method: p.method,
+            });
+          }
+        });
       }
 
       // UPDATE — pagos existentes que el usuario modificó

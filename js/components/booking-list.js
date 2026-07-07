@@ -73,6 +73,7 @@ export class BookingList {
       if (action === 'delete')    this._deleteBooking(id);
       if (action === 'checkout')  this._doCheckout(id);
       if (action === 'early-checkout') this._doEarlyCheckout(id);
+      if (action === 'late-checkin') this._doLateCheckIn(id);
       if (action === 'flag')      this._openFlagModal(id, row);
       if (action === 'duplicate') this._duplicateBooking(id);
       if (action === 'pay-full')  this._payFull(id);
@@ -634,10 +635,19 @@ export class BookingList {
     // check-out pendientes), después "alojada" (ya hizo check-in, no
     // importa si fue hoy o antes — deja de decir "check-in hoy" apenas
     // se hace el check-in, no espera a que termine el día).
-    const isCheckInPending  = !b.checked_in_at && b.check_in === today && b.status !== 'cancelled';
+    const isCheckInPending  = !b.checked_in_at && b.check_in <= today && b.check_in >= today && b.status !== 'cancelled';
     const isCheckOutPending = !b.checked_out_at && b.check_out === today && b.status !== 'cancelled';
     const isToday  = isCheckInPending || isCheckOutPending;
-    const isStaying = !isToday && !isEarlyDeparture && !!b.checked_in_at && !b.checked_out_at && b.status !== 'cancelled';
+    // "Alojada" — la reserva está en curso HOY (check_in ya pasó, check_out
+    // todavía no) y no está cancelada. No requiere que se haya apretado el
+    // botón de check-in antes — una reserva de hace 2 días que nunca tuvo
+    // el botón disponible igualmente debe poder hacerle salida anticipada.
+    const isStaying = !isEarlyDeparture && b.status !== 'cancelled' && !b.checked_out_at
+                     && b.check_in < today && b.check_out > today;
+    // Reservas con check_in pasado sin check-in registrado — necesitan
+    // el botón de Check-in para poder pasar a "alojada" y habilitar la
+    // salida anticipada.
+    const needsLateCheckIn = !b.checked_in_at && b.check_in < today && b.check_out >= today && b.status !== 'cancelled';
     const statusCls = STATUS_CLASSES[b.status] ?? '';
     const statusLbl = STATUS_LABELS[b.status]  ?? b.status;
     const nights   = b.nights ?? Math.round((new Date(b.check_out) - new Date(b.check_in)) / 86400000);
@@ -734,6 +744,14 @@ export class BookingList {
                     <polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 01-4 4H3"/>
                   </svg>
                 </button>` : ''}
+              ${needsLateCheckIn
+                ? `<button data-action="late-checkin" class="bl-action-btn" title="Registrar check-in (llegó antes y no se registró)" aria-label="Registrar check-in tardío"
+                     style="color:#22c55e;border-color:#22c55e;background:rgba(34,197,94,.08)">
+                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                       <path d="M15 3h4a2 2 0 012 2v14a2 2 0 01-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/>
+                     </svg>
+                   </button>`
+                : ''}
               ${b.check_out === today && b.status !== 'cancelled'
                 ? `<button data-action="checkout" class="bl-action-btn" title="Registrar check-out" aria-label="Registrar check-out"
                      style="color:#22c55e;border-color:#22c55e;background:rgba(34,197,94,.08)">
@@ -889,7 +907,25 @@ export class BookingList {
     }
   }
 
-  // ── Check-out ANTICIPADO — el huésped se va antes de la fecha de
+  // ── Check-in TARDÍO — el huésped ya llegó pero no se registró en su
+  // momento (ej: reserva de hace 2 días que nunca tuvo el botón visible).
+  async _doLateCheckIn(id) {
+    const booking = this._allBookings.find(b => b.id === id);
+    const guestName = booking?.guests ? `${booking.guests.first_name} ${booking.guests.last_name}` : 'este huésped';
+    if (!confirm(`¿Registrar check-in de ${guestName}?\n\nSe registrará la hora actual como momento de llegada.`)) return;
+    try {
+      const { data: updated, error } = await this.db.from('bookings')
+        .update({ checked_in_at: new Date().toISOString() })
+        .eq('id', id).select('id');
+      if (error) throw error;
+      if (!updated?.length) throw new Error('No se pudo registrar el check-in — revisá los permisos.');
+      Bus.emit(EVENTS.CHECKIN_DONE, { bookingId: id, guestName });
+      showToast(`✅ Check-in registrado: ${guestName}`, 'success');
+      this.load();
+    } catch (err) { showToast('Error: ' + err.message, 'error'); }
+  }
+
+  // ── Check-out ANTICIPADO ──
   // salida que tenía reservada. Ahora SÍ corrige la fecha de salida (a
   // hoy) para liberar el calendario desde esta noche — la noche original
   // reservada que queda "de más" (entre hoy y la fecha real de salida)
