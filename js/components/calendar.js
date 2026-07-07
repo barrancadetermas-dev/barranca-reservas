@@ -599,7 +599,25 @@ export class Calendar {
             // Mapa de calor: tinte muy tenue solo en celdas vacías a futuro,
             // para dar noción de demanda esperada sin competir visualmente
             // con las barras de reserva.
-            const heatColor = this._heatmapColor(iso, today, !!cellHol && cellHol.type !== 'vacation', cellHol?.type);
+            // Calcular el tamaño del hueco donde está esta celda vacía:
+            // busco el checkout más cercano ANTES y el checkin más cercano
+            // DESPUÉS de esta celda, para esa unidad puntual — si hay un
+            // hueco de 1-2 noches entre reservas, es el caso más urgente.
+            const unitBookings = Object.entries(cellMap[unit.id] ?? {})
+              .flatMap(([d, bks]) => bks.map(b => ({ ...b, _date: d })));
+            const checkouts = unitBookings
+              .filter(b => b.check_out > today && b.check_out <= iso)
+              .map(b => b.check_out).sort();
+            const checkins = unitBookings
+              .filter(b => b.check_in >= iso && b.check_in > today)
+              .map(b => b.check_in).sort();
+            const prevCO = checkouts[checkouts.length - 1] ?? null;
+            const nextCI = checkins[0] ?? null;
+            let gapSize = null;
+            if (prevCO && nextCI) {
+              gapSize = Math.round((new Date(nextCI + 'T12:00:00') - new Date(prevCO + 'T12:00:00')) / 86400000);
+            }
+            const heatColor = this._heatmapColor(iso, today, !!cellHol && cellHol.type !== 'vacation', cellHol?.type, gapSize);
             if (heatColor) cell.style.backgroundColor = heatColor;
           }
           this._bindEmptyCell(cell, unit.id, iso);
@@ -664,8 +682,8 @@ export class Calendar {
   //
   // El resultado se traduce a un tinte de fondo MUY tenue que no compite
   // visualmente con las barras de reserva — solo se ve en celdas vacías.
-  _heatmapColor(iso, today, isHoliday, holidayType) {
-    if (iso < today) return null; // días pasados: sin tinte, no sirve de nada
+  _heatmapColor(iso, today, isHoliday, holidayType, gapSize = null) {
+    if (iso < today) return null; // días pasados: sin tinte
 
     // ── Factor 1: urgencia temporal ──
     const daysAhead = Math.round((new Date(iso + 'T12:00:00') - new Date(today + 'T12:00:00')) / 86400000);
@@ -674,34 +692,45 @@ export class Calendar {
     else if (daysAhead <= 7)  score += 4;
     else if (daysAhead <= 14) score += 3;
     else if (daysAhead <= 30) score += 2;
-    else                      score += 0; // más de 30 días → sin urgencia
+    // más de 30 días → 0
 
     // ── Factor 2: día de semana ──
     const dow = new Date(iso + 'T12:00:00').getDay();
-    if (dow === 5 || dow === 6)  score += 2; // viernes/sábado
-    else if (dow === 0)          score += 1; // domingo
+    if (dow === 5 || dow === 6) score += 2; // viernes/sábado
+    else if (dow === 0)         score += 1; // domingo
 
     // ── Factor 3: temporada alta argentina ──
     const [y, m, d] = iso.split('-').map(Number);
-    const md = m * 100 + d; // ej: 0115 = 15 de enero
-    const isVerano       = md >= 1215 || md <= 228;  // dic 15 – feb 28
-    const isInvierno     = m === 7;                  // julio completo (vacaciones invierno)
-    const isSemSanta     = isHoliday && holidayType === 'movable'; // feriados móviles = pascua/semana santa
-    const isFeriadoLargo = isHoliday;                // cualquier feriado suma
+    const md = m * 100 + d;
+    const isVerano   = md >= 1215 || md <= 228;
+    const isInvierno = m === 7;
+    const isSemSanta = isHoliday && holidayType === 'movable';
+    if (isVerano)              score += 3;
+    else if (isInvierno)       score += 2;
+    if (isSemSanta)            score += 3;
+    else if (isHoliday)        score += 1;
 
-    if (isVerano)        score += 3;
-    else if (isInvierno) score += 2;
-    if (isSemSanta)      score += 3;
-    else if (isFeriadoLargo) score += 1;
+    // ── Factor 4: tamaño del hueco ──
+    // Un hueco de 1-2 noches entre reservas es el más difícil de llenar
+    // y el que más duele dejar vacío — sube el score considerablemente.
+    // Un hueco de 3-4 noches también suma, pero menos.
+    // Sin hueco (celda aislada sin contexto de reservas antes/después):
+    // no suma nada extra — el score base ya contempla temporada y urgencia.
+    if (gapSize !== null) {
+      if      (gapSize <= 2) score += 5; // hueco crítico: 1-2 noches
+      else if (gapSize <= 4) score += 3; // hueco pequeño: 3-4 noches
+      else if (gapSize <= 7) score += 1; // hueco mediano: hasta 1 semana
+      // hueco grande (8+) → no suma extra, ya tiene urgencia temporal propia
+    }
 
     // ── Score → color tenue ──
-    // Máximo teórico: 5+2+3+3 = 13. Se normaliza a escala de 10.
-    const s = Math.min(score, 10);
-    if      (s >= 8) return 'rgba(239,68,68,.08)';   // rojo muy tenue
-    else if (s >= 6) return 'rgba(249,115,22,.07)';  // naranja muy tenue
-    else if (s >= 4) return 'rgba(234,179,8,.06)';   // amarillo muy tenue
-    else if (s >= 2) return 'rgba(34,197,94,.05)';   // verde muy tenue
-    return null; // score bajo → sin tinte
+    // Escala máxima teórica ~14 (5+2+3+3+5). Se mapea en 4 niveles.
+    const s = Math.min(score, 14);
+    if      (s >= 10) return 'rgba(239,68,68,.11)';   // rojo — urgente
+    else if (s >= 7)  return 'rgba(249,115,22,.09)';  // naranja
+    else if (s >= 4)  return 'rgba(234,179,8,.07)';   // amarillo
+    else if (s >= 2)  return 'rgba(34,197,94,.05)';   // verde tenue
+    return null;
   }
 
   _renderNcPendingBar(cell, guestName) {
