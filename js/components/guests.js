@@ -264,18 +264,37 @@ export class GuestsCRM {
         .order('created_at', { ascending: false })
         .limit(limit),
       this.db.from('guests')
-        .select('linked_guest_id')
+        .select('id, linked_guest_id')
         .eq('hotel_id', this.ctx.hotelId)
         .not('linked_guest_id', 'is', null),
     ]);
     const guests = guestsRes.data ?? [];
-    // Set de todos los IDs que son el "lado vinculado" (secondary) — se ocultan de la lista
-    const allLinkedIds = new Set((allLinkedRes.data ?? []).map(r => r.linked_guest_id));
+
+    // Determinar cuál de cada par vinculado es "secundario" (se oculta).
+    // Como el vínculo es bidireccional (A→B y B→A), necesito elegir uno.
+    // Regla: en un par (A, B), el que tiene el id mayor alfabéticamente
+    // es el secundario — simple, consistente, sin ambigüedad.
+    const allLinkedData = allLinkedRes.data ?? [];
+    // Construir un mapa id → linked_guest_id para todos los que tienen vínculo
+    const linkedMap = new Map(allLinkedData.map(r => [r.id, r.linked_guest_id]).filter(([id]) => id));
+    // Complementar con los de la página actual
+    guests.forEach(g => { if (g.linked_guest_id) linkedMap.set(g.id, g.linked_guest_id); });
+
+    const secondaryIds = new Set();
+    linkedMap.forEach((linkedId, id) => {
+      // Si es un par mutuo (ambos se apuntan), el de id mayor es secundario
+      if (linkedMap.get(linkedId) === id) {
+        secondaryIds.add(id > linkedId ? id : linkedId);
+      } else {
+        // Vínculo unidireccional (solo uno apunta al otro): el que apunta es primario, el apuntado es secundario
+        secondaryIds.add(linkedId);
+      }
+    });
     if (!guests?.length) {
       area.innerHTML = '<div class="empty-state"><span class="empty-state-icon">👤</span><p>Sin huéspedes aún.</p></div>';
       return;
     }
-    const primaryGuests = guests.filter(g => !allLinkedIds.has(g.id));
+    const primaryGuests = guests.filter(g => !secondaryIds.has(g.id));
 
     this._allGuestsData = guests;
     primaryGuests.forEach(g => {
