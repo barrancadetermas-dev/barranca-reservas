@@ -2025,7 +2025,7 @@ export class Calendar {
 
       const newNights = this._dayDiff(booking.check_in, currentCO);
       const { error } = await this.db.from('bookings')
-        .update({ check_out: currentCO, nights: newNights }).eq('id', booking.id);
+        .update({ check_out: currentCO }).eq('id', booking.id);
       if (error) {
         showToast('Error al cambiar la fecha de salida', 'error');
         bar.style.width = origWidthStyle;
@@ -2174,7 +2174,7 @@ export class Calendar {
 
       const newNights = this._dayDiff(currentCI, booking.check_out);
       const { error } = await this.db.from('bookings')
-        .update({ check_in: currentCI, nights: newNights }).eq('id', booking.id);
+        .update({ check_in: currentCI }).eq('id', booking.id);
       if (error) {
         showToast('Error al cambiar la fecha de ingreso', 'error');
         bar.style.width = origWidthStyle;

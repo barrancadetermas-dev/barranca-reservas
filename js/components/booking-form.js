@@ -2378,11 +2378,9 @@ ${notes ? `
           'Limpiar unidades de la reserva'
         );
         if (buDelErr) throw new Error('Error limpiando unidades anteriores: ' + buDelErr.message);
-        const { error: payDelErr } = await this._withTimeout(
-          this.db.from('payments').delete().eq('booking_id', bookingId),
-          'Limpiar pagos de la reserva'
-        );
-        if (payDelErr) throw new Error('Error limpiando pagos anteriores: ' + payDelErr.message);
+        // NOTA: los pagos NO se borran acá — cada pago se maneja
+        // individualmente más abajo (INSERT para nuevos, UPDATE para
+        // existentes, DELETE solo para los que el usuario quitó del form).
       } else {
         // INSERT — intentar con free_nights primero
         let { data: newB, error: insErr } = await this._withTimeout(

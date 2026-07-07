@@ -148,6 +148,7 @@ export class GuestsCRM {
     }
 
     this._guestLimit = parseInt(localStorage.getItem('mila_guest_limit') ?? '10');
+    this._secondaryIds = new Set(); // IDs de huéspedes vinculados que son secundarios (no aparecen en la lista principal)
     this._loadAll();
     this._loadDestacados();
   }
@@ -287,6 +288,7 @@ export class GuestsCRM {
         secondaryIds.add(linkedId);
       }
     });
+    this._secondaryIds = secondaryIds;
     if (!guests?.length) {
       area.innerHTML = '<div class="empty-state"><span class="empty-state-icon">👤</span><p>Sin huéspedes aún.</p></div>';
       return;
@@ -354,9 +356,9 @@ export class GuestsCRM {
       <div class="skeleton-box" style="height:72px;margin-bottom:8px"></div>
       <div class="skeleton-box" style="height:72px"></div>`;
 
-    const { data: guests, error } = await this.db
+    const { data: allResults, error } = await this.db
       .from('guests')
-      .select(`id, first_name, last_name, phone, email, dni, nationality, tags, bad_experience, created_at, locality, age, car_model, car_plate,
+      .select(`id, first_name, last_name, phone, email, dni, nationality, tags, bad_experience, created_at, locality, age, car_model, car_plate, linked_guest_id,
         bookings!bookings_guest_id_fkey(id, total_paid, check_in, check_out, status, notes,
           booking_units(units(name, color))),
         guest_notes!guest_notes_guest_id_fkey(body, category, created_at)`)
@@ -364,33 +366,75 @@ export class GuestsCRM {
       .or(`first_name.ilike.%${query}%,last_name.ilike.%${query}%,phone.ilike.%${query}%,email.ilike.%${query}%,dni.ilike.%${query}%`)
       .order('created_at', { ascending: false })
       .limit(50);
-    if (guests) guests.forEach(g => {
+
+    if (error) { showToast('Error al buscar huéspedes', 'error'); return; }
+    if (!allResults?.length) {
+      area.innerHTML = `<div class="empty-state"><span class="empty-state-icon">🔍</span><p>Sin resultados para "<strong>${query}</strong>".</p></div>`;
+      return;
+    }
+
+    const secondaryIds = this._secondaryIds ?? new Set();
+
+    // Separar: primarios que coinciden, y secundarios que coinciden
+    const primaryMatches   = allResults.filter(g => !secondaryIds.has(g.id));
+    const secondaryMatches = allResults.filter(g => secondaryIds.has(g.id));
+
+    // Para cada secundario que coincide, buscar quién es su primario
+    let primaryIdsFromSecondary = [];
+    for (const sg of secondaryMatches) {
+      // El primario es quien tiene linked_guest_id apuntando a sg, o sg apunta a él
+      // Lo buscamos en la DB
+      const { data: primData } = await this.db.from('guests')
+        .select(`id, first_name, last_name, phone, email, dni, nationality, tags, bad_experience, created_at, locality, age, car_model, car_plate, linked_guest_id,
+          bookings!bookings_guest_id_fkey(id, total_paid, check_in, check_out, status, notes,
+            booking_units(units(name, color))),
+          guest_notes!guest_notes_guest_id_fkey(body, category, created_at)`)
+        .eq('hotel_id', this.ctx.hotelId)
+        .eq('linked_guest_id', sg.id)
+        .limit(1);
+      if (primData?.[0] && !primaryMatches.find(p => p.id === primData[0].id)) {
+        primData[0]._foundViaLinked = `${sg.first_name} ${sg.last_name}`; // para mostrar la nota
+        primaryMatches.push(primData[0]);
+      }
+    }
+
+    // Cargar linked para los primarios que los tengan
+    const linkedIds = [...new Set(primaryMatches.filter(g => g.linked_guest_id).map(g => g.linked_guest_id))];
+    let linkedMap2 = new Map();
+    if (linkedIds.length) {
+      const { data: ld } = await this.db.from('guests')
+        .select(`id, first_name, last_name, bookings!bookings_guest_id_fkey(id, total_paid, check_in, check_out, status, notes, booking_units(units(name, color)))`)
+        .in('id', linkedIds);
+      (ld ?? []).forEach(lg => linkedMap2.set(lg.id, lg));
+    }
+
+    primaryMatches.forEach(g => {
+      g.linked = g.linked_guest_id ? linkedMap2.get(g.linked_guest_id) ?? null : null;
       const bks = (g.bookings ?? []).filter(b => b.status !== 'blocked' && b.status !== 'cancelled');
-      g.total_bookings = bks.length;
-      g.total_spent    = bks.reduce((s, b) => s + (b.total_paid ?? 0), 0);
-      const sorted2    = bks.sort((a,b) => b.check_in.localeCompare(a.check_in));
-      g.last_checkin   = sorted2[0]?.check_in ?? null;
-      g.last_checkout  = sorted2[0]?.check_out ?? null;
-      g.last_units     = (sorted2[0]?.booking_units ?? []).map(bu => bu.units).filter(Boolean);
+      const linkedBks = g.linked ? (g.linked.bookings ?? []).filter(b => b.status !== 'blocked' && b.status !== 'cancelled') : [];
+      const allBks = [...bks, ...linkedBks];
+      g.total_bookings = allBks.length;
+      g.total_spent    = allBks.reduce((s, b) => s + (b.total_paid ?? 0), 0);
+      const bksSorted2 = allBks.sort((a,b) => b.check_in.localeCompare(a.check_in));
+      g.last_checkin   = bksSorted2[0]?.check_in ?? null;
+      g.last_checkout  = bksSorted2[0]?.check_out ?? null;
+      g.last_units     = (bksSorted2[0]?.booking_units ?? []).map(bu => bu.units).filter(Boolean);
       g.last_unit      = g.last_units[0] ?? null;
-      g.prev_units     = [...new Set(sorted2.slice(1,4).flatMap(b => (b.booking_units ?? []).map(bu => bu.units?.name)).filter(Boolean))];
+      g.prev_units     = [...new Set(bksSorted2.slice(1,4).flatMap(b => (b.booking_units ?? []).map(bu => bu.units?.name)).filter(Boolean))];
       const allNotes   = (g.guest_notes ?? []).sort((a,b) => b.created_at.localeCompare(a.created_at));
       g.latest_note    = allNotes[0]?.body ?? null;
       this._attachOpenCreditNote(g);
     });
 
-    if (error) { showToast('Error al buscar huéspedes', 'error'); return; }
-
-    if (!guests?.length) {
-      area.innerHTML = `
-        <div class="empty-state">
-          <span class="empty-state-icon">🔍</span>
-          <p>Sin resultados para "<strong>${query}</strong>".</p>
-        </div>`;
-      return;
-    }
-
-    area.innerHTML = this._sortGuests(guests).map(g => this._renderGuestCard(g)).join('');
+    area.innerHTML = this._sortGuests(primaryMatches).map(g => {
+      let card = this._renderGuestCard(g);
+      // Si esta card apareció porque coincidió el vinculado, agregar una nota al inicio
+      if (g._foundViaLinked) {
+        card = card.replace('<div class="guest-row-item"',
+          `<div class="guest-row-item" title="Encontrado via ${g._foundViaLinked}"`);
+      }
+      return card;
+    }).join('');
 
     area.querySelectorAll('.guest-row-item,.guest-search-result').forEach(card => {
       card.addEventListener('click', () => this._openProfile(card.dataset.guestId));
