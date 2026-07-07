@@ -595,6 +595,12 @@ export class Calendar {
             const dayLabel = `${dayNames[d.getDay()]} ${d.getDate()}/${d.getMonth()+1}`;
             const simpleMsg = `#${_unitNum} — ${dayLabel}`;
             cell.title = cell.title ? `${cell.title} · ${simpleMsg}` : simpleMsg;
+
+            // Mapa de calor: tinte muy tenue solo en celdas vacías a futuro,
+            // para dar noción de demanda esperada sin competir visualmente
+            // con las barras de reserva.
+            const heatColor = this._heatmapColor(iso, today, !!cellHol && cellHol.type !== 'vacation', cellHol?.type);
+            if (heatColor) cell.style.backgroundColor = heatColor;
           }
           this._bindEmptyCell(cell, unit.id, iso);
         } else if (bookings.length === 1) {
@@ -650,6 +656,54 @@ export class Calendar {
   // con Nota de Crédito sin usar — mismo peso visual que una barra real
   // (se nota de un vistazo, sin pasar el mouse), pero en marrón apagado y
   // con rayas, para que se distinga claramente de una ocupación real.
+  // ── Mapa de calor de demanda para celdas vacías ────────────────────
+  // Puntaje 0-10 basado en 3 factores combinados:
+  //   1. Urgencia temporal (cuántos días faltan — más urgente = más caliente)
+  //   2. Día de semana (viernes/sábado = más demanda)
+  //   3. Temporada (verano, invierno, Semana Santa, fines de semana largos)
+  //
+  // El resultado se traduce a un tinte de fondo MUY tenue que no compite
+  // visualmente con las barras de reserva — solo se ve en celdas vacías.
+  _heatmapColor(iso, today, isHoliday, holidayType) {
+    if (iso < today) return null; // días pasados: sin tinte, no sirve de nada
+
+    // ── Factor 1: urgencia temporal ──
+    const daysAhead = Math.round((new Date(iso + 'T12:00:00') - new Date(today + 'T12:00:00')) / 86400000);
+    let score = 0;
+    if      (daysAhead <= 3)  score += 5;
+    else if (daysAhead <= 7)  score += 4;
+    else if (daysAhead <= 14) score += 3;
+    else if (daysAhead <= 30) score += 2;
+    else                      score += 0; // más de 30 días → sin urgencia
+
+    // ── Factor 2: día de semana ──
+    const dow = new Date(iso + 'T12:00:00').getDay();
+    if (dow === 5 || dow === 6)  score += 2; // viernes/sábado
+    else if (dow === 0)          score += 1; // domingo
+
+    // ── Factor 3: temporada alta argentina ──
+    const [y, m, d] = iso.split('-').map(Number);
+    const md = m * 100 + d; // ej: 0115 = 15 de enero
+    const isVerano       = md >= 1215 || md <= 228;  // dic 15 – feb 28
+    const isInvierno     = m === 7;                  // julio completo (vacaciones invierno)
+    const isSemSanta     = isHoliday && holidayType === 'movable'; // feriados móviles = pascua/semana santa
+    const isFeriadoLargo = isHoliday;                // cualquier feriado suma
+
+    if (isVerano)        score += 3;
+    else if (isInvierno) score += 2;
+    if (isSemSanta)      score += 3;
+    else if (isFeriadoLargo) score += 1;
+
+    // ── Score → color tenue ──
+    // Máximo teórico: 5+2+3+3 = 13. Se normaliza a escala de 10.
+    const s = Math.min(score, 10);
+    if      (s >= 8) return 'rgba(239,68,68,.08)';   // rojo muy tenue
+    else if (s >= 6) return 'rgba(249,115,22,.07)';  // naranja muy tenue
+    else if (s >= 4) return 'rgba(234,179,8,.06)';   // amarillo muy tenue
+    else if (s >= 2) return 'rgba(34,197,94,.05)';   // verde muy tenue
+    return null; // score bajo → sin tinte
+  }
+
   _renderNcPendingBar(cell, guestName) {
     const bar = document.createElement('div');
     bar.className = 'nc-pending-bar';

@@ -65,7 +65,7 @@ const READ_CHECKMARKS_SVG = `
   <svg viewBox="0 0 16 10" width="15" height="9" style="margin-left:4px;vertical-align:-1px" fill="none" stroke="#4FC3F7" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
     <path d="M1 5.5L4 8.5L10 1.5"/>
     <path d="M6 5.5L9 8.5L15 1.5"/>
-  </svg>`;
+  </svg><span style="color:#4FC3F7;font-size:.65rem;margin-left:2px">Leído</span>`;
 
 function _renderBadge() {
   const badge = document.getElementById('notifcenter-badge');
