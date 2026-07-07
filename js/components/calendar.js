@@ -498,6 +498,29 @@ export class Calendar {
       grid.appendChild(dh);
     });
 
+    // ── Mapa de huecos por unidad ─────────────────────────────────────
+    // Para cada unidad, ordenamos sus reservas por fecha y calculamos los
+    // huecos entre checkout de una y checkin de la siguiente. Para cada
+    // día dentro de ese hueco, guardamos el tamaño del hueco (en noches)
+    // → así cada celda vacía sabe si está dentro de un hueco y cuán chico
+    // es, sin recalcular nada durante el loop de celdas (sería muy lento).
+    const gapMap = new Map(); // `${unitId}|${iso}` → tamaño del hueco en noches
+    this.ctx.units.forEach(unit => {
+      const unitBks = (this._lastRenderedBookings ?? [])
+        .filter(b => !b.is_blocked && b.status !== 'cancelled' && b.status !== 'blocked'
+                  && (b.booking_units ?? []).some(bu => bu.unit_id === unit.id))
+        .sort((a, b) => a.check_in < b.check_in ? -1 : 1);
+      for (let i = 0; i < unitBks.length - 1; i++) {
+        const co = unitBks[i].check_out;
+        const ci = unitBks[i + 1].check_in;
+        if (ci <= co) continue; // solapadas o contiguas, no hay hueco
+        const gap = Math.round((new Date(ci + 'T12:00:00') - new Date(co + 'T12:00:00')) / 86400000);
+        for (let d = co; d < ci; d = this._addDays(d, 1)) {
+          gapMap.set(`${unit.id}|${d}`, gap);
+        }
+      }
+    });
+
     // ── Filas de unidades ─────────────────────────
     this.ctx.units.forEach((unit, rowIdx) => {
       const unitColor  = getUnitColor(unit);
@@ -599,24 +622,7 @@ export class Calendar {
             // Mapa de calor: tinte muy tenue solo en celdas vacías a futuro,
             // para dar noción de demanda esperada sin competir visualmente
             // con las barras de reserva.
-            // Calcular el tamaño del hueco donde está esta celda vacía:
-            // busco el checkout más cercano ANTES y el checkin más cercano
-            // DESPUÉS de esta celda, para esa unidad puntual — si hay un
-            // hueco de 1-2 noches entre reservas, es el caso más urgente.
-            const unitBookings = Object.entries(cellMap[unit.id] ?? {})
-              .flatMap(([d, bks]) => bks.map(b => ({ ...b, _date: d })));
-            const checkouts = unitBookings
-              .filter(b => b.check_out > today && b.check_out <= iso)
-              .map(b => b.check_out).sort();
-            const checkins = unitBookings
-              .filter(b => b.check_in >= iso && b.check_in > today)
-              .map(b => b.check_in).sort();
-            const prevCO = checkouts[checkouts.length - 1] ?? null;
-            const nextCI = checkins[0] ?? null;
-            let gapSize = null;
-            if (prevCO && nextCI) {
-              gapSize = Math.round((new Date(nextCI + 'T12:00:00') - new Date(prevCO + 'T12:00:00')) / 86400000);
-            }
+            const gapSize   = gapMap.get(`${unit.id}|${iso}`) ?? null;
             const heatColor = this._heatmapColor(iso, today, !!cellHol && cellHol.type !== 'vacation', cellHol?.type, gapSize);
             if (heatColor) cell.style.backgroundColor = heatColor;
           }
