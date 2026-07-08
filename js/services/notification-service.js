@@ -91,6 +91,39 @@ export class NotificationService {
         });
       });
 
+      // ── Recambios de hoy (sale uno, entra otro el mismo día) ──
+      const { data: checkinsHoy } = await this.db
+        .from('bookings')
+        .select('id, check_in, booking_units(unit_id, units(name)), guests!bookings_guest_id_fkey(first_name, last_name)')
+        .eq('hotel_id', AppContext.hotelId)
+        .eq('check_in', today)
+        .not('status', 'in', '(cancelled,blocked)');
+
+      const { data: checkoutsHoy } = await this.db
+        .from('bookings')
+        .select('id, check_out, booking_units(unit_id, units(name)), guests!bookings_guest_id_fkey(first_name, last_name)')
+        .eq('hotel_id', AppContext.hotelId)
+        .eq('check_out', today)
+        .not('status', 'in', '(cancelled,blocked)');
+
+      (checkinsHoy ?? []).forEach(ci => {
+        const ciUnitId = ci.booking_units?.[0]?.unit_id;
+        const co = (checkoutsHoy ?? []).find(co => co.booking_units?.[0]?.unit_id === ciUnitId);
+        if (!co) return; // no hay salida en la misma unidad hoy → no es recambio
+        const unitName = ci.booking_units?.[0]?.units?.name ?? 'Unidad';
+        const inGuest  = ci.guests ? `${ci.guests.first_name} ${ci.guests.last_name}` : 'Huésped';
+        const outGuest = co.guests ? `${co.guests.first_name} ${co.guests.last_name}` : 'Huésped';
+        this._list.push({
+          id:       `rec-${ci.id}`,
+          type:     'recambio',
+          priority: 'high',
+          icon:     '⚡',
+          title:    `Recambio en ${unitName}`,
+          body:     `Sale: ${outGuest} · Entra: ${inGuest}`,
+          bookingId: ci.id,
+        });
+      });
+
       // ── Reservas con saldo pendiente (check-in en ≤3 días) ──
       const { data: unpaid } = await this.db
         .from('bookings')

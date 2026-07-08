@@ -505,6 +505,10 @@ export class Calendar {
     // → así cada celda vacía sabe si está dentro de un hueco y cuán chico
     // es, sin recalcular nada durante el loop de celdas (sería muy lento).
     const gapMap = new Map(); // `${unitId}|${iso}` → tamaño del hueco en noches
+    // recambioSet: días en que hay salida Y entrada el mismo día en la misma unidad
+    // Key: `${unitId}|${iso}` (la fecha del check_in entrante = día del recambio)
+    // Value: { outGuest, inGuest } — nombres para la notificación
+    const recambioSet = new Map();
     this.ctx.units.forEach(unit => {
       const unitBks = (this._lastRenderedBookings ?? [])
         .filter(b => !b.is_blocked && b.status !== 'cancelled' && b.status !== 'blocked'
@@ -513,10 +517,17 @@ export class Calendar {
       for (let i = 0; i < unitBks.length - 1; i++) {
         const co = unitBks[i].check_out;
         const ci = unitBks[i + 1].check_in;
-        if (ci <= co) continue; // solapadas o contiguas, no hay hueco
-        const gap = Math.round((new Date(ci + 'T12:00:00') - new Date(co + 'T12:00:00')) / 86400000);
-        for (let d = co; d < ci; d = this._addDays(d, 1)) {
-          gapMap.set(`${unit.id}|${d}`, gap);
+        if (ci === co) {
+          // Recambio: sale uno y entra otro el mismo día
+          const outGuest = unitBks[i].guests ? `${unitBks[i].guests.first_name ?? ''} ${unitBks[i].guests.last_name ?? ''}`.trim() : '—';
+          const inGuest  = unitBks[i+1].guests ? `${unitBks[i+1].guests.first_name ?? ''} ${unitBks[i+1].guests.last_name ?? ''}`.trim() : '—';
+          recambioSet.set(`${unit.id}|${ci}`, { outGuest, inGuest, unitName: unit.name ?? `#${unit.unit_number}` });
+        } else if (ci > co) {
+          // Hueco normal
+          const gap = Math.round((new Date(ci + 'T12:00:00') - new Date(co + 'T12:00:00')) / 86400000);
+          for (let d = co; d < ci; d = this._addDays(d, 1)) {
+            gapMap.set(`${unit.id}|${d}`, gap);
+          }
         }
       }
     });
@@ -628,12 +639,15 @@ export class Calendar {
           }
           this._bindEmptyCell(cell, unit.id, iso);
         } else if (bookings.length === 1) {
-          this._renderBar(cell, bookings[0], today);
+          const isRecambio = recambioSet.has(`${unit.id}|${iso}`);
+          this._renderBar(cell, bookings[0], today, isRecambio);
         } else {
           const co = bookings.find(b => b._cellType === 'end');
           const ci = bookings.find(b => b._cellType === 'start' || b._cellType === 'solo');
-          if (co && ci) this._renderSplitCell(cell, co, ci, today);
-          else this._renderBar(cell, bookings[0], today);
+          if (co && ci) {
+            const isRecambio = recambioSet.has(`${unit.id}|${iso}`);
+            this._renderSplitCell(cell, co, ci, today, isRecambio);
+          } else this._renderBar(cell, bookings[0], today);
         }
 
         rems.forEach(r => {
@@ -778,7 +792,7 @@ export class Calendar {
     cell.appendChild(bar);
   }
 
-  _renderBar(cell, booking, todayISO) {
+  _renderBar(cell, booking, todayISO, isRecambio = false) {
     if (booking._cellType !== 'start' && booking._cellType !== 'solo') return;
 
     const { color, textColor } = getBookingBarColor(booking);
@@ -862,7 +876,13 @@ export class Calendar {
 
     const avatar = !isBlock ? Calendar._guestAvatar(booking.guests, 16) : '';
     const nameStyle = 'color:' + textColor + ';font-size:.68rem;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0';
-    bar.innerHTML = avatar + canalChip + splitChip + '<span style="' + nameStyle + '">' + guestFull + '</span>';
+    const recambioBadge = isRecambio
+      ? '<span title="⚡ Recambio — entra hoy mismo que sale otro huésped" style="' +
+        'display:inline-flex;align-items:center;justify-content:center;' +
+        'padding:0 3px;border-radius:3px;font-size:.62rem;line-height:1.5;' +
+        'flex-shrink:0;margin-right:4px;background:rgba(255,255,255,.3);color:' + textColor + '">⚡</span>'
+      : '';
+    bar.innerHTML = avatar + canalChip + splitChip + recambioBadge + '<span style="' + nameStyle + '">' + guestFull + '</span>';
 
     // ── Resize handles — derecha (checkout) y ahora también izquierda (check-in) ──
     if (!truncRight) {
