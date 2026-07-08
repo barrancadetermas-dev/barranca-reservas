@@ -493,119 +493,104 @@ export class GuestsCRM {
     return `
       <div class="guest-row-item" data-guest-id="${g.id}"
         title="${tipParts}"
-        style="display:flex;align-items:center;gap:10px;padding:7px 10px;
-          border-bottom:1px solid var(--color-border);cursor:pointer;
-          transition:background .12s;position:relative;
-          ${g.bad_experience ? 'border-left:3px solid #EF4444;' : ''}
-          "
+        style="border-bottom:1px solid var(--color-border);cursor:pointer;
+          transition:background .12s;
+          ${g.bad_experience ? 'border-left:3px solid #EF4444;background:rgba(239,68,68,.03)' : ''}"
         onmouseenter="this.style.background='var(--color-surface-2)'"
-        onmouseleave="this.style.background=''">
+        onmouseleave="this.style.background='${g.bad_experience ? 'rgba(239,68,68,.03)' : ''}'">
 
-        ${g.bad_experience ? `
-        <div style="position:absolute;top:0;left:0;right:0;
-          background:rgba(239,68,68,.08);
-          border-bottom:1px solid rgba(239,68,68,.15);
-          padding:2px 10px 2px ${g.bad_experience ? '14px' : '10px'};
-          font-size:.6rem;font-weight:700;color:#EF4444;letter-spacing:.04em;
-          display:flex;align-items:center;gap:4px">
-          ⚠️ ATENCIÓN — conducta registrada
-        </div>
-        <div style="height:14px"></div>` : ''}
+        <!-- Fila principal: 1 sola línea -->
+        <div style="display:flex;align-items:center;gap:8px;padding:6px 10px">
 
-        <!-- Avatar -->
-        <div style="width:30px;height:30px;border-radius:50%;flex-shrink:0;
-          display:flex;align-items:center;justify-content:center;
-          font-size:.7rem;font-weight:700;color:#fff;
-          background:${g.bad_experience ? 'linear-gradient(135deg,#EF4444,#DC2626)' : 'var(--color-primary)'}">
-          ${initials}</div>
+          <!-- Avatar -->
+          <div style="width:28px;height:28px;border-radius:50%;flex-shrink:0;
+            display:flex;align-items:center;justify-content:center;
+            font-size:.67rem;font-weight:700;color:#fff;
+            background:${g.bad_experience ? 'linear-gradient(135deg,#EF4444,#DC2626)' : 'var(--color-primary)'}">
+            ${initials}</div>
 
-        <!-- Bloque info — todo en 2 líneas compactas -->
-        <div style="flex:1;min-width:0;overflow:hidden">
-          <!-- Línea 1: nombre + badges -->
-          <div style="display:flex;align-items:center;gap:5px">
-            <span style="font-weight:600;font-size:.83rem;color:var(--color-text);
-              white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:200px">
+          <!-- Nombre + badges -->
+          <div style="flex:1;min-width:0;display:flex;align-items:center;gap:5px;overflow:hidden">
+            <span style="font-weight:600;font-size:.82rem;color:var(--color-text);
+              white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
               ${g.first_name} ${g.last_name}</span>
-            ${tagsBadge ? `<span style="font-size:.65rem">${tagsBadge}</span>` : ''}
+            ${g.bad_experience ? `<span style="font-size:.58rem;font-weight:700;padding:1px 5px;border-radius:4px;
+              background:#FEE2E2;color:#DC2626;white-space:nowrap;flex-shrink:0">⚠️ Conducta</span>` : ''}
+            ${tagsBadge ? `<span style="font-size:.65rem;flex-shrink:0">${tagsBadge}</span>` : ''}
             ${g.open_credit_note ? (g.open_credit_note.stale
-                ? `<span style="font-size:.58rem;font-weight:700;padding:1px 5px;border-radius:999px;background:var(--state-red-bg);color:var(--state-red-txt)">⚠️ NC</span>`
-                : `<span style="font-size:.58rem;font-weight:700;padding:1px 5px;border-radius:999px;background:rgba(124,58,237,.1);color:#7c3aed">🔄 NC</span>`
+                ? `<span style="font-size:.58rem;font-weight:700;padding:1px 5px;border-radius:999px;background:var(--state-red-bg);color:var(--state-red-txt);flex-shrink:0">⚠️ NC</span>`
+                : `<span style="font-size:.58rem;font-weight:700;padding:1px 5px;border-radius:999px;background:rgba(124,58,237,.1);color:#7c3aed;flex-shrink:0">🔄 NC</span>`
               ) : ''}
           </div>
-          <!-- Línea 2: última visita + contacto compacto -->
-          <div style="display:flex;align-items:center;gap:4px;flex-wrap:nowrap;overflow:hidden">
+
+          <!-- Última visita (centro) -->
+          <div style="display:flex;align-items:center;gap:4px;flex-shrink:0;max-width:320px;overflow:hidden">
             ${lastCI ? `
-            <span style="font-size:.6rem;font-weight:600;text-transform:uppercase;
-              letter-spacing:.04em;color:var(--color-text-3);opacity:.55;flex-shrink:0">Última visita</span>
+            <span style="font-size:.59rem;font-weight:600;text-transform:uppercase;
+              letter-spacing:.04em;color:var(--color-text-3);opacity:.5">Última visita</span>
             ${unitChip}
-            <span style="font-size:.67rem;color:var(--color-text-3);white-space:nowrap">${lastCI} → ${lastCO ?? ''}</span>
-            ${g.prev_units?.length ? `<span style="font-size:.62rem;opacity:.4;white-space:nowrap">· tb: ${g.prev_units.slice(0,2).join(', ')}</span>` : ''}
-            ` : contactLine ? `<span style="font-size:.67rem;color:var(--color-text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${contactLine}</span>` : ''}
+            <span style="font-size:.65rem;color:var(--color-text-3);white-space:nowrap">${lastCI} → ${lastCO ?? ''}</span>
+            ${g.prev_units?.length ? `<span style="font-size:.6rem;opacity:.35;white-space:nowrap">· tb: ${g.prev_units.slice(0,2).join(', ')}</span>` : ''}
+            ` : contactLine ? `<span style="font-size:.65rem;color:var(--color-text-3);white-space:nowrap">${contactLine}</span>` : ''}
           </div>
-          <!-- Nota reciente (solo si hay, muy compacta) -->
-          ${noteText ? `<div style="font-size:.64rem;color:var(--color-text-3);
-            white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
-            font-style:italic;margin-top:1px;opacity:.75">
-            📝 ${noteText}</div>` : ''}
+
+          <!-- Estadías + total -->
+          <div style="text-align:right;flex-shrink:0;min-width:60px">
+            <span style="font-size:.78rem;font-weight:700;color:var(--color-text)">${g.total_bookings ?? 0}</span>
+            <span style="font-weight:400;font-size:.6rem;color:var(--color-text-3)"> est.</span>
+            ${g.total_spent ? `<div style="font-size:.65rem;color:var(--color-success);font-weight:600">${formatARS(g.total_spent)}</div>` : ''}
+          </div>
+
+          <!-- Botones editar + borrar -->
+          <div style="display:flex;gap:2px;flex-shrink:0">
+            <button onclick="event.stopPropagation();window._guestsCRM?._openEditModal('${g.id}')"
+              style="width:22px;height:22px;border-radius:5px;border:none;background:transparent;
+                cursor:pointer;font-size:.72rem;display:flex;align-items:center;justify-content:center;
+                opacity:.2;transition:all .15s"
+              onmouseenter="this.style.opacity='1';this.style.background='var(--color-primary-l)'"
+              onmouseleave="this.style.opacity='.2';this.style.background='transparent'"
+              title="Editar">✏️</button>
+            <button onclick="event.stopPropagation();window._guestsCRM?._confirmDelete('${g.id}','${esc(g.first_name)} ${esc(g.last_name)}')"
+              style="width:22px;height:22px;border-radius:5px;border:none;background:transparent;
+                cursor:pointer;font-size:.72rem;display:flex;align-items:center;justify-content:center;
+                opacity:.2;transition:all .15s"
+              onmouseenter="this.style.opacity='1';this.style.background='#FEE2E2'"
+              onmouseleave="this.style.opacity='.2';this.style.background='transparent'"
+              title="Eliminar">🗑️</button>
+          </div>
+
         </div>
 
-        <!-- Estadías + total (columna derecha) -->
-        <div style="text-align:right;flex-shrink:0;min-width:50px">
-          <div style="font-size:.78rem;font-weight:700;color:var(--color-text)">
-            ${g.total_bookings ?? 0}
-            <span style="font-weight:400;font-size:.62rem;color:var(--color-text-3)">est.</span>
-          </div>
-          ${g.total_spent ? `<div style="font-size:.67rem;color:var(--color-success);
-            font-weight:600;white-space:nowrap">${formatARS(g.total_spent)}</div>` : ''}
-        </div>
+        <!-- Nota (solo si existe, debajo de la línea principal) -->
+        ${noteText ? `<div style="padding:0 10px 5px 46px;font-size:.63rem;color:var(--color-text-3);
+          font-style:italic;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;opacity:.8">
+          📝 ${noteText}</div>` : ''}
 
-        <!-- Botón editar -->
-        <button class="btn-edit-guest"
-          onclick="event.stopPropagation();window._guestsCRM?._openEditModal('${g.id}')"
-          style="flex-shrink:0;width:24px;height:24px;border-radius:6px;border:none;
-            background:transparent;cursor:pointer;color:var(--color-text-3);font-size:.78rem;
-            display:flex;align-items:center;justify-content:center;opacity:.25;transition:all .15s"
-          onmouseenter="this.style.opacity='1';this.style.background='var(--color-primary-l)';this.style.color='var(--color-primary)'"
-          onmouseleave="this.style.opacity='.25';this.style.background='transparent';this.style.color='var(--color-text-3)'"
-          title="Editar datos" aria-label="Editar datos">✏️</button>
-
-      </div>
-      ${g.linked ? `
-      <div style="border-top:1px dashed var(--color-border);padding:6px 10px 6px 10px">
-        <div style="font-size:.68rem;color:var(--color-text-3);font-weight:600;margin-bottom:4px;display:flex;align-items:center;gap:6px">
-          <span>👫</span>
-          <span>Reservas de <span style="color:var(--color-text-2)">${esc(g.linked.first_name)} ${esc(g.linked.last_name)}</span></span>
+        <!-- Vinculado familiar -->
+        ${g.linked ? `
+        <div style="border-top:1px dashed var(--color-border);padding:4px 10px 5px 46px;
+          display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+          <span style="font-size:.62rem;color:var(--color-text-3)">👫</span>
+          <span style="font-size:.65rem;color:var(--color-text-2);font-weight:500">
+            ${esc(g.linked.first_name)} ${esc(g.linked.last_name)}</span>
+          ${(g.linked.bookings ?? []).filter(b=>b.status!='cancelled'&&b.status!='blocked')
+            .sort((a,b)=>b.check_in.localeCompare(a.check_in)).map(b => {
+              const uc = b.booking_units?.[0]?.units?.color ?? '#999';
+              const un = b.booking_units?.[0]?.units?.name ?? '—';
+              const ci = b.check_in?.split('-').reverse().join('/') ?? '';
+              const co = b.check_out?.split('-').reverse().join('/') ?? '';
+              return `<span style="font-size:.62rem;color:var(--color-text-3);
+                display:inline-flex;align-items:center;gap:3px">
+                <span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${uc}"></span>
+                ${un} ${ci}→${co}
+                <span style="color:var(--color-success);font-weight:600">${formatARS(b.total_paid??0)}</span>
+              </span>`;
+            }).join('<span style="color:var(--color-border)">·</span>')}
           <button onclick="event.stopPropagation();window._guestsCRM?._openProfile('${g.linked.id}')"
-            style="font-size:.65rem;color:var(--color-primary);background:none;border:none;cursor:pointer;padding:1px 6px;border-radius:4px;border:1px solid var(--color-primary)">ver ficha →</button>
-        </div>
-        ${(g.linked.bookings ?? []).filter(b=>b.status!='cancelled'&&b.status!='blocked').sort((a,b)=>b.check_in.localeCompare(a.check_in)).map(b => {
-          const unitName = b.booking_units?.[0]?.units?.name ?? '—';
-          const unitColor = b.booking_units?.[0]?.units?.color ?? '#999';
-          const ci = b.check_in ? b.check_in.split('-').reverse().join('/') : '';
-          const co = b.check_out ? b.check_out.split('-').reverse().join('/') : '';
-          return `<div style="display:flex;align-items:center;gap:6px;padding:3px 0;font-size:.72rem;color:var(--color-text-2)">
-            <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${unitColor};flex-shrink:0"></span>
-            <span style="font-weight:500">${unitName}</span>
-            <span style="color:var(--color-text-3)">${ci} → ${co}</span>
-            <span style="margin-left:auto;color:var(--color-success);font-weight:600;font-size:.69rem">${formatARS(b.total_paid ?? 0)}</span>
-          </div>`;
-        }).join('')}
-      </div>` : ''}
+            style="font-size:.6rem;color:var(--color-primary);background:none;border:none;
+              cursor:pointer;padding:0 4px;border-radius:3px;border:1px solid var(--color-primary)">ver →</button>
+        </div>` : ''}
 
-        <!-- Botón borrar -->
-        <button class="btn-delete-guest"
-          onclick="event.stopPropagation();window._guestsCRM?._confirmDelete('${g.id}','${g.first_name} ${g.last_name}')"
-          style="flex-shrink:0;width:26px;height:26px;border-radius:6px;border:none;
-            background:transparent;cursor:pointer;color:var(--color-text-3);font-size:.82rem;
-            display:flex;align-items:center;justify-content:center;opacity:.3;transition:all .15s;
-            margin-top:1px"
-          onmouseenter="this.style.opacity='1';this.style.background='#FEE2E2';this.style.color='#DC2626'"
-          onmouseleave="this.style.opacity='.3';this.style.background='transparent';this.style.color='var(--color-text-3)'"
-          title="Eliminar huésped" aria-label="Eliminar huésped">🗑️</button>
-
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"
-          style="color:var(--color-text-3);flex-shrink:0;margin-top:5px">
-          <polyline points="9 18 15 12 9 6"/></svg>
       </div>`;
   }
 
