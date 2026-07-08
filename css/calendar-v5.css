@@ -148,7 +148,7 @@
   position: absolute;
   right: 3px; top: 50%;
   transform: translateY(-50%);
-  width: 2px; height: 12px;
+  width: 2px; height: 16px;
   border-radius: 1px;
   background: rgba(255,255,255,.7);
 }
@@ -170,7 +170,7 @@
   position: absolute;
   left: 3px; top: 50%;
   transform: translateY(-50%);
-  width: 2px; height: 12px;
+  width: 2px; height: 16px;
   border-radius: 1px;
   background: rgba(255,255,255,.7);
 }

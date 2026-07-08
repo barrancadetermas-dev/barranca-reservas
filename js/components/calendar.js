@@ -751,7 +751,7 @@ export class Calendar {
       border:1px dashed rgba(148,163,184,.45);
       z-index:2;
       display:flex;align-items:center;justify-content:center;
-      font-size:.72rem;pointer-events:none;
+      font-size:.9rem;pointer-events:none;
     `;
     bar.innerHTML = '<span style="opacity:.7">🔄</span>';
     cell.appendChild(bar);
@@ -772,7 +772,7 @@ export class Calendar {
       border:1px dashed rgba(148,163,184,.45);
       z-index:2;
       display:flex;align-items:center;justify-content:center;
-      font-size:.72rem;pointer-events:none;
+      font-size:.9rem;pointer-events:none;
     `;
     bar.innerHTML = '<span style="opacity:.7">🚪</span>';
     cell.appendChild(bar);
