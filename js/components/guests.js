@@ -493,105 +493,73 @@ export class GuestsCRM {
     return `
       <div class="guest-row-item" data-guest-id="${g.id}"
         title="${tipParts}"
-        style="border-bottom:1px solid var(--color-border);cursor:pointer;
-          transition:background .12s;
+        style="display:flex;align-items:center;gap:8px;padding:6px 10px;
+          border-bottom:1px solid var(--color-border);cursor:pointer;transition:background .12s;
           ${g.bad_experience ? 'border-left:3px solid #EF4444;background:rgba(239,68,68,.03)' : ''}"
         onmouseenter="this.style.background='var(--color-surface-2)'"
         onmouseleave="this.style.background='${g.bad_experience ? 'rgba(239,68,68,.03)' : ''}'">
 
-        <!-- Fila principal: 1 sola línea -->
-        <div style="display:flex;align-items:center;gap:8px;padding:6px 10px">
+        <!-- Avatar -->
+        <div style="width:28px;height:28px;border-radius:50%;flex-shrink:0;
+          display:flex;align-items:center;justify-content:center;
+          font-size:.67rem;font-weight:700;color:#fff;
+          background:${g.bad_experience ? 'linear-gradient(135deg,#EF4444,#DC2626)' : 'var(--color-primary)'}">
+          ${initials}</div>
 
-          <!-- Avatar -->
-          <div style="width:28px;height:28px;border-radius:50%;flex-shrink:0;
-            display:flex;align-items:center;justify-content:center;
-            font-size:.67rem;font-weight:700;color:#fff;
-            background:${g.bad_experience ? 'linear-gradient(135deg,#EF4444,#DC2626)' : 'var(--color-primary)'}">
-            ${initials}</div>
-
-          <!-- Nombre + badges -->
-          <div style="flex:1;min-width:0;display:flex;align-items:center;gap:5px;overflow:hidden">
+        <!-- Columna izquierda: nombre + última visita -->
+        <div style="flex:1;min-width:0;overflow:hidden">
+          <div style="display:flex;align-items:center;gap:4px;overflow:hidden">
             <span style="font-weight:600;font-size:.82rem;color:var(--color-text);
-              white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
-              ${g.first_name} ${g.last_name}</span>
-            ${g.bad_experience ? `<span style="font-size:.58rem;font-weight:700;padding:1px 5px;border-radius:4px;
-              background:#FEE2E2;color:#DC2626;white-space:nowrap;flex-shrink:0">⚠️ Conducta</span>` : ''}
+              white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${g.first_name} ${g.last_name}</span>
+            ${g.bad_experience ? `<span style="font-size:.57rem;font-weight:700;padding:1px 4px;border-radius:3px;background:#FEE2E2;color:#DC2626;white-space:nowrap;flex-shrink:0">⚠️ Conducta</span>` : ''}
             ${tagsBadge ? `<span style="font-size:.65rem;flex-shrink:0">${tagsBadge}</span>` : ''}
-            ${g.open_credit_note ? (g.open_credit_note.stale
-                ? `<span style="font-size:.58rem;font-weight:700;padding:1px 5px;border-radius:999px;background:var(--state-red-bg);color:var(--state-red-txt);flex-shrink:0">⚠️ NC</span>`
-                : `<span style="font-size:.58rem;font-weight:700;padding:1px 5px;border-radius:999px;background:rgba(124,58,237,.1);color:#7c3aed;flex-shrink:0">🔄 NC</span>`
-              ) : ''}
+            ${g.open_credit_note ? `<span style="font-size:.57rem;font-weight:700;padding:1px 4px;border-radius:999px;${g.open_credit_note.stale ? 'background:var(--state-red-bg);color:var(--state-red-txt)' : 'background:rgba(124,58,237,.1);color:#7c3aed'};white-space:nowrap;flex-shrink:0">${g.open_credit_note.stale ? '⚠️' : '🔄'} NC</span>` : ''}
           </div>
-
-          <!-- Última visita (centro) -->
-          <div style="display:flex;align-items:center;gap:4px;flex-shrink:0;max-width:320px;overflow:hidden">
-            ${lastCI ? `
-            <span style="font-size:.59rem;font-weight:600;text-transform:uppercase;
-              letter-spacing:.04em;color:var(--color-text-3);opacity:.5">Última visita</span>
+          ${lastCI ? `<div style="display:flex;align-items:center;gap:3px;margin-top:1px;overflow:hidden">
+            <span style="font-size:.59rem;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--color-text-3);opacity:.5;flex-shrink:0">Última visita</span>
             ${unitChip}
-            <span style="font-size:.65rem;color:var(--color-text-3);white-space:nowrap">${lastCI} → ${lastCO ?? ''}</span>
-            ${g.prev_units?.length ? `<span style="font-size:.6rem;opacity:.35;white-space:nowrap">· tb: ${g.prev_units.slice(0,2).join(', ')}</span>` : ''}
-            ` : contactLine ? `<span style="font-size:.65rem;color:var(--color-text-3);white-space:nowrap">${contactLine}</span>` : ''}
-          </div>
-
-          <!-- Estadías + total -->
-          <div style="text-align:right;flex-shrink:0;min-width:60px">
-            <span style="font-size:.78rem;font-weight:700;color:var(--color-text)">${g.total_bookings ?? 0}</span>
-            <span style="font-weight:400;font-size:.6rem;color:var(--color-text-3)"> est.</span>
-            ${g.total_spent ? `<div style="font-size:.65rem;color:var(--color-success);font-weight:600">${formatARS(g.total_spent)}</div>` : ''}
-          </div>
-
-          <!-- Botones editar + borrar -->
-          <div style="display:flex;gap:2px;flex-shrink:0">
-            <button onclick="event.stopPropagation();window._guestsCRM?._openEditModal('${g.id}')"
-              style="width:22px;height:22px;border-radius:5px;border:none;background:transparent;
-                cursor:pointer;font-size:.72rem;display:flex;align-items:center;justify-content:center;
-                opacity:.2;transition:all .15s"
-              onmouseenter="this.style.opacity='1';this.style.background='var(--color-primary-l)'"
-              onmouseleave="this.style.opacity='.2';this.style.background='transparent'"
-              title="Editar">✏️</button>
-            <button onclick="event.stopPropagation();window._guestsCRM?._confirmDelete('${g.id}','${esc(g.first_name)} ${esc(g.last_name)}')"
-              style="width:22px;height:22px;border-radius:5px;border:none;background:transparent;
-                cursor:pointer;font-size:.72rem;display:flex;align-items:center;justify-content:center;
-                opacity:.2;transition:all .15s"
-              onmouseenter="this.style.opacity='1';this.style.background='#FEE2E2'"
-              onmouseleave="this.style.opacity='.2';this.style.background='transparent'"
-              title="Eliminar">🗑️</button>
-          </div>
-
+            <span style="font-size:.64rem;color:var(--color-text-3);white-space:nowrap">${lastCI} → ${lastCO ?? ''}</span>
+            ${g.prev_units?.length ? `<span style="font-size:.6rem;opacity:.35;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">· tb: ${g.prev_units.slice(0,2).join(', ')}</span>` : ''}
+          </div>` : contactLine ? `<div style="font-size:.64rem;color:var(--color-text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px">${contactLine}</div>` : ''}
+          ${noteText ? `<div style="font-size:.62rem;color:var(--color-text-3);font-style:italic;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;opacity:.75">📝 ${noteText}</div>` : ''}
         </div>
 
-        <!-- Nota (solo si existe, debajo de la línea principal) -->
-        ${noteText ? `<div style="padding:0 10px 5px 46px;font-size:.63rem;color:var(--color-text-3);
-          font-style:italic;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;opacity:.8">
-          📝 ${noteText}</div>` : ''}
+        <!-- Columna derecha: estadías + total + botones -->
+        <div style="display:flex;align-items:center;gap:4px;flex-shrink:0">
+          <div style="text-align:right;min-width:55px">
+            <div style="font-size:.77rem;font-weight:700;color:var(--color-text)">${g.total_bookings ?? 0} <span style="font-weight:400;font-size:.6rem;color:var(--color-text-3)">est.</span></div>
+            ${g.total_spent ? `<div style="font-size:.64rem;color:var(--color-success);font-weight:600">${formatARS(g.total_spent)}</div>` : ''}
+          </div>
+          <button onclick="event.stopPropagation();window._guestsCRM?._openEditModal('${g.id}')"
+            style="width:22px;height:22px;border-radius:5px;border:none;background:transparent;cursor:pointer;font-size:.7rem;opacity:.2;transition:all .15s;display:flex;align-items:center;justify-content:center"
+            onmouseenter="this.style.opacity='1';this.style.background='var(--color-primary-l)'"
+            onmouseleave="this.style.opacity='.2';this.style.background='transparent'"
+            title="Editar">✏️</button>
+          <button onclick="event.stopPropagation();window._guestsCRM?._confirmDelete('${g.id}','${esc(g.first_name)} ${esc(g.last_name)}')"
+            style="width:22px;height:22px;border-radius:5px;border:none;background:transparent;cursor:pointer;font-size:.7rem;opacity:.2;transition:all .15s;display:flex;align-items:center;justify-content:center"
+            onmouseenter="this.style.opacity='1';this.style.background='#FEE2E2'"
+            onmouseleave="this.style.opacity='.2';this.style.background='transparent'"
+            title="Eliminar">🗑️</button>
+        </div>
 
-        <!-- Vinculado familiar -->
-        ${g.linked ? `
-        <div style="border-top:1px dashed var(--color-border);padding:4px 10px 5px 46px;
-          display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-          <span style="font-size:.62rem;color:var(--color-text-3)">👫</span>
-          <span style="font-size:.65rem;color:var(--color-text-2);font-weight:500">
-            ${esc(g.linked.first_name)} ${esc(g.linked.last_name)}</span>
-          ${(g.linked.bookings ?? []).filter(b=>b.status!='cancelled'&&b.status!='blocked')
-            .sort((a,b)=>b.check_in.localeCompare(a.check_in)).map(b => {
-              const uc = b.booking_units?.[0]?.units?.color ?? '#999';
-              const un = b.booking_units?.[0]?.units?.name ?? '—';
-              const ci = b.check_in?.split('-').reverse().join('/') ?? '';
-              const co = b.check_out?.split('-').reverse().join('/') ?? '';
-              return `<span style="font-size:.62rem;color:var(--color-text-3);
-                display:inline-flex;align-items:center;gap:3px">
-                <span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${uc}"></span>
-                ${un} ${ci}→${co}
-                <span style="color:var(--color-success);font-weight:600">${formatARS(b.total_paid??0)}</span>
-              </span>`;
-            }).join('<span style="color:var(--color-border)">·</span>')}
-          <button onclick="event.stopPropagation();window._guestsCRM?._openProfile('${g.linked.id}')"
-            style="font-size:.6rem;color:var(--color-primary);background:none;border:none;
-              cursor:pointer;padding:0 4px;border-radius:3px;border:1px solid var(--color-primary)">ver →</button>
-        </div>` : ''}
-
-      </div>`;
+      </div>
+      ${g.linked ? `<div style="border-top:1px dashed var(--color-border);padding:3px 10px 4px 46px;
+        display:flex;align-items:center;gap:5px;flex-wrap:wrap;font-size:.62rem">
+        <span>👫</span>
+        <span style="color:var(--color-text-2);font-weight:500">${esc(g.linked.first_name)} ${esc(g.linked.last_name)}</span>
+        ${(g.linked.bookings ?? []).filter(b=>b.status!='cancelled'&&b.status!='blocked')
+          .sort((a,b)=>b.check_in.localeCompare(a.check_in)).map(b=>{
+            const uc=b.booking_units?.[0]?.units?.color??'#999';
+            const un=b.booking_units?.[0]?.units?.name??'—';
+            const ci=b.check_in?.split('-').reverse().join('/')??'';
+            const co=b.check_out?.split('-').reverse().join('/')??'';
+            return `<span style="color:var(--color-text-3);display:inline-flex;align-items:center;gap:2px">
+              <span style="width:6px;height:6px;border-radius:50%;background:${uc};display:inline-block"></span>
+              ${un} ${ci}→${co} <span style="color:var(--color-success);font-weight:600">${formatARS(b.total_paid??0)}</span></span>`;
+          }).join('<span style="opacity:.3">·</span>')}
+        <button onclick="event.stopPropagation();window._guestsCRM?._openProfile('${g.linked.id}')"
+          style="font-size:.58rem;color:var(--color-primary);background:none;border:1px solid var(--color-primary);cursor:pointer;padding:0 4px;border-radius:3px">ver →</button>
+      </div>` : ''}`;
   }
 
 
