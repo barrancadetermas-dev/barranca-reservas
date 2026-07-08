@@ -882,8 +882,8 @@ export class Calendar {
     if (isRecambio) {
       const badge = document.createElement('div');
       badge.title = '⚡ Recambio — sale un huésped y entra otro el mismo día';
-      badge.style.cssText = 'position:absolute;top:2px;left:2px;z-index:10;' +
-        'font-size:.62rem;line-height:1;pointer-events:none;filter:drop-shadow(0 0 2px rgba(0,0,0,.3))';
+      badge.style.cssText = 'position:absolute;top:1px;left:2px;z-index:10;' +
+        'font-size:.78rem;line-height:1;pointer-events:none;filter:drop-shadow(0 0 2px rgba(0,0,0,.3))';
       badge.textContent = '⚡';
       cell.appendChild(badge);
     }
