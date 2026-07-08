@@ -876,13 +876,17 @@ export class Calendar {
 
     const avatar = !isBlock ? Calendar._guestAvatar(booking.guests, 16) : '';
     const nameStyle = 'color:' + textColor + ';font-size:.68rem;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0';
-    const recambioBadge = isRecambio
-      ? '<span title="⚡ Recambio — entra hoy mismo que sale otro huésped" style="' +
-        'display:inline-flex;align-items:center;justify-content:center;' +
-        'padding:0 3px;border-radius:3px;font-size:.62rem;line-height:1.5;' +
-        'flex-shrink:0;margin-right:4px;background:rgba(255,255,255,.3);color:' + textColor + '">⚡</span>'
-      : '';
-    bar.innerHTML = avatar + canalChip + splitChip + recambioBadge + '<span style="' + nameStyle + '">' + guestFull + '</span>';
+    bar.innerHTML = avatar + canalChip + splitChip + '<span style="' + nameStyle + '">' + guestFull + '</span>';
+
+    // ⚡ Recambio: indicador fuera de la barra, esquina superior de la celda
+    if (isRecambio) {
+      const badge = document.createElement('div');
+      badge.title = '⚡ Recambio — sale un huésped y entra otro el mismo día';
+      badge.style.cssText = 'position:absolute;top:2px;left:2px;z-index:10;' +
+        'font-size:.62rem;line-height:1;pointer-events:none;filter:drop-shadow(0 0 2px rgba(0,0,0,.3))';
+      badge.textContent = '⚡';
+      cell.appendChild(badge);
+    }
 
     // ── Resize handles — derecha (checkout) y ahora también izquierda (check-in) ──
     if (!truncRight) {
