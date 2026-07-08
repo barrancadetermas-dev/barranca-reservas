@@ -617,7 +617,7 @@ export class Calendar {
           if (ncPendingDays.has(`${unit.id}|${iso}`)) {
             const guestName = ncPendingDays.get(`${unit.id}|${iso}`);
             this._renderNcPendingBar(cell, guestName);
-            cell.title = `🔄 Noche de una nota de crédito${guestName ? ` de ${guestName}` : ''} sin usar — todavía se puede reservar`;
+            cell.title = `🗓️ Noche de reprogramación${guestName ? ` de ${guestName}` : ''} sin usar — todavía se puede reservar`;
           } else if (earlyDepartureDays.has(`${unit.id}|${iso}`)) {
             const guestName = earlyDepartureDays.get(`${unit.id}|${iso}`);
             this._renderEarlyDepartureBar(cell, guestName);
@@ -767,7 +767,7 @@ export class Calendar {
       display:flex;align-items:center;justify-content:center;
       font-size:.9rem;pointer-events:none;
     `;
-    bar.innerHTML = '<span style="opacity:.7">🔄</span>';
+    bar.innerHTML = '<span style="opacity:.8">🗓️</span>';
     cell.appendChild(bar);
   }
 
@@ -883,8 +883,8 @@ export class Calendar {
       const badge = document.createElement('div');
       badge.title = '⚡ Recambio — sale un huésped y entra otro el mismo día';
       badge.style.cssText = 'position:absolute;top:1px;left:2px;z-index:10;' +
-        'font-size:.78rem;line-height:1;pointer-events:none;filter:drop-shadow(0 0 2px rgba(0,0,0,.3))';
-      badge.textContent = '⚡';
+        'font-size:1rem;line-height:1;pointer-events:none;filter:drop-shadow(0 0 2px rgba(0,0,0,.25))';
+      badge.textContent = '🔄';
       cell.appendChild(badge);
     }
 
