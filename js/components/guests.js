@@ -493,88 +493,80 @@ export class GuestsCRM {
     return `
       <div class="guest-row-item" data-guest-id="${g.id}"
         title="${tipParts}"
-        style="display:flex;align-items:flex-start;gap:10px;padding:9px 10px;
+        style="display:flex;align-items:center;gap:10px;padding:7px 10px;
           border-bottom:1px solid var(--color-border);cursor:pointer;
-          transition:background .12s;border-radius:6px"
+          transition:background .12s;position:relative;
+          ${g.bad_experience ? 'border-left:3px solid #EF4444;' : ''}
+          "
         onmouseenter="this.style.background='var(--color-surface-2)'"
         onmouseleave="this.style.background=''">
 
+        ${g.bad_experience ? `
+        <div style="position:absolute;top:0;left:0;right:0;
+          background:rgba(239,68,68,.08);
+          border-bottom:1px solid rgba(239,68,68,.15);
+          padding:2px 10px 2px ${g.bad_experience ? '14px' : '10px'};
+          font-size:.6rem;font-weight:700;color:#EF4444;letter-spacing:.04em;
+          display:flex;align-items:center;gap:4px">
+          ⚠️ ATENCIÓN — conducta registrada
+        </div>
+        <div style="height:14px"></div>` : ''}
+
         <!-- Avatar -->
-        <div style="width:34px;height:34px;border-radius:50%;flex-shrink:0;margin-top:1px;
+        <div style="width:30px;height:30px;border-radius:50%;flex-shrink:0;
           display:flex;align-items:center;justify-content:center;
-          font-size:.73rem;font-weight:700;color:#fff;
-          background:${g.bad_experience ? 'linear-gradient(135deg,#EF4444,#DC2626)' : 'var(--color-primary)'}">` + initials + `</div>
+          font-size:.7rem;font-weight:700;color:#fff;
+          background:${g.bad_experience ? 'linear-gradient(135deg,#EF4444,#DC2626)' : 'var(--color-primary)'}">
+          ${initials}</div>
 
-        <!-- Bloque info -->
+        <!-- Bloque info — todo en 2 líneas compactas -->
         <div style="flex:1;min-width:0;overflow:hidden">
-
-          <!-- SECCIÓN 1: datos del huésped -->
-          <div style="margin-bottom:5px">
-            <!-- Nombre + badges -->
-            <div style="display:flex;align-items:center;gap:5px;margin-bottom:2px">
-              <span style="font-weight:600;font-size:.85rem;color:var(--color-text);
-                white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:210px">
-                ${g.first_name} ${g.last_name}</span>
-              ${g.bad_experience ? '<span style="font-size:.6rem;color:#EF4444" title="Mala experiencia">⚠️</span>' : ''}
-              ${tagsBadge ? `<span style="font-size:.68rem">${tagsBadge}</span>` : ''}
-              ${g.open_credit_note ? (g.open_credit_note.stale
-                  ? `<span style="font-size:.62rem;font-weight:700;padding:1px 7px;border-radius:999px;background:var(--state-red-bg);color:var(--state-red-txt)" title="Nota de crédito de ${formatARS(g.open_credit_note.amount)} sin usar hace ${g.open_credit_note.ageDays} días">⚠️ NC vieja</span>`
-                  : `<span style="font-size:.62rem;font-weight:700;padding:1px 7px;border-radius:999px;background:rgba(124,58,237,.1);color:#7c3aed" title="Nota de crédito abierta de ${formatARS(g.open_credit_note.amount)}">🔄 NC ${formatARS(g.open_credit_note.amount)}</span>`
-                ) : ''}
-            </div>
-            <!-- Contacto -->
-            ${contactLine ? `<div style="font-size:.71rem;color:var(--color-text-3);
-              white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
-              ${contactLine}</div>` : ''}
-            <!-- Datos adicionales (registro): localidad, edad, auto, patente -->
-            ${(g.locality || g.age || g.car_model || g.car_plate) ? `<div style="font-size:.68rem;color:var(--color-text-3);
-              white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px">
-              ${[g.locality ? '📍 ' + g.locality : null, g.age ? g.age + ' años' : null,
-                 g.car_model ? '🚗 ' + g.car_model : null, g.car_plate ? g.car_plate : null]
-                 .filter(Boolean).join('  ·  ')}</div>` : ''}
+          <!-- Línea 1: nombre + badges -->
+          <div style="display:flex;align-items:center;gap:5px">
+            <span style="font-weight:600;font-size:.83rem;color:var(--color-text);
+              white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:200px">
+              ${g.first_name} ${g.last_name}</span>
+            ${tagsBadge ? `<span style="font-size:.65rem">${tagsBadge}</span>` : ''}
+            ${g.open_credit_note ? (g.open_credit_note.stale
+                ? `<span style="font-size:.58rem;font-weight:700;padding:1px 5px;border-radius:999px;background:var(--state-red-bg);color:var(--state-red-txt)">⚠️ NC</span>`
+                : `<span style="font-size:.58rem;font-weight:700;padding:1px 5px;border-radius:999px;background:rgba(124,58,237,.1);color:#7c3aed">🔄 NC</span>`
+              ) : ''}
           </div>
-
-          <!-- SEPARADOR + SECCIÓN 2: última visita -->
-          ${lastCI ? `
-          <div style="border-top:1px dashed var(--color-border);margin:5px 0 4px"></div>
-          <div style="font-size:.68rem;color:var(--color-text-3);display:flex;align-items:center;gap:5px;flex-wrap:wrap">
+          <!-- Línea 2: última visita + contacto compacto -->
+          <div style="display:flex;align-items:center;gap:4px;flex-wrap:nowrap;overflow:hidden">
+            ${lastCI ? `
             <span style="font-size:.6rem;font-weight:600;text-transform:uppercase;
-              letter-spacing:.05em;color:var(--color-text-3);opacity:.6">Última visita</span>
+              letter-spacing:.04em;color:var(--color-text-3);opacity:.55;flex-shrink:0">Última visita</span>
             ${unitChip}
-            <span>${lastCI}${lastCO ? ' → ' + lastCO : ''}</span>
-            ${g.prev_units?.length ? `<span style="opacity:.5">· también: ${g.prev_units.join(', ')}</span>` : ''}
-          </div>` : ''}
-
-          <!-- SECCIÓN 3: nota más reciente -->
-          ${noteText ? `
-          <div style="margin-top:4px;font-size:.69rem;color:var(--color-text-2);
-            font-style:italic;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
-            padding:3px 6px;background:var(--color-surface-2);border-radius:4px;
-            border-left:2px solid var(--color-primary)">
-            📝 ${noteText}
-          </div>` : ''}
-
+            <span style="font-size:.67rem;color:var(--color-text-3);white-space:nowrap">${lastCI} → ${lastCO ?? ''}</span>
+            ${g.prev_units?.length ? `<span style="font-size:.62rem;opacity:.4;white-space:nowrap">· tb: ${g.prev_units.slice(0,2).join(', ')}</span>` : ''}
+            ` : contactLine ? `<span style="font-size:.67rem;color:var(--color-text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${contactLine}</span>` : ''}
+          </div>
+          <!-- Nota reciente (solo si hay, muy compacta) -->
+          ${noteText ? `<div style="font-size:.64rem;color:var(--color-text-3);
+            white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+            font-style:italic;margin-top:1px;opacity:.75">
+            📝 ${noteText}</div>` : ''}
         </div>
 
         <!-- Estadías + total (columna derecha) -->
-        <div style="text-align:right;flex-shrink:0;min-width:50px;padding-top:1px">
-          <div style="font-size:.8rem;font-weight:700;color:var(--color-text)">
+        <div style="text-align:right;flex-shrink:0;min-width:50px">
+          <div style="font-size:.78rem;font-weight:700;color:var(--color-text)">
             ${g.total_bookings ?? 0}
-            <span style="font-weight:400;font-size:.65rem;color:var(--color-text-3)">est.</span>
+            <span style="font-weight:400;font-size:.62rem;color:var(--color-text-3)">est.</span>
           </div>
-          ${g.total_spent ? `<div style="font-size:.68rem;color:var(--color-success);
+          ${g.total_spent ? `<div style="font-size:.67rem;color:var(--color-success);
             font-weight:600;white-space:nowrap">${formatARS(g.total_spent)}</div>` : ''}
         </div>
 
         <!-- Botón editar -->
         <button class="btn-edit-guest"
           onclick="event.stopPropagation();window._guestsCRM?._openEditModal('${g.id}')"
-          style="flex-shrink:0;width:26px;height:26px;border-radius:6px;border:none;
-            background:transparent;cursor:pointer;color:var(--color-text-3);font-size:.82rem;
-            display:flex;align-items:center;justify-content:center;opacity:.3;transition:all .15s;
-            margin-top:1px"
+          style="flex-shrink:0;width:24px;height:24px;border-radius:6px;border:none;
+            background:transparent;cursor:pointer;color:var(--color-text-3);font-size:.78rem;
+            display:flex;align-items:center;justify-content:center;opacity:.25;transition:all .15s"
           onmouseenter="this.style.opacity='1';this.style.background='var(--color-primary-l)';this.style.color='var(--color-primary)'"
-          onmouseleave="this.style.opacity='.3';this.style.background='transparent';this.style.color='var(--color-text-3)'"
+          onmouseleave="this.style.opacity='.25';this.style.background='transparent';this.style.color='var(--color-text-3)'"
           title="Editar datos" aria-label="Editar datos">✏️</button>
 
       </div>
