@@ -891,6 +891,7 @@ export class BookingList {
 
   // ── Checkout rápido ───────────────────────────────
   async _doCheckout(id) {
+    if (!navigator.onLine) { showToast('📵 Sin conexión — necesitás internet para registrar el check-out', 'warning'); return; }
     if (!confirm('¿Confirmar check-out de esta reserva?')) return;
     try {
       await this.db.from('bookings').update({ status: 'paid', checked_out_at: new Date().toISOString() }).eq('id', id);
@@ -914,6 +915,7 @@ export class BookingList {
   // ── Check-in TARDÍO — el huésped ya llegó pero no se registró en su
   // momento (ej: reserva de hace 2 días que nunca tuvo el botón visible).
   async _doLateCheckIn(id) {
+    if (!navigator.onLine) { showToast('📵 Sin conexión — necesitás internet para registrar el check-in', 'warning'); return; }
     const booking = this._allBookings.find(b => b.id === id);
     const guestName = booking?.guests ? `${booking.guests.first_name} ${booking.guests.last_name}` : 'este huésped';
     if (!confirm(`¿Registrar check-in de ${guestName}?\n\nSe registrará la hora actual como momento de llegada.`)) return;
@@ -938,6 +940,7 @@ export class BookingList {
   // reserva conserva la fecha original en las notas, para poder mostrar
   // ese tramo en el calendario.
   async _doEarlyCheckout(id) {
+    if (!navigator.onLine) { showToast('📵 Sin conexión — necesitás internet para registrar la salida anticipada', 'warning'); return; }
     const booking = this._allBookings.find(b => b.id === id);
     const guestName = booking?.guests ? `${booking.guests.first_name} ${booking.guests.last_name}` : 'este huésped';
     const originalCheckOut = booking?.check_out;

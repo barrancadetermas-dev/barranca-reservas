@@ -18,6 +18,8 @@ import { checkDollarVariants } from './services/dollar-variants-notifications.js
 import { initNewsNotifications } from './services/news-notifications.js';
 import { initMilaEventNotifications } from './services/mila-event-notifications.js';
 import { initEventEngine } from './services/event-engine.js';
+import { initOfflineSync } from './services/offline-sync.js';
+import { saveSnapshot, loadSnapshot } from './services/offline-store.js';
 // ═══════════════════════════════════════════════════
 // app.js v5.0 — MILA Sistema Inteligente para Alojamientos
 // + Roles (admin/staff/demo) + Demo banner
@@ -282,6 +284,13 @@ async function initApp(user) {
     initAccessibility(supabase, AppContext.hotelId);
     initNotificationCenterUI();
     initMilaEventNotifications();
+    initOfflineSync(supabase, {
+      onSynced: () => {
+        // Recargar calendario y lista cuando termina el sync
+        debouncedCalendarLoad(300);
+        bookingList?.load?.();
+      }
+    });
     initSystemNotifications();
     checkUpcomingHolidays(); // sin red, es cálculo local — puede ir ya mismo
 

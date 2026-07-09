@@ -2214,6 +2214,17 @@ ${notes ? `
     if (this._submitting) return; // guard contra doble click
     if (!this._validateAll()) return;
 
+    // ── Guard offline ──────────────────────────────────────────
+    // Si no hay conexión, no intentamos guardar — Supabase va a
+    // fallar de todas formas y el formulario quedaría en estado
+    // indefinido. Mejor avisar claramente y dejar el form abierto
+    // para que el usuario lo guarde cuando vuelva la conexión.
+    if (!navigator.onLine) {
+      showToast('📵 Sin conexión — conectate a internet para guardar la reserva', 'warning');
+      return;
+    }
+    // ──────────────────────────────────────────────────────────
+
     this._submitting = true;
     const btn = document.getElementById('btn-step-next');
     const confirmBtn = document.getElementById('btn-voucher-confirm');

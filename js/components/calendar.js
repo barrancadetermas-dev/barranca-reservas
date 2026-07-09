@@ -100,6 +100,15 @@ export class Calendar {
         }),
       ]);
 
+      // Guardar snapshot para uso offline
+      if (navigator.onLine && bookings?.length) {
+        try {
+          const { saveSnapshot } = await import('../services/offline-store.js');
+          await saveSnapshot('bookings', bookings);
+          await saveSnapshot('bookings-range', { start: this._windowStart, end: lastISO });
+        } catch {}
+      }
+
       this._lastRenderedBookings = bookings;
       const cellMap     = this._buildCellMap(bookings);
       const reminderMap = this._buildReminderMap(reminders);
@@ -180,6 +189,22 @@ export class Calendar {
   // DATA FETCHING
   // ══════════════════════════════════════════════════
   async _fetchBookings(firstDay, lastDay) {
+    // Si no hay conexión, intentar con el snapshot guardado
+    if (!navigator.onLine) {
+      try {
+        const { loadSnapshot } = await import('../services/offline-store.js');
+        const snap = await loadSnapshot('bookings');
+        if (snap?.data?.length) {
+          console.info('[Calendar] Offline — usando snapshot guardado');
+          // Filtrar por rango visible
+          return snap.data.filter(b =>
+            b.check_in <= lastDay && b.check_out > firstDay
+          );
+        }
+      } catch {}
+      return [];
+    }
+
     const params = { hotelId: this.ctx.hotelId, firstDay, lastDay };
     const bookings = await cachedQuery(this.db, 'bookings', params, () =>
       this.db.from('bookings').select(`
@@ -1725,10 +1750,10 @@ export class Calendar {
         this.load(); return;
       }
 
+      if (!navigator.onLine) { showToast('📵 Sin conexión — el cambio no se guardó', 'warning'); this.load(); return; }
       const { error } = await this.db.from('bookings')
         .update({ check_in: newCI, check_out: newCO }).eq('id', booking.id);
       if (error) { showToast('Error al mover la reserva', 'error'); return; }
-
       if (unitChanged) {
         await this.db.from('booking_units')
           .update({ unit_id: targetUnitId })
@@ -2048,6 +2073,7 @@ export class Calendar {
       }
 
       const newNights = this._dayDiff(booking.check_in, currentCO);
+      if (!navigator.onLine) { showToast('📵 Sin conexión — el cambio no se guardó', 'warning'); this.load(); return; }
       const { error } = await this.db.from('bookings')
         .update({ check_out: currentCO }).eq('id', booking.id);
       if (error) {
@@ -2197,6 +2223,7 @@ export class Calendar {
       }
 
       const newNights = this._dayDiff(currentCI, booking.check_out);
+      if (!navigator.onLine) { showToast('📵 Sin conexión — el cambio no se guardó', 'warning'); this.load(); return; }
       const { error } = await this.db.from('bookings')
         .update({ check_in: currentCI }).eq('id', booking.id);
       if (error) {
