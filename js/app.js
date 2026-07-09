@@ -449,6 +449,12 @@ async function initApp(user) {
       cache.invalidate('bookings', 'reminders', 'payments');
       debouncedCalendarLoad(300);
       window._sidebarCal?.refresh().catch(console.error);
+      // Recargar la lista de reservas también — así cualquier acción
+      // (check-in, checkout, cobro, edición) se ve de inmediato sin
+      // necesitar refrescar la página.
+      if (bookingList && typeof bookingList.load === 'function') {
+        setTimeout(() => bookingList.load(), 200);
+      }
     });
 
     // "Nueva Reserva" → abre calculadora primero como paso 0

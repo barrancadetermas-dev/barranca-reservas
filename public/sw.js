@@ -1,14 +1,12 @@
 // ═══════════════════════════════════════════════════
-// MILA PMS — Service Worker v7
-// Estrategia: Network First con fallback offline
-// FIX: clone() debe llamarse SÍNCRONAMENTE al recibir
-// la respuesta, nunca dentro de un .then() posterior,
-// porque para entonces el body ya puede estar consumido
-// (causaba "Response body is already used").
+// MILA PMS — Service Worker v12
+// Estrategia: Network First con fallback a APP CACHE
+// Offline → sirve el index.html cacheado (no offline.html)
+// así la app funciona con los datos de IndexedDB.
 // ═══════════════════════════════════════════════════
 
-const CACHE_NAME  = 'mila-v11';
-const OFFLINE_URL = '/offline.html';
+const CACHE_NAME  = 'mila-v12';
+const APP_SHELL   = '/index.html'; // lo que servimos offline
 
 const STATIC_ASSETS = [
   '/',
@@ -44,39 +42,49 @@ self.addEventListener('activate', (e) => {
   );
 });
 
-// Guarda una respuesta en cache de forma segura, sin romper
-// el flujo principal si algo falla (cuota llena, etc.)
 function safePut(request, response) {
   caches.open(CACHE_NAME)
     .then(c => c.put(request, response))
     .catch(err => console.warn('[SW] cache put failed:', err));
 }
 
-// ── Fetch: Network First para todo ──
+// ── Fetch ──
 self.addEventListener('fetch', (e) => {
   const { request } = e;
   const url = new URL(request.url);
 
-  // No interceptar otros orígenes (Supabase, etc.)
+  // No interceptar otros orígenes (Supabase, APIs, etc.)
   if (url.origin !== self.location.origin) return;
   if (request.method !== 'GET') return;
 
-  // HTML: Network First, fallback offline
+  // ── HTML: Network First, fallback al APP SHELL cacheado ──
+  // Cuando no hay conexión, servimos index.html desde cache
+  // para que la app arranque con los datos de IndexedDB.
   if (request.headers.get('accept')?.includes('text/html')) {
     e.respondWith(
       fetch(request)
         .then(res => {
-          // Clonar INMEDIATAMENTE, antes de devolver la respuesta original
           const toCache = res.clone();
           safePut(request, toCache);
           return res;
         })
-        .catch(() => caches.match(OFFLINE_URL))
+        .catch(async () => {
+          // 1. Intentar el recurso exacto desde cache
+          const cached = await caches.match(request);
+          if (cached) return cached;
+          // 2. Fallback al app shell (index.html) — la app carga offline
+          const shell = await caches.match(APP_SHELL);
+          if (shell) return shell;
+          // 3. Último recurso: página offline
+          return caches.match('/offline.html');
+        })
     );
     return;
   }
 
-  // JS/CSS: Network First (evita servir código viejo tras deploy)
+  // ── JS/CSS: Network First, fallback cache ──
+  // Importante: si el JS no está cacheado y no hay red, la app
+  // no puede arrancar. Por eso pre-cacheamos en el install.
   if (url.pathname.endsWith('.js') || url.pathname.endsWith('.css')) {
     e.respondWith(
       fetch(request)
@@ -92,7 +100,7 @@ self.addEventListener('fetch', (e) => {
     return;
   }
 
-  // Imágenes / iconos: Cache First (no cambian)
+  // ── Imágenes / iconos: Cache First ──
   e.respondWith(
     caches.match(request).then(cached => {
       if (cached) return cached;
@@ -104,9 +112,6 @@ self.addEventListener('fetch', (e) => {
           }
           return res;
         })
-        // FIX: sin este catch, un fetch fallido (offline, red inestable en
-        // mobile) quedaba como unhandled promise rejection en consola.
-        // No es grave, pero ensuciaba el debugging de otros errores reales.
         .catch(() => cached || new Response('', { status: 504, statusText: 'Offline' }));
     })
   );

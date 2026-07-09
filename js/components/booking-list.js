@@ -446,6 +446,7 @@ export class BookingList {
       close();
       showToast('✅ Pago registrado — reserva abonada en su totalidad', 'success');
       document.dispatchEvent(new CustomEvent('booking:changed'));
+      this.load();
     });
   }
 
@@ -906,14 +907,14 @@ export class BookingList {
         Bus.emit(EVENTS.UNIT_FREED, { unitName, guestName });
       }
       showToast('Check-out realizado ✓', 'success');
+      document.dispatchEvent(new CustomEvent('booking:changed'));
       this.load();
     } catch (err) {
       showToast('Error: ' + err.message, 'error');
     }
   }
 
-  // ── Check-in TARDÍO — el huésped ya llegó pero no se registró en su
-  // momento (ej: reserva de hace 2 días que nunca tuvo el botón visible).
+  // ── Check-in TARDÍO ──
   async _doLateCheckIn(id) {
     if (!navigator.onLine) { showToast('📵 Sin conexión — necesitás internet para registrar el check-in', 'warning'); return; }
     const booking = this._allBookings.find(b => b.id === id);
@@ -927,6 +928,7 @@ export class BookingList {
       if (!updated?.length) throw new Error('No se pudo registrar el check-in — revisá los permisos.');
       Bus.emit(EVENTS.CHECKIN_DONE, { bookingId: id, guestName });
       showToast(`✅ Check-in registrado: ${guestName}`, 'success');
+      document.dispatchEvent(new CustomEvent('booking:changed'));
       this.load();
     } catch (err) { showToast('Error: ' + err.message, 'error'); }
   }
@@ -970,6 +972,7 @@ export class BookingList {
         Bus.emit(EVENTS.AVAILABILITY_CHANGED, { unitName, checkIn: todayISO, checkOut: originalCheckOut });
       }
       showToast('Check-out anticipado registrado ✓ — calendario actualizado', 'success');
+      document.dispatchEvent(new CustomEvent('booking:changed'));
       this.load();
     } catch (err) {
       showToast('Error: ' + err.message, 'error');
