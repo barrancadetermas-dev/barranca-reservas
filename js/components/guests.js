@@ -94,6 +94,9 @@ export class GuestsCRM {
           id="bl-limit-9999" style="font-size:.68rem;padding:2px 9px;border-radius:999px;cursor:pointer;
           border:1px solid var(--color-border);background:var(--color-surface-2);color:var(--color-text-2)">Todas</button>
         <span style="font-size:.7rem;color:var(--color-text-3);margin-left:8px" id="bl-total-label"></span>
+        <button id="btn-find-dupes" class="btn btn-outline btn-sm" style="gap:5px;font-size:.72rem" title="Buscar huéspedes con nombres similares que podrían ser la misma persona">
+          🔍 Duplicados
+        </button>
         <button id="btn-export-guests" class="btn btn-outline btn-sm" style="margin-left:auto;gap:5px;font-size:.72rem">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
           Exportar ▾
@@ -117,7 +120,9 @@ export class GuestsCRM {
       this._searchTimer = setTimeout(() => this._search(q), 280);
     });
 
-    // Botón Exportar huéspedes
+    // Botón Buscar duplicados
+    document.getElementById('btn-find-dupes')?.addEventListener('click', () => this._findAndShowDuplicates());
+
     document.getElementById('btn-export-guests')?.addEventListener('click', (e) => {
       const btn = e.currentTarget;
       import('../services/export-service.js').then(({ showExportDropdown, exportBookingsExcel, exportBookingsCSV, exportBookingsPDF }) => {
@@ -721,7 +726,129 @@ export class GuestsCRM {
     }
   }
 
-  // Calcula similitud entre 2 strings (0-1). Usa distancia de Levenshtein
+  // ── Búsqueda de duplicados por similitud de nombre ────────────
+  async _findAndShowDuplicates() {
+    const btn = document.getElementById('btn-find-dupes');
+    if (btn) { btn.textContent = '⏳ Buscando...'; btn.disabled = true; }
+
+    try {
+      const { data: all } = await this.db.from('guests')
+        .select('id, first_name, last_name')
+        .eq('hotel_id', this.ctx.hotelId)
+        .not('linked_guest_id', 'is', null === false ? null : undefined); // traer todos
+
+      const guests = await this.db.from('guests')
+        .select('id, first_name, last_name')
+        .eq('hotel_id', this.ctx.hotelId);
+
+      const list = guests.data ?? [];
+      const pairs = [];
+
+      for (let i = 0; i < list.length; i++) {
+        for (let j = i + 1; j < list.length; j++) {
+          const a = `${list[i].first_name ?? ''} ${list[i].last_name ?? ''}`.toLowerCase().trim();
+          const b = `${list[j].first_name ?? ''} ${list[j].last_name ?? ''}`.toLowerCase().trim();
+          if (!a || !b) continue;
+          const sim = this._similarity(a, b);
+          if (sim >= 0.80 && sim < 1.0) {
+            pairs.push({ sim, a: list[i], b: list[j] });
+          }
+        }
+      }
+
+      pairs.sort((x, y) => y.sim - x.sim);
+
+      if (!pairs.length) {
+        showToast('✅ No se encontraron huéspedes con nombres similares', 'success');
+        return;
+      }
+
+      this._showDupesModal(pairs);
+    } catch (err) {
+      showToast('Error al buscar duplicados: ' + err.message, 'error');
+    } finally {
+      if (btn) { btn.textContent = '🔍 Duplicados'; btn.disabled = false; }
+    }
+  }
+
+  _showDupesModal(pairs) {
+    document.getElementById('dupes-modal-overlay')?.remove();
+    const overlay = document.createElement('div');
+    overlay.id = 'dupes-modal-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px';
+
+    overlay.innerHTML = `
+      <div class="card" style="width:100%;max-width:560px;max-height:85vh;display:flex;flex-direction:column">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+          <span style="font-size:1.1rem">🔍</span>
+          <span class="card-title" style="margin:0">Posibles duplicados — ${pairs.length} par${pairs.length !== 1 ? 'es' : ''}</span>
+          <button id="dupes-close" style="margin-left:auto;background:none;border:none;font-size:1.2rem;cursor:pointer;color:var(--color-text-3)">✕</button>
+        </div>
+        <p style="font-size:.72rem;color:var(--color-text-3);margin-bottom:10px">
+          Huéspedes con nombres parecidos. Podés fusionarlos (mueve todas las reservas al primero y borra el segundo) o vincularlos como grupo familiar.
+        </p>
+        <div style="overflow-y:auto;flex:1">
+          ${pairs.map((p, idx) => `
+          <div style="display:flex;align-items:center;gap:8px;padding:8px;border-radius:8px;
+            border:1px solid var(--color-border);margin-bottom:6px;background:var(--color-surface-2)">
+            <div style="flex:1;min-width:0">
+              <div style="font-size:.78rem;font-weight:600">${esc(p.a.first_name)} ${esc(p.a.last_name)}</div>
+              <div style="font-size:.7rem;color:var(--color-text-3)">vs</div>
+              <div style="font-size:.78rem;font-weight:600">${esc(p.b.first_name)} ${esc(p.b.last_name)}</div>
+            </div>
+            <div style="font-size:.65rem;font-weight:700;padding:2px 6px;border-radius:999px;
+              background:${p.sim >= 0.92 ? '#FEE2E2' : '#FEF3C7'};
+              color:${p.sim >= 0.92 ? '#DC2626' : '#92400E'}">
+              ${Math.round(p.sim * 100)}%
+            </div>
+            <button data-merge-a="${p.a.id}" data-merge-b="${p.b.id}" data-idx="${idx}"
+              class="btn btn-sm" style="font-size:.68rem;background:#EF4444;color:white;border:none;white-space:nowrap">
+              🔀 Fusionar
+            </button>
+            <button data-link-a="${p.a.id}" data-link-b="${p.b.id}" data-idx="${idx}"
+              class="btn btn-outline btn-sm" style="font-size:.68rem;white-space:nowrap">
+              👫 Vincular
+            </button>
+          </div>`).join('')}
+        </div>
+      </div>`;
+
+    document.body.appendChild(overlay);
+
+    overlay.querySelector('#dupes-close').addEventListener('click', () => overlay.remove());
+    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+
+    // Fusionar
+    overlay.querySelectorAll('[data-merge-a]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const { mergeA, mergeB } = { mergeA: btn.dataset.mergeA, mergeB: btn.dataset.mergeB };
+        if (!confirm('¿Fusionar estos dos huéspedes? Todas las reservas del segundo pasarán al primero y el segundo se eliminará.')) return;
+        try {
+          await this.db.from('bookings').update({ guest_id: mergeA }).eq('guest_id', mergeB);
+          await this.db.from('guests').delete().eq('id', mergeB);
+          btn.closest('div[style]').remove();
+          showToast('✅ Huéspedes fusionados', 'success');
+          this._loadAll();
+        } catch (err) { showToast('Error: ' + err.message, 'error'); }
+      });
+    });
+
+    // Vincular como familia
+    overlay.querySelectorAll('[data-link-a]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const { linkA, linkB } = { linkA: btn.dataset.linkA, linkB: btn.dataset.linkB };
+        try {
+          await this.db.from('guests').update({ linked_guest_id: linkB }).eq('id', linkA);
+          await this.db.from('guests').update({ linked_guest_id: linkA }).eq('id', linkB);
+          btn.closest('div[style]').remove();
+          showToast('✅ Huéspedes vinculados como familia', 'success');
+          this._loadAll();
+        } catch (err) { showToast('Error: ' + err.message, 'error'); }
+      });
+    });
+  }
+
+
   // normalizada — funciona bien para detectar errores de tipeo.
   _similarity(a, b) {
     a = a.toLowerCase().trim(); b = b.toLowerCase().trim();

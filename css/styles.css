@@ -5980,3 +5980,35 @@ html, body {
 .dollar-badge {
   padding: 4px 9px !important;
 }
+
+/* ══════════════════════════════════════════════════════
+   BOOKING FORM — Optimización mobile
+   ══════════════════════════════════════════════════════ */
+@media (max-width: 768px) {
+  /* Modal ocupa toda la pantalla en mobile */
+  #modal-booking .modal-dialog {
+    margin: 0 !important;
+    max-width: 100vw !important;
+    width: 100vw !important;
+    min-height: 100dvh !important;
+    border-radius: 0 !important;
+  }
+  #modal-booking .modal-body {
+    max-height: calc(100dvh - 130px) !important;
+    padding: 10px 12px !important;
+  }
+  /* Steps más pequeños en mobile */
+  .steps-nav .step-label { display: none; }
+  .steps-nav .step-num { width: 24px; height: 24px; font-size: .7rem; }
+  /* Grids de 2 columnas → 1 columna en pantallas chicas */
+  .form-grid-2 { grid-template-columns: 1fr !important; }
+  /* Botones de paso full-width */
+  #btn-step-next, #btn-step-back {
+    width: 100% !important;
+    margin-top: 6px !important;
+  }
+  /* Precio por noche más compacto */
+  .price-input-wrap { flex-direction: column !important; gap: 6px !important; }
+  /* Resumen de voucher compacto */
+  .voucher-section { padding: 10px !important; }
+}

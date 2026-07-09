@@ -20,6 +20,7 @@ import { initMilaEventNotifications } from './services/mila-event-notifications.
 import { initEventEngine } from './services/event-engine.js';
 import { initOfflineSync } from './services/offline-sync.js';
 import { saveSnapshot, loadSnapshot } from './services/offline-store.js';
+import { initSMNNotifications } from './services/smn-notifications.js';
 // ═══════════════════════════════════════════════════
 // app.js v5.0 — MILA Sistema Inteligente para Alojamientos
 // + Roles (admin/staff/demo) + Demo banner
@@ -302,6 +303,7 @@ async function initApp(user) {
     setTimeout(() => initSportsNotifications(), 800);
     setTimeout(() => initF1Notifications(), 1300);
     setTimeout(() => initRiverNotifications(), 1800);
+    setTimeout(() => initSMNNotifications(), 2100);
     setTimeout(() => checkTomorrowArrivalsWithoutDeposit(supabase, AppContext.hotelId), 2300);
     setTimeout(() => checkHighSeasonOccupancy(supabase, AppContext.hotelId, AppContext.units?.length), 2800);
     setTimeout(() => checkDollarVariants(), 3300);
