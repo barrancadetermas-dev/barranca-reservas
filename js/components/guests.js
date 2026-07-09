@@ -460,7 +460,8 @@ export class GuestsCRM {
     // Chips de depto — TODOS los de la última reserva (fix: antes solo mostraba 1 aunque hubiera 4)
     const unitChip = lastUnits.map(u =>
       `<span style="display:inline-block;padding:1px 6px;border-radius:3px;font-size:.62rem;
-          font-weight:700;color:#fff;background:${u.color ?? 'var(--color-primary)'};margin-right:2px">${u.name}</span>`
+          font-weight:700;color:#fff;white-space:nowrap;flex-shrink:0;
+          background:${u.color ?? 'var(--color-primary)'};margin-right:2px">${u.name}</span>`
     ).join('');
 
     // ── Contacto ──

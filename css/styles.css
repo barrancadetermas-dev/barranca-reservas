@@ -5545,15 +5545,59 @@ select.field-error {
 
 /* 8. Mobile responsive */
 @media (max-width:768px) {
-  .bl-row-main { grid-template-columns:1fr auto; grid-template-rows:auto auto auto; gap:6px 0; padding:10px 12px; }
-  .bl-col-guest   { grid-column:1; grid-row:1; border:none; }
-  .bl-col-dates   { grid-column:2; grid-row:1; border:none; padding:0 0 0 8px; }
-  .bl-col-amount  { grid-column:1; grid-row:2; border:none; padding:0; align-items:flex-start; }
-  .bl-col-status  { grid-column:2; grid-row:2; border:none; padding:0; flex-direction:row; justify-content:flex-end; }
-  .booking-actions-cell { grid-column:1/-1; grid-row:3; border:none; padding:0; justify-content:flex-start; }
+  /* En mobile: todo en una sola columna flexible, sin grid apretado */
+  .bl-row-main {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 10px 12px;
+  }
+  /* Fila superior: avatar + nombre + chips */
+  .bl-col-guest {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border: none;
+    min-width: 0;
+  }
+  /* Fechas: debajo del nombre, no al lado */
+  .bl-col-dates {
+    border: none;
+    padding: 0;
+    font-size: .8rem;
+  }
+  /* Monto + status en la misma fila */
+  .bl-col-amount {
+    border: none;
+    padding: 0;
+    align-items: flex-start;
+  }
+  .bl-col-status {
+    border: none;
+    padding: 0;
+    flex-direction: row;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  /* Fila de montos y estado juntos */
+  .bl-mobile-row-money {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .booking-actions-cell {
+    border: none;
+    padding: 0;
+    justify-content: flex-start;
+  }
   .modal-overlay  { align-items:flex-end !important; padding:0 !important; }
   .modal:not(.modal-sm) { width:100% !important; max-width:100% !important; border-radius:var(--r-2xl) var(--r-2xl) 0 0 !important; max-height:93dvh !important; overflow-y:auto !important; margin:0 !important; }
   .form-group input, .form-group select, .form-group textarea { font-size:16px !important; }
+  /* Chips de unidad sin overflow en mobile */
+  .bl-guest-meta { flex-wrap: wrap; gap: 3px; }
+  .unit-chip, [class*="unit-chip"] { white-space: nowrap !important; }
 }
 @media (max-width:480px) {
   .kpi-grid { grid-template-columns:1fr 1fr !important; gap:8px !important; }
