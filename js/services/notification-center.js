@@ -79,6 +79,19 @@ export function onNotificationsChanged(fn) {
 // category:   una de CATEGORIES (default 'sistema')
 export function addNotification({ type = 'generic', title, message = '', icon, color, persistent = true, data = null, category = 'sistema', skipToast = false }) {
   const catInfo = CATEGORIES[category] ?? CATEGORIES.sistema;
+
+  // Dedup: si ya existe una notificación del mismo tipo con el mismo título
+  // en los últimos 3 segundos, la ignoramos — evita duplicados cuando el
+  // mismo evento se dispara múltiples veces seguidas (doble recarga, etc.)
+  const all = _loadAll();
+  const cutoff = Date.now() - 3000;
+  const isDupe = all.some(n =>
+    n.type === type &&
+    n.title === title &&
+    new Date(n.createdAt).getTime() > cutoff
+  );
+  if (isDupe) return null;
+
   const notif = {
     id:        `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     type, title, message,
@@ -91,7 +104,6 @@ export function addNotification({ type = 'generic', title, message = '', icon, c
   };
 
   if (persistent) {
-    const all = _loadAll();
     all.unshift(notif);
     _saveAll(all);
   }
