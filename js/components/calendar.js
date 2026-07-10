@@ -209,7 +209,7 @@ export class Calendar {
     const bookings = await cachedQuery(this.db, 'bookings', params, () =>
       this.db.from('bookings').select(`
         id, check_in, check_out, status, source, is_blocked, block_reason,
-        late_checkout, late_checkout_charged, total_amount, total_paid, balance, nights, pax,
+        late_checkout, late_checkout_charged, free_nights, total_amount, total_paid, balance, nights, pax,
         adults, children, notes, price_per_night, created_at,
         checked_in_at, checked_out_at,
         guests!bookings_guest_id_fkey(first_name, last_name, bad_experience, tags),
@@ -854,6 +854,18 @@ export class Calendar {
     if (booking._cellType !== 'start' && booking._cellType !== 'solo') return;
 
     const { color, textColor } = getBookingBarColor(booking);
+
+    // Promo: si hay noches sin cargo, el degradado recorre TODA la barra
+    // de punta a punta — sólido hasta donde terminan las noches pagas,
+    // luego transición suave al amarillo.
+    const freeN   = booking.free_nights ?? 0;
+    const totalN  = booking.nights      ?? 1;
+    const barBg   = (freeN > 0 && totalN > 0)
+      ? (() => {
+          const paidPct = Math.round(((totalN - freeN) / totalN) * 100);
+          return `linear-gradient(to right, ${color} 0%, ${color} ${paidPct}%, #EF9F27 100%)`;
+        })()
+      : color;
     const ci        = booking.check_in;
     const co        = booking.check_out;
     const winStart  = this._windowStart;
@@ -903,7 +915,7 @@ export class Calendar {
     }
 
     bar.style.cssText = `
-      background:${color};
+      background:${barBg};
       position:absolute;top:6px;bottom:6px;
       left:${leftStyle};
       width:${widthInteractive};
@@ -1039,9 +1051,12 @@ export class Calendar {
       // Sin cargo → degradado color→amarillo; cobrado → color sólido
       const isFree  = booking.late_checkout_charged === false;
       const yellow  = '#EF9F27';
+      // Si hay degradado de promo, la extensión late CO arranca del color final
+      // de ese degradado (que puede ser amarillo si toda la última noche es gratis)
+      const extBaseColor = (freeN > 0) ? yellow : color;
       const extBg   = isFree
-        ? `linear-gradient(to right, ${color} 0%, ${color} 20%, ${yellow} 100%)`
-        : color;
+        ? `linear-gradient(to right, ${extBaseColor} 0%, ${extBaseColor} 20%, ${yellow} 100%)`
+        : extBaseColor;
       ext.style.cssText = `
         position:absolute;top:6px;bottom:6px;
         left:${leftStyle};
