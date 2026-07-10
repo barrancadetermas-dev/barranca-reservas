@@ -545,7 +545,7 @@ export class Calendar {
       // Late checkout map — el día de salida queda "medio ocupado"
       unitBks.forEach(bk => {
         if (bk.late_checkout) {
-          const barColor = getBookingBarColor(bk);
+          const barColor = getBookingBarColor(bk).color;
           lateCheckoutMap.set(`${unit.id}|${bk.check_out}`, { booking: bk, color: barColor });
         }
       });
