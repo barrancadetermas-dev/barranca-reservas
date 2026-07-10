@@ -432,9 +432,56 @@
         <!-- Panel de personalización -->
         <div id="dashboard-cards" style="display:grid;grid-template-columns:repeat(5,1fr);gap:14px;margin-top:8px">
 
-          <!-- FILA 1 — métricas clave del mes -->
+          <!-- FILA 1 — Lo de HOY -->
 
-          <!-- 1. RevPAR / ADR -->
+          <!-- 1. Llegadas hoy -->
+          <div class="card dash-card-uniform" data-card-id="arrivals">
+            <div class="card-header"><h3>✅ Llegadas hoy</h3></div>
+            <div id="arrivals-list" style="flex:1"><p class="empty-state-sm">Sin llegadas hoy</p></div>
+          </div>
+
+          <!-- 2. Salidas hoy -->
+          <div class="card dash-card-uniform" data-card-id="departures">
+            <div class="card-header"><h3>👋 Salidas hoy</h3></div>
+            <div id="departures-list" style="flex:1"><p class="empty-state-sm">Sin salidas hoy</p></div>
+          </div>
+
+          <!-- 3. Ocupación hoy -->
+          <div class="card dash-card-uniform" data-card-id="occ">
+            <div class="card-header"><h3>📊 Ocupación hoy</h3></div>
+            <div style="display:flex;align-items:center;justify-content:center;flex:1;padding:6px 0">
+              <svg width="132" height="132" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
+                <circle id="occ-ring-track" cx="60" cy="60" r="50" fill="none" stroke="var(--color-border)" stroke-width="10"/>
+                <circle id="occ-ring" cx="60" cy="60" r="50" fill="none" stroke="var(--state-yellow)" stroke-width="10" stroke-dasharray="314" stroke-dashoffset="314" stroke-linecap="round" transform="rotate(-90 60 60)" style="transition:stroke-dashoffset .8s ease"/>
+                <text id="occ-pct" x="60" y="68" text-anchor="middle" font-size="26" font-weight="800" fill="var(--color-text)" font-family="inherit">—</text>
+              </svg>
+            </div>
+            <div id="occ-sub" style="text-align:center;font-size:.78rem;color:var(--color-text-3);margin-top:2px">—</div>
+          </div>
+
+          <!-- 4. Recaudación hoy -->
+          <div class="card dash-card-uniform" data-card-id="recaudacion-hoy">
+            <div class="card-header"><h3>💵 Recaudación hoy</h3></div>
+            <div style="font-size:1.5rem;font-weight:800;color:var(--color-success)" id="dash-rec-hoy-val">—</div>
+            <div id="dash-rec-hoy-sub" style="font-size:.72rem;color:var(--color-text-3);margin-bottom:6px">Pagos registrados hoy</div>
+            <div style="display:flex;justify-content:space-between;font-size:.78rem;margin-top:auto">
+              <span style="color:var(--color-text-3)">Cantidad de pagos</span>
+              <span style="font-weight:700;color:var(--color-text)" id="dash-rec-hoy-count">—</span>
+            </div>
+          </div>
+
+          <!-- 5. Próximas llegadas -->
+          <div class="card dash-card-uniform widget-upcoming" data-card-id="upcoming">
+            <div class="card-header">
+              <h3>📅 Próximas llegadas</h3>
+              <span class="badge-today" style="font-size:.65rem;background:#f0f9ff;color:#0369a1;padding:2px 8px;border-radius:4px;font-weight:700">7d</span>
+            </div>
+            <div id="dashboard-upcoming" style="flex:1;overflow-y:auto;max-height:200px"></div>
+          </div>
+
+          <!-- FILA 2 — Lo del MES -->
+
+          <!-- 6. RevPAR / ADR -->
           <div class="card dash-card-uniform" data-card-id="revpar">
             <div class="card-header"><h3>📈 RevPAR / ADR</h3></div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:10px">
@@ -457,24 +504,13 @@
             </div>
           </div>
 
-          <!-- 2. Ocupación próximos días -->
+          <!-- 7. Ocupación próximos días -->
           <div class="card dash-card-uniform" data-card-id="next-event">
             <div class="card-header"><h3>📈 Ocupación próx. días</h3></div>
             <div id="dash-next-event" style="flex:1"></div>
           </div>
 
-          <!-- 3. Recaudación hoy -->
-          <div class="card dash-card-uniform" data-card-id="recaudacion-hoy">
-            <div class="card-header"><h3>💵 Recaudación hoy</h3></div>
-            <div style="font-size:1.5rem;font-weight:800;color:var(--color-success)" id="dash-rec-hoy-val">—</div>
-            <div id="dash-rec-hoy-sub" style="font-size:.72rem;color:var(--color-text-3);margin-bottom:6px">Pagos registrados hoy</div>
-            <div style="display:flex;justify-content:space-between;font-size:.78rem;margin-top:auto">
-              <span style="color:var(--color-text-3)">Cantidad de pagos</span>
-              <span style="font-weight:700;color:var(--color-text)" id="dash-rec-hoy-count">—</span>
-            </div>
-          </div>
-
-          <!-- 4. Cobros del mes -->
+          <!-- 8. Cobros del mes -->
           <div class="card dash-card-uniform" data-card-id="cobros">
             <div class="card-header">
               <h3>💰 Cobros del mes</h3>
@@ -493,44 +529,6 @@
             </div>
           </div>
 
-          <!-- 5. Dinero asegurado -->
-          <div class="card dash-card-uniform" data-card-id="dinero">
-            <div class="card-header">
-              <h3>🔒 Dinero asegurado</h3>
-              <button id="dash-dinero-toggle" style="font-size:.65rem;background:var(--color-surface-2);color:var(--color-text-2);padding:2px 8px;border-radius:4px;font-weight:700;border:none;cursor:pointer">7d</button>
-            </div>
-            <div style="font-size:1.5rem;font-weight:800;color:var(--color-text)" id="dash-dinero-val">—</div>
-            <div id="dash-dinero-sub" style="font-size:.72rem;color:var(--color-text-3);margin-bottom:8px">—</div>
-            <div id="dash-dinero-breakdown" style="font-size:.75rem;color:var(--color-text-3)"></div>
-          </div>
-
-          <!-- FILA 2 — operativo del día -->
-
-          <!-- 6. Llegadas hoy -->
-          <div class="card dash-card-uniform" data-card-id="arrivals">
-            <div class="card-header"><h3>✅ Llegadas hoy</h3></div>
-            <div id="arrivals-list" style="flex:1"><p class="empty-state-sm">Sin llegadas hoy</p></div>
-          </div>
-
-          <!-- 7. Salidas hoy -->
-          <div class="card dash-card-uniform" data-card-id="departures">
-            <div class="card-header"><h3>👋 Salidas hoy</h3></div>
-            <div id="departures-list" style="flex:1"><p class="empty-state-sm">Sin salidas hoy</p></div>
-          </div>
-
-          <!-- 8. Ocupación hoy -->
-          <div class="card dash-card-uniform" data-card-id="occ">
-            <div class="card-header"><h3>📊 Ocupación hoy</h3></div>
-            <div style="display:flex;align-items:center;justify-content:center;flex:1;padding:6px 0">
-              <svg width="132" height="132" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
-                <circle id="occ-ring-track" cx="60" cy="60" r="50" fill="none" stroke="var(--color-border)" stroke-width="10"/>
-                <circle id="occ-ring" cx="60" cy="60" r="50" fill="none" stroke="var(--state-yellow)" stroke-width="10" stroke-dasharray="314" stroke-dashoffset="314" stroke-linecap="round" transform="rotate(-90 60 60)" style="transition:stroke-dashoffset .8s ease"/>
-                <text id="occ-pct" x="60" y="68" text-anchor="middle" font-size="26" font-weight="800" fill="var(--color-text)" font-family="inherit">—</text>
-              </svg>
-            </div>
-            <div id="occ-sub" style="text-align:center;font-size:.78rem;color:var(--color-text-3);margin-top:2px">—</div>
-          </div>
-
           <!-- 9. Reservas del mes -->
           <div class="card dash-card-uniform" data-card-id="rmes">
             <div class="card-header">
@@ -542,18 +540,21 @@
             <div style="font-size:.78rem;color:var(--color-text-3);margin-top:auto">
               Ticket prom. <span style="font-weight:700;color:var(--color-text)" id="dash-rmes-ticket">—</span>
             </div>
+            <div id="dash-rmes-ticket-vs" style="font-size:.66rem;color:var(--color-text-3)"></div>
           </div>
 
-          <!-- 10. Próximas llegadas -->
-          <div class="card dash-card-uniform widget-upcoming" data-card-id="upcoming">
+          <!-- 10. Dinero asegurado -->
+          <div class="card dash-card-uniform" data-card-id="dinero">
             <div class="card-header">
-              <h3>📅 Próximas llegadas</h3>
-              <span class="badge-today" style="font-size:.65rem;background:#f0f9ff;color:#0369a1;padding:2px 8px;border-radius:4px;font-weight:700">7d</span>
+              <h3>🔒 Dinero asegurado</h3>
+              <button id="dash-dinero-toggle" style="font-size:.65rem;background:var(--color-surface-2);color:var(--color-text-2);padding:2px 8px;border-radius:4px;font-weight:700;border:none;cursor:pointer">7d</button>
             </div>
-            <div id="dashboard-upcoming" style="flex:1;overflow-y:auto;max-height:200px"></div>
+            <div style="font-size:1.5rem;font-weight:800;color:var(--color-text)" id="dash-dinero-val">—</div>
+            <div id="dash-dinero-sub" style="font-size:.72rem;color:var(--color-text-3);margin-bottom:8px">—</div>
+            <div id="dash-dinero-breakdown" style="font-size:.75rem;color:var(--color-text-3)"></div>
           </div>
 
-          <!-- Limpieza de hoy — oculta por defecto, aparece cuando hay tareas -->
+          <!-- Limpieza de hoy — oculta por defecto -->
           <div id="dashboard-cleaning-widget" class="card dash-card-uniform" data-card-id="cleaning" style="display:none"></div>
 
           <!-- Dólar -->
