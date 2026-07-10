@@ -656,13 +656,6 @@ export class Calendar {
             const guestName = earlyDepartureDays.get(`${unit.id}|${iso}`);
             this._renderEarlyDepartureBar(cell, guestName);
             cell.title = `🚪 Noche libre por salida anticipada${guestName ? ` de ${guestName}` : ''} — todavía se puede reservar`;
-          } else if (lateCheckoutMap.has(`${unit.id}|${iso}`)) {
-            // Triángulo de late checkout — media celda pintada
-            const { booking: lcBk, color: lcColor } = lateCheckoutMap.get(`${unit.id}|${iso}`);
-            this._renderLateCheckoutTriangle(cell, lcBk, lcColor);
-            const d = new Date(iso + 'T12:00:00');
-            const dayNames = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
-            cell.title = `🌅 Late check-out — #${_unitNum} ${dayNames[d.getDay()]} ${d.getDate()}/${d.getMonth()+1}`;
           } else {
             // Tooltip simple: número de unidad + fecha completa legible
             const d = new Date(iso + 'T12:00:00');
@@ -876,12 +869,11 @@ export class Calendar {
 
     const left  = truncLeft  ? 0 : 4;
     const rightM= truncRight ? 0 : 4;
-    const width = `calc(${span} * 100% - ${left + rightM}px)`;
-    // Si la reserva tiene late_checkout, la barra no termina visualmente
-    // en esta celda — continúa como media barra en la celda de checkout.
-    // Eliminamos el borde redondeado derecho para que conecte sin gap.
-    const isLastCellBeforeCheckout = !truncRight && booking.late_checkout;
-    const borderR = (truncRight || isLastCellBeforeCheckout) ? 0 : 6;
+    // Late checkout: la barra se extiende media celda más (50%) hacia el día de salida
+    // así parece visualmente una reserva de N.5 noches — sin nada cortado ni separado.
+    const lateExtra = booking.late_checkout ? ' + 50%' : '';
+    const width = `calc(${span} * 100%${lateExtra} - ${left + rightM}px)`;
+    const borderR = truncRight ? 0 : 6;
     const borderL = truncLeft  ? 0 : 6;
 
     const firstName = booking.guests?.first_name ?? '';
@@ -944,9 +936,9 @@ export class Calendar {
     const avatar = !isBlock ? Calendar._guestAvatar(booking.guests, 16) : '';
     const nameStyle = 'color:' + textColor + ';font-size:.68rem;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0';
     const lateChip = booking.late_checkout
-      ? '<span title="🌅 Late check-out" style="flex-shrink:0;font-size:.65rem;margin-right:3px">🌅</span>'
+      ? '<span title="🌅 Late check-out" style="flex-shrink:0;font-size:.65rem;margin-left:3px">🌅</span>'
       : '';
-    bar.innerHTML = avatar + canalChip + splitChip + lateChip + '<span style="' + nameStyle + '">' + guestFull + '</span>';
+    bar.innerHTML = avatar + canalChip + splitChip + '<span style="' + nameStyle + '">' + guestFull + '</span>' + lateChip;
 
     // 🔄 Recambio: al centro superior de la celda, entre las dos barras
     if (isRecambio) {
