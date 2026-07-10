@@ -137,7 +137,12 @@ export class BookingForm {
 
     // ── Checkbox late-checkout ──
     document.addEventListener('change', (e) => {
-      if (e.target.id === 'f-late-checkout') this._updateBreakdown();
+      if (e.target.id === 'f-late-checkout') {
+        const opts = document.getElementById('f-late-checkout-options');
+        if (opts) opts.style.display = e.target.checked ? '' : 'none';
+        this._updateBreakdown();
+      }
+      if (e.target.id === 'f-late-checkout-paid') this._updateBreakdown();
     });
 
     // Inicializar selector de canal de origen (compacto)
@@ -387,7 +392,18 @@ export class BookingForm {
       setVal('f-surcharge',   b.surcharge_amount ?? 0);
       setVal('f-free-nights', b.free_nights     ?? 0);
       const lateCbEl = document.getElementById('f-late-checkout');
-      if (lateCbEl) lateCbEl.checked = b.late_checkout ?? false;
+      if (lateCbEl) {
+        lateCbEl.checked = b.late_checkout ?? false;
+        const opts = document.getElementById('f-late-checkout-options');
+        if (opts) opts.style.display = lateCbEl.checked ? '' : 'none';
+        // Si tiene late_checkout y el total incluye media noche, marcar "se cobra"
+        const expectedWithLate = (b.price_per_night ?? 0) * 0.5;
+        const paidCbEl = document.getElementById('f-late-checkout-paid');
+        if (paidCbEl && b.late_checkout) {
+          // Si el surcharge/total parece incluir media noche → marcar cobrado
+          paidCbEl.checked = (b.surcharge_amount ?? 0) > 0 || b.total_amount > ((b.nights ?? 0) * (b.price_per_night ?? 0));
+        }
+      }
       setVal('f-deposit',     b.deposit_amount  ?? 0);
       setVal('f-notes',       b.notes           ?? '');
       document.getElementById('notes-count').textContent = (b.notes ?? '').length;
@@ -1268,7 +1284,8 @@ export class BookingForm {
     const disc  = parseFloat(document.getElementById('f-discount').value) || 0;
     const surch = parseFloat(document.getElementById('f-surcharge').value) || 0;
     const freeN = parseInt(document.getElementById('f-free-nights').value) || 0;
-    const lateCheckout = document.getElementById('f-late-checkout')?.checked ?? false;
+    const lateCheckout     = document.getElementById('f-late-checkout')?.checked ?? false;
+    const lateCheckoutPaid = lateCheckout && (document.getElementById('f-late-checkout-paid')?.checked ?? true);
 
     if (!ci || !co || !price) {
       ['pb-nights','pb-subtotal','pb-discount','pb-surcharge','pb-total','pb-free-nights','pb-late-checkout']
@@ -1280,7 +1297,7 @@ export class BookingForm {
     const billable     = Math.max(0, nights - freeN);
     const subtotal     = price * billable;
     const discAmt      = subtotal * (disc / 100);
-    const lateAmt      = lateCheckout ? price * 0.5 : 0;
+    const lateAmt      = lateCheckoutPaid ? price * 0.5 : 0;
     const total        = Math.max(0, subtotal - discAmt + surch + lateAmt);
 
     const set = (id, text) => { const el = document.getElementById(id); if (el) el.textContent = text; };
@@ -1289,7 +1306,7 @@ export class BookingForm {
     set('pb-free-nights',  freeN > 0 ? `−${formatARS(price * freeN)}` : '—');
     set('pb-discount',     disc > 0 ? `−${formatARS(discAmt)} (${disc}%)` : '—');
     set('pb-surcharge',    surch > 0 ? `+${formatARS(surch)}` : '—');
-    set('pb-late-checkout', lateCheckout ? `+${formatARS(lateAmt)}` : '—');
+    set('pb-late-checkout', lateCheckoutPaid ? `+${formatARS(lateAmt)}` : lateCheckout ? 'Sin cargo' : '—');
     set('pb-total',        formatARS(total));
 
     document.getElementById('pbr-free-nights')?.style.setProperty('display', freeN > 0 ? '' : 'none');
