@@ -209,7 +209,8 @@ export class Calendar {
     const bookings = await cachedQuery(this.db, 'bookings', params, () =>
       this.db.from('bookings').select(`
         id, check_in, check_out, status, source, is_blocked, block_reason,
-        late_checkout, late_checkout_charged, free_nights, total_amount, total_paid, balance, nights, pax,
+        late_checkout, late_checkout_charged, free_nights, discount_pct, surcharge_amount,
+        total_amount, total_paid, balance, nights, pax,
         adults, children, notes, price_per_night, created_at,
         checked_in_at, checked_out_at,
         guests!bookings_guest_id_fkey(first_name, last_name, bad_experience, tags),
@@ -855,17 +856,52 @@ export class Calendar {
 
     const { color, textColor } = getBookingBarColor(booking);
 
-    // Promo: si hay noches sin cargo, el degradado recorre TODA la barra
-    // de punta a punta — sólido hasta donde terminan las noches pagas,
-    // luego transición suave al amarillo.
-    const freeN   = booking.free_nights ?? 0;
-    const totalN  = booking.nights      ?? 1;
-    const barBg   = (freeN > 0 && totalN > 0)
-      ? (() => {
-          const paidPct = Math.round(((totalN - freeN) / totalN) * 100);
-          return `linear-gradient(to right, ${color} 0%, ${color} ${paidPct}%, #EF9F27 100%)`;
-        })()
-      : color;
+    // ── Degradés proporcionales — toda la barra como un solo bloque ──
+    // · Noches sin cargo  → amarillo  (noche gratis)
+    // · Descuento %       → naranja   (pagó menos)
+    // · Recargo           → color más oscuro (pagó extra)
+    //   · Recargo chico   → ligeramente más oscuro
+    //   · Recargo grande  → bordó/verde oscuro según color base
+    const freeN       = booking.free_nights    ?? 0;
+    const discPct     = booking.discount_pct   ?? 0;
+    const surcharge   = booking.surcharge_amount ?? 0;
+    const total       = booking.total_amount   ?? 0;
+    const totalN      = booking.nights         ?? 1;
+    const orange      = '#F97316';
+    const yellow      = '#EF9F27';
+
+    // Función que oscurece un color hex por un factor (0=negro, 1=original)
+    const darken = (hex, factor) => {
+      const h = hex.replace('#','');
+      const r = Math.round(parseInt(h.slice(0,2),16) * factor);
+      const g = Math.round(parseInt(h.slice(2,4),16) * factor);
+      const b = Math.round(parseInt(h.slice(4,6),16) * factor);
+      return `rgb(${r},${g},${b})`;
+    };
+
+    let barBg = color;
+
+    if (freeN > 0 && totalN > 0) {
+      // Noches sin cargo: solidColor hasta el % pagado, luego amarillo
+      const paidPct = Math.round(((totalN - freeN) / totalN) * 100);
+      barBg = `linear-gradient(to right, ${color} 0%, ${color} ${paidPct}%, ${yellow} 100%)`;
+
+    } else if (discPct > 0) {
+      // Descuento: solidColor hasta (100-disc)%, luego naranja
+      const solidPct = Math.round(100 - discPct);
+      barBg = `linear-gradient(to right, ${color} 0%, ${color} ${solidPct}%, ${orange} 100%)`;
+
+    } else if (surcharge > 0 && total > 0) {
+      // Recargo: color → versión más oscura del mismo color
+      // La proporción del oscuro y cuándo arranca dependen del ratio recargo/total
+      const surchargeRatio = Math.min(surcharge / total, 0.6);
+      // El degradé arranca más temprano cuanto mayor es el recargo (mín 55%)
+      const solidPct   = Math.round(Math.max(55, 100 - surchargeRatio * 80));
+      // El factor de oscurecimiento: 0.65 (suave) → 0.35 (bordó/oscuro)
+      const darkFactor = Math.max(0.35, 0.75 - surchargeRatio * 0.8);
+      const darkColor  = darken(color, darkFactor);
+      barBg = `linear-gradient(to right, ${color} 0%, ${color} ${solidPct}%, ${darkColor} 100%)`;
+    }
     const ci        = booking.check_in;
     const co        = booking.check_out;
     const winStart  = this._windowStart;
