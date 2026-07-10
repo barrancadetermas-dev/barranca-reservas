@@ -794,27 +794,30 @@ export class Calendar {
   }
 
   _renderLateCheckoutTriangle(cell, booking, color) {
-    // SVG inline — triángulo |/ (esquina inferior-izquierda con el
-    // color de la reserva). SVG es la forma más fiable de renderizarlo
-    // sin depender de clip-path ni del overflow de la celda.
-    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-    svg.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
-    svg.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;z-index:2;pointer-events:none';
-    const poly = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
-    // Puntos: esquina superior-izquierda, inferior-izquierda, inferior-derecha
-    poly.setAttribute('points', '0,0 0,100 100,100');
-    poly.setAttribute('fill', color);
-    poly.setAttribute('opacity', '0.82');
-    // Usamos viewBox relativo — el SVG escala con la celda
-    svg.setAttribute('viewBox', '0 0 100 100');
-    svg.setAttribute('preserveAspectRatio', 'none');
-    svg.appendChild(poly);
-    cell.appendChild(svg);
-    // Emoji encima del SVG
-    const badge = document.createElement('span');
-    badge.textContent = '🌅';
-    badge.style.cssText = 'position:absolute;bottom:3px;left:3px;font-size:.78rem;line-height:1;z-index:3;pointer-events:none;filter:drop-shadow(0 0 2px rgba(0,0,0,.5))';
-    cell.appendChild(badge);
+    // Media barra — ocupa la mitad izquierda de la celda, mismo estilo
+    // que las barras de reserva (mismo color, mismo border-radius, mismo
+    // posicionamiento). Visualmente es la continuación de la reserva que
+    // termina al mediodía en vez de a la noche.
+    const half = document.createElement('div');
+    half.style.cssText = [
+      'position:absolute',
+      'top:7px',
+      'bottom:7px',
+      'left:0',
+      'width:55%',           // mitad + un poco para que se vea bien
+      `background:${color}`,
+      'border-radius:0 5px 5px 0', // bordes redondeados solo a la derecha
+      'opacity:0.9',
+      'z-index:2',
+      'pointer-events:none',
+      'display:flex',
+      'align-items:center',
+      'justify-content:flex-end',
+      'padding-right:4px',
+      'overflow:hidden',
+    ].join(';') + ';';
+    half.innerHTML = '<span style="font-size:.65rem;line-height:1;flex-shrink:0">🌅</span>';
+    cell.appendChild(half);
   }
 
   _renderNcPendingBar(cell, guestName) {
