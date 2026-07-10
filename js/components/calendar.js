@@ -799,23 +799,18 @@ export class Calendar {
     // posicionamiento). Visualmente es la continuación de la reserva que
     // termina al mediodía en vez de a la noche.
     const half = document.createElement('div');
-    half.style.cssText = [
-      'position:absolute',
-      'top:7px',
-      'bottom:7px',
-      'left:0',
-      'width:55%',           // mitad + un poco para que se vea bien
-      `background:${color}`,
-      'border-radius:0 5px 5px 0', // bordes redondeados solo a la derecha
-      'opacity:0.9',
-      'z-index:2',
-      'pointer-events:none',
-      'display:flex',
-      'align-items:center',
-      'justify-content:flex-end',
-      'padding-right:4px',
-      'overflow:hidden',
-    ].join(';') + ';';
+    // La media barra continúa exactamente donde terminó la barra anterior
+    // (sin margen izquierdo, sin borde izquierdo redondeado) y se cierra
+    // con borde redondeado a la derecha — visualmente parece una barra
+    // que se corta al mediodía.
+    half.style.cssText = `
+      position:absolute;top:6px;bottom:6px;left:0;width:55%;
+      background:${color};
+      border-radius:0 6px 6px 0;
+      opacity:0.9;z-index:2;pointer-events:none;
+      display:flex;align-items:center;justify-content:flex-end;
+      padding-right:5px;box-sizing:border-box;
+    `;
     half.innerHTML = '<span style="font-size:.65rem;line-height:1;flex-shrink:0">🌅</span>';
     cell.appendChild(half);
   }
@@ -881,7 +876,11 @@ export class Calendar {
     const left  = truncLeft  ? 0 : 4;
     const rightM= truncRight ? 0 : 4;
     const width = `calc(${span} * 100% - ${left + rightM}px)`;
-    const borderR = truncRight ? 0 : 6;
+    // Si la reserva tiene late_checkout, la barra no termina visualmente
+    // en esta celda — continúa como media barra en la celda de checkout.
+    // Eliminamos el borde redondeado derecho para que conecte sin gap.
+    const isLastCellBeforeCheckout = !truncRight && booking.late_checkout;
+    const borderR = (truncRight || isLastCellBeforeCheckout) ? 0 : 6;
     const borderL = truncLeft  ? 0 : 6;
 
     const firstName = booking.guests?.first_name ?? '';
