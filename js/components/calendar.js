@@ -877,12 +877,12 @@ export class Calendar {
     const unitId = (booking.booking_units ?? [])[0]?.unit_id ?? '';
     const lateCoKey = `${unitId}|${ci}`;
     const startsAfterLate = !truncLeft && (this._lateCheckoutMap?.has(lateCoKey) ?? false);
-    const leftStyle = startsAfterLate ? 'calc(70% + 2px)' : `${left}px`;
-    const widthReduceForLate = startsAfterLate ? ' - 70%' : '';
+    const leftStyle = startsAfterLate ? 'calc(67% + 2px)' : `${left}px`;
+    const widthReduceForLate = startsAfterLate ? ' - 67%' : '';
 
-    // Late checkout: la barra se extiende 65% hacia el día de salida
-    const lateExtra = booking.late_checkout ? ' + 70%' : '';
-    const width = `calc(${span} * 100%${lateExtra}${widthReduceForLate} - ${left + rightM}px)`;
+    // Ancho INTERACTIVO: solo celdas reales de la reserva (sin extensión late checkout)
+    // La extensión late checkout se agrega como overlay visual sin pointer-events.
+    const widthInteractive = `calc(${span} * 100%${widthReduceForLate} - ${left + rightM}px)`;
     const borderR = truncRight ? 0 : 6;
     const borderL = truncLeft  ? 0 : 6;
 
@@ -906,7 +906,7 @@ export class Calendar {
       background:${color};
       position:absolute;top:6px;bottom:6px;
       left:${leftStyle};
-      width:${width};
+      width:${widthInteractive};
       z-index:3;
       border-radius:${borderL}px ${borderR}px ${borderR}px ${borderL}px;
       display:flex;align-items:center;padding:0 8px;
@@ -1031,6 +1031,23 @@ export class Calendar {
     });
 
     cell.appendChild(bar);
+
+    // Extensión visual late checkout: overlay sin pointer-events que
+    // "continúa" la barra 67% hacia el día de salida. No captura clicks.
+    if (booking.late_checkout && !truncRight) {
+      const ext = document.createElement('div');
+      ext.style.cssText = `
+        position:absolute;top:6px;bottom:6px;
+        left:${leftStyle};
+        width:calc(${span} * 100% + 67%${widthReduceForLate} - ${left + rightM}px);
+        background:${color};
+        border-radius:${borderL}px 6px 6px ${borderL}px;
+        opacity:${isPast ? 0.4 : 0.9};
+        z-index:2;
+        pointer-events:none;
+      `;
+      cell.appendChild(ext);
+    }
   }
 
   // ── Celda dividida (check-out + check-in el mismo día) ──
