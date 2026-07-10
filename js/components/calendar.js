@@ -877,8 +877,8 @@ export class Calendar {
     const unitId = (booking.booking_units ?? [])[0]?.unit_id ?? '';
     const lateCoKey = `${unitId}|${ci}`;
     const startsAfterLate = !truncLeft && (this._lateCheckoutMap?.has(lateCoKey) ?? false);
-    const leftStyle = startsAfterLate ? 'calc(67% + 2px)' : `${left}px`;
-    const widthReduceForLate = startsAfterLate ? ' - 67%' : '';
+    const leftStyle = startsAfterLate ? 'calc(65.5% + 2px)' : `${left}px`;
+    const widthReduceForLate = startsAfterLate ? ' - 65.5%' : '';
 
     // Ancho INTERACTIVO: solo celdas reales de la reserva (sin extensión late checkout)
     // La extensión late checkout se agrega como overlay visual sin pointer-events.
@@ -1039,7 +1039,7 @@ export class Calendar {
       ext.style.cssText = `
         position:absolute;top:6px;bottom:6px;
         left:${leftStyle};
-        width:calc(${span} * 100% + 67%${widthReduceForLate} - ${left + rightM}px);
+        width:calc(${span} * 100% + 65.5%${widthReduceForLate} - ${left + rightM}px);
         background:${color};
         border-radius:${borderL}px 6px 6px ${borderL}px;
         opacity:${isPast ? 0.4 : 0.9};
