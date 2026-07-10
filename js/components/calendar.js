@@ -794,33 +794,23 @@ export class Calendar {
   }
 
   _renderLateCheckoutTriangle(cell, booking, color) {
-    // Triángulo inferior izquierdo: el huésped ocupa la mañana y se va al mediodía.
-    // Visualmente: la mitad inferior-izquierda de la celda está pintada con el
-    // color de la reserva, la superior-derecha queda vacía (disponible para nueva reserva).
-    const tri = document.createElement('div');
-    tri.className = 'late-checkout-triangle';
-    tri.style.cssText = `
-      position:absolute;inset:0;pointer-events:none;z-index:2;
-      overflow:hidden;border-radius:inherit;
-    `;
-    // Usamos clip-path para el triángulo |/ (esquina inferior izquierda)
+    // Triángulo |/ con clip-path — esquina inferior-izquierda pintada
+    // con el color de la reserva que tuvo late check-out.
     const inner = document.createElement('div');
-    inner.style.cssText = `
-      position:absolute;inset:0;
-      background:${color};
-      clip-path:polygon(0 0, 0 100%, 100% 100%);
-      opacity:0.85;
-    `;
-    // Badge 🌅 centrado en el triángulo
+    inner.style.cssText = [
+      'position:absolute',
+      'top:0','left:0','right:0','bottom:0',
+      `background:${color}`,
+      'clip-path:polygon(0 0, 0 100%, 100% 100%)',
+      'opacity:0.82',
+      'z-index:2',
+      'pointer-events:none',
+    ].join(';') + ';';
     const badge = document.createElement('span');
     badge.textContent = '🌅';
-    badge.style.cssText = `
-      position:absolute;bottom:4px;left:3px;font-size:.65rem;line-height:1;
-      filter:drop-shadow(0 0 2px rgba(0,0,0,.4));
-    `;
-    tri.appendChild(inner);
-    tri.appendChild(badge);
-    cell.appendChild(tri);
+    badge.style.cssText = 'position:absolute;bottom:3px;left:3px;font-size:.75rem;line-height:1;z-index:3;pointer-events:none;filter:drop-shadow(0 0 2px rgba(0,0,0,.5))';
+    cell.appendChild(inner);
+    cell.appendChild(badge);
   }
 
   _renderNcPendingBar(cell, guestName) {
