@@ -1045,7 +1045,11 @@ export class Calendar {
         opacity:${isPast ? 0.4 : 0.9};
         z-index:2;
         pointer-events:none;
+        display:flex;align-items:center;justify-content:flex-end;
+        padding-right:6px;box-sizing:border-box;overflow:hidden;
       `;
+      const extName = (lastName || firstName) ? (lastName + ' ' + firstName).trim() + ' ' : '';
+      ext.innerHTML = '<span style="font-size:.75rem;opacity:.85">' + extName + '🌅</span>';
       cell.appendChild(ext);
     }
   }
