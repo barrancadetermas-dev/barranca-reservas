@@ -794,19 +794,27 @@ export class Calendar {
   }
 
   _renderLateCheckoutTriangle(cell, booking, color) {
-    // Wrapper con overflow:hidden para recortar el triángulo sin tocar
-    // el overflow de la celda (que debe ser visible para las barras).
-    const wrapper = document.createElement('div');
-    wrapper.style.cssText = 'position:absolute;inset:0;overflow:hidden;pointer-events:none;z-index:2;border-radius:2px';
-    // Triángulo |/ via clip-path dentro del wrapper
-    const tri = document.createElement('div');
-    tri.style.cssText = `position:absolute;inset:0;background:${color};opacity:0.82;clip-path:polygon(0 0,0 100%,100% 100%)`;
+    // SVG inline — triángulo |/ (esquina inferior-izquierda con el
+    // color de la reserva). SVG es la forma más fiable de renderizarlo
+    // sin depender de clip-path ni del overflow de la celda.
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+    svg.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;z-index:2;pointer-events:none';
+    const poly = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+    // Puntos: esquina superior-izquierda, inferior-izquierda, inferior-derecha
+    poly.setAttribute('points', '0,0 0,100 100,100');
+    poly.setAttribute('fill', color);
+    poly.setAttribute('opacity', '0.82');
+    // Usamos viewBox relativo — el SVG escala con la celda
+    svg.setAttribute('viewBox', '0 0 100 100');
+    svg.setAttribute('preserveAspectRatio', 'none');
+    svg.appendChild(poly);
+    cell.appendChild(svg);
+    // Emoji encima del SVG
     const badge = document.createElement('span');
     badge.textContent = '🌅';
-    badge.style.cssText = 'position:absolute;bottom:3px;left:3px;font-size:.75rem;line-height:1;filter:drop-shadow(0 0 2px rgba(0,0,0,.5))';
-    wrapper.appendChild(tri);
-    wrapper.appendChild(badge);
-    cell.appendChild(wrapper);
+    badge.style.cssText = 'position:absolute;bottom:3px;left:3px;font-size:.78rem;line-height:1;z-index:3;pointer-events:none;filter:drop-shadow(0 0 2px rgba(0,0,0,.5))';
+    cell.appendChild(badge);
   }
 
   _renderNcPendingBar(cell, guestName) {
