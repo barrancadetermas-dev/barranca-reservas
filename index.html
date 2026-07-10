@@ -432,66 +432,9 @@
         <!-- Panel de personalización -->
         <div id="dashboard-cards" style="display:grid;grid-template-columns:repeat(5,1fr);gap:14px;margin-top:8px">
 
-          <!-- ROW 1: operativo del día -->
+          <!-- FILA 1 — métricas clave del mes -->
 
-          <!-- CARD: Llegadas hoy -->
-          <div class="card dash-card-uniform" data-card-id="arrivals">
-            <div class="card-header"><h3>✅ Llegadas hoy</h3></div>
-            <div id="arrivals-list" style="flex:1"><p class="empty-state-sm">Sin llegadas hoy</p></div>
-          </div>
-
-          <!-- CARD: Salidas hoy -->
-          <div class="card dash-card-uniform" data-card-id="departures">
-            <div class="card-header"><h3>👋 Salidas hoy</h3></div>
-            <div id="departures-list" style="flex:1"><p class="empty-state-sm">Sin salidas hoy</p></div>
-          </div>
-
-          <!-- CARD: Ocupación hoy -->
-          <div class="card dash-card-uniform" data-card-id="occ">
-            <div class="card-header"><h3>📊 Ocupación hoy</h3></div>
-            <div style="display:flex;align-items:center;justify-content:center;flex:1;padding:6px 0">
-              <svg width="132" height="132" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
-                <circle id="occ-ring-track" cx="60" cy="60" r="50" fill="none" stroke="var(--color-border)" stroke-width="10"/>
-                <circle id="occ-ring" cx="60" cy="60" r="50" fill="none" stroke="var(--state-yellow)" stroke-width="10" stroke-dasharray="314" stroke-dashoffset="314" stroke-linecap="round" transform="rotate(-90 60 60)" style="transition:stroke-dashoffset .8s ease"/>
-                <text id="occ-pct" x="60" y="68" text-anchor="middle" font-size="26" font-weight="800" fill="var(--color-text)" font-family="inherit">—</text>
-              </svg>
-            </div>
-            <div id="occ-sub" style="text-align:center;font-size:.78rem;color:var(--color-text-3);margin-top:2px">—</div>
-          </div>
-
-
-          <!-- CARD: Reservas del mes -->
-          <div class="card dash-card-uniform" data-card-id="rmes">
-            <div class="card-header">
-              <h3>📋 Reservas del mes</h3>
-              <span id="dash-rmes-badge" style="font-size:.65rem;background:#f0fdf4;color:#15803d;padding:2px 8px;border-radius:4px;font-weight:700">—</span>
-            </div>
-            <div style="font-size:1.5rem;font-weight:800;color:var(--color-text)" id="dash-rmes-val">—</div>
-            <div id="dash-rmes-vs" style="font-size:.72rem;color:var(--color-text-3);margin-bottom:6px">—</div>
-            <div style="font-size:.78rem;color:var(--color-text-3);margin-top:auto">
-              Ticket prom. <span style="font-weight:700;color:var(--color-text)" id="dash-rmes-ticket">—</span>
-            </div>
-            <div id="dash-rmes-ticket-vs" style="font-size:.66rem;color:var(--color-text-3)"></div>
-          </div>
-
-          <!-- CARD: Próximas llegadas -->
-          <div class="card dash-card-uniform widget-upcoming" data-card-id="upcoming">
-            <div class="card-header">
-              <h3>📅 Próximas llegadas</h3>
-              <span class="badge-today" style="font-size:.65rem;background:#f0f9ff;color:#0369a1;padding:2px 8px;border-radius:4px;font-weight:700">7d</span>
-            </div>
-            <div id="dashboard-upcoming" style="flex:1;overflow-y:auto;max-height:200px"></div>
-          </div>
-
-          <!-- ROW 2: financiero del mes -->
-
-          <!-- CARD: Ocupación próximos días -->
-          <div class="card dash-card-uniform" data-card-id="next-event">
-            <div class="card-header"><h3>📈 Ocupación próx. días</h3></div>
-            <div id="dash-next-event" style="flex:1"></div>
-          </div>
-
-          <!-- CARD: RevPAR / ADR (se oculta y cede su lugar a Limpieza si hay tareas hoy) -->
+          <!-- 1. RevPAR / ADR -->
           <div class="card dash-card-uniform" data-card-id="revpar">
             <div class="card-header"><h3>📈 RevPAR / ADR</h3></div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:10px">
@@ -505,7 +448,7 @@
               </div>
             </div>
             <div style="display:flex;justify-content:space-between;font-size:.78rem;margin-bottom:4px">
-              <span style="color:var(--color-text-3)">Ocupación</span>
+              <span style="color:var(--color-text-3)">Ocupación mes</span>
               <span style="font-weight:700;color:var(--color-text)" id="dash-occ-month-val">—</span>
             </div>
             <div style="display:flex;justify-content:space-between;font-size:.78rem;margin-top:auto">
@@ -514,299 +457,117 @@
             </div>
           </div>
 
-          <!-- CARD: Limpieza de hoy — mismo lugar/tamaño que RevPAR/ADR, solo cuando hay tareas -->
-          <div id="dashboard-cleaning-widget" class="card dash-card-uniform" data-card-id="cleaning" style="display:none"></div>
+          <!-- 2. Ocupación próximos días -->
+          <div class="card dash-card-uniform" data-card-id="next-event">
+            <div class="card-header"><h3>📈 Ocupación próx. días</h3></div>
+            <div id="dash-next-event" style="flex:1"></div>
+          </div>
 
-          <!-- CARD: Cobros del mes -->
+          <!-- 3. Recaudación hoy -->
+          <div class="card dash-card-uniform" data-card-id="recaudacion-hoy">
+            <div class="card-header"><h3>💵 Recaudación hoy</h3></div>
+            <div style="font-size:1.5rem;font-weight:800;color:var(--color-success)" id="dash-rec-hoy-val">—</div>
+            <div id="dash-rec-hoy-sub" style="font-size:.72rem;color:var(--color-text-3);margin-bottom:6px">Pagos registrados hoy</div>
+            <div style="display:flex;justify-content:space-between;font-size:.78rem;margin-top:auto">
+              <span style="color:var(--color-text-3)">Cantidad de pagos</span>
+              <span style="font-weight:700;color:var(--color-text)" id="dash-rec-hoy-count">—</span>
+            </div>
+          </div>
+
+          <!-- 4. Cobros del mes -->
           <div class="card dash-card-uniform" data-card-id="cobros">
             <div class="card-header">
               <h3>💰 Cobros del mes</h3>
               <span id="dash-cobros-badge" style="font-size:.65rem;background:var(--color-surface-2);color:var(--color-text-2);padding:2px 8px;border-radius:4px;font-weight:700">—</span>
             </div>
-            <div id="dash-cobros-subtitle" style="font-size:.68rem;color:var(--color-text-3);margin-bottom:6px">Reservas con check-in este mes · mes completo</div>
+            <div id="dash-cobros-subtitle" style="font-size:.68rem;color:var(--color-text-3);margin-bottom:6px">Check-ins este mes</div>
             <div style="font-size:1.5rem;font-weight:800;color:var(--color-text)" id="dash-cobros-val">—</div>
             <div style="font-size:.72rem;color:var(--color-text-3);margin-bottom:8px">pendiente de cobro</div>
             <div style="display:flex;justify-content:space-between;font-size:.78rem;margin-bottom:4px">
-              <span style="color:var(--color-text-3)" title="Suma señas y pagos parciales, no solo reservas 100% pagadas">Cobrado (seña + total) ⓘ</span>
-              <span style="font-weight:700;color:#16a34a" id="dash-cobrado-val">—</span>
+              <span style="color:var(--color-text-3)">Cobrado</span>
+              <span style="font-weight:700;color:var(--color-success)" id="dash-cobros-cobrado-val">—</span>
             </div>
-            <div style="display:flex;justify-content:space-between;font-size:.78rem;margin-bottom:8px">
-              <span style="color:var(--color-text-3)">Total facturado</span>
-              <span style="font-weight:700;color:var(--color-text)" id="dash-total-val">—</span>
+            <div style="display:flex;justify-content:space-between;font-size:.78rem">
+              <span style="color:var(--color-text-3)">Total vendido</span>
+              <span style="font-weight:700;color:var(--color-text)" id="dash-cobros-total-val">—</span>
             </div>
-            <div style="height:6px;border-radius:3px;background:var(--color-border);overflow:hidden;margin-top:auto">
-              <div id="dash-cobros-bar-fill" style="height:100%;background:#16a34a;border-radius:3px;width:0%;transition:width .6s"></div>
-            </div>
-            <div style="font-size:.65rem;color:var(--color-text-3);margin-top:4px" id="dash-cobros-pct">0% cobrado</div>
-            <a href="#" onclick="sessionStorage.setItem('mila_jump_pending_balance','1');window.milaNav&&window.milaNav('bookings');return false;"
-               style="display:block;text-align:center;margin-top:8px;font-size:.72rem;color:var(--color-primary);font-weight:600;text-decoration:none">Ver reservas →</a>
           </div>
 
-          <!-- CARD: Dinero asegurado -->
-          <div class="card dash-card-uniform" data-card-id="dinero-asegurado">
+          <!-- 5. Dinero asegurado -->
+          <div class="card dash-card-uniform" data-card-id="dinero">
             <div class="card-header">
-              <h3>🔐 Por cobrar — hoy en adelante</h3>
+              <h3>🔒 Dinero asegurado</h3>
+              <button id="dash-dinero-toggle" style="font-size:.65rem;background:var(--color-surface-2);color:var(--color-text-2);padding:2px 8px;border-radius:4px;font-weight:700;border:none;cursor:pointer">7d</button>
             </div>
-            <div style="font-size:.68rem;color:var(--color-text-3);margin-bottom:6px">Estadías en curso + reservas futuras (no se limita al mes)</div>
-            <div id="dash-dinero-val" style="font-size:1.5rem;font-weight:800;color:var(--color-text)">—</div>
-            <div style="display:flex;flex-direction:column;gap:4px;margin-top:auto">
-              <div style="display:flex;justify-content:space-between;font-size:.78rem">
-                <span style="color:var(--color-text-3)" title="Suma señas y pagos parciales, no solo reservas 100% pagadas">Cobrado (seña + total) ⓘ</span>
-                <span style="font-weight:700;color:#16a34a" id="dash-dinero-cobrado">—</span>
-              </div>
-              <div style="display:flex;justify-content:space-between;font-size:.78rem">
-                <span style="color:var(--color-text-3)">Por cobrar</span>
-                <span style="font-weight:700;color:var(--state-yellow-txt)" id="dash-dinero-pendiente">—</span>
-              </div>
-              <div style="display:flex;justify-content:space-between;font-size:.78rem;margin-top:2px">
-                <span style="color:var(--color-text-3)">Reservas</span>
-                <span style="font-weight:700" id="dash-dinero-count">—</span>
-              </div>
-            </div>
-            <div id="dash-dinero-bar" style="margin-top:10px;height:6px;border-radius:3px;background:var(--color-border);overflow:hidden">
-              <div id="dash-dinero-bar-fill" style="height:100%;background:#16a34a;border-radius:3px;width:0%;transition:width .6s"></div>
-            </div>
-            <div style="font-size:.65rem;color:var(--color-text-3);margin-top:4px" id="dash-dinero-pct">0% cobrado</div>
-            <a href="#" onclick="sessionStorage.setItem('mila_jump_pending_balance','1');window.milaNav&&window.milaNav('bookings');return false;"
-               style="display:block;text-align:center;margin-top:6px;font-size:.72rem;color:var(--color-primary);font-weight:600;text-decoration:none">Ver reservas →</a>
+            <div style="font-size:1.5rem;font-weight:800;color:var(--color-text)" id="dash-dinero-val">—</div>
+            <div id="dash-dinero-sub" style="font-size:.72rem;color:var(--color-text-3);margin-bottom:8px">—</div>
+            <div id="dash-dinero-breakdown" style="font-size:.75rem;color:var(--color-text-3)"></div>
           </div>
 
-          <!-- CARD: Dólar Oficial -->
-          <div class="card dash-card-uniform" data-card-id="dollar">
+          <!-- FILA 2 — operativo del día -->
+
+          <!-- 6. Llegadas hoy -->
+          <div class="card dash-card-uniform" data-card-id="arrivals">
+            <div class="card-header"><h3>✅ Llegadas hoy</h3></div>
+            <div id="arrivals-list" style="flex:1"><p class="empty-state-sm">Sin llegadas hoy</p></div>
+          </div>
+
+          <!-- 7. Salidas hoy -->
+          <div class="card dash-card-uniform" data-card-id="departures">
+            <div class="card-header"><h3>👋 Salidas hoy</h3></div>
+            <div id="departures-list" style="flex:1"><p class="empty-state-sm">Sin salidas hoy</p></div>
+          </div>
+
+          <!-- 8. Ocupación hoy -->
+          <div class="card dash-card-uniform" data-card-id="occ">
+            <div class="card-header"><h3>📊 Ocupación hoy</h3></div>
+            <div style="display:flex;align-items:center;justify-content:center;flex:1;padding:6px 0">
+              <svg width="132" height="132" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
+                <circle id="occ-ring-track" cx="60" cy="60" r="50" fill="none" stroke="var(--color-border)" stroke-width="10"/>
+                <circle id="occ-ring" cx="60" cy="60" r="50" fill="none" stroke="var(--state-yellow)" stroke-width="10" stroke-dasharray="314" stroke-dashoffset="314" stroke-linecap="round" transform="rotate(-90 60 60)" style="transition:stroke-dashoffset .8s ease"/>
+                <text id="occ-pct" x="60" y="68" text-anchor="middle" font-size="26" font-weight="800" fill="var(--color-text)" font-family="inherit">—</text>
+              </svg>
+            </div>
+            <div id="occ-sub" style="text-align:center;font-size:.78rem;color:var(--color-text-3);margin-top:2px">—</div>
+          </div>
+
+          <!-- 9. Reservas del mes -->
+          <div class="card dash-card-uniform" data-card-id="rmes">
             <div class="card-header">
-              <h3>💵 Dólar Oficial</h3>
-              <span id="dollar-status-badge" style="font-size:.65rem;padding:2px 8px;border-radius:4px;font-weight:700;background:#f0fdf4;color:#15803d">—</span>
+              <h3>📋 Reservas del mes</h3>
+              <span id="dash-rmes-badge" style="font-size:.65rem;background:#f0fdf4;color:#15803d;padding:2px 8px;border-radius:4px;font-weight:700">—</span>
             </div>
-            <div id="dollar-widget-body" style="flex:1"></div>
-          </div>
-
-          <!-- Extras inyectados por JS (sin slot visual fijo) -->
-          <div class="card" data-card-id="reminders" style="display:none">
-            <div class="card-header"><h3>🔔 Recordatorios</h3></div>
-            <div id="dashboard-reminders"></div>
-          </div>
-          <div id="dashboard-forecast" style="display:none"></div>
-
-        </div>
-
-        <!-- Elementos ocultos necesarios para compatibilidad -->
-        <div id="dashboard-revenue" style="display:none"></div>
-      </section>
-
-      <!-- ── SECTION: CALENDAR ── -->
-      <section id="section-calendar" class="section">
-        <div class="cal-toolbar">
-
-          <!-- GRUPO IZQUIERDO: Navegación -->
-          <div class="cal-tb-nav">
-            <button class="cal-tb-btn" id="cal-prev" title="Período anterior">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="16" height="16"><polyline points="15 18 9 12 15 6"/></svg>
-            </button>
-            <h3 class="cal-month-title" id="cal-month-title">Jun 2026</h3>
-            <button class="cal-tb-btn" id="cal-next" title="Período siguiente">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="16" height="16"><polyline points="9 18 15 12 9 6"/></svg>
-            </button>
-            <button class="cal-tb-tag" id="cal-today" style="display:none">Hoy</button>
-          </div>
-
-          <!-- DIVISOR -->
-          <div class="cal-tb-sep"></div>
-
-          <!-- GRUPO CENTRO: Búsqueda -->
-          <div class="cal-tb-search">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13" class="cal-tb-search-icon">
-              <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-            </svg>
-            <input type="text" id="cal-search-input" class="cal-tb-search-input" placeholder="Buscar huésped o unidad...">
-            <button id="cal-search-clear" class="cal-tb-search-clear" style="display:none" title="Limpiar">✕</button>
-          </div>
-
-          <!-- ESPACIADOR -->
-          <div style="flex:1"></div>
-
-          <!-- GRUPO DERECHO: Acciones -->
-          <div class="cal-tb-actions">
-            <button class="cal-tb-btn cal-tb-btn--outline" id="cal-goto-today" title="Ir al día de hoy">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-              Volver a hoy
-            </button>
-            <button class="cal-tb-btn cal-tb-btn--outline" id="cal-avail-toggle" title="Ver disponibilidad libre">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-              Disponibilidad
-            </button>
-            <button class="cal-tb-btn" id="cal-print" title="Imprimir" onclick="window.print()">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
-            </button>
-            <button class="cal-tb-btn" id="cal-hide-past-btn" style="display:none" title="Ocultar pasados">◀</button>
-            <span class="cal-tb-hint" title="Arrastrá con SHIFT para bloquear fechas">
-              <kbd class="cal-tb-kbd">⇧</kbd> bloquear
-            </span>
-          </div>
-
-        </div>
-
-        <!-- Grilla del calendario -->
-        <div class="cal-wrapper">
-          <div id="calendar-grid" class="cal-grid"><!-- Generado por calendar.js --></div>
-        </div>
-        <!-- Mini agenda: máx 1/3 ancho -->
-        <div class="cal-agenda-wrap">
-          <div class="cal-agenda-title">Próximas reservas</div>
-          <div id="cal-mini-agenda-list"></div>
-        </div>
-        <!-- Cuadro tarifario — solo lectura, solo PC (ver mobile-fixes.css) -->
-        <div class="cal-agenda-wrap" id="cal-tariff-wrap"></div>
-        <!-- placeholder agenda quitado del layout antiguo-->
-        <div id="__cal-mini-agenda-old" style="display:none">
-          <div id="__unused"></div>
-        </div>
-
-      </section>
-
-      <!-- ── SECTION: BOOKINGS ── -->
-      <!-- ── SECTION: BOOKINGS ── -->
-      <section id="section-bookings" class="section">
-        <div class="card search-card">
-          <div class="search-bar">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="17" height="17" class="search-icon"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-            <input type="text" id="booking-search" class="search-input" placeholder="Buscar por huésped, DNI, unidad...">
-          </div>
-          <div class="filter-row">
-            <select id="filter-status" class="filter-select">
-              <option value="">Todos los estados</option>
-              <option value="pending">Sin seña</option>
-              <option value="partial">Con seña</option>
-              <option value="paid">Pagado</option>
-              <option value="cancelled">Cancelada</option>
-              <option value="blocked">Bloqueada</option>
-            </select>
-            <select id="filter-unit" class="filter-select"><option value="">Todas las unidades</option></select>
-            <div class="filter-date-wrap">
-              <input type="date" id="filter-date-from" class="filter-input" title="Check-in desde">
-              <span style="font-size:.72rem;color:var(--color-text-3)">→</span>
-              <input type="date" id="filter-date-to"   class="filter-input" title="Check-out hasta">
-              <button class="bl-date-clear" id="filter-date-clear" title="Limpiar fechas" style="display:none">✕</button>
+            <div style="font-size:1.5rem;font-weight:800;color:var(--color-text)" id="dash-rmes-val">—</div>
+            <div id="dash-rmes-vs" style="font-size:.72rem;color:var(--color-text-3);margin-bottom:6px">—</div>
+            <div style="font-size:.78rem;color:var(--color-text-3);margin-top:auto">
+              Ticket prom. <span style="font-weight:700;color:var(--color-text)" id="dash-rmes-ticket">—</span>
             </div>
           </div>
-          <!-- Presets de fecha rápidos -->
-          <div class="date-preset-row" id="date-preset-row">
-            <span style="font-size:.7rem;color:var(--color-text-3);font-weight:600">Período:</span>
-            <button class="date-preset-btn" data-preset="today">Hoy</button>
-            <button class="date-preset-btn" data-preset="week">Esta semana</button>
-            <button class="date-preset-btn" data-preset="month">Este mes</button>
-            <button class="date-preset-btn" data-preset="last-month">Mes anterior</button>
-            <button class="date-preset-btn" data-preset="next-month">Mes siguiente</button>
-            <button class="date-preset-btn" data-preset="year">Este año</button>
+
+          <!-- 10. Próximas llegadas -->
+          <div class="card dash-card-uniform widget-upcoming" data-card-id="upcoming">
+            <div class="card-header">
+              <h3>📅 Próximas llegadas</h3>
+              <span class="badge-today" style="font-size:.65rem;background:#f0f9ff;color:#0369a1;padding:2px 8px;border-radius:4px;font-weight:700">7d</span>
+            </div>
+            <div id="dashboard-upcoming" style="flex:1;overflow-y:auto;max-height:200px"></div>
           </div>
-          <!-- Filtros de origen -->
-          <div class="source-filter-row" id="source-filter-row">
-            <span style="font-size:.75rem;font-weight:600;color:var(--color-text-3);align-self:center">Origen:</span>
-            <!-- Generated from SOURCE_CONFIG via booking-list.js -->
-            <button class="source-filter-btn active" data-source="">Todos</button>
-            <button class="source-filter-btn" data-source="direct"   style="--btn-color:#64748B">Directo</button>
-            <button class="source-filter-btn" data-source="walkin"   style="--btn-color:#0891B2">Espontáneo</button>
-            <button class="source-filter-btn" data-source="booking"  style="--btn-color:#1D4ED8">Booking</button>
-            <button class="source-filter-btn" data-source="airbnb"   style="--btn-color:#EA580C">Airbnb</button>
-            <button class="source-filter-btn" data-source="family"   style="--btn-color:#7C3AED">Familia</button>
-            <button class="source-filter-btn" data-source="company"  style="--btn-color:#0F766E">Empresa</button>
-            <button class="source-filter-btn" data-source="referral" style="--btn-color:#B45309">Referido</button>
-            <button class="source-filter-btn" data-source="despegar" style="--btn-color:#059669">Despegar</button>
-            <button class="source-filter-btn" data-source="expedia"  style="--btn-color:#DC2626">Expedia</button>
-            <button class="source-filter-btn" data-source="blocked"  style="--btn-color:#374151">Bloqueos</button>
+
+          <!-- Limpieza de hoy — oculta por defecto, aparece cuando hay tareas -->
+          <div id="dashboard-cleaning-widget" class="card dash-card-uniform" data-card-id="cleaning" style="display:none"></div>
+
+          <!-- Dólar -->
+          <div class="card dash-card-uniform" data-card-id="dollar" id="dashboard-dollar-card">
+            <div class="card-header">
+              <h3>💱 Dólar oficial</h3>
+              <span id="dash-dollar-badge" style="font-size:.65rem;padding:2px 8px;border-radius:4px;font-weight:700;background:var(--color-surface-2);color:var(--color-text-2)">hoy</span>
+            </div>
+            <div style="font-size:1.5rem;font-weight:800;color:var(--color-text)" id="dash-dollar-val">—</div>
+            <div id="dash-dollar-sub" style="font-size:.72rem;color:var(--color-text-3);margin-bottom:6px">—</div>
+            <div id="dash-usd-conversion" style="font-size:.75rem;color:var(--color-text-3)"></div>
           </div>
-        </div>
 
-        <div class="tabs-bar">
-          <button class="tab active" data-tab="active">Reservas abiertas</button>
-          <button class="tab" data-tab="archive">Historial</button>
-        </div>
-
-        <div id="bookings-list" class="bookings-list"><!-- Generado por booking-list.js --></div>
-      </section>
-
-      <!-- ── SECTION: STATISTICS ── -->
-      <!-- ── SECTION: STATISTICS ── -->
-      <section id="section-statistics" class="section">
-        <div class="stats-toolbar" id="stats-toolbar">
-          <div class="stats-period-selectors">
-            <select id="stats-month" class="filter-select"></select>
-            <select id="stats-year"  class="filter-select"></select>
-          </div>
-        </div>
-        <div class="tabs-bar">
-          <button class="tab active" data-tab="units">Departamentos</button>
-          <button class="tab" data-tab="financ">💵 Finanzas</button>
-          <button class="tab" data-tab="pl">💰 Resultado</button>
-          <button class="tab" data-tab="charts">📊 Gráficos</button>
-          <button class="tab" data-tab="revenue">💡 Revenue</button>
-        </div>
-        <div id="stats-financ-panel" class="stats-panel hidden">
-          <div id="financ-container"></div>
-        </div>
-        <div id="stats-units-panel" class="stats-panel">
-          <div id="stats-units-grid" class="stats-units-grid"></div>
-        </div>
-        
-        <div id="stats-pl-panel" class="stats-panel hidden"></div>
-        <div id="stats-charts-panel" class="stats-panel hidden">
-          <div id="charts-container">
-            <p class="empty-state-sm" style="padding:40px;text-align:center">
-              Seleccioná un período y hacé clic en <strong>Cargar</strong>
-            </p>
-          </div>
-        </div>
-        <div id="stats-revenue-panel" class="stats-panel hidden">
-          <div id="revenue-container">
-            <p class="empty-state-sm" style="padding:40px;text-align:center">
-              Cargando análisis de revenue...
-            </p>
-          </div>
-        </div>
-      </section>
-
-      <!-- ── SECTION: REMINDERS ── -->
-      <section id="section-reminders" class="section">
-        <div id="reminders-full-list"></div>
-      </section>
-
-      <!-- ── SECTION: GUESTS CRM ── -->
-      <section id="section-guests" class="section">
-        <div id="guests-container"></div>
-      </section>
-
-      <!-- ── SECTION: WAITLIST ── -->
-      <section id="section-waitlist" class="section">
-        <div id="waitlist-container"></div>
-      </section>
-
-      <!-- ── SECTION: TARIFFS (mobile only) ── -->
-      <section id="section-tariffs" class="section">
-        <div id="tariffs-mobile-container"></div>
-      </section>
-
-      <!-- ── SECTION: OPERATIONS ── -->
-      <section id="section-operations" class="section">
-        <div id="operations-container"></div>
-      </section>
-
-            <!-- ── SECTION: AUDIT LOG (Admin only) ── -->
-      <section id="section-audit" class="section">
-        <div id="audit-container"></div>
-      </section>
-
-      <!-- ── SECTION: CONFIG (Admin only) ── -->
-      <section id="section-config" class="section">
-        <div id="config-container"></div>
-      </section>
-
-      <!-- ── SECTION: MILA ASSISTANT ── -->
-      <section id="section-mila" class="section">
-        <div id="mila-container"></div>
-      </section>
-
-    </main>
-  </div><!-- end main-wrapper -->
-</div><!-- end app-shell -->
+        </div><!-- end app-shell -->
 
 <!-- ═══════════════════════════════════════
      MODAL: NUEVA / EDITAR RESERVA

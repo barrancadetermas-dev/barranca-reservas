@@ -1089,6 +1089,14 @@ export class BookingForm {
     let tariffHTML = '';
     const tariff = await this._getTariffSuggestedPrice(unitIds, ci);
     if (tariff?.price) {
+      // Auto-aplicar el precio tarifario si el campo está vacío o en 0
+      // (solo en reservas nuevas, no al editar)
+      const priceEl = document.getElementById('f-price');
+      const currentPrice = parseFloat(priceEl?.value) || 0;
+      if (!this._editingId && currentPrice === 0 && priceEl) {
+        priceEl.value = Math.round(tariff.price);
+        this._updateBreakdown();
+      }
       const promoNote = tariff.promoActive
         ? `<div class="ps-promo-note" style="margin-top:6px;font-size:12.5px;color:#92400e;background:#fffbeb;border:1px solid #fde68a;border-radius:6px;padding:6px 8px">
              🎁 Promo activa este mes: paga ${tariff.promoPay ?? '?'} noches, ${tariff.promoFree ?? '?'} gratis. El precio de arriba es por noche y no la incluye — recordá aplicarla al calcular el total.

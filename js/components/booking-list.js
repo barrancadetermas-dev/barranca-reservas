@@ -69,6 +69,7 @@ export class BookingList {
       const action = btn.dataset.action;
       if (action === 'view')      this._openDetail(id);
       if (action === 'edit')      this.bookingForm.openEdit(id);
+      if (action === 'voucher')   this._openVoucher(id);
       if (action === 'whatsapp')  this._sendWhatsApp(id);
       if (action === 'delete')    this._deleteBooking(id);
       if (action === 'checkout')  this._doCheckout(id);
@@ -730,6 +731,14 @@ export class BookingList {
                   <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
                 </svg>
               </button>
+              <button data-action="voucher"
+                class="bl-action-btn"
+                title="Comprobante / Voucher para el huésped" aria-label="Generar voucher">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15">
+                  <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/>
+                  <line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="13" y2="17"/>
+                </svg>
+              </button>
               <button data-action="whatsapp"
                 class="bl-action-btn whatsapp"
                 title="Enviar por WhatsApp" aria-label="Enviar comprobante por WhatsApp">
@@ -891,6 +900,26 @@ export class BookingList {
   }
 
   // ── Checkout rápido ───────────────────────────────
+  async _openVoucher(id) {
+    try {
+      const { data: booking, error } = await this.db.from('bookings')
+        .select(`id, check_in, check_out, nights, pax, total_amount, total_paid, balance,
+          status, source, notes, late_checkout,
+          guests!bookings_guest_id_fkey(first_name, last_name, dni, phone, email),
+          booking_units(units(name, color)),
+          payments(amount, amount_ars, method, payment_date)`)
+        .eq('id', id).single();
+      if (error || !booking) { showToast('No se pudo cargar la reserva', 'error'); return; }
+      const { openGuestVoucher } = await import('../services/voucher-guest.js');
+      openGuestVoucher(booking, {
+        name:    this.ctx.hotelName ?? 'Barranca de Termas',
+        address: this.ctx.hotelAddress ?? '',
+        phone:   this.ctx.hotelPhone ?? '',
+        email:   this.ctx.hotelEmail ?? '',
+      });
+    } catch (err) { showToast('Error al generar voucher: ' + err.message, 'error'); }
+  }
+
   async _doCheckout(id) {
     if (!navigator.onLine) { showToast('📵 Sin conexión — necesitás internet para registrar el check-out', 'warning'); return; }
     if (!confirm('¿Confirmar check-out de esta reserva?')) return;

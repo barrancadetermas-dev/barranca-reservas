@@ -222,12 +222,13 @@ export class Dashboard {
     this._renderSkeleton(); // estaba definido pero nunca se llamaba
     try {
       const today = toISODate(new Date());
-      const [kpis, extraStats, dineroStats, dollarRates, occForecast] = await Promise.all([
+      const [kpis, extraStats, dineroStats, dollarRates, occForecast, recHoy] = await Promise.all([
         this._fetchKPIs(today),
         this._fetchExtraStats(today),
         this._fetchDineroAsegurado(today),
         fetchDollarRates().catch(() => null),
         this._fetchOccupancyForecast(today),
+        this._fetchRecaudacionHoy(today),
       ]);
       this._renderKPIs(kpis, today);
       this._renderUpcoming(kpis.upcoming ?? kpis.arrivals ?? []);
@@ -242,6 +243,7 @@ export class Dashboard {
       this._renderOccupancyForecast(occForecast, today);
       this._renderRevPAR(extraStats);
       this._renderCobros(extraStats);
+      this._renderRecaudacionHoy(recHoy);
       this._renderOccupancyRing(kpis.occupiedUnits ?? 0, this.ctx.units?.length ?? 7);
       this._renderArrivals(kpis.arrivals ?? []);
       this._renderDepartures(kpis.checkouts ?? []);
@@ -1290,6 +1292,27 @@ export class Dashboard {
   }
 
   // ══════════════════════════════════════════════════
+  async _fetchRecaudacionHoy(today) {
+    try {
+      const { data } = await this.db.from('payments')
+        .select('amount, amount_ars, method, booking_id')
+        .eq('hotel_id', this.ctx.hotelId)
+        .eq('payment_date', today);
+      return data ?? [];
+    } catch { return []; }
+  }
+
+  _renderRecaudacionHoy(payments) {
+    const total = payments.reduce((s, p) => s + (p.amount_ars ?? p.amount ?? 0), 0);
+    const count = payments.length;
+    const el    = document.getElementById('dash-rec-hoy-val');
+    const sub   = document.getElementById('dash-rec-hoy-sub');
+    const cnt   = document.getElementById('dash-rec-hoy-count');
+    if (el)  el.textContent  = total > 0 ? formatARS(total) : '$0';
+    if (sub) sub.textContent = count > 0 ? `En ${count} pago${count !== 1 ? 's' : ''} registrado${count !== 1 ? 's' : ''} hoy` : 'Sin pagos registrados hoy';
+    if (cnt) cnt.textContent = count;
+  }
+
   // EXTRA STATS — RevPAR, Cobros, Reservas del mes
   // ══════════════════════════════════════════════════
   async _fetchExtraStats(today) {

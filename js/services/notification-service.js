@@ -124,27 +124,31 @@ export class NotificationService {
         });
       });
 
-      // ── Reservas con saldo pendiente (check-in en ≤3 días) ──
+      // ── Reservas con saldo pendiente (check-in en ≤5 días) ──
+      const in5Days = new Date(now.getTime() + 5 * 86400000).toISOString().slice(0, 10);
       const { data: unpaid } = await this.db
         .from('bookings')
-        .select('id, check_in, total_amount, total_paid, balance, guests!bookings_guest_id_fkey(first_name, last_name)')
+        .select('id, check_in, total_amount, total_paid, balance, booking_units(units(name)), guests!bookings_guest_id_fkey(first_name, last_name)')
         .eq('hotel_id', AppContext.hotelId)
         .eq('status', 'partial')
-        .lte('check_in', in3Days)
+        .lte('check_in', in5Days)
         .gte('check_in', today);
 
       (unpaid ?? []).forEach(b => {
-        const g   = b.guests ? `${b.guests.first_name} ${b.guests.last_name}` : 'Huésped';
-        const bal = Math.round(b.balance ?? (b.total_amount - (b.total_paid ?? 0)));
+        const g    = b.guests ? `${b.guests.first_name} ${b.guests.last_name}` : 'Huésped';
+        const unit = b.booking_units?.[0]?.units?.name ?? '';
+        const bal  = Math.round(b.balance ?? (b.total_amount - (b.total_paid ?? 0)));
         if (bal <= 0) return;
-        const daysTo = Math.round((new Date(b.check_in) - now) / 86400000);
+        const daysTo  = Math.round((new Date(b.check_in + 'T12:00:00') - now) / 86400000);
+        const cuando  = daysTo === 0 ? 'HOY' : daysTo === 1 ? 'mañana' : `en ${daysTo} días`;
+        const urgency = daysTo === 0 ? '🔴' : daysTo <= 2 ? '🟠' : '🟡';
         this._list.push({
           id:       `up-${b.id}`,
           type:     'unpaid',
-          priority: daysTo <= 1 ? 'high' : 'medium',
-          icon:     '💰',
-          title:    `Saldo pendiente`,
-          body:     `${g} llega en ${daysTo === 0 ? 'hoy' : daysTo + (daysTo === 1 ? ' día' : ' días')} · Debe $${bal.toLocaleString('es-AR')}`,
+          priority: daysTo <= 1 ? 'high' : daysTo <= 3 ? 'medium' : 'low',
+          icon:     urgency,
+          title:    `Cobro pendiente — ${g}`,
+          body:     `Llega ${cuando}${unit ? ` · ${unit}` : ''}\nSaldo: $${bal.toLocaleString('es-AR')}`,
           bookingId: b.id,
         });
       });
