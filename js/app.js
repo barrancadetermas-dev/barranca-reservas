@@ -358,6 +358,7 @@ async function initApp(user) {
     auditPanel  = tryInit('AuditPanel', () => new AuditPanel(supabase, AppContext));
     operations  = tryInit('Operations', () => new OperationsModule(supabase, AppContext));
     window._guestsCRM    = guestsCRM;
+    window._bookingList  = bookingList;
     window._statsInstance = statistics;
     window._operations   = operations;
 
@@ -445,16 +446,14 @@ async function initApp(user) {
 
     // ── Recargar la sección activa cuando cambia una reserva (debounced) ──
     document.addEventListener('booking:changed', () => {
-      // SIEMPRE invalidar cache antes de recargar — evita mostrar datos viejos
+      // Invalidar cache y recargar calendario
       cache.invalidate('bookings', 'reminders', 'payments');
       debouncedCalendarLoad(300);
       window._sidebarCal?.refresh().catch(console.error);
-      // Recargar la lista de reservas también — así cualquier acción
-      // (check-in, checkout, cobro, edición) se ve de inmediato sin
-      // necesitar refrescar la página.
-      if (bookingList && typeof bookingList.load === 'function') {
-        setTimeout(() => bookingList.load(), 200);
-      }
+      // La lista de reservas ya se recarga desde cada acción individualmente
+      // (checkout, checkin, early checkout, etc.) con su propio this.load().
+      // NO llamar bookingList.load() acá para evitar doble recarga y
+      // notificaciones duplicadas.
     });
 
     // "Nueva Reserva" → abre calculadora primero como paso 0

@@ -2673,6 +2673,9 @@ ${notes ? `
 
       this.close(true); // force=true: guardado exitoso, no mostrar "¿Salir sin guardar?"
       document.dispatchEvent(new CustomEvent('booking:changed'));
+      // Recargar la lista de reservas explícitamente desde el form
+      // (el listener de booking:changed ya no lo hace para evitar duplicados)
+      setTimeout(() => window._bookingList?.load?.(), 250);
 
       if (_splitPart2) {
         showToast('Abriendo la 2ª reserva de la estadía dividida…', 'info');
