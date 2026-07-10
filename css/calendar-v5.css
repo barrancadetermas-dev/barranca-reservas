@@ -329,7 +329,6 @@
 .cal-cell {
   height: 52px !important;
   position: relative;
-  overflow: hidden;
   transition: background .12s, opacity .12s;
 }
 .bar {
@@ -960,7 +959,7 @@
   border-right: 1px solid var(--cal-border) !important;
   border-bottom: 1px solid var(--cal-border) !important;
   transition: background .1s !important;
-  overflow: hidden !important;
+  overflow: visible !important;
 }
 
 /* Pasado */

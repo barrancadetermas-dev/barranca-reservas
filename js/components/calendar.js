@@ -794,23 +794,19 @@ export class Calendar {
   }
 
   _renderLateCheckoutTriangle(cell, booking, color) {
-    // Triángulo |/ con clip-path — esquina inferior-izquierda pintada
-    // con el color de la reserva que tuvo late check-out.
-    const inner = document.createElement('div');
-    inner.style.cssText = [
-      'position:absolute',
-      'top:0','left:0','right:0','bottom:0',
-      `background:${color}`,
-      'clip-path:polygon(0 0, 0 100%, 100% 100%)',
-      'opacity:0.82',
-      'z-index:2',
-      'pointer-events:none',
-    ].join(';') + ';';
+    // Wrapper con overflow:hidden para recortar el triángulo sin tocar
+    // el overflow de la celda (que debe ser visible para las barras).
+    const wrapper = document.createElement('div');
+    wrapper.style.cssText = 'position:absolute;inset:0;overflow:hidden;pointer-events:none;z-index:2;border-radius:2px';
+    // Triángulo |/ via clip-path dentro del wrapper
+    const tri = document.createElement('div');
+    tri.style.cssText = `position:absolute;inset:0;background:${color};opacity:0.82;clip-path:polygon(0 0,0 100%,100% 100%)`;
     const badge = document.createElement('span');
     badge.textContent = '🌅';
-    badge.style.cssText = 'position:absolute;bottom:3px;left:3px;font-size:.75rem;line-height:1;z-index:3;pointer-events:none;filter:drop-shadow(0 0 2px rgba(0,0,0,.5))';
-    cell.appendChild(inner);
-    cell.appendChild(badge);
+    badge.style.cssText = 'position:absolute;bottom:3px;left:3px;font-size:.75rem;line-height:1;filter:drop-shadow(0 0 2px rgba(0,0,0,.5))';
+    wrapper.appendChild(tri);
+    wrapper.appendChild(badge);
+    cell.appendChild(wrapper);
   }
 
   _renderNcPendingBar(cell, guestName) {

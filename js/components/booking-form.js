@@ -135,14 +135,33 @@ export class BookingForm {
       }
     });
 
-    // ── Checkbox late-checkout ──
+    // ── Late checkout: mostrar/ocultar opciones inline ──
     document.addEventListener('change', (e) => {
       if (e.target.id === 'f-late-checkout') {
-        const opts = document.getElementById('f-late-checkout-options');
-        if (opts) opts.style.display = e.target.checked ? '' : 'none';
+        const show = e.target.checked;
+        const paidWrap   = document.getElementById('f-lco-paid-wrap');
+        const amountWrap = document.getElementById('f-lco-amount-wrap');
+        if (paidWrap)   paidWrap.style.display   = show ? 'flex' : 'none';
+        if (amountWrap) amountWrap.style.display  = 'none'; // se muestra solo si "se cobra" checked
         this._updateBreakdown();
       }
-      if (e.target.id === 'f-late-checkout-paid') this._updateBreakdown();
+      if (e.target.id === 'f-late-checkout-paid') {
+        const amountWrap = document.getElementById('f-lco-amount-wrap');
+        if (amountWrap) amountWrap.style.display = e.target.checked ? 'flex' : 'none';
+        // Precargar con ½ noche si no tiene valor
+        if (e.target.checked) {
+          const amtEl = document.getElementById('f-late-checkout-amount');
+          if (amtEl && !amtEl.value) {
+            const price = parseFloat(document.getElementById('f-price')?.value) || 0;
+            amtEl.value = price > 0 ? Math.round(price * 0.5) : '';
+          }
+        }
+        this._updateBreakdown();
+      }
+      if (e.target.id === 'f-late-checkout-amount') this._updateBreakdown();
+    });
+    document.addEventListener('input', (e) => {
+      if (e.target.id === 'f-late-checkout-amount') this._updateBreakdown();
     });
 
     // Inicializar selector de canal de origen (compacto)
@@ -394,14 +413,18 @@ export class BookingForm {
       const lateCbEl = document.getElementById('f-late-checkout');
       if (lateCbEl) {
         lateCbEl.checked = b.late_checkout ?? false;
-        const opts = document.getElementById('f-late-checkout-options');
-        if (opts) opts.style.display = lateCbEl.checked ? '' : 'none';
-        // Si tiene late_checkout y el total incluye media noche, marcar "se cobra"
-        const expectedWithLate = (b.price_per_night ?? 0) * 0.5;
+        const paidWrap   = document.getElementById('f-lco-paid-wrap');
+        const amountWrap = document.getElementById('f-lco-amount-wrap');
+        if (paidWrap)   paidWrap.style.display   = lateCbEl.checked ? 'flex' : 'none';
+        // Determinar si se cobró: total > noches × precio
+        const expectedBase = (b.nights ?? 0) * (b.price_per_night ?? 0);
+        const extraAmt = b.late_checkout ? Math.max(0, (b.total_amount ?? 0) - expectedBase) : 0;
         const paidCbEl = document.getElementById('f-late-checkout-paid');
         if (paidCbEl && b.late_checkout) {
-          // Si el surcharge/total parece incluir media noche → marcar cobrado
-          paidCbEl.checked = (b.surcharge_amount ?? 0) > 0 || b.total_amount > ((b.nights ?? 0) * (b.price_per_night ?? 0));
+          paidCbEl.checked = extraAmt > 0;
+          if (amountWrap) amountWrap.style.display = extraAmt > 0 ? 'flex' : 'none';
+          const amtEl = document.getElementById('f-late-checkout-amount');
+          if (amtEl && extraAmt > 0) amtEl.value = extraAmt;
         }
       }
       setVal('f-deposit',     b.deposit_amount  ?? 0);
@@ -1286,6 +1309,7 @@ export class BookingForm {
     const freeN = parseInt(document.getElementById('f-free-nights').value) || 0;
     const lateCheckout     = document.getElementById('f-late-checkout')?.checked ?? false;
     const lateCheckoutPaid = lateCheckout && (document.getElementById('f-late-checkout-paid')?.checked ?? true);
+    const lateAmtCustom    = parseFloat(document.getElementById('f-late-checkout-amount')?.value) || (price * 0.5);
 
     if (!ci || !co || !price) {
       ['pb-nights','pb-subtotal','pb-discount','pb-surcharge','pb-total','pb-free-nights','pb-late-checkout']
@@ -1297,7 +1321,7 @@ export class BookingForm {
     const billable     = Math.max(0, nights - freeN);
     const subtotal     = price * billable;
     const discAmt      = subtotal * (disc / 100);
-    const lateAmt      = lateCheckoutPaid ? price * 0.5 : 0;
+    const lateAmt      = lateCheckoutPaid ? lateAmtCustom : 0;
     const total        = Math.max(0, subtotal - discAmt + surch + lateAmt);
 
     const set = (id, text) => { const el = document.getElementById(id); if (el) el.textContent = text; };
