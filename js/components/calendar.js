@@ -205,12 +205,13 @@ export class Calendar {
       return [];
     }
 
-    const params = { hotelId: this.ctx.hotelId, firstDay, lastDay };
+    const params = { hotelId: this.ctx.hotelId, firstDay, lastDay, v: 2 };
     const bookings = await cachedQuery(this.db, 'bookings', params, () =>
       this.db.from('bookings').select(`
-        id, check_in, check_out, status, source, is_blocked, block_reason, late_checkout,
-        total_amount, total_paid, balance, nights, pax, adults, children, notes,
-        price_per_night, created_at,
+        id, check_in, check_out, status, source, is_blocked, block_reason,
+        late_checkout, total_amount, total_paid, balance, nights, pax,
+        adults, children, notes, price_per_night, created_at,
+        checked_in_at, checked_out_at,
         guests!bookings_guest_id_fkey(first_name, last_name, bad_experience, tags),
         booking_units(unit_id, price_per_night, units(name, sort_order, color, max_guests))
       `)
