@@ -1048,8 +1048,11 @@ export class Calendar {
         display:flex;align-items:center;justify-content:flex-end;
         padding-right:6px;box-sizing:border-box;overflow:hidden;
       `;
-      const extName = (lastName || firstName) ? (lastName + ' ' + firstName).trim() + ' ' : '';
-      ext.innerHTML = '<span style="font-size:.75rem;opacity:.85">' + extName + '🌅</span>';
+      // Mismo contenido que la barra: avatar + apellido nombre
+      ext.innerHTML = Calendar._guestAvatar(booking.guests, 16) +
+        '<span style="font-size:.68rem;font-weight:700;color:' + textColor + ';overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0">' +
+        guestFull + '</span>';
+      ext.style.paddingLeft = '8px';
       cell.appendChild(ext);
     }
   }
