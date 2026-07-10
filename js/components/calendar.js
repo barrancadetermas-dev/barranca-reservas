@@ -871,7 +871,7 @@ export class Calendar {
     const rightM= truncRight ? 0 : 4;
     // Late checkout: la barra se extiende media celda más (50%) hacia el día de salida
     // así parece visualmente una reserva de N.5 noches — sin nada cortado ni separado.
-    const lateExtra = booking.late_checkout ? ' + 50%' : '';
+    const lateExtra = booking.late_checkout ? ' + 65%' : '';
     const width = `calc(${span} * 100%${lateExtra} - ${left + rightM}px)`;
     const borderR = truncRight ? 0 : 6;
     const borderL = truncLeft  ? 0 : 6;
