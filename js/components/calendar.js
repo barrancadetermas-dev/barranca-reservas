@@ -811,7 +811,7 @@ export class Calendar {
       display:flex;align-items:center;justify-content:flex-end;
       padding-right:5px;box-sizing:border-box;
     `;
-    half.innerHTML = '<span style="font-size:.65rem;line-height:1;flex-shrink:0">🌅</span>';
+    half.innerHTML = '<span style="font-size:1rem;line-height:1;flex-shrink:0">🌅</span>';
     cell.appendChild(half);
   }
 
@@ -947,12 +947,13 @@ export class Calendar {
       : '';
     bar.innerHTML = avatar + canalChip + splitChip + lateChip + '<span style="' + nameStyle + '">' + guestFull + '</span>';
 
-    // ⚡ Recambio: indicador fuera de la barra, esquina superior de la celda
+    // 🔄 Recambio: al centro superior de la celda, entre las dos barras
     if (isRecambio) {
       const badge = document.createElement('div');
-      badge.title = '⚡ Recambio — sale un huésped y entra otro el mismo día';
-      badge.style.cssText = 'position:absolute;top:1px;left:2px;z-index:10;' +
-        'font-size:1rem;line-height:1;pointer-events:none;filter:drop-shadow(0 0 2px rgba(0,0,0,.25))';
+      badge.title = '🔄 Recambio — sale un huésped y entra otro el mismo día';
+      badge.style.cssText = 'position:absolute;top:1px;left:0;right:0;z-index:10;' +
+        'font-size:1rem;line-height:1;pointer-events:none;text-align:center;' +
+        'filter:drop-shadow(0 0 2px rgba(0,0,0,.25))';
       badge.textContent = '🔄';
       cell.appendChild(badge);
     }
