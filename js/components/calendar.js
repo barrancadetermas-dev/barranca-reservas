@@ -209,7 +209,7 @@ export class Calendar {
     const bookings = await cachedQuery(this.db, 'bookings', params, () =>
       this.db.from('bookings').select(`
         id, check_in, check_out, status, source, is_blocked, block_reason,
-        late_checkout, total_amount, total_paid, balance, nights, pax,
+        late_checkout, late_checkout_charged, total_amount, total_paid, balance, nights, pax,
         adults, children, notes, price_per_night, created_at,
         checked_in_at, checked_out_at,
         guests!bookings_guest_id_fkey(first_name, last_name, bad_experience, tags),
@@ -1036,23 +1036,26 @@ export class Calendar {
     // "continúa" la barra 67% hacia el día de salida. No captura clicks.
     if (booking.late_checkout && !truncRight) {
       const ext = document.createElement('div');
+      // Sin cargo → degradado color→amarillo; cobrado → color sólido
+      const isFree  = booking.late_checkout_charged === false;
+      const yellow  = '#EF9F27';
+      const extBg   = isFree
+        ? `linear-gradient(to right, ${color} 0%, ${color} 20%, ${yellow} 100%)`
+        : color;
       ext.style.cssText = `
         position:absolute;top:6px;bottom:6px;
         left:${leftStyle};
         width:calc(${span} * 100% + 65%${widthReduceForLate} - ${left + rightM}px);
-        background:${color};
+        background:${extBg};
         border-radius:${borderL}px 6px 6px ${borderL}px;
         opacity:${isPast ? 0.4 : 0.9};
-        z-index:2;
-        pointer-events:none;
-        display:flex;align-items:center;justify-content:flex-end;
-        padding-right:6px;box-sizing:border-box;overflow:hidden;
+        z-index:2;pointer-events:none;
+        display:flex;align-items:center;
+        padding-left:8px;padding-right:6px;box-sizing:border-box;overflow:hidden;
       `;
-      // Mismo contenido que la barra: avatar + apellido nombre
       ext.innerHTML = Calendar._guestAvatar(booking.guests, 16) +
         '<span style="font-size:.68rem;font-weight:700;color:' + textColor + ';overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0">' +
         guestFull + '</span>';
-      ext.style.paddingLeft = '8px';
       cell.appendChild(ext);
     }
   }

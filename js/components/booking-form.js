@@ -421,8 +421,8 @@ export class BookingForm {
         const extraAmt = b.late_checkout ? Math.max(0, (b.total_amount ?? 0) - expectedBase) : 0;
         const paidCbEl = document.getElementById('f-late-checkout-paid');
         if (paidCbEl && b.late_checkout) {
-          paidCbEl.checked = extraAmt > 0;
-          if (amountWrap) amountWrap.style.display = extraAmt > 0 ? 'flex' : 'none';
+          paidCbEl.checked = b.late_checkout_charged ?? true;
+          if (amountWrap) amountWrap.style.display = paidCbEl.checked ? 'flex' : 'none';
           const amtEl = document.getElementById('f-late-checkout-amount');
           if (amtEl && extraAmt > 0) amtEl.value = extraAmt;
         }
@@ -2413,7 +2413,8 @@ ${notes ? `
         balance,
         notes:            notes || null,
         status:           balance <= 0 ? 'paid' : paid > 0 ? 'partial' : 'pending',
-        late_checkout:    lateCheckout,
+        late_checkout:         lateCheckout,
+        late_checkout_charged: lateCheckout ? (document.getElementById('f-late-checkout-paid')?.checked ?? true) : true,
       };
 
       // ── Columnas opcionales — se agregan en UPDATE separado ──────
