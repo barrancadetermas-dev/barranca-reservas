@@ -208,7 +208,7 @@ export class Calendar {
     const params = { hotelId: this.ctx.hotelId, firstDay, lastDay };
     const bookings = await cachedQuery(this.db, 'bookings', params, () =>
       this.db.from('bookings').select(`
-        id, check_in, check_out, status, source, is_blocked, block_reason,
+        id, check_in, check_out, status, source, is_blocked, block_reason, late_checkout,
         total_amount, total_paid, balance, nights, pax, adults, children, notes,
         price_per_night, created_at,
         guests!bookings_guest_id_fkey(first_name, last_name, bad_experience, tags),
@@ -529,26 +529,34 @@ export class Calendar {
     // día dentro de ese hueco, guardamos el tamaño del hueco (en noches)
     // → así cada celda vacía sabe si está dentro de un hueco y cuán chico
     // es, sin recalcular nada durante el loop de celdas (sería muy lento).
-    const gapMap = new Map(); // `${unitId}|${iso}` → tamaño del hueco en noches
-    // recambioSet: días en que hay salida Y entrada el mismo día en la misma unidad
-    // Key: `${unitId}|${iso}` (la fecha del check_in entrante = día del recambio)
-    // Value: { outGuest, inGuest } — nombres para la notificación
+    const gapMap = new Map();
     const recambioSet = new Map();
+    // lateCheckoutMap: día de checkout de reservas con late_checkout=true
+    // Key: `${unitId}|${checkoutDate}` → { booking, color }
+    const lateCheckoutMap = new Map();
+
     this.ctx.units.forEach(unit => {
       const unitBks = (this._lastRenderedBookings ?? [])
         .filter(b => !b.is_blocked && b.status !== 'cancelled' && b.status !== 'blocked'
                   && (b.booking_units ?? []).some(bu => bu.unit_id === unit.id))
         .sort((a, b) => a.check_in < b.check_in ? -1 : 1);
+
+      // Late checkout map — el día de salida queda "medio ocupado"
+      unitBks.forEach(bk => {
+        if (bk.late_checkout) {
+          const barColor = getBookingBarColor(bk);
+          lateCheckoutMap.set(`${unit.id}|${bk.check_out}`, { booking: bk, color: barColor });
+        }
+      });
+
       for (let i = 0; i < unitBks.length - 1; i++) {
         const co = unitBks[i].check_out;
         const ci = unitBks[i + 1].check_in;
         if (ci === co) {
-          // Recambio: sale uno y entra otro el mismo día
           const outGuest = unitBks[i].guests ? `${unitBks[i].guests.first_name ?? ''} ${unitBks[i].guests.last_name ?? ''}`.trim() : '—';
           const inGuest  = unitBks[i+1].guests ? `${unitBks[i+1].guests.first_name ?? ''} ${unitBks[i+1].guests.last_name ?? ''}`.trim() : '—';
           recambioSet.set(`${unit.id}|${ci}`, { outGuest, inGuest, unitName: unit.name ?? `#${unit.unit_number}` });
         } else if (ci > co) {
-          // Hueco normal
           const gap = Math.round((new Date(ci + 'T12:00:00') - new Date(co + 'T12:00:00')) / 86400000);
           for (let d = co; d < ci; d = this._addDays(d, 1)) {
             gapMap.set(`${unit.id}|${d}`, gap);
@@ -647,6 +655,13 @@ export class Calendar {
             const guestName = earlyDepartureDays.get(`${unit.id}|${iso}`);
             this._renderEarlyDepartureBar(cell, guestName);
             cell.title = `🚪 Noche libre por salida anticipada${guestName ? ` de ${guestName}` : ''} — todavía se puede reservar`;
+          } else if (lateCheckoutMap.has(`${unit.id}|${iso}`)) {
+            // Triángulo de late checkout — media celda pintada
+            const { booking: lcBk, color: lcColor } = lateCheckoutMap.get(`${unit.id}|${iso}`);
+            this._renderLateCheckoutTriangle(cell, lcBk, lcColor);
+            const d = new Date(iso + 'T12:00:00');
+            const dayNames = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
+            cell.title = `🌅 Late check-out — #${_unitNum} ${dayNames[d.getDay()]} ${d.getDate()}/${d.getMonth()+1}`;
           } else {
             // Tooltip simple: número de unidad + fecha completa legible
             const d = new Date(iso + 'T12:00:00');
@@ -778,6 +793,36 @@ export class Calendar {
     return null;
   }
 
+  _renderLateCheckoutTriangle(cell, booking, color) {
+    // Triángulo inferior izquierdo: el huésped ocupa la mañana y se va al mediodía.
+    // Visualmente: la mitad inferior-izquierda de la celda está pintada con el
+    // color de la reserva, la superior-derecha queda vacía (disponible para nueva reserva).
+    const tri = document.createElement('div');
+    tri.className = 'late-checkout-triangle';
+    tri.style.cssText = `
+      position:absolute;inset:0;pointer-events:none;z-index:2;
+      overflow:hidden;border-radius:inherit;
+    `;
+    // Usamos clip-path para el triángulo |/ (esquina inferior izquierda)
+    const inner = document.createElement('div');
+    inner.style.cssText = `
+      position:absolute;inset:0;
+      background:${color};
+      clip-path:polygon(0 0, 0 100%, 100% 100%);
+      opacity:0.85;
+    `;
+    // Badge 🌅 centrado en el triángulo
+    const badge = document.createElement('span');
+    badge.textContent = '🌅';
+    badge.style.cssText = `
+      position:absolute;bottom:4px;left:3px;font-size:.65rem;line-height:1;
+      filter:drop-shadow(0 0 2px rgba(0,0,0,.4));
+    `;
+    tri.appendChild(inner);
+    tri.appendChild(badge);
+    cell.appendChild(tri);
+  }
+
   _renderNcPendingBar(cell, guestName) {
     const bar = document.createElement('div');
     bar.className = 'nc-pending-bar';
@@ -901,7 +946,10 @@ export class Calendar {
 
     const avatar = !isBlock ? Calendar._guestAvatar(booking.guests, 16) : '';
     const nameStyle = 'color:' + textColor + ';font-size:.68rem;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0';
-    bar.innerHTML = avatar + canalChip + splitChip + '<span style="' + nameStyle + '">' + guestFull + '</span>';
+    const lateChip = booking.late_checkout
+      ? '<span title="🌅 Late check-out" style="flex-shrink:0;font-size:.65rem;margin-right:3px">🌅</span>'
+      : '';
+    bar.innerHTML = avatar + canalChip + splitChip + lateChip + '<span style="' + nameStyle + '">' + guestFull + '</span>';
 
     // ⚡ Recambio: indicador fuera de la barra, esquina superior de la celda
     if (isRecambio) {

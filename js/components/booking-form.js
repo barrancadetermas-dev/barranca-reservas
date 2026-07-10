@@ -135,6 +135,11 @@ export class BookingForm {
       }
     });
 
+    // ── Checkbox late-checkout ──
+    document.addEventListener('change', (e) => {
+      if (e.target.id === 'f-late-checkout') this._updateBreakdown();
+    });
+
     // Inicializar selector de canal de origen (compacto)
     this._renderSourceSelector();
   }
@@ -381,6 +386,8 @@ export class BookingForm {
       setVal('f-discount',    b.discount_pct    ?? 0);
       setVal('f-surcharge',   b.surcharge_amount ?? 0);
       setVal('f-free-nights', b.free_nights     ?? 0);
+      const lateCbEl = document.getElementById('f-late-checkout');
+      if (lateCbEl) lateCbEl.checked = b.late_checkout ?? false;
       setVal('f-deposit',     b.deposit_amount  ?? 0);
       setVal('f-notes',       b.notes           ?? '');
       document.getElementById('notes-count').textContent = (b.notes ?? '').length;
@@ -1261,30 +1268,34 @@ export class BookingForm {
     const disc  = parseFloat(document.getElementById('f-discount').value) || 0;
     const surch = parseFloat(document.getElementById('f-surcharge').value) || 0;
     const freeN = parseInt(document.getElementById('f-free-nights').value) || 0;
+    const lateCheckout = document.getElementById('f-late-checkout')?.checked ?? false;
 
     if (!ci || !co || !price) {
-      ['pb-nights','pb-subtotal','pb-discount','pb-surcharge','pb-total','pb-free-nights']
+      ['pb-nights','pb-subtotal','pb-discount','pb-surcharge','pb-total','pb-free-nights','pb-late-checkout']
         .forEach(id => { const el = document.getElementById(id); if (el) el.textContent = '—'; });
       return;
     }
 
-    const nights   = Math.round((new Date(co) - new Date(ci)) / 86400000);
-    const billable = Math.max(0, nights - freeN);
-    const subtotal = price * billable;
-    const discAmt  = subtotal * (disc / 100);
-    const total    = Math.max(0, subtotal - discAmt + surch);
+    const nights       = Math.round((new Date(co) - new Date(ci)) / 86400000);
+    const billable     = Math.max(0, nights - freeN);
+    const subtotal     = price * billable;
+    const discAmt      = subtotal * (disc / 100);
+    const lateAmt      = lateCheckout ? price * 0.5 : 0;
+    const total        = Math.max(0, subtotal - discAmt + surch + lateAmt);
 
     const set = (id, text) => { const el = document.getElementById(id); if (el) el.textContent = text; };
-    set('pb-nights',     `${nights} noche${nights !== 1 ? 's' : ''}`);
-    set('pb-subtotal',   formatARS(subtotal));
-    set('pb-free-nights', freeN > 0 ? `−${formatARS(price * freeN)}` : '—');
-    set('pb-discount',   disc > 0 ? `−${formatARS(discAmt)} (${disc}%)` : '—');
-    set('pb-surcharge',  surch > 0 ? `+${formatARS(surch)}` : '—');
-    set('pb-total',      formatARS(total));
+    set('pb-nights',       `${nights} noche${nights !== 1 ? 's' : ''}${lateCheckout ? ' + ½' : ''}`);
+    set('pb-subtotal',     formatARS(subtotal));
+    set('pb-free-nights',  freeN > 0 ? `−${formatARS(price * freeN)}` : '—');
+    set('pb-discount',     disc > 0 ? `−${formatARS(discAmt)} (${disc}%)` : '—');
+    set('pb-surcharge',    surch > 0 ? `+${formatARS(surch)}` : '—');
+    set('pb-late-checkout', lateCheckout ? `+${formatARS(lateAmt)}` : '—');
+    set('pb-total',        formatARS(total));
 
     document.getElementById('pbr-free-nights')?.style.setProperty('display', freeN > 0 ? '' : 'none');
     document.getElementById('pbr-discount')?.style.setProperty('display',    disc > 0 ? '' : 'none');
     document.getElementById('pbr-surcharge')?.style.setProperty('display',   surch > 0 ? '' : 'none');
+    document.getElementById('pbr-late-checkout')?.style.setProperty('display', lateCheckout ? '' : 'none');
 
     this._cachedTotal = total;
     this._updatePaymentSummary();
@@ -2345,6 +2356,7 @@ ${notes ? `
       }
 
       // ── Columnas CORE (siempre existen en la DB) ──────────────
+      const lateCheckout = document.getElementById('f-late-checkout')?.checked ?? false;
       const corePayload = {
         hotel_id:         this.ctx.hotelId,
         guest_id:         guestId,
@@ -2360,6 +2372,7 @@ ${notes ? `
         balance,
         notes:            notes || null,
         status:           balance <= 0 ? 'paid' : paid > 0 ? 'partial' : 'pending',
+        late_checkout:    lateCheckout,
       };
 
       // ── Columnas opcionales — se agregan en UPDATE separado ──────

@@ -669,7 +669,7 @@ export class BookingList {
               ${BookingList._avatar(g)}
               <div class="bl-guest-info">
                 <div class="bl-guest-name bl-guest-name-hover" data-booking-id="${b.id}">${getNationalityFlag(g?.nationality) ? getNationalityFlag(g?.nationality) + ' ' : ''}${guest}${flagHTML ? ' '+flagHTML : ''}</div>
-                <div class="bl-guest-meta">${unitChipsHTML}${getSourceBadgeHTML(b.source)}</div>
+                <div class="bl-guest-meta">${unitChipsHTML}${getSourceBadgeHTML(b.source)}${b.late_checkout ? '<span style="font-size:.65rem;padding:1px 5px;border-radius:3px;background:rgba(251,191,36,.15);color:#b45309;font-weight:600;white-space:nowrap">🌅 Late CO</span>' : ''}</div>
               </div>
             </div>
             <div class="bl-col-dates">

@@ -992,6 +992,13 @@
         <div class="form-group"><label>Descuento (%)</label><input type="number" id="f-discount" min="0" max="100" step="0.5" value="0"></div>
         <div class="form-group"><label>Recargo fijo ($)</label><input type="number" id="f-surcharge" min="0" step="500" value="0"></div>
       </div>
+      <!-- Late Check-out -->
+      <div class="form-group" style="margin-top:4px">
+        <label style="display:flex;align-items:center;gap:10px;cursor:pointer;user-select:none">
+          <input type="checkbox" id="f-late-checkout" style="width:16px;height:16px;cursor:pointer">
+          <span>🌅 Late Check-out <span style="font-size:.72rem;color:var(--color-text-3)">(se cobra media noche extra)</span></span>
+        </label>
+      </div>
       <div class="form-grid-2">
         <div class="form-group">
           <label>Depósito de garantía ($)
@@ -1006,6 +1013,7 @@
         <div class="pb-row pb-deduct" id="pbr-free-nights"><span>Noches sin cargo</span><span id="pb-free-nights">−$—</span></div>
         <div class="pb-row pb-deduct" id="pbr-discount"><span>Descuento</span><span id="pb-discount">−$—</span></div>
         <div class="pb-row pb-add" id="pbr-surcharge"><span>Recargo</span><span id="pb-surcharge">+$—</span></div>
+        <div class="pb-row pb-add" id="pbr-late-checkout" style="display:none"><span>🌅 Late check-out (½ noche)</span><span id="pb-late-checkout">+$—</span></div>
         <div class="pb-row pb-commission" id="pbr-commission" style="display:none">
           <span id="pb-commission-label">Comisión canal</span>
           <span id="pb-commission">−$—</span>
