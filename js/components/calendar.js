@@ -879,28 +879,37 @@ export class Calendar {
       return `rgb(${r},${g},${b})`;
     };
 
+    // Los gradientes se aplican en orden de prioridad, pudiendo combinarse:
+    // El late checkout (extension overlay) es independiente — no interfiere con barBg.
+    // Para la barra principal: una sola condición activa a la vez.
+    // Prioridad: noches sin cargo > descuento > recargo
     let barBg = color;
 
     if (freeN > 0 && totalN > 0) {
-      // Noches sin cargo: solidColor hasta el % pagado, luego amarillo
+      // Noches sin cargo → amarillo (parte proporcional de la barra)
       const paidPct = Math.round(((totalN - freeN) / totalN) * 100);
       barBg = `linear-gradient(to right, ${color} 0%, ${color} ${paidPct}%, ${yellow} 100%)`;
 
+    } else if (discPct > 0 && surcharge > 0 && total > 0) {
+      // Descuento + recargo simultáneos: el recargo "gana" (es más notable)
+      const surchargeRatio = Math.min(surcharge / total, 0.6);
+      const solidPct   = Math.round(Math.max(55, 100 - surchargeRatio * 80));
+      const darkFactor = Math.max(0.35, 0.75 - surchargeRatio * 0.8);
+      barBg = `linear-gradient(to right, ${color} 0%, ${color} ${solidPct}%, ${darken(color, darkFactor)} 100%)`;
+
     } else if (discPct > 0) {
-      // Descuento: solidColor hasta (100-disc)%, luego naranja
+      // Solo descuento → naranja
       const solidPct = Math.round(100 - discPct);
       barBg = `linear-gradient(to right, ${color} 0%, ${color} ${solidPct}%, ${orange} 100%)`;
 
     } else if (surcharge > 0 && total > 0) {
-      // Recargo: color → versión más oscura del mismo color
-      // La proporción del oscuro y cuándo arranca dependen del ratio recargo/total
+      // Solo recargo → más oscuro proporcional al monto
       const surchargeRatio = Math.min(surcharge / total, 0.6);
-      // El degradé arranca más temprano cuanto mayor es el recargo (mín 55%)
       const solidPct   = Math.round(Math.max(55, 100 - surchargeRatio * 80));
-      // El factor de oscurecimiento: 0.65 (suave) → 0.35 (bordó/oscuro)
       const darkFactor = Math.max(0.35, 0.75 - surchargeRatio * 0.8);
       const darkColor  = darken(color, darkFactor);
       barBg = `linear-gradient(to right, ${color} 0%, ${color} ${solidPct}%, ${darkColor} 100%)`;
+      console.log('[Calendar] recargo gradient:', color, '→', darkColor, 'solidPct:', solidPct, 'ratio:', surchargeRatio.toFixed(2));
     }
     const ci        = booking.check_in;
     const co        = booking.check_out;
