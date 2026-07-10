@@ -432,21 +432,18 @@
         <!-- Panel de personalización -->
         <div id="dashboard-cards" style="display:grid;grid-template-columns:repeat(5,1fr);gap:14px;margin-top:8px">
 
-          <!-- FILA 1 — Lo de HOY -->
+          <!-- FILA 1 — HOY -->
 
-          <!-- 1. Llegadas hoy -->
           <div class="card dash-card-uniform" data-card-id="arrivals">
             <div class="card-header"><h3>✅ Llegadas hoy</h3></div>
             <div id="arrivals-list" style="flex:1"><p class="empty-state-sm">Sin llegadas hoy</p></div>
           </div>
 
-          <!-- 2. Salidas hoy -->
           <div class="card dash-card-uniform" data-card-id="departures">
             <div class="card-header"><h3>👋 Salidas hoy</h3></div>
             <div id="departures-list" style="flex:1"><p class="empty-state-sm">Sin salidas hoy</p></div>
           </div>
 
-          <!-- 3. Ocupación hoy -->
           <div class="card dash-card-uniform" data-card-id="occ">
             <div class="card-header"><h3>📊 Ocupación hoy</h3></div>
             <div style="display:flex;align-items:center;justify-content:center;flex:1;padding:6px 0">
@@ -459,7 +456,6 @@
             <div id="occ-sub" style="text-align:center;font-size:.78rem;color:var(--color-text-3);margin-top:2px">—</div>
           </div>
 
-          <!-- 4. Recaudación hoy -->
           <div class="card dash-card-uniform" data-card-id="recaudacion-hoy">
             <div class="card-header"><h3>💵 Recaudación hoy</h3></div>
             <div style="font-size:1.5rem;font-weight:800;color:var(--color-success)" id="dash-rec-hoy-val">—</div>
@@ -470,18 +466,16 @@
             </div>
           </div>
 
-          <!-- 5. Próximas llegadas -->
           <div class="card dash-card-uniform widget-upcoming" data-card-id="upcoming">
             <div class="card-header">
               <h3>📅 Próximas llegadas</h3>
-              <span class="badge-today" style="font-size:.65rem;background:#f0f9ff;color:#0369a1;padding:2px 8px;border-radius:4px;font-weight:700">7d</span>
+              <span style="font-size:.65rem;background:#f0f9ff;color:#0369a1;padding:2px 8px;border-radius:4px;font-weight:700">7d</span>
             </div>
             <div id="dashboard-upcoming" style="flex:1;overflow-y:auto;max-height:200px"></div>
           </div>
 
-          <!-- FILA 2 — Lo del MES -->
+          <!-- FILA 2 — EL MES -->
 
-          <!-- 6. RevPAR / ADR -->
           <div class="card dash-card-uniform" data-card-id="revpar">
             <div class="card-header"><h3>📈 RevPAR / ADR</h3></div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:10px">
@@ -504,32 +498,33 @@
             </div>
           </div>
 
-          <!-- 7. Ocupación próximos días -->
           <div class="card dash-card-uniform" data-card-id="next-event">
             <div class="card-header"><h3>📈 Ocupación próx. días</h3></div>
             <div id="dash-next-event" style="flex:1"></div>
           </div>
 
-          <!-- 8. Cobros del mes -->
           <div class="card dash-card-uniform" data-card-id="cobros">
             <div class="card-header">
               <h3>💰 Cobros del mes</h3>
               <span id="dash-cobros-badge" style="font-size:.65rem;background:var(--color-surface-2);color:var(--color-text-2);padding:2px 8px;border-radius:4px;font-weight:700">—</span>
             </div>
-            <div id="dash-cobros-subtitle" style="font-size:.68rem;color:var(--color-text-3);margin-bottom:6px">Check-ins este mes</div>
+            <div id="dash-cobros-subtitle" style="font-size:.68rem;color:var(--color-text-3);margin-bottom:6px">—</div>
             <div style="font-size:1.5rem;font-weight:800;color:var(--color-text)" id="dash-cobros-val">—</div>
             <div style="font-size:.72rem;color:var(--color-text-3);margin-bottom:8px">pendiente de cobro</div>
             <div style="display:flex;justify-content:space-between;font-size:.78rem;margin-bottom:4px">
-              <span style="color:var(--color-text-3)">Cobrado</span>
-              <span style="font-weight:700;color:var(--color-success)" id="dash-cobros-cobrado-val">—</span>
+              <span style="color:var(--color-text-3)">Cobrado (seña + total)</span>
+              <span style="font-weight:700" id="dash-cobrado-val">—</span>
+            </div>
+            <div style="height:4px;background:var(--color-border);border-radius:2px;margin-bottom:4px;overflow:hidden">
+              <div id="dash-cobros-bar-fill" style="height:100%;width:0%;border-radius:2px;transition:width .5s ease"></div>
             </div>
             <div style="display:flex;justify-content:space-between;font-size:.78rem">
               <span style="color:var(--color-text-3)">Total vendido</span>
-              <span style="font-weight:700;color:var(--color-text)" id="dash-cobros-total-val">—</span>
+              <span style="font-weight:700;color:var(--color-text)" id="dash-total-val">—</span>
             </div>
+            <div id="dash-cobros-pct" style="font-size:.68rem;color:var(--color-text-3);margin-top:2px">—</div>
           </div>
 
-          <!-- 9. Reservas del mes -->
           <div class="card dash-card-uniform" data-card-id="rmes">
             <div class="card-header">
               <h3>📋 Reservas del mes</h3>
@@ -543,29 +538,36 @@
             <div id="dash-rmes-ticket-vs" style="font-size:.66rem;color:var(--color-text-3)"></div>
           </div>
 
-          <!-- 10. Dinero asegurado -->
           <div class="card dash-card-uniform" data-card-id="dinero">
-            <div class="card-header">
-              <h3>🔒 Dinero asegurado</h3>
-              <button id="dash-dinero-toggle" style="font-size:.65rem;background:var(--color-surface-2);color:var(--color-text-2);padding:2px 8px;border-radius:4px;font-weight:700;border:none;cursor:pointer">7d</button>
-            </div>
+            <div class="card-header"><h3>🔒 Dinero asegurado</h3></div>
             <div style="font-size:1.5rem;font-weight:800;color:var(--color-text)" id="dash-dinero-val">—</div>
-            <div id="dash-dinero-sub" style="font-size:.72rem;color:var(--color-text-3);margin-bottom:8px">—</div>
-            <div id="dash-dinero-breakdown" style="font-size:.75rem;color:var(--color-text-3)"></div>
+            <div style="font-size:.72rem;color:var(--color-text-3);margin-bottom:4px" id="dash-dinero-count">—</div>
+            <div style="height:4px;background:var(--color-border);border-radius:2px;margin-bottom:6px;overflow:hidden">
+              <div id="dash-dinero-bar-fill" style="height:100%;width:0%;border-radius:2px;transition:width .5s ease"></div>
+            </div>
+            <div style="display:flex;justify-content:space-between;font-size:.78rem;margin-bottom:3px">
+              <span style="color:var(--color-text-3)">Cobrado</span>
+              <span style="font-weight:700" id="dash-dinero-cobrado">—</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;font-size:.78rem">
+              <span style="color:var(--color-text-3)">Pendiente</span>
+              <span style="font-weight:700;color:var(--color-text)" id="dash-dinero-pendiente">—</span>
+            </div>
+            <div id="dash-dinero-pct" style="font-size:.68rem;color:var(--color-text-3);margin-top:4px">—</div>
           </div>
 
-          <!-- Limpieza de hoy — oculta por defecto -->
+          <!-- Limpieza (oculta por defecto) -->
           <div id="dashboard-cleaning-widget" class="card dash-card-uniform" data-card-id="cleaning" style="display:none"></div>
 
           <!-- Dólar -->
-          <div class="card dash-card-uniform" data-card-id="dollar" id="dashboard-dollar-card">
+          <div class="card dash-card-uniform" data-card-id="dollar">
             <div class="card-header">
               <h3>💱 Dólar oficial</h3>
-              <span id="dash-dollar-badge" style="font-size:.65rem;padding:2px 8px;border-radius:4px;font-weight:700;background:var(--color-surface-2);color:var(--color-text-2)">hoy</span>
+              <span id="dollar-status-badge" style="font-size:.65rem;padding:2px 8px;border-radius:4px;font-weight:700;background:var(--color-surface-2);color:var(--color-text-2)">—</span>
             </div>
-            <div style="font-size:1.5rem;font-weight:800;color:var(--color-text)" id="dash-dollar-val">—</div>
-            <div id="dash-dollar-sub" style="font-size:.72rem;color:var(--color-text-3);margin-bottom:6px">—</div>
-            <div id="dash-usd-conversion" style="font-size:.75rem;color:var(--color-text-3)"></div>
+            <div id="dollar-widget-body">
+              <div style="font-size:1.5rem;font-weight:800;color:var(--color-text)" id="dash-dollar-val">—</div>
+            </div>
           </div>
 
         </div><!-- end app-shell -->
