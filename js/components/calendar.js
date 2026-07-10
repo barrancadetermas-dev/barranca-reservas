@@ -566,6 +566,8 @@ export class Calendar {
       }
     });
 
+    this._lateCheckoutMap = lateCheckoutMap; // para que _renderBar pueda consultarlo
+
     // ── Filas de unidades ─────────────────────────
     this.ctx.units.forEach((unit, rowIdx) => {
       const unitColor  = getUnitColor(unit);
@@ -869,10 +871,18 @@ export class Calendar {
 
     const left  = truncLeft  ? 0 : 4;
     const rightM= truncRight ? 0 : 4;
-    // Late checkout: la barra se extiende media celda más (50%) hacia el día de salida
-    // así parece visualmente una reserva de N.5 noches — sin nada cortado ni separado.
-    const lateExtra = booking.late_checkout ? ' + 65%' : '';
-    const width = `calc(${span} * 100%${lateExtra} - ${left + rightM}px)`;
+
+    // ¿Esta barra arranca en un día con late checkout de otra reserva en la misma unidad?
+    // Si es así, empieza desde el 65% de la celda (donde termina el late checkout).
+    const unitId = (booking.booking_units ?? [])[0]?.unit_id ?? '';
+    const lateCoKey = `${unitId}|${ci}`;
+    const startsAfterLate = !truncLeft && (this._lateCheckoutMap?.has(lateCoKey) ?? false);
+    const leftStyle = startsAfterLate ? 'calc(70% + 2px)' : `${left}px`;
+    const widthReduceForLate = startsAfterLate ? ' - 70%' : '';
+
+    // Late checkout: la barra se extiende 65% hacia el día de salida
+    const lateExtra = booking.late_checkout ? ' + 70%' : '';
+    const width = `calc(${span} * 100%${lateExtra}${widthReduceForLate} - ${left + rightM}px)`;
     const borderR = truncRight ? 0 : 6;
     const borderL = truncLeft  ? 0 : 6;
 
@@ -895,7 +905,7 @@ export class Calendar {
     bar.style.cssText = `
       background:${color};
       position:absolute;top:6px;bottom:6px;
-      left:${left}px;
+      left:${leftStyle};
       width:${width};
       z-index:3;
       border-radius:${borderL}px ${borderR}px ${borderR}px ${borderL}px;
