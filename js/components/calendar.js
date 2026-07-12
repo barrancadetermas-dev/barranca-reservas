@@ -2534,28 +2534,15 @@ export class Calendar {
     filterPanel.className = 'avail-filter-panel';
     filterPanel.style.display = 'none';
     filterPanel.innerHTML = `
-      <div class="avail-panel-inner">
-        <div class="avail-panel-header">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-          <span>Buscar disponibilidad</span>
-        </div>
-        <div class="avail-panel-fields">
-          <label class="avail-field">
-            <span class="avail-label">Check-in</span>
-            <input type="date" id="avail-checkin" value="${todayStr}" class="avail-input">
-          </label>
-          <label class="avail-field">
-            <span class="avail-label">Check-out</span>
-            <input type="date" id="avail-checkout" value="${tomorrowStr}" class="avail-input">
-          </label>
-          <label class="avail-field avail-field-sm">
-            <span class="avail-label">Personas</span>
-            <input type="number" id="avail-guests" min="1" max="20" value="2" class="avail-input">
-          </label>
-          <button id="avail-search-btn" class="avail-search-btn">
-            Ver disponibles →
-          </button>
-        </div>
+      <div class="avail-panel-row">
+        <span class="avail-panel-label">🔍 Disponibilidad</span>
+        <span class="avail-sep">Check-in</span>
+        <input type="date" id="avail-checkin" value="${todayStr}" class="avail-input">
+        <span class="avail-sep">Check-out</span>
+        <input type="date" id="avail-checkout" value="${tomorrowStr}" class="avail-input">
+        <span class="avail-sep">Personas</span>
+        <input type="number" id="avail-guests" min="1" max="20" value="2" class="avail-input avail-input-num">
+        <button id="avail-search-btn" class="avail-search-btn">Ver disponibles →</button>
       </div>
       <div id="avail-results" style="display:none"></div>
     `;

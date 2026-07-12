@@ -457,6 +457,11 @@ export class GuestsCRM {
     const lastCO    = g.last_checkout ? formatDate(g.last_checkout) : null;
     const lastUnits = g.last_units?.length ? g.last_units : (g.last_unit ? [g.last_unit] : []);
 
+    // Color del avatar = color del último depto donde se alojó
+    const avatarColor = g.bad_experience
+      ? 'linear-gradient(135deg,#EF4444,#DC2626)'
+      : (lastUnits[0]?.color ?? 'var(--color-primary)');
+
     // Chips de depto — TODOS los de la última reserva (fix: antes solo mostraba 1 aunque hubiera 4)
     const unitChip = lastUnits.map(u =>
       `<span style="display:inline-block;padding:1px 6px;border-radius:3px;font-size:.62rem;
@@ -509,7 +514,7 @@ export class GuestsCRM {
         <div style="width:28px;height:28px;border-radius:50%;flex-shrink:0;
           display:flex;align-items:center;justify-content:center;
           font-size:.67rem;font-weight:700;color:#fff;
-          background:${g.bad_experience ? 'linear-gradient(135deg,#EF4444,#DC2626)' : 'var(--color-primary)'}">
+          background:${avatarColor}">
           ${initials}</div>
 
         <!-- Columna izquierda: nombre + última visita -->
@@ -965,13 +970,17 @@ export class GuestsCRM {
       : 0;
     const lastVisit  = bookings[0]?.check_in ?? null;
     const initials   = `${g.first_name?.[0] ?? ''}${g.last_name?.[0] ?? ''}`.toUpperCase();
+    const profileUnits = (bookings[0]?.booking_units ?? []).map(bu => bu.units).filter(Boolean);
+    const profileAvatarBg = g.bad_experience
+      ? 'linear-gradient(135deg,#EF4444,#DC2626)'
+      : (profileUnits[0]?.color ?? 'var(--color-primary)');
 
     return `
       <!-- ── HEADER OSCURO ── -->
       <div class="guest-profile-header">
         <div style="display:flex;align-items:center;gap:16px;position:relative;z-index:1">
           <div class="guest-avatar-lg" style="width:60px;height:60px;font-size:1.4rem;
-            flex-shrink:0;${g.bad_experience ? 'background:linear-gradient(135deg,#EF4444,#DC2626)' : ''}">
+            flex-shrink:0;background:${profileAvatarBg}">
             ${initials}
           </div>
           <div>

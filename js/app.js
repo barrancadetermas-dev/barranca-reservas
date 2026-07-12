@@ -590,7 +590,6 @@ const SECTION_META = {
   audit:      { title: 'Auditoría',                  icon: '📜', sub: 'Registro del Sistema · Historial de acciones' },
   config:     { title: 'Configuración',              icon: '⚙️', sub: 'Panel de Administración · Comisiones · Tarifas · Departamentos' },
   tariffs:    { title: 'Cuadro Tarifario',            icon: '🏷️', sub: 'Precios por departamento y mes' },
-  gmail:      { title: 'Gmail',                       icon: '📧', sub: 'Bandeja de entrada · barrancadetermas@gmail.com' },
   waitlist:   { title: 'Lista de espera',             icon: '⏳', sub: 'Solicitudes pendientes · Consultas sin reserva confirmada' },
   mila:       { title: 'Preguntale a Mila',           icon: '🤖', sub: 'Asistente inteligente · Consultas rápidas' },
 };
@@ -663,10 +662,7 @@ export async function navigateTo(section) {
       case 'audit':       await auditPanel?.load(); break;
       case 'config':      await configPanel?.load(); break;
       case 'tariffs':     await loadMobileTariffs(); break;
-      case 'gmail': {
-        const { initGmailSection, loadThreads } = await import('./components/gmail-section.js');
-        initGmailSection(); await loadThreads(); break;
-      }
+
     }
   } catch (err) {
     showErrorBoundary(`section-${section}`, err.message, () => navigateTo(section));
