@@ -107,6 +107,14 @@ export class BookingList {
   }
 
   async load() {
+    // Re-bind UI if the DOM wasn't ready when constructor ran
+    if (!this._domBound) {
+      this._bindTabs();
+      this._bindFilters();
+      this._bindSourceFilters();
+      this._populateUnitFilter();
+      this._domBound = true;
+    }
     try {
       // Si venimos de un link "Ver reservas →" del dashboard (Dinero
       // asegurado / Cobros del mes), abrir ya ordenado por saldo pendiente.

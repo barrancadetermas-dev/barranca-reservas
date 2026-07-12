@@ -6285,12 +6285,14 @@ input[type="number"]:focus, select:focus {
    DISPONIBILIDAD — panel flotante rediseñado
 ══════════════════════════════════════════════════════ */
 .avail-filter-panel {
-  margin: 0 20px 0;
+  margin: 0;
   border: 1px solid var(--color-border);
   border-top: none;
   border-radius: 0 0 10px 10px;
   background: var(--color-surface-2);
   overflow: hidden;
+  width: 100%;
+  box-sizing: border-box;
 }
 .avail-panel-inner {
   padding: 12px 16px;
@@ -6493,10 +6495,11 @@ input[type="number"]:focus, select:focus {
 .avail-panel-row {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 10px 16px;
-  flex-wrap: nowrap;
-  overflow-x: auto;
+  gap: 10px;
+  padding: 10px 20px;
+  flex-wrap: wrap;
+  width: 100%;
+  box-sizing: border-box;
 }
 .avail-panel-label {
   font-size: .72rem;
@@ -6522,7 +6525,9 @@ input[type="number"]:focus, select:focus {
   color: var(--color-text);
   font-size: .78rem;
   font-family: inherit;
-  flex-shrink: 0;
+  min-width: 0;
+  flex: 1 1 120px;
+  max-width: 160px;
   transition: border-color .15s;
 }
 .avail-input:focus { border-color: var(--color-primary); outline: none; }
@@ -6556,10 +6561,16 @@ input[type="number"]:focus, select:focus {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 12px 0 14px;
+  padding: 10px 0 12px;
   border-bottom: 1px solid var(--color-border);
   margin-bottom: 14px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  width: 100%;
+}
+.bl-date-filter-row .filter-date-wrap { flex: 1; }
+.bl-date-filter-row .filter-date-wrap input[type="date"] {
+  flex: 1;
+  min-width: 0;
 }
 .bl-date-filter-label {
   display: flex;
@@ -6575,4 +6586,34 @@ input[type="number"]:focus, select:focus {
   color: var(--color-text-3);
   font-size: .82rem;
 }
+
+
+/* ══════════════════════════════════════════════════════
+   FINANZAS — espaciado del selector de período
+══════════════════════════════════════════════════════ */
+#financ-shell { padding: 4px 0; }
+#financ-shell > div:first-child {
+  padding: 12px 0 16px;
+  border-bottom: 1px solid var(--color-border);
+  margin-bottom: 20px !important;
+  gap: 8px !important;
+}
+.fin-period-btn {
+  padding: 5px 14px;
+  border-radius: 6px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-2);
+  color: var(--color-text-2);
+  font-size: .78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all .12s;
+  font-family: inherit;
+}
+.fin-period-btn:hover { border-color: var(--color-primary); color: var(--color-primary); }
+.fin-period-btn.active { background: var(--color-primary); color: #fff; border-color: var(--color-primary); }
+
+/* Reservas — tabs y lista */
+.bl-tabs-row .tabs-bar { border-bottom: none; }
+.bl-tabs-row { border-bottom: 1px solid var(--color-border); margin-bottom: 12px; }
 
