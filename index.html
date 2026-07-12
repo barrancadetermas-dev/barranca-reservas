@@ -563,21 +563,13 @@
           <!-- Limpieza (oculta por defecto) -->
           <div id="dashboard-cleaning-widget" class="card dash-card-uniform" data-card-id="cleaning" style="display:none"></div>
 
-          <!-- Dólar -->
-          <div class="card dash-card-uniform" data-card-id="dollar">
-            <div class="card-header">
-              <h3>💱 Dólar oficial</h3>
-              <span id="dollar-status-badge" style="font-size:.65rem;padding:2px 8px;border-radius:4px;font-weight:700;background:var(--color-surface-2);color:var(--color-text-2)">—</span>
-            </div>
-            <div id="dollar-widget-body">
-              <div style="font-size:1.5rem;font-weight:800;color:var(--color-text)" id="dash-dollar-val">—</div>
-            </div>
-          </div>
+        </div><!-- end dashboard-cards grid -->
 
-        </div><!-- end dashboard section -->
-      </main><!-- end main-content -->
-    </div><!-- end main-wrapper -->
-  </div><!-- end app-shell -->
+        <!-- IDs del dólar requeridos por el JS — ocultos, sin card visible -->
+        <div style="display:none" aria-hidden="true">
+          <span id="dollar-status-badge"></span>
+          <div id="dollar-widget-body"><div id="dash-dollar-val"></div></div>
+        </div>
 
 <!-- ═══════════════════════════════════════
      MODAL: NUEVA / EDITAR RESERVA
