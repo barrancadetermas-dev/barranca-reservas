@@ -592,6 +592,7 @@ const SECTION_META = {
   tariffs:    { title: 'Cuadro Tarifario',            icon: '🏷️', sub: 'Precios por departamento y mes' },
   mila:       { title: 'Preguntale a Mila',           icon: '🤖', sub: 'Asistente inteligente · Consultas rápidas' },
   gmail:      { title: 'Gmail',                       icon: '📧', sub: 'Bandeja de entrada · barrancadetermas@gmail.com' },
+  waitlist:   { title: 'Lista de espera',             icon: '⏳', sub: 'Solicitudes pendientes · Consultas sin reserva confirmada' },
 };
 const SECTION_TITLES = Object.fromEntries(Object.entries(SECTION_META).map(([k,v]) => [k, v.title]));
 

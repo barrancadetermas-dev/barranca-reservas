@@ -169,6 +169,9 @@
         <span class="nav-label">Huéspedes</span>
       </a>
       <a href="#" class="nav-item" data-section="waitlist">
+        <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="19" height="19"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 12h6M9 16h4"/></svg></span>
+        <span class="nav-label">Lista de espera</span>
+      </a>
         <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="19" height="19"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span>
         <span class="nav-label">Lista de espera</span>
         <span class="nav-badge" id="nav-badge-waitlist" style="display:none">0</span>
@@ -1271,8 +1274,176 @@
 </div>
 
 <!-- ═══════════════════════════════════════
-     SECCIÓN: GMAIL
+     SECCIÓN: CALENDARIO
 ═══════════════════════════════════════ -->
+<section id="section-calendar" class="section">
+  <div class="cal-toolbar" id="cal-toolbar">
+    <div class="cal-toolbar-left">
+      <button class="btn btn-icon" id="cal-prev" title="Período anterior">‹</button>
+      <button class="btn btn-icon" id="cal-today" title="Ir a hoy">Hoy</button>
+      <button class="btn btn-icon" id="cal-next" title="Período siguiente">›</button>
+      <span id="cal-month-title" class="cal-month-title"></span>
+    </div>
+    <div class="cal-toolbar-right">
+      <div class="cal-search-wrap">
+        <input id="cal-search-input" type="text" placeholder="Buscar huésped…" class="cal-search-input">
+        <button id="cal-search-clear" class="cal-search-clear hidden">✕</button>
+      </div>
+      <button class="btn btn-icon" id="cal-avail-toggle" title="Ver disponibilidad">📋</button>
+      <button class="btn btn-icon" id="cal-goto-today" title="Ir a hoy">⊙</button>
+    </div>
+  </div>
+  <div id="cal-summary-bar"></div>
+  <div class="cal-wrapper">
+    <div id="calendar-grid" class="month-grid"></div>
+  </div>
+  <div id="cal-mini-agenda-list" class="cal-mini-agenda"></div>
+  <div id="cal-tariff-wrap"></div>
+</section>
+
+<!-- ═══════════════════════════════════════
+     SECCIÓN: RESERVAS
+═══════════════════════════════════════ -->
+<section id="section-bookings" class="section">
+  <div class="main-content-inner">
+    <div class="tabs-bar">
+      <button class="tab active" data-tab="active">Reservas abiertas</button>
+      <button class="tab" data-tab="history">Historial</button>
+    </div>
+    <div class="bl-filters-row" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:10px 0">
+      <input type="text" id="booking-search" placeholder="Buscar huésped…" class="input-sm" style="min-width:180px">
+      <select id="filter-unit" class="input-sm"></select>
+      <select id="filter-status" class="input-sm">
+        <option value="">Todos los estados</option>
+        <option value="pending">Sin seña</option>
+        <option value="partial">Señada</option>
+        <option value="paid">Abonada</option>
+      </select>
+      <div style="display:flex;gap:4px">
+        <button class="source-filter-btn btn btn-xs btn-outline active" data-source="">Todos</button>
+        <button class="source-filter-btn btn btn-xs btn-outline" data-source="direct">Directo</button>
+        <button class="source-filter-btn btn btn-xs btn-outline" data-source="booking">Booking</button>
+        <button class="source-filter-btn btn btn-xs btn-outline" data-source="airbnb">Airbnb</button>
+      </div>
+      <input type="date" id="filter-date-from" class="input-sm" title="Desde">
+      <input type="date" id="filter-date-to" class="input-sm" title="Hasta">
+      <div style="display:flex;gap:4px">
+        <button class="date-preset-btn btn btn-xs btn-outline" data-preset="today">Hoy</button>
+        <button class="date-preset-btn btn btn-xs btn-outline" data-preset="week">7d</button>
+        <button class="date-preset-btn btn btn-xs btn-outline" data-preset="month">Mes</button>
+      </div>
+      <button id="filter-date-clear" class="btn btn-xs btn-outline">✕</button>
+    </div>
+    <div id="bookings-list"></div>
+    <div id="btn-load-more-wrap" style="text-align:center;margin-top:12px;display:none">
+      <button id="btn-load-more" class="btn btn-outline">Cargar más</button>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════
+     SECCIÓN: ESTADÍSTICAS
+═══════════════════════════════════════ -->
+<section id="section-statistics" class="section">
+  <div class="main-content-inner">
+    <div class="tabs-bar">
+      <button class="tab active" data-stats-tab="occ">Ocupación</button>
+      <button class="tab" data-stats-tab="financ">Financiero</button>
+      <button class="tab" data-stats-tab="units">Unidades</button>
+      <button class="tab" data-stats-tab="heatmap">Heatmap</button>
+    </div>
+    <div id="stats-toolbar" style="display:flex;gap:8px;align-items:center;margin:10px 0">
+      <select id="stats-month" class="input-sm">
+        <option value="1">Enero</option><option value="2">Febrero</option>
+        <option value="3">Marzo</option><option value="4">Abril</option>
+        <option value="5">Mayo</option><option value="6">Junio</option>
+        <option value="7">Julio</option><option value="8">Agosto</option>
+        <option value="9">Septiembre</option><option value="10">Octubre</option>
+        <option value="11">Noviembre</option><option value="12">Diciembre</option>
+      </select>
+      <select id="stats-year" class="input-sm"></select>
+      <button id="btn-load-stats" class="btn btn-primary btn-sm">Ver</button>
+    </div>
+    <div id="stats-occ-panel"></div>
+    <div id="stats-financ-panel" class="hidden"></div>
+    <div id="stats-units-panel" class="hidden">
+      <div id="stats-units-grid"></div>
+    </div>
+    <div id="stats-heatmap-panel" class="hidden"></div>
+    <div id="stats-pl-panel" class="hidden"></div>
+    <div id="charts-container"></div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════
+     SECCIÓN: OPERACIONES
+═══════════════════════════════════════ -->
+<section id="section-operations" class="section">
+  <div class="main-content-inner">
+    <div id="operations-container"></div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════
+     SECCIÓN: HUÉSPEDES
+═══════════════════════════════════════ -->
+<section id="section-guests" class="section">
+  <div class="main-content-inner">
+    <div id="guests-container"></div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════
+     SECCIÓN: LISTA DE ESPERA
+═══════════════════════════════════════ -->
+<section id="section-waitlist" class="section">
+  <div class="main-content-inner">
+    <div id="waitlist-container"></div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════
+     SECCIÓN: AUDITORÍA
+═══════════════════════════════════════ -->
+<section id="section-audit" class="section">
+  <div class="main-content-inner">
+    <div id="audit-container"></div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════
+     SECCIÓN: CONFIGURACIÓN
+═══════════════════════════════════════ -->
+<section id="section-config" class="section">
+  <div class="main-content-inner">
+    <div id="config-inner"></div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════
+     SECCIÓN: TARIFAS
+═══════════════════════════════════════ -->
+<section id="section-tariffs" class="section">
+  <div class="main-content-inner">
+    <div id="tariffs-mobile-container"></div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════
+     SECCIÓN: MILA
+═══════════════════════════════════════ -->
+<section id="section-mila" class="section">
+  <div class="mila-hero"></div>
+</section>
+
+<!-- ═══════════════════════════════════════
+     SECCIÓN: RECORDATORIOS (inline)
+═══════════════════════════════════════ -->
+<section id="section-reminders" class="section">
+  <div class="main-content-inner">
+    <div id="reminders-full-list"></div>
+  </div>
+</section>
 <section id="section-gmail" class="section">
   <div class="main-content-inner" style="max-width:900px;margin:0 auto;padding:20px">
     <div id="gmail-inbox-root">
