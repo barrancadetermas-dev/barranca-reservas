@@ -21,7 +21,6 @@ import { initEventEngine } from './services/event-engine.js';
 import { initOfflineSync } from './services/offline-sync.js';
 import { saveSnapshot, loadSnapshot } from './services/offline-store.js';
 import { initSMNNotifications } from './services/smn-notifications.js';
-import { initGmailSection, loadThreads as loadGmailThreads } from './components/gmail-section.js';
 // ═══════════════════════════════════════════════════
 // app.js v5.0 — MILA Sistema Inteligente para Alojamientos
 // + Roles (admin/staff/demo) + Demo banner
@@ -663,7 +662,12 @@ export async function navigateTo(section) {
       case 'audit':       await auditPanel?.load(); break;
       case 'config':      await configPanel?.load(); break;
       case 'tariffs':     await loadMobileTariffs(); break;
-      case 'gmail':       initGmailSection(); await loadGmailThreads(); break;
+      case 'gmail': {
+        const { initGmailSection, loadThreads } = await import('./components/gmail-section.js');
+        initGmailSection();
+        await loadThreads();
+        break;
+      }
     }
   } catch (err) {
     showErrorBoundary(`section-${section}`, err.message, () => navigateTo(section));
