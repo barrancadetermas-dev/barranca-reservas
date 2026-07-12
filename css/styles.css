@@ -5834,7 +5834,7 @@ html, body {
 /* Grid dashboard: 5 col × 2 filas con altura fija por fila */
 #dashboard-cards {
   grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
-  grid-template-rows: 185px 230px !important;
+  grid-auto-rows: minmax(185px, auto) !important;
   align-items: stretch;
   gap: 14px;
 }
@@ -6053,3 +6053,129 @@ html, body {
   /* Resumen de voucher compacto */
   .voucher-section { padding: 10px !important; }
 }
+
+/* ══════════════════════════════════════════════
+   RESERVAS — Rediseño visual completo
+══════════════════════════════════════════════ */
+.bl-section-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  height: 100%;
+  padding: 0 20px 20px;
+}
+
+.bl-tabs-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 0 6px;
+  border-bottom: 1px solid var(--color-border);
+  margin-bottom: 14px;
+}
+
+.bl-summary-chips {
+  display: flex;
+  gap: 6px;
+}
+.bl-chip {
+  font-size: .68rem;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 99px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-2);
+  color: var(--color-text-2);
+  white-space: nowrap;
+}
+.bl-chip.chip-active { background: var(--color-primary); color: #fff; border-color: var(--color-primary); }
+
+/* Filter bar */
+.bl-filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+
+.bl-search-wrap {
+  position: relative;
+  flex: 1;
+  min-width: 220px;
+}
+.bl-search-icon {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--color-text-3);
+  pointer-events: none;
+}
+.bl-search-input {
+  width: 100%;
+  padding: 8px 12px 8px 34px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--r-md);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: .82rem;
+  outline: none;
+  transition: border-color .15s;
+}
+.bl-search-input:focus { border-color: var(--color-primary); }
+.bl-search-input::placeholder { color: var(--color-text-3); }
+
+.bl-select {
+  padding: 7px 28px 7px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--r-md);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: .8rem;
+  outline: none;
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  transition: border-color .15s;
+  min-width: 140px;
+}
+.bl-select:focus { border-color: var(--color-primary); }
+
+/* Secondary filters row */
+.bl-filter-secondary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.bl-list-container {
+  flex: 1;
+  overflow-y: auto;
+}
+
+/* Stats section improvements */
+#section-statistics .main-content-inner {
+  padding: 20px;
+}
+#section-statistics .tabs-bar {
+  margin-bottom: 0;
+  border-bottom: 1px solid var(--color-border);
+}
+#stats-toolbar {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--color-border);
+  margin-bottom: 16px !important;
+}
+#btn-load-stats {
+  padding: 7px 18px;
+  font-weight: 600;
+}
+

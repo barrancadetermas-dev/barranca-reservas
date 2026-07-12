@@ -1225,7 +1225,7 @@ export class Dashboard {
 
   _renderCleaningWidget(tasks) {
     const el = document.getElementById('dashboard-cleaning-widget');
-    const revparCard = document.querySelector('[data-card-id="revpar"]');
+    const revparCard = document.querySelector('[data-card-id="rmes"]');
     if (!el) return;
 
     // Sin tareas de limpieza hoy -> vuelve a mostrarse la card de RevPAR/ADR.
