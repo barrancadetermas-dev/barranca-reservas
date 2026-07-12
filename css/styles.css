@@ -451,15 +451,14 @@ svg { flex-shrink: 0; }
 /* ── 9. MAIN CONTENT & SECTIONS ──────────────────── */
 .main-content { flex: 1; overflow-y: auto; padding: var(--sp-24); }
 .section { display: none; }
-.section.active {
-  display: block;
-  /* Padding base uniforme — overrides específicos solo donde realmente difiere */
-  padding: var(--sp-20) var(--sp-24);
+.section.active { display: block; }
+
+/* main-content already provides 24px padding uniformly */
+/* sections should NOT add extra padding on top */
+.main-content-inner {
+  /* transparent wrapper — no extra padding, just structure */
+  width: 100%;
 }
-/* Excepciones que necesitan padding 0 en la sección (manejan el propio) */
-#section-calendar.active,
-#section-bookings.active,
-#section-dashboard.active { padding: 0; }
 
 /* ── 10. CARDS ───────────────────────────────────── */
 .card {
@@ -6070,7 +6069,6 @@ html, body {
   flex-direction: column;
   gap: 0;
   height: 100%;
-  padding: 0 20px 20px;
 }
 
 .bl-tabs-row {
@@ -6170,9 +6168,7 @@ html, body {
 }
 
 /* Stats section improvements */
-#section-statistics .main-content-inner {
-  padding: 20px;
-}
+#section-statistics .main-content-inner { /* no extra padding — main-content handles it */ }
 #section-statistics .tabs-bar {
   margin-bottom: 0;
   border-bottom: 1px solid var(--color-border);
@@ -6293,12 +6289,9 @@ input[type="number"]:focus, select:focus {
    DISPONIBILIDAD — panel flotante rediseñado
 ══════════════════════════════════════════════════════ */
 .avail-filter-panel {
-  margin: 0;
-  border: 1px solid var(--color-border);
   border-top: none;
-  border-radius: 0 0 10px 10px;
+  border-bottom: 1px solid var(--color-border);
   background: var(--color-surface-2);
-  overflow: hidden;
   width: 100%;
   box-sizing: border-box;
 }
@@ -6363,11 +6356,7 @@ input[type="number"]:focus, select:focus {
   font-family: inherit;
 }
 .avail-search-btn:hover { opacity: .88; }
-#avail-results {
-  padding: 10px 16px 12px;
-  border-top: 1px solid var(--color-border);
-  font-size: .82rem;
-}
+/* avail-results is now inline in the flex row via display:contents */
 
 /* ══════════════════════════════════════════════════════
    ESTADÍSTICAS — mejoras visuales
@@ -6503,12 +6492,31 @@ input[type="number"]:focus, select:focus {
 .avail-panel-row {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 20px;
-  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 16px;
+  flex-wrap: nowrap;
   width: 100%;
   box-sizing: border-box;
+  overflow-x: auto;
 }
+/* Inline results area */
+.avail-results-inline {
+  display: contents; /* renders children as if directly in flex row */
+}
+.avail-result-sep { color: var(--color-border-2); flex-shrink: 0; }
+.avail-result-ok  { font-size: .72rem; font-weight: 700; color: #16a34a; white-space: nowrap; flex-shrink: 0; }
+.avail-result-info { font-size: .7rem; color: var(--color-text-3); white-space: nowrap; flex-shrink: 0; }
+.avail-chip {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 7px; border-radius: var(--r-sm);
+  font-size: .73rem; font-weight: 700; cursor: default;
+  flex-shrink: 0; white-space: nowrap;
+}
+.avail-chip-small { background: #f3f4f6; border: 1px solid #d1d5db; color: #9ca3af; text-decoration: line-through; }
+.avail-chip-occ   { background: #fee2e255; border: 1px solid #fca5a5; color: #ef4444; }
+.avail-chip-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.avail-chip-dot-gray { background: #d1d5db; }
+.avail-chip-dot-red  { background: #ef4444; }
 .avail-panel-label {
   font-size: .72rem;
   font-weight: 700;
@@ -6556,11 +6564,7 @@ input[type="number"]:focus, select:focus {
   transition: opacity .12s;
 }
 .avail-search-btn:hover { opacity: .85; }
-#avail-results {
-  padding: 10px 16px 12px;
-  border-top: 1px solid var(--color-border);
-  font-size: .82rem;
-}
+/* avail-results is now inline in the flex row via display:contents */
 
 /* ══════════════════════════════════════════════════════
    RESERVAS — solo filtro de fecha

@@ -2543,8 +2543,8 @@ export class Calendar {
         <span class="avail-sep">Personas</span>
         <input type="number" id="avail-guests" min="1" max="20" value="2" class="avail-input avail-input-num">
         <button id="avail-search-btn" class="avail-search-btn">Ver disponibles →</button>
+        <div id="avail-results" class="avail-results-inline"></div>
       </div>
-      <div id="avail-results" style="display:none"></div>
     `;
 
     const calWrapper = document.querySelector('.cal-wrapper') ?? availBtn.closest('.cal-toolbar')?.nextElementSibling;
@@ -2663,32 +2663,24 @@ export class Calendar {
       const fmt = s => s.split('-').reverse().join('/');
       const chip = u => {
         const color = u.color ?? 'var(--color-primary)';
-        return `<span title="#${u.sort_order} · ${u.name} (hasta ${u.max_guests} pers.)"
-          style="display:inline-flex;align-items:center;gap:4px;padding:2px 7px;border-radius:4px;
-          background:${color}20;border:1px solid ${color}55;font-size:.74rem;font-weight:700;color:var(--color-text);cursor:default">
-          <span style="width:7px;height:7px;border-radius:50%;background:${color};flex-shrink:0"></span>#${u.sort_order}
-        </span>`;
+        return '<span class="avail-chip" style="background:' + color + '20;border:1px solid ' + color + '55;color:var(--color-text)" title="#' + u.sort_order + ' · ' + u.name + ' (hasta ' + u.max_guests + ' pers.)">' +
+               '<span class="avail-chip-dot" style="background:' + color + '"></span>#' + u.sort_order + '</span>';
       };
 
       if (!available.length) {
         results.style.display = 'block';
-        results.innerHTML = `<span style="color:#ef4444;font-size:.76rem">😔 Sin unidades disponibles para ${guests} personas en esas fechas.</span>`;
+        results.style.display = 'contents';
+        results.innerHTML = '<span class="avail-sep avail-result-sep">│</span><span style="color:#ef4444;font-size:.76rem;white-space:nowrap">😔 Sin disponibilidad para ' + guests + ' pers.</span>';
         return;
       }
-      results.style.display = 'block';
-      results.innerHTML = `
-        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 16px 6px">
-          <span style="font-size:.72rem;font-weight:700;color:#16a34a;white-space:nowrap;flex-shrink:0">
-            ✅ ${available.length} disponible${available.length > 1 ? 's' : ''}
-          </span>
-          <span style="font-size:.7rem;color:var(--color-text-3);white-space:nowrap;flex-shrink:0">
-            ${fmt(ci)} → ${fmt(co)} · ${guests} pers.
-          </span>
-          <span style="color:var(--color-border);user-select:none;flex-shrink:0">│</span>
-          ${available.map(chip).join('')}
-          ${tooSmall.map(u => '<span style="display:inline-flex;align-items:center;gap:4px;padding:2px 7px;border-radius:4px;background:#f3f4f6;border:1px solid #d1d5db;font-size:.73rem;font-weight:700;color:#9ca3af;cursor:default;text-decoration:line-through" title="#' + u.sort_order + ' · ' + u.name + ' — max. ' + u.max_guests + ' pers."><span style="width:7px;height:7px;border-radius:50%;background:#d1d5db;flex-shrink:0"></span>#' + u.sort_order + '</span>').join('')}
-          ${occupied.map(u => '<span style="display:inline-flex;align-items:center;gap:4px;padding:2px 7px;border-radius:4px;background:#fee2e255;border:1px solid #fca5a5;font-size:.73rem;font-weight:700;color:#ef4444;cursor:default" title="#' + u.sort_order + ' · ' + u.name + ' — ocupada"><span style="width:7px;height:7px;border-radius:50%;background:#ef4444;flex-shrink:0"></span>#' + u.sort_order + '</span>').join('')}
-        </div>`;
+      results.style.display = 'contents';
+      results.innerHTML =
+        '<span class="avail-sep avail-result-sep">│</span>' +
+        '<span class="avail-result-ok">✅ ' + available.length + ' disponible' + (available.length > 1 ? 's' : '') + '</span>' +
+        '<span class="avail-result-info">' + fmt(ci) + ' → ' + fmt(co) + ' · ' + guests + ' pers.</span>' +
+        available.map(chip).join('') +
+        tooSmall.map(u => '<span class="avail-chip avail-chip-small" title="#' + u.sort_order + ' · ' + u.name + ' — max. ' + u.max_guests + ' pers."><span class="avail-chip-dot avail-chip-dot-gray"></span>#' + u.sort_order + '</span>').join('') +
+        occupied.map(u => '<span class="avail-chip avail-chip-occ" title="#' + u.sort_order + ' · ' + u.name + ' — ocupada"><span class="avail-chip-dot avail-chip-dot-red"></span>#' + u.sort_order + '</span>').join('');
     };
 
     availBtn.addEventListener('click', () => {
