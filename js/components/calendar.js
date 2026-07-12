@@ -2677,13 +2677,17 @@ export class Calendar {
       }
       results.style.display = 'block';
       results.innerHTML = `
-        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-          <span style="font-size:.72rem;font-weight:600;color:#16a34a;white-space:nowrap">
-            ✅ ${available.length} disponible${available.length > 1 ? 's' : ''} · ${fmt(ci)} → ${fmt(co)} · ${guests} pers.
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 16px 6px">
+          <span style="font-size:.72rem;font-weight:700;color:#16a34a;white-space:nowrap;flex-shrink:0">
+            ✅ ${available.length} disponible${available.length > 1 ? 's' : ''}
           </span>
+          <span style="font-size:.7rem;color:var(--color-text-3);white-space:nowrap;flex-shrink:0">
+            ${fmt(ci)} → ${fmt(co)} · ${guests} pers.
+          </span>
+          <span style="color:var(--color-border);user-select:none;flex-shrink:0">│</span>
           ${available.map(chip).join('')}
-          ${tooSmall.map(u => '<span title="#' + u.sort_order + ' · ' + u.name + ' — capacidad insuficiente (max. ' + u.max_guests + ')" style="display:inline-flex;align-items:center;gap:4px;padding:2px 7px;border-radius:4px;background:#f3f4f6;border:1px solid #d1d5db;font-size:.74rem;font-weight:700;color:#9ca3af;cursor:default;text-decoration:line-through"><span style="width:7px;height:7px;border-radius:50%;background:#d1d5db;flex-shrink:0"></span>#' + u.sort_order + '</span>').join('')}
-          ${occupied.map(u => '<span title="#' + u.sort_order + ' · ' + u.name + ' — ocupada" style="display:inline-flex;align-items:center;gap:4px;padding:2px 7px;border-radius:4px;background:#fee2e255;border:1px solid #fca5a5;font-size:.74rem;font-weight:700;color:#ef4444;cursor:default"><span style="width:7px;height:7px;border-radius:50%;background:#ef4444;flex-shrink:0"></span>#' + u.sort_order + '</span>').join('')}
+          ${tooSmall.map(u => '<span style="display:inline-flex;align-items:center;gap:4px;padding:2px 7px;border-radius:4px;background:#f3f4f6;border:1px solid #d1d5db;font-size:.73rem;font-weight:700;color:#9ca3af;cursor:default;text-decoration:line-through" title="#' + u.sort_order + ' · ' + u.name + ' — max. ' + u.max_guests + ' pers."><span style="width:7px;height:7px;border-radius:50%;background:#d1d5db;flex-shrink:0"></span>#' + u.sort_order + '</span>').join('')}
+          ${occupied.map(u => '<span style="display:inline-flex;align-items:center;gap:4px;padding:2px 7px;border-radius:4px;background:#fee2e255;border:1px solid #fca5a5;font-size:.73rem;font-weight:700;color:#ef4444;cursor:default" title="#' + u.sort_order + ' · ' + u.name + ' — ocupada"><span style="width:7px;height:7px;border-radius:50%;background:#ef4444;flex-shrink:0"></span>#' + u.sort_order + '</span>').join('')}
         </div>`;
     };
 

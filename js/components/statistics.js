@@ -483,8 +483,10 @@ export class Statistics {
         (b.booking_units ?? []).forEach(({ unit_id }) => {
           if (!occMap[unit_id]) return;
           let d = new Date(Math.max(new Date(b.check_in + 'T00:00:00'), new Date(firstDay + 'T00:00:00')));
-          const end = new Date(Math.min(new Date(b.check_out + 'T00:00:00'), new Date(lastDayStr + 'T23:59:59')));
-          while (d <= end) {
+          // checkout day is NOT occupied — guest leaves that morning
+          const end = new Date(b.check_out + 'T00:00:00');
+          const cap  = new Date(lastDayStr + 'T00:00:00');
+          while (d < end && d <= cap) {
             occMap[unit_id].add(d.getDate());
             d.setDate(d.getDate() + 1);
           }
@@ -510,7 +512,7 @@ export class Statistics {
         const dayOfW = date.getDay();
         const isWknd = dayOfW === 0 || dayOfW === 6;
         const isToday = d === todayDay;
-        return `<div class="hm-day-head ${isWknd ? 'hm-weekend' : ''} ${isToday ? 'hm-today' : ''}"
+        return `<div class="hm-day-head ${isWknd ? 'hm-weekend' : ''} ${isToday ? 'hm-today-head' : ''}"
                      title="${date.toLocaleDateString('es-AR', {weekday:'long', day:'numeric'})}">
           <div class="hm-day-num">${d}</div>
           <div class="hm-day-name">${dayNames[dayOfW]}</div>
@@ -523,9 +525,30 @@ export class Statistics {
         const cells = days.map(d => {
           const occupied = occMap[u.id].has(d);
           const isToday  = d === todayDay;
-          return `<div class="hm-cell ${occupied ? 'hm-occ' : 'hm-free'} ${isToday ? 'hm-today' : ''}"
-                       style="${occupied ? `background:${color};opacity:.85` : ''}"
-                       title="${u.name} — día ${d}: ${occupied ? 'Ocupado' : 'Libre'}">
+          // Find booking info for this cell
+          const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+          const booking = occupied ? bookings.find(b =>
+            b.check_in <= dateStr && b.check_out > dateStr &&
+            (b.booking_units ?? []).some(bu => bu.unit_id === u.id)
+          ) : null;
+          const isCheckIn  = booking?.check_in === dateStr;
+          const isCheckOut = bookings.some(b =>
+            b.check_out === dateStr && (b.booking_units ?? []).some(bu => bu.unit_id === u.id)
+          );
+          const tip = occupied
+            ? `${u.name} · ${dateStr}\n${isCheckIn ? '→ Check-in' : isCheckOut ? '← Check-out' : '● Ocupado'}`
+            : isCheckOut
+              ? `${u.name} · ${dateStr}\n← Check-out (libre desde mediodía)`
+              : `${u.name} · ${dateStr}\nLibre`;
+          const cellBg = occupied
+            ? `background:${color};opacity:${isCheckIn ? '1' : '.8'}`
+            : isCheckOut ? 'background:rgba(34,197,94,.12)' : '';
+          const borderL = isCheckIn  ? `border-left:2px solid ${color};border-radius:3px 0 0 3px` : '';
+          const borderR = isCheckOut && !occupied ? `border-right:2px solid #22c55e;border-radius:0 3px 3px 0` : '';
+          return `<div class="hm-cell ${occupied ? 'hm-occ' : 'hm-free'} ${isToday ? 'hm-today-cell' : ''} ${isCheckIn ? 'hm-checkin' : ''}"
+                       style="${cellBg};${borderL};${borderR}"
+                       title="${tip}">
+            ${isCheckIn ? '<span class="hm-ci-dot"></span>' : ''}
           </div>`;
         }).join('');
 
@@ -554,14 +577,24 @@ export class Statistics {
                      title="Día ${d}: ${pct}% ocupado"></div>`;
       }).join('');
 
+      const avgOccPct = Math.round(dailyOcc.reduce((s,v) => s+v, 0) / daysInMonth);
+      const peakDays  = dailyOcc.filter(v => v >= 90).length;
+      const freeDays  = dailyOcc.filter(v => v === 0).length;
       panel.innerHTML = `
         <div class="hm-header-row">
           <h4>Mapa de Ocupación — ${MONTH_NAMES[month]} ${year}</h4>
+          <div class="hm-summary-stats">
+            <span class="hm-stat"><strong>${avgOccPct}%</strong> prom. mes</span>
+            <span class="hm-stat-sep">·</span>
+            <span class="hm-stat"><strong>${peakDays}</strong> días 100%</span>
+            <span class="hm-stat-sep">·</span>
+            <span class="hm-stat"><strong>${freeDays}</strong> días libres</span>
+          </div>
           <div class="hm-legend">
-            <span class="hm-leg-item"><span class="hm-leg-dot" style="background:#93c5fd"></span>Baja</span>
-            <span class="hm-leg-item"><span class="hm-leg-dot" style="background:#22c55e"></span>Media</span>
-            <span class="hm-leg-item"><span class="hm-leg-dot" style="background:#f59e0b"></span>Alta</span>
-            <span class="hm-leg-item"><span class="hm-leg-dot" style="background:#ef4444"></span>Completo</span>
+            <span class="hm-leg-item"><span class="hm-leg-dot" style="background:#93c5fd"></span>1–39%</span>
+            <span class="hm-leg-item"><span class="hm-leg-dot" style="background:#22c55e"></span>40–69%</span>
+            <span class="hm-leg-item"><span class="hm-leg-dot" style="background:#f59e0b"></span>70–89%</span>
+            <span class="hm-leg-item"><span class="hm-leg-dot" style="background:#ef4444"></span>90–100%</span>
           </div>
         </div>
         <div class="heatmap-scroll">

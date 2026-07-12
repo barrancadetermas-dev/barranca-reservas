@@ -451,7 +451,15 @@ svg { flex-shrink: 0; }
 /* ── 9. MAIN CONTENT & SECTIONS ──────────────────── */
 .main-content { flex: 1; overflow-y: auto; padding: var(--sp-24); }
 .section { display: none; }
-.section.active { display: block; }
+.section.active {
+  display: block;
+  /* Padding base uniforme — overrides específicos solo donde realmente difiere */
+  padding: var(--sp-20) var(--sp-24);
+}
+/* Excepciones que necesitan padding 0 en la sección (manejan el propio) */
+#section-calendar.active,
+#section-bookings.active,
+#section-dashboard.active { padding: 0; }
 
 /* ── 10. CARDS ───────────────────────────────────── */
 .card {
@@ -6266,7 +6274,7 @@ input[type="number"]:focus, select:focus {
 #cal-search-input {
   height: 32px;
   padding: 0 10px 0 32px;
-  border-radius: 7px;
+  border-radius: var(--r-sm);
   border: 1px solid var(--color-border);
   background: var(--color-surface-2);
   color: var(--color-text);
@@ -6519,7 +6527,7 @@ input[type="number"]:focus, select:focus {
 .avail-input {
   height: 30px;
   padding: 0 8px;
-  border-radius: 6px;
+  border-radius: var(--r-sm);
   border: 1px solid var(--color-border);
   background: var(--color-surface);
   color: var(--color-text);
@@ -6616,4 +6624,116 @@ input[type="number"]:focus, select:focus {
 /* Reservas — tabs y lista */
 .bl-tabs-row .tabs-bar { border-bottom: none; }
 .bl-tabs-row { border-bottom: 1px solid var(--color-border); margin-bottom: 12px; }
+
+
+/* ══════════════════════════════════════════════════════
+   HEATMAP — mejoras visuales y correcciones
+══════════════════════════════════════════════════════ */
+.hm-today-head {
+  background: var(--color-primary-l) !important;
+  border-radius: var(--r-sm) var(--r-sm) 0 0;
+  position: relative;
+}
+.hm-today-head .hm-day-num {
+  color: var(--color-primary) !important;
+  font-weight: 800 !important;
+  font-size: .9rem !important;
+}
+.hm-today-head::after {
+  content: '';
+  position: absolute;
+  bottom: -2px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 4px; height: 4px;
+  border-radius: 50%;
+  background: var(--color-primary);
+}
+.hm-today-cell {
+  outline: 2px solid var(--color-primary) !important;
+  outline-offset: -1px;
+  z-index: 1;
+  position: relative;
+}
+.hm-checkin {
+  border-left: 3px solid rgba(255,255,255,.6) !important;
+}
+.hm-ci-dot {
+  display: block;
+  width: 4px; height: 4px;
+  border-radius: 50%;
+  background: rgba(255,255,255,.8);
+  margin: auto;
+}
+.hm-summary-stats {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: .78rem;
+  color: var(--color-text-2);
+}
+.hm-summary-stats strong { color: var(--color-text); font-weight: 700; }
+.hm-stat-sep { color: var(--color-border-2); }
+.hm-header-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--color-border);
+}
+.hm-header-row h4 {
+  font-size: .9rem;
+  font-weight: 700;
+  color: var(--color-text);
+  flex: 1;
+  min-width: 200px;
+}
+
+/* ══════════════════════════════════════════════════════
+   DARK MODE — componentes nuevos
+══════════════════════════════════════════════════════ */
+[data-theme="dark"] .avail-filter-panel {
+  background: var(--color-surface-2);
+  border-color: var(--color-border);
+}
+[data-theme="dark"] .avail-input {
+  background: var(--color-surface);
+  color: var(--color-text);
+  border-color: var(--color-border);
+}
+[data-theme="dark"] .avail-search-btn {
+  background: var(--color-primary);
+}
+[data-theme="dark"] .bl-search-input {
+  background: var(--color-surface-2);
+  color: var(--color-text);
+  border-color: var(--color-border);
+}
+[data-theme="dark"] .bl-select {
+  background: var(--color-surface);
+  color: var(--color-text);
+  border-color: var(--color-border);
+}
+[data-theme="dark"] .fin-period-btn {
+  background: var(--color-surface-2);
+  color: var(--color-text-2);
+  border-color: var(--color-border);
+}
+[data-theme="dark"] .fin-period-btn.active {
+  background: var(--color-primary);
+  color: #fff;
+}
+[data-theme="dark"] #stats-toolbar select {
+  background: var(--color-surface);
+  color: var(--color-text);
+  border-color: var(--color-border);
+}
+[data-theme="dark"] .bl-date-filter-row {
+  border-color: var(--color-border);
+}
+[data-theme="dark"] .hm-today-head {
+  background: rgba(24,63,150,.25) !important;
+}
 
