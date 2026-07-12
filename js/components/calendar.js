@@ -2531,25 +2531,33 @@ export class Calendar {
     filterPanel.id = 'avail-filter-panel';
     const todayStr    = localToday();
     const tomorrowStr = this._addDays(todayStr, 1);
-    filterPanel.style.cssText = 'display:none;flex-direction:column;background:var(--color-surface-2,#f8f9fa);border:1px solid var(--color-border,#e5e7eb);border-radius:10px;overflow:hidden;margin-top:8px;font-size:.78rem;color:var(--color-text);';
+    filterPanel.className = 'avail-filter-panel';
+    filterPanel.style.display = 'none';
     filterPanel.innerHTML = `
-      <div style="display:flex;align-items:center;gap:8px;flex-wrap:nowrap;overflow-x:auto;padding:8px 14px">
-        <span style="font-weight:600;font-size:.72rem;color:var(--color-text-3);text-transform:uppercase;letter-spacing:.05em;white-space:nowrap">🔍 Disponibilidad</span>
-        <span style="font-size:.72rem;color:var(--color-text-3);white-space:nowrap">Check-in</span>
-        <input type="date" id="avail-checkin" value="${todayStr}"
-          style="border:1px solid var(--color-border,#e5e7eb);border-radius:6px;padding:3px 6px;font-size:.75rem;background:var(--color-surface);color:var(--color-text);min-width:0">
-        <span style="font-size:.72rem;color:var(--color-text-3);white-space:nowrap">Check-out</span>
-        <input type="date" id="avail-checkout" value="${tomorrowStr}"
-          style="border:1px solid var(--color-border,#e5e7eb);border-radius:6px;padding:3px 6px;font-size:.75rem;background:var(--color-surface);color:var(--color-text);min-width:0">
-        <span style="font-size:.72rem;color:var(--color-text-3);white-space:nowrap">Pers.</span>
-        <input type="number" id="avail-guests" min="1" max="20" value="2"
-          style="width:48px;border:1px solid var(--color-border,#e5e7eb);border-radius:6px;padding:3px 6px;font-size:.75rem;background:var(--color-surface);color:var(--color-text)">
-        <button id="avail-search-btn"
-          style="padding:4px 11px;border-radius:6px;border:none;background:var(--color-primary,#6366f1);color:#fff;font-size:.75rem;font-weight:600;cursor:pointer;white-space:nowrap;flex-shrink:0">
-          Ver disponibles
-        </button>
+      <div class="avail-panel-inner">
+        <div class="avail-panel-header">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <span>Buscar disponibilidad</span>
+        </div>
+        <div class="avail-panel-fields">
+          <label class="avail-field">
+            <span class="avail-label">Check-in</span>
+            <input type="date" id="avail-checkin" value="${todayStr}" class="avail-input">
+          </label>
+          <label class="avail-field">
+            <span class="avail-label">Check-out</span>
+            <input type="date" id="avail-checkout" value="${tomorrowStr}" class="avail-input">
+          </label>
+          <label class="avail-field avail-field-sm">
+            <span class="avail-label">Personas</span>
+            <input type="number" id="avail-guests" min="1" max="20" value="2" class="avail-input">
+          </label>
+          <button id="avail-search-btn" class="avail-search-btn">
+            Ver disponibles →
+          </button>
+        </div>
       </div>
-      <div id="avail-results" style="display:none;width:100%;padding:6px 14px 8px;border-top:1px solid var(--color-border,#e5e7eb);margin-top:0"></div>
+      <div id="avail-results" style="display:none"></div>
     `;
 
     const calWrapper = document.querySelector('.cal-wrapper') ?? availBtn.closest('.cal-toolbar')?.nextElementSibling;

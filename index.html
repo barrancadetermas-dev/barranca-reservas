@@ -585,8 +585,8 @@
         <div class="cal-wrapper">
           <div id="calendar-grid" class="cal-grid month-grid"></div>
         </div>
-        <div id="cal-mini-agenda-list"></div>
-        <div id="cal-tariff-wrap"></div>
+        <div id="cal-mini-agenda-list" style="margin-top:24px"></div>
+        <div id="cal-tariff-wrap" style="margin-top:24px;margin-bottom:20px"></div>
       </section>
 
       <!-- ═══ SECCIÓN: RESERVAS ═══ -->
@@ -657,8 +657,8 @@
             <button class="tab active" data-tab="units">📐 Unidades</button>
             <button class="tab" data-tab="financ">💰 Financiero</button>
             <button class="tab" data-tab="heatmap">🗓️ Heatmap</button>
-            <button class="tab" data-tab="pl">📊 P&amp;L</button>
-            <button class="tab" data-tab="revenue">📈 Revenue</button>
+            <button class="tab" data-tab="pl">📊 Ganancias</button>
+            <button class="tab" data-tab="revenue">💡 Precios</button>
           </div>
           <div id="stats-toolbar" style="display:flex;gap:8px;align-items:center;margin:12px 0">
             <select id="stats-month" class="input input-sm"></select>
@@ -666,10 +666,10 @@
             <button id="btn-load-stats" class="btn btn-primary btn-sm">Generar Reporte</button>
           </div>
           <div id="stats-units-panel"><div id="stats-units-grid"></div></div>
-          <div id="stats-financ-panel" class="hidden"></div>
+          <div id="stats-financ-panel" class="hidden"><div id="financ-container"></div></div>
           <div id="stats-heatmap-panel" class="hidden"></div>
           <div id="stats-pl-panel" class="hidden"></div>
-          <div id="stats-revenue-panel" class="hidden"></div>
+          <div id="stats-revenue-panel" class="hidden"><div id="revenue-container"></div></div>
           <div id="stats-charts-panel" class="hidden"></div>
           <div id="charts-container"></div>
         </div>
@@ -731,11 +731,10 @@
       <section id="section-gmail" class="section">
         <div style="width:100%;padding:20px">
           <div id="gmail-inbox-root">
-            <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px">
+            <div class="gmail-toolbar">
               <button id="gmail-tab-inbox" class="btn btn-primary btn-sm">📥 Recibidos</button>
               <button id="gmail-tab-sent" class="btn btn-outline btn-sm">📤 Enviados</button>
-              <div style="flex:1"></div>
-              <button id="gmail-refresh-btn" class="btn btn-outline btn-sm">↺ Actualizar</button>
+              <button id="gmail-refresh-btn">↺ Actualizar</button>
             </div>
             <div id="gmail-list" style="display:flex;flex-direction:column;gap:4px">
               <p class="empty-state-sm" style="padding:40px;text-align:center">Cargando correos...</p>
