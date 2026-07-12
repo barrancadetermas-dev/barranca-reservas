@@ -6056,3 +6056,8 @@ html, body {
   /* Resumen de voucher compacto */
   .voucher-section { padding: 10px !important; }
 }
+
+/* ══ Gmail Section ═══════════════════════════════ */
+.gmail-thread-item { transition: background .12s; }
+.gmail-unread .gmail-thread-from { font-weight: 700 !important; }
+#section-gmail .main-content-inner { max-width: 860px; margin: 0 auto; }
