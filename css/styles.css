@@ -5827,19 +5827,15 @@ html, body {
 .dash-card-uniform {
   display: flex !important;
   flex-direction: column !important;
-  min-height: 160px;
-  min-width: 0; /* permite que la card se achique dentro de su columna del grid en vez de forzar overflow */
+  min-height: 0;
+  min-width: 0;
 }
 
-/* Card "Ocupación próx. días" — el gráfico necesita más alto que el resto */
-[data-card-id="next-event"] { min-height: 220px; }
-/* Card "Ocupación hoy" — la dona se agrandó, necesita un poco más de alto */
-[data-card-id="occ"] { min-height: 200px; }
-
-/* Grid dashboard: 5 col fijas desktop */
+/* Grid dashboard: 5 col × 2 filas, altura fija por fila para que se vean alineadas */
 #dashboard-cards {
   grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
-  align-items: stretch;
+  grid-template-rows: 190px 220px !important;
+  align-items: stretch !important;
 }
 @media (max-width: 1100px) {
   #dashboard-cards { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
