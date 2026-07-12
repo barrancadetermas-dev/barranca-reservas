@@ -117,7 +117,20 @@ function fmtDate(s) {
 }
 
 function showNoAuth(el) {
-  el.innerHTML = '<div style="padding:40px;text-align:center"><div style="font-size:2rem;margin-bottom:12px">📧</div><p style="font-size:.88rem;color:var(--color-text-2)">Conectá tu cuenta Gmail en Claude.ai para ver los correos</p></div>';
+  el.innerHTML = `<div style="padding:40px;text-align:center;max-width:400px;margin:0 auto">
+    <div style="font-size:3rem;margin-bottom:16px">📧</div>
+    <div style="font-size:1rem;font-weight:600;color:var(--color-text);margin-bottom:8px">Gmail no conectado</div>
+    <p style="font-size:.82rem;color:var(--color-text-2);line-height:1.6;margin-bottom:16px">
+      Para ver tus correos de <strong>barrancadetermas@gmail.com</strong> directamente en MILA,
+      conectá tu cuenta de Google desde Claude.ai.
+    </p>
+    <div style="font-size:.75rem;color:var(--color-text-3);background:var(--color-surface-2);border-radius:8px;padding:10px 14px;text-align:left;line-height:1.8">
+      1. Abrí Claude.ai en el navegador<br>
+      2. Menú → Conectores → Gmail<br>
+      3. Hacé clic en "Conectar"<br>
+      4. Volvé acá y recargá la página
+    </div>
+  </div>`;
 }
 
 function esc(s) { return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
