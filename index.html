@@ -169,9 +169,6 @@
         <span class="nav-label">Huéspedes</span>
       </a>
       <a href="#" class="nav-item" data-section="waitlist">
-        <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="19" height="19"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 12h6M9 16h4"/></svg></span>
-        <span class="nav-label">Lista de espera</span>
-      </a>
         <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="19" height="19"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span>
         <span class="nav-label">Lista de espera</span>
         <span class="nav-badge" id="nav-badge-waitlist" style="display:none">0</span>
@@ -483,20 +480,27 @@
 
           <!-- FILA 2 — EL MES -->
 
-          <!-- RevPAR IDs ocultos — necesarios para el JS pero sin card visible -->
-          <div style="display:none" aria-hidden="true">
-            <span id="dash-revpar-val"></span><span id="dash-adr-val"></span>
-            <span id="dash-occ-month-val"></span><span id="dash-nights-sold-val"></span>
-          </div>
-
-          <!-- Posición 1 fila 2: Reservas del mes -->
-
-          <div class="card dash-card-uniform" data-card-id="rmes">
-            <div class="card-header">
-              <h3>📋 Reservas del mes</h3>
-              <span id="dash-rmes-badge" style="font-size:.65rem;background:#f0fdf4;color:#15803d;padding:2px 8px;border-radius:4px;font-weight:700">—</span>
+          <div class="card dash-card-uniform" data-card-id="revpar">
+            <div class="card-header"><h3>📈 RevPAR / ADR</h3></div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:10px">
+              <div>
+                <div style="font-size:1.3rem;font-weight:800;color:var(--color-text)" id="dash-revpar-val">—</div>
+                <div style="font-size:.7rem;color:var(--color-text-3);font-weight:600">RevPAR</div>
+              </div>
+              <div>
+                <div style="font-size:1.3rem;font-weight:800;color:var(--color-text)" id="dash-adr-val">—</div>
+                <div style="font-size:.7rem;color:var(--color-text-3);font-weight:600">ADR</div>
+              </div>
             </div>
-
+            <div style="display:flex;justify-content:space-between;font-size:.78rem;margin-bottom:4px">
+              <span style="color:var(--color-text-3)">Ocupación mes</span>
+              <span style="font-weight:700;color:var(--color-text)" id="dash-occ-month-val">—</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;font-size:.78rem;margin-top:auto">
+              <span style="color:var(--color-text-3)">Noches vendidas</span>
+              <span style="font-weight:700;color:var(--color-text)" id="dash-nights-sold-val">—</span>
+            </div>
+          </div>
 
           <div class="card dash-card-uniform" data-card-id="next-event">
             <div class="card-header"><h3>📈 Ocupación próx. días</h3></div>
@@ -523,7 +527,14 @@
               <span style="font-weight:700;color:var(--color-text)" id="dash-total-val">—</span>
             </div>
             <div id="dash-cobros-pct" style="font-size:.68rem;color:var(--color-text-3);margin-top:2px">—</div>
-          </div>            <div style="font-size:1.5rem;font-weight:800;color:var(--color-text)" id="dash-rmes-val">—</div>
+          </div>
+
+          <div class="card dash-card-uniform" data-card-id="rmes">
+            <div class="card-header">
+              <h3>📋 Reservas del mes</h3>
+              <span id="dash-rmes-badge" style="font-size:.65rem;background:#f0fdf4;color:#15803d;padding:2px 8px;border-radius:4px;font-weight:700">—</span>
+            </div>
+            <div style="font-size:1.5rem;font-weight:800;color:var(--color-text)" id="dash-rmes-val">—</div>
             <div id="dash-rmes-vs" style="font-size:.72rem;color:var(--color-text-3);margin-bottom:6px">—</div>
             <div style="font-size:.78rem;color:var(--color-text-3);margin-top:auto">
               Ticket prom. <span style="font-weight:700;color:var(--color-text)" id="dash-rmes-ticket">—</span>
@@ -552,7 +563,7 @@
           <!-- Limpieza (oculta por defecto) -->
           <div id="dashboard-cleaning-widget" class="card dash-card-uniform" data-card-id="cleaning" style="display:none"></div>
 
-          <!-- Fila 2 pos 5: Dólar oficial -->
+          <!-- Dólar -->
           <div class="card dash-card-uniform" data-card-id="dollar">
             <div class="card-header">
               <h3>💱 Dólar oficial</h3>
@@ -563,7 +574,180 @@
             </div>
           </div>
 
-        </div><!-- end dashboard-cards grid -->
+        </div><!-- end app-shell -->
+
+      </section><!-- end section-dashboard -->
+
+      <!-- ═══ SECCIÓN: CALENDARIO ═══ -->
+      <section id="section-calendar" class="section">
+        <div class="cal-toolbar" id="cal-toolbar">
+          <div style="display:flex;align-items:center;gap:6px">
+            <button class="btn btn-icon btn-sm" id="cal-prev">‹</button>
+            <button class="btn btn-sm" id="cal-today">Hoy</button>
+            <button class="btn btn-icon btn-sm" id="cal-next">›</button>
+            <span id="cal-month-title" style="font-size:.85rem;font-weight:600;color:var(--color-text);margin-left:4px"></span>
+          </div>
+          <div style="display:flex;align-items:center;gap:6px">
+            <div style="position:relative">
+              <input id="cal-search-input" type="text" placeholder="Buscar huésped…" class="input-sm">
+              <button id="cal-search-clear" class="hidden" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--color-text-3)">✕</button>
+            </div>
+            <button class="btn btn-icon btn-sm" id="cal-avail-toggle" title="Disponibilidad">📋</button>
+            <button class="btn btn-icon btn-sm" id="cal-goto-today">⊙</button>
+          </div>
+        </div>
+        <div id="cal-summary-bar"></div>
+        <div class="cal-wrapper">
+          <div id="calendar-grid" class="month-grid"></div>
+        </div>
+        <div id="cal-mini-agenda-list"></div>
+        <div id="cal-tariff-wrap"></div>
+      </section>
+
+      <!-- ═══ SECCIÓN: RESERVAS ═══ -->
+      <section id="section-bookings" class="section">
+        <div class="main-content-inner">
+          <div class="tabs-bar">
+            <button class="tab active" data-tab="active">Reservas abiertas</button>
+            <button class="tab" data-tab="history">Historial</button>
+          </div>
+          <div class="bl-filters-row" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:10px 0">
+            <input type="text" id="booking-search" placeholder="Buscar huésped…" class="input-sm" style="min-width:180px">
+            <select id="filter-unit" class="input-sm"></select>
+            <select id="filter-status" class="input-sm">
+              <option value="">Todos los estados</option>
+              <option value="pending">Sin seña</option>
+              <option value="partial">Señada</option>
+              <option value="paid">Abonada</option>
+            </select>
+            <div style="display:flex;gap:4px;flex-wrap:wrap">
+              <button class="source-filter-btn btn btn-xs btn-outline active" data-source="">Todos</button>
+              <button class="source-filter-btn btn btn-xs btn-outline" data-source="direct">Directo</button>
+              <button class="source-filter-btn btn btn-xs btn-outline" data-source="booking">Booking</button>
+              <button class="source-filter-btn btn btn-xs btn-outline" data-source="airbnb">Airbnb</button>
+              <button class="source-filter-btn btn btn-xs btn-outline" data-source="walkin">Espontáneo</button>
+            </div>
+            <input type="date" id="filter-date-from" class="input-sm">
+            <input type="date" id="filter-date-to" class="input-sm">
+            <div style="display:flex;gap:4px">
+              <button class="date-preset-btn btn btn-xs btn-outline" data-preset="today">Hoy</button>
+              <button class="date-preset-btn btn btn-xs btn-outline" data-preset="week">7d</button>
+              <button class="date-preset-btn btn btn-xs btn-outline" data-preset="month">Mes</button>
+            </div>
+            <button id="filter-date-clear" class="btn btn-xs btn-outline">✕</button>
+          </div>
+          <div id="bookings-list"></div>
+          <div id="btn-load-more-wrap" style="text-align:center;margin-top:12px;display:none">
+            <button id="btn-load-more" class="btn btn-outline">Cargar más</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ═══ SECCIÓN: ESTADÍSTICAS ═══ -->
+      <section id="section-statistics" class="section">
+        <div class="main-content-inner">
+          <div class="tabs-bar">
+            <button class="tab active" data-stats-tab="occ">Ocupación</button>
+            <button class="tab" data-stats-tab="financ">Financiero</button>
+            <button class="tab" data-stats-tab="units">Unidades</button>
+            <button class="tab" data-stats-tab="heatmap">Heatmap</button>
+          </div>
+          <div id="stats-toolbar" style="display:flex;gap:8px;align-items:center;margin:10px 0">
+            <select id="stats-month" class="input-sm">
+              <option value="1">Enero</option><option value="2">Febrero</option>
+              <option value="3">Marzo</option><option value="4">Abril</option>
+              <option value="5">Mayo</option><option value="6">Junio</option>
+              <option value="7">Julio</option><option value="8">Agosto</option>
+              <option value="9">Septiembre</option><option value="10">Octubre</option>
+              <option value="11">Noviembre</option><option value="12">Diciembre</option>
+            </select>
+            <select id="stats-year" class="input-sm"></select>
+            <button id="btn-load-stats" class="btn btn-primary btn-sm">Ver</button>
+          </div>
+          <div id="stats-occ-panel"></div>
+          <div id="stats-financ-panel" class="hidden"></div>
+          <div id="stats-units-panel" class="hidden"><div id="stats-units-grid"></div></div>
+          <div id="stats-heatmap-panel" class="hidden"></div>
+          <div id="stats-pl-panel" class="hidden"></div>
+          <div id="charts-container"></div>
+        </div>
+      </section>
+
+      <!-- ═══ SECCIÓN: OPERACIONES ═══ -->
+      <section id="section-operations" class="section">
+        <div class="main-content-inner">
+          <div id="operations-container"></div>
+        </div>
+      </section>
+
+      <!-- ═══ SECCIÓN: HUÉSPEDES ═══ -->
+      <section id="section-guests" class="section">
+        <div class="main-content-inner">
+          <div id="guests-container"></div>
+        </div>
+      </section>
+
+      <!-- ═══ SECCIÓN: LISTA DE ESPERA ═══ -->
+      <section id="section-waitlist" class="section">
+        <div class="main-content-inner">
+          <div id="waitlist-container"></div>
+        </div>
+      </section>
+
+      <!-- ═══ SECCIÓN: AUDITORÍA ═══ -->
+      <section id="section-audit" class="section">
+        <div class="main-content-inner">
+          <div id="audit-container"></div>
+        </div>
+      </section>
+
+      <!-- ═══ SECCIÓN: CONFIGURACIÓN ═══ -->
+      <section id="section-config" class="section">
+        <div class="main-content-inner"></div>
+      </section>
+
+      <!-- ═══ SECCIÓN: TARIFAS ═══ -->
+      <section id="section-tariffs" class="section">
+        <div class="main-content-inner">
+          <div id="tariffs-mobile-container"></div>
+        </div>
+      </section>
+
+      <!-- ═══ SECCIÓN: MILA ═══ -->
+      <section id="section-mila" class="section">
+        <div class="mila-hero"></div>
+      </section>
+
+      <!-- ═══ SECCIÓN: RECORDATORIOS ═══ -->
+      <section id="section-reminders" class="section">
+        <div class="main-content-inner">
+          <div id="reminders-full-list"></div>
+        </div>
+      </section>
+
+      <!-- ═══ SECCIÓN: GMAIL ═══ -->
+      <section id="section-gmail" class="section">
+        <div class="main-content-inner" style="max-width:860px;padding:20px">
+          <div id="gmail-inbox-root">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px">
+              <button id="gmail-tab-inbox" class="btn btn-primary btn-sm">📥 Recibidos</button>
+              <button id="gmail-tab-sent" class="btn btn-outline btn-sm">📤 Enviados</button>
+              <div style="flex:1"></div>
+              <button id="gmail-refresh-btn" class="btn btn-outline btn-sm">↺ Actualizar</button>
+            </div>
+            <div id="gmail-list" style="display:flex;flex-direction:column;gap:4px">
+              <p class="empty-state-sm" style="padding:40px;text-align:center">Cargando correos...</p>
+            </div>
+            <div id="gmail-detail" class="hidden" style="margin-top:16px;background:var(--color-surface);border:1px solid var(--color-border);border-radius:12px;padding:20px">
+              <button id="gmail-back-btn" class="btn btn-outline btn-sm" style="margin-bottom:12px">← Volver</button>
+              <div id="gmail-detail-content"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </main><!-- end main-content -->
+
 
 <!-- ═══════════════════════════════════════
      MODAL: NUEVA / EDITAR RESERVA
@@ -1272,203 +1456,6 @@
     </div>
   </div>
 </div>
-
-<!-- ═══════════════════════════════════════
-     SECCIÓN: CALENDARIO
-═══════════════════════════════════════ -->
-<section id="section-calendar" class="section">
-  <div class="cal-toolbar" id="cal-toolbar">
-    <div class="cal-toolbar-left">
-      <button class="btn btn-icon" id="cal-prev" title="Período anterior">‹</button>
-      <button class="btn btn-icon" id="cal-today" title="Ir a hoy">Hoy</button>
-      <button class="btn btn-icon" id="cal-next" title="Período siguiente">›</button>
-      <span id="cal-month-title" class="cal-month-title"></span>
-    </div>
-    <div class="cal-toolbar-right">
-      <div class="cal-search-wrap">
-        <input id="cal-search-input" type="text" placeholder="Buscar huésped…" class="cal-search-input">
-        <button id="cal-search-clear" class="cal-search-clear hidden">✕</button>
-      </div>
-      <button class="btn btn-icon" id="cal-avail-toggle" title="Ver disponibilidad">📋</button>
-      <button class="btn btn-icon" id="cal-goto-today" title="Ir a hoy">⊙</button>
-    </div>
-  </div>
-  <div id="cal-summary-bar"></div>
-  <div class="cal-wrapper">
-    <div id="calendar-grid" class="month-grid"></div>
-  </div>
-  <div id="cal-mini-agenda-list" class="cal-mini-agenda"></div>
-  <div id="cal-tariff-wrap"></div>
-</section>
-
-<!-- ═══════════════════════════════════════
-     SECCIÓN: RESERVAS
-═══════════════════════════════════════ -->
-<section id="section-bookings" class="section">
-  <div class="main-content-inner">
-    <div class="tabs-bar">
-      <button class="tab active" data-tab="active">Reservas abiertas</button>
-      <button class="tab" data-tab="history">Historial</button>
-    </div>
-    <div class="bl-filters-row" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:10px 0">
-      <input type="text" id="booking-search" placeholder="Buscar huésped…" class="input-sm" style="min-width:180px">
-      <select id="filter-unit" class="input-sm"></select>
-      <select id="filter-status" class="input-sm">
-        <option value="">Todos los estados</option>
-        <option value="pending">Sin seña</option>
-        <option value="partial">Señada</option>
-        <option value="paid">Abonada</option>
-      </select>
-      <div style="display:flex;gap:4px">
-        <button class="source-filter-btn btn btn-xs btn-outline active" data-source="">Todos</button>
-        <button class="source-filter-btn btn btn-xs btn-outline" data-source="direct">Directo</button>
-        <button class="source-filter-btn btn btn-xs btn-outline" data-source="booking">Booking</button>
-        <button class="source-filter-btn btn btn-xs btn-outline" data-source="airbnb">Airbnb</button>
-      </div>
-      <input type="date" id="filter-date-from" class="input-sm" title="Desde">
-      <input type="date" id="filter-date-to" class="input-sm" title="Hasta">
-      <div style="display:flex;gap:4px">
-        <button class="date-preset-btn btn btn-xs btn-outline" data-preset="today">Hoy</button>
-        <button class="date-preset-btn btn btn-xs btn-outline" data-preset="week">7d</button>
-        <button class="date-preset-btn btn btn-xs btn-outline" data-preset="month">Mes</button>
-      </div>
-      <button id="filter-date-clear" class="btn btn-xs btn-outline">✕</button>
-    </div>
-    <div id="bookings-list"></div>
-    <div id="btn-load-more-wrap" style="text-align:center;margin-top:12px;display:none">
-      <button id="btn-load-more" class="btn btn-outline">Cargar más</button>
-    </div>
-  </div>
-</section>
-
-<!-- ═══════════════════════════════════════
-     SECCIÓN: ESTADÍSTICAS
-═══════════════════════════════════════ -->
-<section id="section-statistics" class="section">
-  <div class="main-content-inner">
-    <div class="tabs-bar">
-      <button class="tab active" data-stats-tab="occ">Ocupación</button>
-      <button class="tab" data-stats-tab="financ">Financiero</button>
-      <button class="tab" data-stats-tab="units">Unidades</button>
-      <button class="tab" data-stats-tab="heatmap">Heatmap</button>
-    </div>
-    <div id="stats-toolbar" style="display:flex;gap:8px;align-items:center;margin:10px 0">
-      <select id="stats-month" class="input-sm">
-        <option value="1">Enero</option><option value="2">Febrero</option>
-        <option value="3">Marzo</option><option value="4">Abril</option>
-        <option value="5">Mayo</option><option value="6">Junio</option>
-        <option value="7">Julio</option><option value="8">Agosto</option>
-        <option value="9">Septiembre</option><option value="10">Octubre</option>
-        <option value="11">Noviembre</option><option value="12">Diciembre</option>
-      </select>
-      <select id="stats-year" class="input-sm"></select>
-      <button id="btn-load-stats" class="btn btn-primary btn-sm">Ver</button>
-    </div>
-    <div id="stats-occ-panel"></div>
-    <div id="stats-financ-panel" class="hidden"></div>
-    <div id="stats-units-panel" class="hidden">
-      <div id="stats-units-grid"></div>
-    </div>
-    <div id="stats-heatmap-panel" class="hidden"></div>
-    <div id="stats-pl-panel" class="hidden"></div>
-    <div id="charts-container"></div>
-  </div>
-</section>
-
-<!-- ═══════════════════════════════════════
-     SECCIÓN: OPERACIONES
-═══════════════════════════════════════ -->
-<section id="section-operations" class="section">
-  <div class="main-content-inner">
-    <div id="operations-container"></div>
-  </div>
-</section>
-
-<!-- ═══════════════════════════════════════
-     SECCIÓN: HUÉSPEDES
-═══════════════════════════════════════ -->
-<section id="section-guests" class="section">
-  <div class="main-content-inner">
-    <div id="guests-container"></div>
-  </div>
-</section>
-
-<!-- ═══════════════════════════════════════
-     SECCIÓN: LISTA DE ESPERA
-═══════════════════════════════════════ -->
-<section id="section-waitlist" class="section">
-  <div class="main-content-inner">
-    <div id="waitlist-container"></div>
-  </div>
-</section>
-
-<!-- ═══════════════════════════════════════
-     SECCIÓN: AUDITORÍA
-═══════════════════════════════════════ -->
-<section id="section-audit" class="section">
-  <div class="main-content-inner">
-    <div id="audit-container"></div>
-  </div>
-</section>
-
-<!-- ═══════════════════════════════════════
-     SECCIÓN: CONFIGURACIÓN
-═══════════════════════════════════════ -->
-<section id="section-config" class="section">
-  <div class="main-content-inner">
-    <div id="config-inner"></div>
-  </div>
-</section>
-
-<!-- ═══════════════════════════════════════
-     SECCIÓN: TARIFAS
-═══════════════════════════════════════ -->
-<section id="section-tariffs" class="section">
-  <div class="main-content-inner">
-    <div id="tariffs-mobile-container"></div>
-  </div>
-</section>
-
-<!-- ═══════════════════════════════════════
-     SECCIÓN: MILA
-═══════════════════════════════════════ -->
-<section id="section-mila" class="section">
-  <div class="mila-hero"></div>
-</section>
-
-<!-- ═══════════════════════════════════════
-     SECCIÓN: RECORDATORIOS (inline)
-═══════════════════════════════════════ -->
-<section id="section-reminders" class="section">
-  <div class="main-content-inner">
-    <div id="reminders-full-list"></div>
-  </div>
-</section>
-<section id="section-gmail" class="section">
-  <div class="main-content-inner" style="max-width:900px;margin:0 auto;padding:20px">
-    <div id="gmail-inbox-root">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
-        <div style="display:flex;gap:8px">
-          <button id="gmail-tab-inbox" class="btn btn-primary btn-sm">📥 Recibidos</button>
-          <button id="gmail-tab-sent"  class="btn btn-outline btn-sm">📤 Enviados</button>
-        </div>
-        <button id="gmail-refresh-btn" class="btn btn-outline btn-sm">↺ Actualizar</button>
-      </div>
-      <div id="gmail-list" style="display:flex;flex-direction:column;gap:6px">
-        <p class="empty-state-sm" style="padding:40px;text-align:center">
-          Cargando correos...
-        </p>
-      </div>
-      <!-- Vista de email seleccionado -->
-      <div id="gmail-detail" class="hidden" style="margin-top:16px;background:var(--color-surface);border:1px solid var(--color-border);border-radius:12px;padding:20px">
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
-          <button id="gmail-back-btn" class="btn btn-outline btn-sm">← Volver</button>
-        </div>
-        <div id="gmail-detail-content"></div>
-      </div>
-    </div>
-  </div>
-</section>
 
 <!-- ═══════════════════════════════════════
      PANEL DE NOTIFICACIONES
