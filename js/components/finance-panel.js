@@ -160,7 +160,7 @@ export class FinancePanel {
     });
 
     // ── Reservas activas para el frasco — query independiente ──────────────
-    const sevenDaysAgo = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
+    const sevenDaysAgo = new Date(Date.now() - 3 * 86400000).toISOString().slice(0, 10);
     let activeBookings = [];
     try {
       const { data: ab1, error: err1 } = await this.db.from('bookings')
@@ -619,8 +619,12 @@ export class FinancePanel {
     const existing = document.getElementById('overlay-frasco-new');
     if (existing) existing.remove();
 
-    const fmt    = n => Math.round(n ?? 0).toLocaleString('es-AR');
-    const fmt$   = n => '$' + fmt(n);
+    const fmtNum = n => {
+      const v = n ?? 0;
+      return Number.isInteger(v) ? v.toLocaleString('es-AR') : v.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    };
+    const fmt    = fmtNum;
+    const fmt$   = n => '$' + fmtNum(n);
     const today2 = new Date().toISOString().slice(0, 10);
 
     const bookingOptions = activeBookings.map(bk => {
@@ -689,7 +693,7 @@ export class FinancePanel {
                 }
               </select>
               <small style="color:var(--color-text-3);font-size:.7rem">
-                Últimos 7 días + futuras · ordenadas por check-in
+                Últimos 3 días + futuras · ordenadas por check-in
               </small>
             </div>
           </div>
@@ -725,11 +729,13 @@ export class FinancePanel {
             </div>
           </div>
 
-          <div style="background:#f0fdf4;border-radius:8px;padding:10px 14px;margin-bottom:12px;
+          <div style="background:#f0fdf4;border-radius:8px;padding:10px 14px;margin-bottom:4px;
                       display:flex;justify-content:space-between;align-items:center">
             <span style="font-size:.78rem;color:#166534;font-weight:600">Total al acreditar</span>
             <span id="fn-total-display" style="font-size:1.05rem;font-weight:800;color:#16a34a">$0</span>
           </div>
+          <div id="fn-pct-display" style="text-align:right;font-size:.7rem;color:var(--color-text-3);
+               margin-bottom:12px;min-height:16px"></div>
 
           <div class="form-group">
             <label>Fecha de acreditación <span class="req">*</span></label>
@@ -793,11 +799,32 @@ export class FinancePanel {
     const baseInput  = modal.querySelector('#fn-base');
     const intInput   = modal.querySelector('#fn-interest');
     const totalDisp  = modal.querySelector('#fn-total-display');
+    const pctDisp    = modal.querySelector('#fn-pct-display');
+    const dateInput  = modal.querySelector('#fn-date');
 
     const updateTotal = () => {
       const base = parseFloat(baseInput.value) || 0;
       const int  = parseFloat(intInput.value)  || 0;
       totalDisp.textContent = fmt$(base + int);
+
+      // Porcentaje y días
+      if (pctDisp) {
+        if (base > 0 && int > 0) {
+          const pct  = (int / base * 100).toFixed(2).replace('.', ',');
+          const dateVal = dateInput?.value;
+          let diasStr = '';
+          if (dateVal) {
+            const hoy  = new Date(today2 + 'T00:00:00');
+            const acred = new Date(dateVal + 'T00:00:00');
+            const dias = Math.round((acred - hoy) / 86400000);
+            if (dias > 0) diasStr = ` en ${dias} día${dias !== 1 ? 's' : ''}`;
+          }
+          pctDisp.textContent = `${pct}% de rendimiento${diasStr}`;
+          pctDisp.style.color = '#16a34a';
+        } else {
+          pctDisp.textContent = '';
+        }
+      }
     };
 
     bookingSel?.addEventListener('change', () => {
@@ -807,6 +834,7 @@ export class FinancePanel {
     });
     baseInput.addEventListener('input', updateTotal);
     intInput.addEventListener('input',  updateTotal);
+    dateInput?.addEventListener('change', updateTotal);
     updateTotal();
 
     // Guardar
@@ -819,6 +847,8 @@ export class FinancePanel {
       const bkId     = tipo === 'reserva' ? (bookingSel?.value || null) : null;
       const desc     = tipo === 'gastos'  ? modal.querySelector('#fn-desc')?.value.trim() : null;
 
+      console.log('[Frasco] guardar:', { tipo, base, interest, date, bkId, hotelId: this.ctx?.hotelId });
+
       if (!base || base <= 0) { showToast('Ingresá el monto', 'warning'); return; }
       if (!date)              { showToast('Elegí la fecha de acreditación', 'warning'); return; }
       if (tipo === 'gastos' && !desc) { showToast('Ingresá una descripción', 'warning'); return; }
@@ -830,26 +860,34 @@ export class FinancePanel {
         ? ('[GASTOS] ' + desc + (notes ? ' · ' + notes : ''))
         : notes;
 
-      const { error } = await this.db.from('frasco_items').insert({
-        hotel_id:        this.ctx.hotelId,
-        booking_id:      bkId,
-        original_amount: base,
-        interest_amount: interest,
-        frasco_date:     date,
-        notes:           notasFinal,
-        credited:        false,
-      });
+      try {
+        const { data: inserted, error } = await this.db.from('frasco_items').insert({
+          hotel_id:        this.ctx.hotelId,
+          booking_id:      bkId || null,
+          original_amount: base,
+          interest_amount: interest,
+          frasco_date:     date,
+          notes:           notasFinal,
+          credited:        false,
+        }).select('id');
 
-      if (error) {
-        showToast('Error: ' + error.message, 'error');
+        console.log('[Frasco] resultado insert:', { inserted, error });
+
+        if (error) {
+          showToast('Error al guardar: ' + error.message, 'error');
+          saveBtn.disabled = false; saveBtn.textContent = '🫙 Guardar frasco';
+          return;
+        }
+
+        showToast('Frasco guardado ✓', 'success');
+        close();
+        const container = document.getElementById('financ-container');
+        if (container) await this._fetchAndRender(container);
+      } catch (ex) {
+        console.error('[Frasco] excepción:', ex);
+        showToast('Error inesperado: ' + (ex?.message ?? String(ex)), 'error');
         saveBtn.disabled = false; saveBtn.textContent = '🫙 Guardar frasco';
-        return;
       }
-
-      showToast('Frasco guardado ✓', 'success');
-      close();
-      const container = document.getElementById('financ-container');
-      if (container) this._fetchAndRender(container);
     });
   }
 
