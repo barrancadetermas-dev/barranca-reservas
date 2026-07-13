@@ -19,11 +19,8 @@ async function getInaData() {
     const data = await res.json();
 
     if (!res.ok) {
-      // 502 con diagnóstico — loguear detalle y salir
-      console.warn('[Río] /api/rio devolvió error:', data);
-      if (data?.endpoints_tried) {
-        console.table(data.endpoints_tried);
-      }
+      console.warn('[Río] /api/rio error', res.status + ':',
+        JSON.stringify(data?.endpoints_tried ?? data, null, 2));
       return null;
     }
 
