@@ -591,7 +591,6 @@ const SECTION_META = {
   config:     { title: 'Configuración',              icon: '⚙️', sub: 'Panel de Administración · Comisiones · Tarifas · Departamentos' },
   tariffs:    { title: 'Cuadro Tarifario',            icon: '🏷️', sub: 'Precios por departamento y mes' },
   waitlist:   { title: 'Lista de espera',             icon: '⏳', sub: 'Solicitudes pendientes · Consultas sin reserva confirmada' },
-  guide:      { title: 'Guía del Huésped',            icon: '🗺️', sub: 'Página pública para huéspedes · Configuración completa' },
   mila:       { title: 'Preguntale a Mila',           icon: '🤖', sub: 'Asistente inteligente · Consultas rápidas' },
 };
 const SECTION_TITLES = Object.fromEntries(Object.entries(SECTION_META).map(([k,v]) => [k, v.title]));
@@ -663,12 +662,6 @@ export async function navigateTo(section) {
       case 'audit':       await auditPanel?.load(); break;
       case 'config':      await configPanel?.load(); break;
       case 'tariffs':     await loadMobileTariffs(); break;
-      case 'guide': {
-        const { GuestGuidePanel } = await import('./components/guest-guide.js');
-        if (!window._guidePanel) window._guidePanel = new GuestGuidePanel(supabase, AppContext);
-        await window._guidePanel.load();
-        break;
-      }
 
     }
   } catch (err) {
