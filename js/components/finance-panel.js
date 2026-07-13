@@ -65,6 +65,8 @@ export class FinancePanel {
       </div>
       <!-- Indicadores adicionales -->
       <div id="financ-indicators" style="display:grid;grid-template-columns:repeat(7,1fr);gap:10px"></div>
+      <!-- Frascos (Naranja X / plazo fijo) -->
+      <div id="financ-frasco" style="margin-top:20px"></div>
     </div>`;
   }
 
@@ -159,7 +161,7 @@ export class FinancePanel {
 
     try {
       // Reservas del período + máxima reserva con nombre del huésped
-      const [periodoRes, futuroRes, maxBkRes, prevRes, frascoRes] = await Promise.all([
+      const [periodoRes, futuroRes, maxBkRes, prevRes, frascoRes, frascoItemsRes, activeBkRes] = await Promise.all([
         // Período seleccionado: todas las reservas que INICIAN en el rango
         // Incluye created_at (anticipación) y booking_units con unit_id (unidad más rentable)
         this.db.from('bookings')
@@ -199,6 +201,28 @@ export class FinancePanel {
           .not('frasco_date','is',null)
           .order('frasco_date', { ascending: true })
           .limit(100),
+        // Frascos manuales (tabla frasco_items)
+        this.db.from('frasco_items')
+          .select(`id, original_amount, interest_amount, frasco_date, notes,
+                   credited, credited_at, credited_amount,
+                   booking_id,
+                   bookings(id, check_in, check_out,
+                     guests!bookings_guest_id_fkey(first_name, last_name),
+                     booking_units(units(name, color)))`)
+          .eq('hotel_id', this.ctx.hotelId)
+          .order('frasco_date', { ascending: true })
+          .limit(200),
+        // Reservas activas para el selector del modal
+        this.db.from('bookings')
+          .select(`id, check_in, check_out, total_amount, total_paid,
+                   guests!bookings_guest_id_fkey(first_name, last_name),
+                   booking_units(units(name, color)),
+                   payments(id, amount, payment_method, payment_type)`)
+          .eq('hotel_id', this.ctx.hotelId)
+          .not('status','in','(cancelled,blocked)')
+          .gte('check_out', today)
+          .order('check_in', { ascending: true })
+          .limit(100),
       ]);
 
       if (periodoRes.error) throw periodoRes.error;
@@ -211,6 +235,8 @@ export class FinancePanel {
       const frascoAll     = frascoRes?.data ?? [];
       const frascoPending = frascoAll.filter(p => !p.frasco_credited_at);
       const frascoOverdue = frascoPending.filter(p => p.frasco_date <= today);
+      const frascoItems   = frascoItemsRes?.data ?? [];
+      const activeBookings = activeBkRes?.data ?? [];
 
       // ── Métricas del período ──
       const totalVend  = bks.reduce((s,b) => s + (b.total_amount ?? 0), 0);
@@ -268,6 +294,7 @@ export class FinancePanel {
       this._renderChart({ totalVend, totalCobr, totalPend });
       this._renderAsegurado({ asegVend, asegCobr, asegPend, asegPct, count: futuro.length, frascoPending, frascoOverdue });
       this._renderIndicators({ maxBk, avgBk, avgNoche, avgPend, totalNoch, count: bks.length, topUnit, variacionPct, avgAnticipacion });
+      this._renderFrascoCard({ items: frascoItems, activeBookings });
 
     } catch (err) {
       console.error('[FinancePanel]', err);
@@ -389,5 +416,452 @@ export class FinancePanel {
       (avgAnticipacion !== null
         ? ind('⏱️', 'Anticipación promedio', avgAnticipacion + ' día' + (avgAnticipacion !== 1 ? 's' : ''), 'entre reserva y check-in')
         : '');
+  }
+
+  // ══════════════════════════════════════════════════
+  // FRASCOS (Naranja X / plazo fijo)
+  // ══════════════════════════════════════════════════
+
+  _renderFrascoCard({ items, activeBookings }) {
+    const el = document.getElementById('financ-frasco');
+    if (!el) return;
+
+    const fmt   = n  => '$' + Math.round(n ?? 0).toLocaleString('es-AR');
+    const today = new Date().toISOString().slice(0, 10);
+
+    const pending  = items.filter(i => !i.credited);
+    const credited = items.filter(i =>  i.credited);
+
+    const totalEnFrasco   = pending.reduce((s, i) => s + (i.original_amount ?? 0), 0);
+    const totalConIntereses = pending.reduce((s, i) => s + (i.original_amount ?? 0) + (i.interest_amount ?? 0), 0);
+    const interesesTotales  = totalConIntereses - totalEnFrasco;
+
+    const vencidos = pending.filter(i => i.frasco_date <= today);
+
+    const guestName = bk => {
+      const g = bk?.guests ?? bk?.bookings?.guests;
+      if (!g) return '—';
+      return `${g.last_name ?? ''} ${g.first_name ?? ''}`.trim() || '—';
+    };
+    const unitName = bk => {
+      const units = (bk?.booking_units ?? bk?.bookings?.booking_units ?? []);
+      return units.map(bu => bu?.units?.name).filter(Boolean).join(' + ') || '—';
+    };
+
+    const rowHTML = item => {
+      const bk       = item.bookings;
+      const nombre   = guestName(item);
+      const depto    = unitName(item);
+      const checkIn  = bk?.check_in ?? '';
+      const base     = item.original_amount ?? 0;
+      const interes  = item.interest_amount ?? 0;
+      const total    = base + interes;
+      const vencido  = item.frasco_date <= today;
+      return `
+        <div class="frasco-row" data-id="${item.id}"
+             style="display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;
+                    padding:12px 14px;border-radius:10px;margin-bottom:8px;
+                    background:${vencido ? '#fef9c3' : 'var(--color-surface-2)'};
+                    border:1px solid ${vencido ? '#fde047' : 'var(--color-border)'}">
+          <div>
+            <div style="font-size:.82rem;font-weight:700;color:var(--color-text)">
+              ${nombre} <span style="font-weight:400;color:var(--color-text-3)">· ${depto}</span>
+              ${checkIn ? `<span style="font-size:.7rem;color:var(--color-text-3)"> · check-in ${checkIn}</span>` : ''}
+            </div>
+            <div style="display:flex;gap:12px;margin-top:4px;flex-wrap:wrap">
+              <span style="font-size:.75rem;color:var(--color-text-3)">
+                📥 Base: <strong style="color:var(--color-text)">${fmt(base)}</strong>
+              </span>
+              ${interes > 0 ? `<span style="font-size:.75rem;color:#16a34a">
+                ✨ Intereses: <strong>${fmt(interes)}</strong>
+              </span>` : ''}
+              <span style="font-size:.75rem;color:#ea580c;font-weight:700">
+                Total: ${fmt(total)}
+              </span>
+              <span style="font-size:.72rem;color:${vencido ? '#dc2626' : 'var(--color-text-3)'}">
+                ${vencido ? '⚠️ Vencido · ' : '⏳ Acredita: '}${item.frasco_date}
+              </span>
+            </div>
+            ${item.notes ? `<div style="font-size:.7rem;color:var(--color-text-3);margin-top:3px">📝 ${item.notes}</div>` : ''}
+          </div>
+          <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end">
+            <button class="btn btn-primary btn-xs frasco-credit-btn" data-id="${item.id}"
+                    style="background:#f97316;border-color:#f97316;white-space:nowrap">
+              💸 Acreditar
+            </button>
+            <button class="btn btn-ghost btn-xs frasco-delete-btn" data-id="${item.id}">🗑️</button>
+          </div>
+        </div>`;
+    };
+
+    const creditedHTML = credited.length > 0
+      ? `<details style="margin-top:10px">
+          <summary style="font-size:.72rem;color:var(--color-text-3);cursor:pointer;font-weight:600">
+            ✅ Acreditados (${credited.length})
+          </summary>
+          <div style="margin-top:8px;opacity:.75">
+            ${credited.map(i => {
+              const nombre = guestName(i);
+              const depto  = unitName(i);
+              const total  = i.credited_amount ?? ((i.original_amount ?? 0) + (i.interest_amount ?? 0));
+              const interes = total - (i.original_amount ?? 0);
+              return `<div style="display:flex;justify-content:space-between;font-size:.76rem;padding:6px 0;border-top:1px solid var(--color-border)">
+                <span>${nombre} · ${depto}</span>
+                <span style="color:#16a34a;font-weight:700">${fmt(total)}${interes > 0 ? ` <span style="color:var(--color-text-3)">(+${fmt(interes)} intereses)</span>` : ''}</span>
+              </div>`;
+            }).join('')}
+          </div>
+        </details>`
+      : '';
+
+    el.innerHTML = `
+      <div class="card" style="padding:18px 20px;border-left:3px solid #f97316">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+          <div>
+            <span style="font-size:.72rem;font-weight:700;color:var(--color-text-3);
+                         text-transform:uppercase;letter-spacing:.05em">🫙 Frascos activos</span>
+            <span style="font-size:.65rem;color:var(--color-text-3);margin-left:8px">Naranja X · plazos fijos</span>
+          </div>
+          <button class="btn btn-primary btn-sm" id="frasco-add-btn"
+                  style="background:#f97316;border-color:#f97316">+ Nuevo frasco</button>
+        </div>
+
+        ${pending.length > 0 ? `
+          <div style="display:flex;gap:16px;margin:12px 0;padding:10px 12px;
+                      background:#fff7ed;border-radius:8px;flex-wrap:wrap">
+            <div><span style="font-size:.68rem;color:#9a3412;font-weight:700;text-transform:uppercase">En frasco</span>
+              <div style="font-size:1rem;font-weight:800;color:#ea580c">${fmt(totalEnFrasco)}</div></div>
+            <div><span style="font-size:.68rem;color:#9a3412;font-weight:700;text-transform:uppercase">Con intereses</span>
+              <div style="font-size:1rem;font-weight:800;color:#16a34a">${fmt(totalConIntereses)}</div></div>
+            <div><span style="font-size:.68rem;color:#9a3412;font-weight:700;text-transform:uppercase">A ganar</span>
+              <div style="font-size:1rem;font-weight:800;color:#16a34a">+${fmt(interesesTotales)}</div></div>
+            ${vencidos.length > 0 ? `<div style="margin-left:auto;align-self:center">
+              <span style="background:#fef2f2;color:#dc2626;font-size:.72rem;font-weight:700;
+                           padding:4px 10px;border-radius:6px">⚠️ ${vencidos.length} vencido${vencidos.length > 1 ? 's' : ''} sin acreditar</span>
+            </div>` : ''}
+          </div>
+          <div id="frasco-list">${pending.map(rowHTML).join('')}</div>
+        ` : `
+          <div style="text-align:center;padding:20px;color:var(--color-text-3);font-size:.82rem">
+            Sin frascos activos · presioná "+ Nuevo frasco" para cargar uno
+          </div>
+        `}
+        ${creditedHTML}
+      </div>`;
+
+    // ── Botón nuevo frasco ─────────────────────────────────────────
+    el.querySelector('#frasco-add-btn')?.addEventListener('click', () => {
+      this._openFrascoModal(activeBookings);
+    });
+
+    // ── Acreditar ──────────────────────────────────────────────────
+    el.querySelectorAll('.frasco-credit-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const item = items.find(i => i.id === btn.dataset.id);
+        if (item) this._openCreditModal(item);
+      });
+    });
+
+    // ── Eliminar ───────────────────────────────────────────────────
+    el.querySelectorAll('.frasco-delete-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        if (!confirm('¿Eliminar este frasco?')) return;
+        btn.disabled = true;
+        const { error } = await this.db.from('frasco_items').delete().eq('id', btn.dataset.id);
+        if (error) { showToast('Error: ' + error.message, 'error'); btn.disabled = false; return; }
+        showToast('Frasco eliminado', 'success');
+        const container = document.getElementById('financ-container');
+        if (container) this._fetchAndRender(container);
+      });
+    });
+  }
+
+  // ── Modal: nuevo frasco ────────────────────────────────────────────────────
+  _openFrascoModal(activeBookings) {
+    const existing = document.getElementById('overlay-frasco-new');
+    if (existing) existing.remove();
+
+    const fmt = n => Math.round(n ?? 0).toLocaleString('es-AR');
+
+    // Métodos que SÍ van a frasco (todo menos efectivo)
+    const FRASCO_METHODS = ['transfer','transferencia','card','tarjeta','debit','debito',
+                            'mercadopago','qr','naranja','uala','cuenta','other'];
+
+    const bookingOptions = activeBookings.map(bk => {
+      const g       = bk.guests;
+      const nombre  = g ? `${g.last_name ?? ''}, ${g.first_name ?? ''}`.trim().replace(/^,\s*/, '') : '—';
+      const deptos  = (bk.booking_units ?? []).map(bu => bu?.units?.name).filter(Boolean).join('+') || '—';
+      const ci      = bk.check_in ?? '';
+      // Monto de señas NO en efectivo
+      const montosNoEfectivo = (bk.payments ?? [])
+        .filter(p => p.payment_type === 'deposit' && FRASCO_METHODS.some(m => (p.payment_method ?? '').toLowerCase().includes(m)))
+        .reduce((s, p) => s + (p.amount ?? 0), 0);
+      return { id: bk.id, label: `${nombre} · ${deptos} · ${ci}`, monto: montosNoEfectivo };
+    });
+
+    const modal = document.createElement('div');
+    modal.className = 'modal-overlay';
+    modal.id = 'overlay-frasco-new';
+    modal.innerHTML = `
+      <div class="modal modal-sm">
+        <div class="modal-header" style="background:linear-gradient(135deg,#fff7ed,#ffedd5)">
+          <h3 class="modal-title">🫙 Nuevo Frasco — Naranja X</h3>
+          <button class="modal-close" id="fn-close">✕</button>
+        </div>
+        <div class="modal-body">
+
+          <div class="form-group">
+            <label>Reserva asociada <span style="font-size:.72rem;color:var(--color-text-3)">(opcional)</span></label>
+            <select id="fn-booking" class="filter-select">
+              <option value="">— Sin reserva asociada —</option>
+              ${bookingOptions.map(b =>
+                `<option value="${b.id}" data-monto="${b.monto}">${b.label}${b.monto > 0 ? ` — seña: $${fmt(b.monto)}` : ''}</option>`
+              ).join('')}
+            </select>
+          </div>
+
+          <div class="form-grid-2">
+            <div class="form-group">
+              <label>Monto base <span class="req">*</span>
+                <span style="font-size:.68rem;color:var(--color-text-3)">(seña original)</span>
+              </label>
+              <div style="position:relative">
+                <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--color-text-3);font-size:.85rem">$</span>
+                <input type="number" id="fn-base" min="0" step="1" placeholder="75000"
+                       style="padding-left:22px" class="form-input">
+              </div>
+            </div>
+            <div class="form-group">
+              <label>Intereses a ganar <span style="font-size:.68rem;color:var(--color-text-3)">(en $)</span></label>
+              <div style="position:relative">
+                <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:#16a34a;font-size:.85rem">+$</span>
+                <input type="number" id="fn-interest" min="0" step="1" placeholder="380" value="0"
+                       style="padding-left:28px" class="form-input">
+              </div>
+            </div>
+          </div>
+
+          <div style="background:#f0fdf4;border-radius:8px;padding:10px 14px;margin-bottom:12px;
+                      display:flex;justify-content:space-between;align-items:center">
+            <span style="font-size:.78rem;color:#166534;font-weight:600">Total al acreditar</span>
+            <span id="fn-total-display" style="font-size:1.05rem;font-weight:800;color:#16a34a">$0</span>
+          </div>
+
+          <div class="form-group">
+            <label>Fecha de acreditación <span class="req">*</span></label>
+            <input type="date" id="fn-date" class="form-input">
+          </div>
+
+          <div class="form-group">
+            <label>Notas <span style="font-size:.72rem;color:var(--color-text-3)">(opcional)</span></label>
+            <input type="text" id="fn-notes" class="form-input"
+                   placeholder="Ej: plazo 30 días, tasa 0.5% diario">
+          </div>
+
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-outline" id="fn-cancel">Cancelar</button>
+          <button class="btn btn-primary" id="fn-save"
+                  style="background:#f97316;border-color:#f97316">🫙 Guardar frasco</button>
+        </div>
+      </div>`;
+
+    document.body.appendChild(modal);
+    modal.style.zIndex = '210';
+
+    const close = () => {
+      modal.remove();
+      if (escH) document.removeEventListener('keydown', escH);
+    };
+    const escH = e => { if (e.key === 'Escape') close(); };
+    document.addEventListener('keydown', escH);
+    modal.querySelector('#fn-close').onclick   = close;
+    modal.querySelector('#fn-cancel').onclick  = close;
+    modal.addEventListener('click', e => { if (e.target === modal) close(); });
+
+    // Pre-llenar monto al seleccionar reserva
+    const bookingSel = modal.querySelector('#fn-booking');
+    const baseInput  = modal.querySelector('#fn-base');
+    const intInput   = modal.querySelector('#fn-interest');
+    const totalDisp  = modal.querySelector('#fn-total-display');
+    const fmt2 = n => '$' + Math.round(n ?? 0).toLocaleString('es-AR');
+
+    const updateTotal = () => {
+      const base = parseFloat(baseInput.value) || 0;
+      const int  = parseFloat(intInput.value)  || 0;
+      totalDisp.textContent = fmt2(base + int);
+    };
+
+    bookingSel.addEventListener('change', () => {
+      const opt   = bookingSel.selectedOptions[0];
+      const monto = parseFloat(opt?.dataset?.monto ?? 0);
+      if (monto > 0) baseInput.value = monto;
+      updateTotal();
+    });
+    baseInput.addEventListener('input', updateTotal);
+    intInput.addEventListener('input',  updateTotal);
+    updateTotal();
+
+    setTimeout(() => bookingSel.focus(), 80);
+
+    modal.querySelector('#fn-save').addEventListener('click', async () => {
+      const base     = parseFloat(baseInput.value);
+      const interest = parseFloat(intInput.value) || 0;
+      const date     = modal.querySelector('#fn-date').value;
+      const bkId     = bookingSel.value || null;
+      const notes    = modal.querySelector('#fn-notes').value.trim() || null;
+
+      if (!base || base <= 0) { showToast('Ingresá el monto base', 'warning'); return; }
+      if (!date)              { showToast('Elegí la fecha de acreditación', 'warning'); return; }
+
+      const saveBtn = modal.querySelector('#fn-save');
+      saveBtn.disabled = true; saveBtn.textContent = 'Guardando...';
+
+      const { error } = await this.db.from('frasco_items').insert({
+        hotel_id:        this.ctx.hotelId,
+        booking_id:      bkId,
+        original_amount: base,
+        interest_amount: interest,
+        frasco_date:     date,
+        notes,
+        credited:        false,
+      });
+
+      if (error) {
+        showToast('Error: ' + error.message, 'error');
+        saveBtn.disabled = false; saveBtn.textContent = '🫙 Guardar frasco';
+        return;
+      }
+
+      showToast('Frasco guardado ✓', 'success');
+      close();
+      const container = document.getElementById('financ-container');
+      if (container) this._fetchAndRender(container);
+    });
+  }
+
+  // ── Modal: acreditar frasco ────────────────────────────────────────────────
+  _openCreditModal(item) {
+    const existing = document.getElementById('overlay-frasco-credit');
+    if (existing) existing.remove();
+
+    const fmt        = n => '$' + Math.round(n ?? 0).toLocaleString('es-AR');
+    const base       = item.original_amount ?? 0;
+    const intExpect  = item.interest_amount ?? 0;
+    const totalExpect = base + intExpect;
+    const today      = new Date().toISOString().slice(0, 10);
+
+    const modal = document.createElement('div');
+    modal.className = 'modal-overlay';
+    modal.id = 'overlay-frasco-credit';
+    modal.innerHTML = `
+      <div class="modal modal-sm">
+        <div class="modal-header" style="background:linear-gradient(135deg,#f0fdf4,#dcfce7)">
+          <h3 class="modal-title">💸 Acreditar Frasco</h3>
+          <button class="modal-close" id="fc-close">✕</button>
+        </div>
+        <div class="modal-body">
+
+          <div style="background:#fff7ed;border-radius:8px;padding:10px 14px;margin-bottom:16px">
+            <div style="font-size:.72rem;color:#9a3412;font-weight:700;text-transform:uppercase;margin-bottom:6px">
+              Frasco original
+            </div>
+            <div style="display:flex;gap:16px;flex-wrap:wrap">
+              <div><span style="font-size:.7rem;color:var(--color-text-3)">Base</span>
+                <div style="font-weight:700;color:#ea580c">${fmt(base)}</div></div>
+              ${intExpect > 0 ? `<div><span style="font-size:.7rem;color:var(--color-text-3)">Intereses esperados</span>
+                <div style="font-weight:700;color:#16a34a">+${fmt(intExpect)}</div></div>` : ''}
+              <div><span style="font-size:.7rem;color:var(--color-text-3)">Total esperado</span>
+                <div style="font-weight:700;color:var(--color-text)">${fmt(totalExpect)}</div></div>
+              <div><span style="font-size:.7rem;color:var(--color-text-3)">Fecha pactada</span>
+                <div style="font-weight:700;color:var(--color-text)">${item.frasco_date}</div></div>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>Monto real acreditado <span class="req">*</span></label>
+            <div style="position:relative">
+              <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:#16a34a;font-size:.85rem">$</span>
+              <input type="number" id="fc-amount" min="0" step="1" class="form-input"
+                     style="padding-left:22px" value="${totalExpect}">
+            </div>
+            <small style="color:var(--color-text-3);font-size:.7rem">
+              Por defecto se pre-carga el total esperado. Modificalo si el monto real es distinto.
+            </small>
+          </div>
+
+          <div style="background:#f0fdf4;border-radius:8px;padding:10px 14px;margin-bottom:12px;
+                      display:flex;justify-content:space-between;align-items:center">
+            <span style="font-size:.78rem;color:#166534;font-weight:600">Intereses reales</span>
+            <span id="fc-interest-display" style="font-size:1rem;font-weight:800;color:#16a34a">+${fmt(intExpect)}</span>
+          </div>
+
+          <div class="form-group">
+            <label>Fecha de acreditación real</label>
+            <input type="date" id="fc-date" class="form-input" value="${today}">
+          </div>
+
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-outline" id="fc-cancel">Cancelar</button>
+          <button class="btn btn-primary" id="fc-save" style="background:#16a34a;border-color:#16a34a">
+            ✅ Registrar acreditación
+          </button>
+        </div>
+      </div>`;
+
+    document.body.appendChild(modal);
+    modal.style.zIndex = '210';
+
+    const close = () => {
+      modal.remove();
+      if (escH) document.removeEventListener('keydown', escH);
+    };
+    const escH = e => { if (e.key === 'Escape') close(); };
+    document.addEventListener('keydown', escH);
+    modal.querySelector('#fc-close').onclick   = close;
+    modal.querySelector('#fc-cancel').onclick  = close;
+    modal.addEventListener('click', e => { if (e.target === modal) close(); });
+
+    const amountInput  = modal.querySelector('#fc-amount');
+    const intDisp      = modal.querySelector('#fc-interest-display');
+    const fmt2 = n => '$' + Math.round(n ?? 0).toLocaleString('es-AR');
+    amountInput.addEventListener('input', () => {
+      const real   = parseFloat(amountInput.value) || 0;
+      const intRes = real - base;
+      intDisp.textContent = (intRes >= 0 ? '+' : '') + fmt2(intRes);
+      intDisp.style.color = intRes >= 0 ? '#16a34a' : '#ef4444';
+    });
+
+    setTimeout(() => amountInput.select(), 80);
+
+    modal.querySelector('#fc-save').addEventListener('click', async () => {
+      const creditedAmount = parseFloat(amountInput.value);
+      const creditedAt     = modal.querySelector('#fc-date').value;
+      if (!creditedAmount || creditedAmount <= 0) {
+        showToast('Ingresá el monto acreditado', 'warning'); return;
+      }
+
+      const saveBtn = modal.querySelector('#fc-save');
+      saveBtn.disabled = true; saveBtn.textContent = 'Guardando...';
+
+      const { error } = await this.db.from('frasco_items').update({
+        credited:         true,
+        credited_amount:  creditedAmount,
+        credited_at:      creditedAt || today,
+        interest_amount:  creditedAmount - base,
+      }).eq('id', item.id);
+
+      if (error) {
+        showToast('Error: ' + error.message, 'error');
+        saveBtn.disabled = false; saveBtn.textContent = '✅ Registrar acreditación';
+        return;
+      }
+
+      showToast(`✅ Acreditado ${fmt2(creditedAmount)} · +${fmt2(creditedAmount - base)} intereses`, 'success');
+      close();
+      const container = document.getElementById('financ-container');
+      if (container) this._fetchAndRender(container);
+    });
   }
 }

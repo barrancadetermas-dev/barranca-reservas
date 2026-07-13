@@ -45,3 +45,30 @@ NOTIFY pgrst, 'reload schema';
 --                       'frasco_credited_amount','frasco_credited_at')
 -- ORDER BY table_name, column_name;
 -- ════════════════════════════════════════════════════════════════
+
+-- ── 4. Tabla de Frascos (plazo fijo Naranja X) ───────────────────
+CREATE TABLE IF NOT EXISTS frasco_items (
+  id               uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  hotel_id         uuid REFERENCES hotels(id) ON DELETE CASCADE NOT NULL,
+  booking_id       uuid REFERENCES bookings(id) ON DELETE SET NULL,
+  original_amount  numeric(12,2) NOT NULL,
+  interest_amount  numeric(12,2) DEFAULT 0,
+  frasco_date      date NOT NULL,
+  notes            text,
+  credited         boolean DEFAULT false,
+  credited_at      date,
+  credited_amount  numeric(12,2),
+  created_at       timestamptz DEFAULT now()
+);
+
+ALTER TABLE frasco_items ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS frasco_items_policy ON frasco_items;
+CREATE POLICY frasco_items_policy ON frasco_items
+  FOR ALL USING (hotel_id IN (
+    SELECT hotel_id FROM hotel_users WHERE user_id = auth.uid()
+  ));
+
+CREATE INDEX IF NOT EXISTS idx_frasco_items_hotel
+  ON frasco_items (hotel_id, credited, frasco_date);
+
+NOTIFY pgrst, 'reload schema';
