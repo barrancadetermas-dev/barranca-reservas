@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#1e40af">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <title>Guía del Huésped</title>
+  <link rel="stylesheet" href="/css/guide-public.css">
+  <link rel="manifest" href="/manifest.json">
+</head>
+<body>
+
+<!-- Loading -->
+<div id="g-loading">
+  <div class="g-spinner"></div>
+  <div style="font-size:.85rem;color:rgba(255,255,255,.8)">Cargando guía...</div>
+</div>
+
+<!-- Main content (hidden while loading) -->
+<div id="g-app" style="display:none">
+
+  <!-- Hero -->
+  <div class="g-hero" id="g-hero">
+    <img id="g-hero-img" src="" alt="" style="display:none">
+    <div class="g-hero-overlay"></div>
+    <button class="g-share-hero" onclick="shareGuide()">↗ Compartir</button>
+    <div class="g-hero-content">
+      <div class="g-logo" id="g-logo">🏨</div>
+      <div class="g-hotel-name" id="g-hotel-name">Barranca de Termas</div>
+      <div class="g-hotel-sub" id="g-hotel-sub">Guía del Huésped</div>
+    </div>
+  </div>
+
+  <!-- Quick info -->
+  <div class="g-quick" id="g-quick">
+    <div class="g-quick-item">
+      <div class="g-quick-icon">📥</div>
+      <div class="g-quick-label">Check-in</div>
+      <div class="g-quick-val" id="q-checkin">—</div>
+    </div>
+    <div class="g-quick-item">
+      <div class="g-quick-icon">📤</div>
+      <div class="g-quick-label">Check-out</div>
+      <div class="g-quick-val" id="q-checkout">—</div>
+    </div>
+    <div class="g-quick-item">
+      <div class="g-quick-icon">💬</div>
+      <div class="g-quick-label">Consultas</div>
+      <div class="g-quick-val">WhatsApp</div>
+    </div>
+  </div>
+
+  <!-- Section nav pills -->
+  <div class="g-nav-wrap">
+    <div class="g-nav" id="g-nav"></div>
+  </div>
+
+  <!-- Sections container -->
+  <div id="g-sections"></div>
+
+  <!-- Share banner -->
+  <div class="g-share-banner">
+    <div class="g-share-text">¿Te gustó tu estadía? Compartí esta guía con conocidos 🌴</div>
+    <button class="g-share-btn" onclick="shareGuide()">Compartir</button>
+  </div>
+
+  <!-- Footer -->
+  <div class="g-footer">
+    <div class="g-footer-text" id="g-footer-text">Barranca de Termas · Guía del Huésped</div>
+  </div>
+</div>
+
+<!-- FABs -->
+<a id="g-fab-wapp" class="g-fab-wapp" style="display:none" target="_blank">💬</a>
+<button class="g-fab-top hidden" id="g-fab-top" onclick="window.scrollTo({top:0,behavior:'smooth'})">↑</button>
+
+<!-- Toast -->
+<div class="g-toast" id="g-toast"></div>
+
+<script type="module">
+// ═══════════════════════════════════════════════════════════════
+// GUÍA DEL HUÉSPED — Lógica pública
+// Carga todos los datos desde Supabase (anónimo, lectura pública)
+// ═══════════════════════════════════════════════════════════════
+
+const SUPABASE_URL  = import.meta.env?.VITE_SUPABASE_URL  ?? '__SUPABASE_URL__';
+const SUPABASE_ANON = import.meta.env?.VITE_SUPABASE_ANON_KEY ?? '__SUPABASE_ANON_KEY__';
+const HOTEL_SLUG    = import.meta.env?.VITE_HOTEL_SLUG    ?? 'barranca-de-termas';
+
+// ── Mini cliente Supabase (sin dependencias) ──
+const db = {
+  async from(table) {
+    return {
+      _table: table, _filters: [], _order: null, _limit: null, _eq: null,
+      eq(col, val) { this._filters.push(`${col}=eq.${encodeURIComponent(val)}`); return this; },
+      is(col, val) { this._filters.push(`${col}=is.${val}`); return this; },
+      order(col, opts={}) { this._order = `${col}${opts.ascending === false ? '.desc' : ''}`; return this; },
+      async select(cols='*') {
+        let url = `${SUPABASE_URL}/rest/v1/${this._table}?select=${cols}`;
+        this._filters.forEach(f => url += `&${f}`);
+        if (this._order) url += `&order=${this._order}`;
+        const r = await fetch(url, { headers: { apikey: SUPABASE_ANON, Authorization: `Bearer ${SUPABASE_ANON}`, Accept: 'application/json' } });
+        if (!r.ok) { const e = await r.json(); return { data: null, error: e }; }
+        return { data: await r.json(), error: null };
+      }
+    };
+  }
+};
+
+// ── Category labels ──
+const CAT_LABELS = {
+  restaurants:'🍽 Restaurantes', supermarkets:'🛒 Supermercados', butchers:'🥩 Carnicerías',
+  greengrocers:'🥦 Verdulerías', pharmacies:'💊 Farmacias', bakeries:'🥐 Panaderías',
+  gas_stations:'⛽ Estaciones de servicio', atms:'🏧 Cajeros', banks:'🏦 Bancos',
+  general:'📍 General'
+};
+
+let CFG = {};
+
+// ── Main init ──
+async function init() {
+  try {
+    // Load hotel ID from slug
+    const { data: hotels } = await (await db).from('hotels').eq('slug', HOTEL_SLUG).select('id,name');
+    if (!hotels?.length) { showError('Guía no encontrada.'); return; }
+    const hotelId = hotels[0].id;
+
+    // Load all data in parallel
+    const [cfgRes, secRes, itemsRes, faqsRes] = await Promise.all([
+      (await db).from('guide_config').eq('hotel_id', hotelId).select('*'),
+      (await db).from('guide_sections').eq('hotel_id', hotelId).eq('is_visible', 'true').order('sort_order').select('*'),
+      (await db).from('guide_items').eq('hotel_id', hotelId).eq('is_visible', 'true').order('sort_order').select('*'),
+      (await db).from('guide_faqs').eq('hotel_id', hotelId).eq('is_visible', 'true').order('sort_order').select('*'),
+    ]);
+
+    CFG = cfgRes.data?.[0] ?? {};
+    const sections = secRes.data ?? [];
+    const items    = itemsRes.data ?? [];
+    const faqs     = faqsRes.data ?? [];
+
+    // Apply config
+    applyConfig(CFG, hotels[0].name);
+
+    // Build sections
+    const container = document.getElementById('g-sections');
+    const nav = document.getElementById('g-nav');
+
+    for (const sec of sections) {
+      const el = buildSection(sec, items, faqs, CFG);
+      if (!el) continue;
+      container.appendChild(el);
+
+      const pill = document.createElement('a');
+      pill.className = 'g-nav-pill';
+      pill.href = '#sec-' + sec.key;
+      pill.textContent = `${sec.icon} ${sec.title}`;
+      nav.appendChild(pill);
+    }
+
+    // Weather (async, no blocker)
+    if (sections.find(s => s.key === 'weather') && CFG.coords_lat && CFG.coords_lng) {
+      loadWeather(CFG.coords_lat, CFG.coords_lng);
+    }
+
+    // Active nav pill on scroll
+    setupScrollSpy();
+
+    // Show app
+    document.getElementById('g-loading').classList.add('fade-out');
+    setTimeout(() => {
+      document.getElementById('g-loading').style.display = 'none';
+      document.getElementById('g-app').style.display = 'block';
+    }, 400);
+
+    // Analytics
+    trackView(hotelId, 'home');
+
+  } catch (err) {
+    showError('Error al cargar la guía: ' + err.message);
+  }
+}
+
+function applyConfig(cfg, hotelName) {
+  // Colors
+  if (cfg.primary_color) {
+    document.documentElement.style.setProperty('--g-primary', cfg.primary_color);
+  }
+  // Hero
+  document.getElementById('g-hotel-name').textContent = cfg.hotel_name || hotelName || 'Guía del Huésped';
+  document.getElementById('g-hotel-sub').textContent  = cfg.address || 'Guía del Huésped';
+  if (cfg.cover_url) {
+    const img = document.getElementById('g-hero-img');
+    img.src = cfg.cover_url; img.style.display = 'block';
+  }
+  if (cfg.logo_url) {
+    const logo = document.getElementById('g-logo');
+    logo.innerHTML = `<img src="${cfg.logo_url}" style="width:100%;height:100%;object-fit:contain;border-radius:10px">`;
+  }
+  // Quick info
+  document.getElementById('q-checkin').textContent  = cfg.checkin_time  || '14:00';
+  document.getElementById('q-checkout').textContent = cfg.checkout_time || '10:00';
+  // WhatsApp FAB
+  if (cfg.whatsapp) {
+    const fab = document.getElementById('g-fab-wapp');
+    fab.href = `https://wa.me/${cfg.whatsapp.replace(/\D/g,'')}`;
+    fab.style.display = 'flex';
+  }
+  // Footer
+  document.getElementById('g-footer-text').textContent = `${cfg.hotel_name || hotelName} · Guía del Huésped`;
+  // Page title
+  document.title = `Guía del Huésped · ${cfg.hotel_name || hotelName}`;
+}
+
+// ── Build each section ──
+function buildSection(sec, items, faqs, cfg) {
+  const wrap = document.createElement('section');
+  wrap.className = 'g-section';
+  wrap.id = 'sec-' + sec.key;
+
+  const header = `<div class="g-section-header"><span class="g-section-icon">${sec.icon}</span><h2 class="g-section-title">${sec.title}</h2></div>`;
+
+  switch (sec.key) {
+    case 'quickinfo': return buildQuickInfo(wrap, cfg, header);
+    case 'howtoget':  return buildHowToGet(wrap, cfg, header);
+    case 'weather':   return buildWeatherPlaceholder(wrap, header);
+    case 'visit':     return buildItemList(wrap, items.filter(i => i.section_key === 'visit'), header, false);
+    case 'places':    return buildPlacesList(wrap, items.filter(i => i.section_key === 'places'), header);
+    case 'discounts': return buildDiscounts(wrap, items.filter(i => i.section_key === 'discounts'), header);
+    case 'rules':     return buildRules(wrap, items.filter(i => i.section_key === 'rules'), header);
+    case 'emergencies': return buildEmergencies(wrap, items.filter(i => i.section_key === 'emergencies'), header);
+    case 'faq':       return buildFAQ(wrap, faqs, header);
+    case 'contact':   return buildContact(wrap, cfg, header);
+    case 'welcome':   return buildWelcome(wrap, cfg, header);
+    default: return null;
+  }
+}
+
+function buildWelcome(wrap, cfg, header) {
+  if (!cfg.welcome_text) return null;
+  wrap.innerHTML = header + `<p class="g-welcome-text">${cfg.welcome_text}</p>`;
+  return wrap;
+}
+
+function buildQuickInfo(wrap, cfg, header) {
+  wrap.innerHTML = header + `
+    <div class="g-wifi-card">
+      <div class="g-wifi-badge">📶 Wi-Fi</div>
+      <div class="g-wifi-ssid">${esc(cfg.wifi_ssid || 'Red Wi-Fi')}</div>
+      <div class="g-wifi-row">
+        <span class="g-wifi-pwd">${esc(cfg.wifi_password || '—')}</span>
+        <button class="g-wifi-copy" onclick="copyText('${(cfg.wifi_password||'').replace(/'/g,"\\'")}','Contraseña copiada ✓')">📋 Copiar</button>
+      </div>
+    </div>
+    <div class="g-hours-grid" style="margin-top:14px">
+      <div class="g-hour-card"><div class="g-hour-icon">🛬</div><div class="g-hour-label">Check-in</div><div class="g-hour-val">${esc(cfg.checkin_time||'14:00')}</div></div>
+      <div class="g-hour-card"><div class="g-hour-icon">🛫</div><div class="g-hour-label">Check-out</div><div class="g-hour-val">${esc(cfg.checkout_time||'10:00')}</div></div>
+      <div class="g-hour-card"><div class="g-hour-icon">🏢</div><div class="g-hour-label">Recepción</div><div class="g-hour-val">${esc(cfg.reception_hours||'—')}</div></div>
+      <div class="g-hour-card"><div class="g-hour-icon">💬</div><div class="g-hour-label">WhatsApp</div><div class="g-hour-val">${esc(cfg.whatsapp_hours||'—')}</div></div>
+    </div>`;
+  return wrap;
+}
+
+function buildHowToGet(wrap, cfg, header) {
+  if (!cfg.address && !cfg.maps_embed_url && !cfg.coords_lat) return null;
+  const mapSrc = cfg.maps_embed_url || (cfg.coords_lat
+    ? `https://maps.google.com/maps?q=${cfg.coords_lat},${cfg.coords_lng}&z=15&output=embed`
+    : null);
+  const mapsUrl = cfg.coords_lat
+    ? `https://www.google.com/maps?q=${cfg.coords_lat},${cfg.coords_lng}`
+    : `https://www.google.com/maps/search/${encodeURIComponent(cfg.address||'')}`;
+  wrap.innerHTML = header +
+    (mapSrc ? `<iframe class="g-map-embed" src="${esc(mapSrc)}" loading="lazy" allowfullscreen></iframe>` : '') +
+    (cfg.address ? `<div class="g-addr-box"><div class="g-addr-icon">📍</div><div class="g-addr-text">${esc(cfg.address)}</div></div>` : '') +
+    `<div class="g-btn-row">
+      <a class="g-btn g-btn-maps" href="${mapsUrl}" target="_blank">🗺 Abrir en Maps</a>
+      ${cfg.address ? `<button class="g-btn g-btn-copy" onclick="copyText('${cfg.address.replace(/'/g,"\\'")}','Dirección copiada ✓')">📋 Copiar dirección</button>` : ''}
+    </div>`;
+  return wrap;
+}
+
+function buildWeatherPlaceholder(wrap, header) {
+  wrap.innerHTML = header + `<div id="g-weather-content"><div class="g-skeleton" style="height:120px;border-radius:14px"></div></div>`;
+  return wrap;
+}
+
+function buildItemList(wrap, items, header, withCategories) {
+  if (!items.length) return null;
+  let html = header;
+  items.forEach(item => { html += placeCard(item); });
+  wrap.innerHTML = html;
+  return wrap;
+}
+
+function buildPlacesList(wrap, items, header) {
+  if (!items.length) return null;
+  const cats = [...new Set(items.map(i => i.category || 'general'))];
+  let catHtml = '';
+  if (cats.length > 1) {
+    catHtml = `<div class="g-cat-filter" id="cat-filter-${wrap.id}">
+      <div class="g-cat-pill active" data-cat="all" onclick="filterCat(this,'places-items')">Todos</div>
+      ${cats.map(c => `<div class="g-cat-pill" data-cat="${c}" onclick="filterCat(this,'places-items')">${CAT_LABELS[c]||c}</div>`).join('')}
+    </div>`;
+  }
+  let itemsHtml = `<div id="places-items">`;
+  items.forEach(item => { itemsHtml += `<div class="g-place-item" data-cat="${item.category||'general'}">${placeCard(item)}</div>`; });
+  itemsHtml += `</div>`;
+  wrap.innerHTML = header + catHtml + itemsHtml;
+  return wrap;
+}
+
+function placeCard(item) {
+  const extra = item.extra_json || {};
+  const imgHtml = item.photo_url
+    ? `<img src="${esc(item.photo_url)}" loading="lazy" alt="${esc(item.name)}">`
+    : `<span style="font-size:2.5rem">${item.icon||'📍'}</span>`;
+  const catLabel = CAT_LABELS[item.category] || '';
+  const mapsUrl = item.coords_lat
+    ? `https://www.google.com/maps?q=${item.coords_lat},${item.coords_lng}`
+    : `https://www.google.com/maps/search/${encodeURIComponent((item.name||'')+(item.address?' '+item.address:''))}`;
+  const tags = [
+    extra.schedule ? `🕐 ${extra.schedule}` : '',
+    extra.price    ? `💲 ${extra.price}`    : '',
+    extra.distance ? `📍 ${extra.distance}` : '',
+  ].filter(Boolean);
+  return `
+    <div class="g-place-card">
+      <div class="g-place-img">${imgHtml}${catLabel?`<span class="g-place-category-badge">${catLabel}</span>`:''}</div>
+      <div class="g-place-body">
+        <div class="g-place-name">${esc(item.name)}</div>
+        ${item.address ? `<div class="g-place-addr">📍 ${esc(item.address)}</div>` : ''}
+        ${item.description ? `<div class="g-place-desc">${esc(item.description)}</div>` : ''}
+        ${tags.length ? `<div class="g-place-extra">${tags.map(t=>`<span class="g-place-tag">${esc(t)}</span>`).join('')}</div>` : ''}
+        <div class="g-place-btns">
+          ${item.whatsapp ? `<a class="g-place-btn wapp" href="https://wa.me/${item.whatsapp.replace(/\D/g,'')}" target="_blank">💬 WhatsApp</a>` : ''}
+          <a class="g-place-btn maps" href="${mapsUrl}" target="_blank">🗺 Maps</a>
+          ${item.phone ? `<a class="g-place-btn" href="tel:${item.phone}">📞 Llamar</a>` : ''}
+        </div>
+      </div>
+    </div>`;
+}
+
+function buildDiscounts(wrap, items, header) {
+  if (!items.length) return null;
+  let html = header;
+  items.forEach(item => {
+    const extra = item.extra_json || {};
+    const mapsUrl = item.coords_lat
+      ? `https://www.google.com/maps?q=${item.coords_lat},${item.coords_lng}`
+      : `https://www.google.com/maps/search/${encodeURIComponent(item.name||'')}`;
+    const today = new Date().toISOString().slice(0,10);
+    const daysLeft = extra.valid_until
+      ? Math.round((new Date(extra.valid_until) - new Date(today)) / 86400000) : null;
+    const expClass = daysLeft !== null && daysLeft <= 7 ? 'expiring' : '';
+    html += `
+      <div class="g-discount-card">
+        <div class="g-discount-logo">
+          ${item.photo_url ? `<img src="${esc(item.photo_url)}" alt="${esc(item.name)}">` : (item.icon || '🎁')}
+        </div>
+        <div class="g-discount-body">
+          <div class="g-discount-name">${esc(item.name)}</div>
+          ${extra.discount ? `<div class="g-discount-badge">${esc(extra.discount)}</div>` : ''}
+          ${item.description ? `<div class="g-discount-cond">${esc(item.description)}</div>` : ''}
+          ${extra.conditions ? `<div class="g-discount-cond" style="margin-top:3px">${esc(extra.conditions)}</div>` : ''}
+          ${extra.valid_until ? `<div class="g-discount-exp ${expClass}">⏱ Válido hasta ${extra.valid_until}${daysLeft !== null && daysLeft <= 7 ? ' (¡'+daysLeft+' días!)' : ''}</div>` : ''}
+          <div style="margin-top:8px"><a class="g-place-btn maps" style="display:inline-flex;padding:5px 10px;font-size:.68rem" href="${mapsUrl}" target="_blank">🗺 Maps</a></div>
+        </div>
+      </div>`;
+  });
+  wrap.innerHTML = html;
+  return wrap;
+}
+
+function buildRules(wrap, items, header) {
+  if (!items.length) return null;
+  const RULE_ICONS = { allowed:'✅', prohibited:'❌', important:'⚠️', info:'ℹ️' };
+  let html = header + '<div class="g-rules-list">';
+  items.forEach(item => {
+    const extra = item.extra_json || {};
+    const icon = RULE_ICONS[extra.type] || item.icon || '📌';
+    html += `<div class="g-rule"><span class="g-rule-icon">${icon}</span><span class="g-rule-text">${esc(item.name)}${item.description ? ` — <em>${esc(item.description)}</em>` : ''}</span></div>`;
+  });
+  html += '</div>';
+  wrap.innerHTML = html;
+  return wrap;
+}
+
+function buildEmergencies(wrap, items, header) {
+  if (!items.length) return null;
+  let html = header + `<div style="background:#fef2f2;border-radius:10px;padding:10px 12px;margin-bottom:12px;font-size:.75rem;color:#be123c">
+    🚨 En caso de emergencia llamá al número correspondiente o contactá al complejo vía WhatsApp.
+  </div>`;
+  items.forEach(item => {
+    const extra = item.extra_json || {};
+    const tel = item.phone || extra.phone || '';
+    html += `
+      <div class="g-emergency-card">
+        <div class="g-emergency-info">
+          <div class="g-emergency-name">${esc(item.name)}</div>
+          ${item.description ? `<div class="g-emergency-sub">${esc(item.description)}</div>` : ''}
+        </div>
+        ${tel ? `<a class="g-emergency-btn" href="tel:${tel}">📞 ${esc(tel)}</a>` : ''}
+      </div>`;
+  });
+  wrap.innerHTML = html;
+  return wrap;
+}
+
+function buildFAQ(wrap, faqs, header) {
+  if (!faqs.length) return null;
+  let html = header;
+  faqs.forEach((faq, i) => {
+    html += `
+      <div class="g-faq-item" id="faq-${i}">
+        <div class="g-faq-q" onclick="toggleFaq(${i})">${esc(faq.question)}<span class="g-faq-chevron">▾</span></div>
+        <div class="g-faq-a">${esc(faq.answer)}</div>
+      </div>`;
+  });
+  wrap.innerHTML = html;
+  return wrap;
+}
+
+function buildContact(wrap, cfg, header) {
+  const wappUrl = cfg.whatsapp ? `https://wa.me/${cfg.whatsapp.replace(/\D/g,'')}` : null;
+  const mapsUrl = cfg.coords_lat ? `https://www.google.com/maps?q=${cfg.coords_lat},${cfg.coords_lng}` : null;
+  wrap.innerHTML = header + `
+    <div class="g-contact-grid">
+      ${wappUrl ? `<a class="g-contact-btn wapp" href="${wappUrl}" target="_blank"><span class="icon">💬</span><span class="label">WhatsApp</span></a>` : ''}
+      ${cfg.phone ? `<a class="g-contact-btn" href="tel:${cfg.phone}"><span class="icon">📞</span><span class="label">Llamar</span></a>` : ''}
+      ${cfg.email ? `<a class="g-contact-btn" href="mailto:${cfg.email}"><span class="icon">✉️</span><span class="label">Email</span></a>` : ''}
+      ${mapsUrl ? `<a class="g-contact-btn" href="${mapsUrl}" target="_blank"><span class="icon">📍</span><span class="label">Ubicación</span></a>` : ''}
+      ${cfg.instagram_url ? `<a class="g-contact-btn" href="${cfg.instagram_url}" target="_blank"><span class="icon">📸</span><span class="label">Instagram</span></a>` : ''}
+    </div>`;
+  return wrap;
+}
+
+// ── Weather via Open-Meteo (gratuito, sin API key) ──
+async function loadWeather(lat, lng) {
+  try {
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m,weathercode,relative_humidity_2m&daily=weathercode,temperature_2m_max,temperature_2m_min&timezone=America%2FArgentina%2FBuenos_Aires&forecast_days=5`;
+    const res = await fetch(url);
+    const d   = await res.json();
+    const cur = d.current;
+    const daily = d.daily;
+    const icon = wmoIcon(cur.weathercode);
+    const DAYS = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+    const forecast = daily.time.slice(1,6).map((dt, i) => {
+      const day = DAYS[new Date(dt+'T12:00:00').getDay()];
+      return `<div class="g-fc-day"><div class="g-fc-label">${day}</div><div class="g-fc-emoji">${wmoIcon(daily.weathercode[i+1])}</div><div class="g-fc-temp">${Math.round(daily.temperature_2m_max[i+1])}°</div></div>`;
+    }).join('');
+    document.getElementById('g-weather-content').innerHTML = `
+      <div class="g-weather">
+        <div class="g-weather-main">
+          <div class="g-weather-temp">${Math.round(cur.temperature_2m)}°</div>
+          <div class="g-weather-right">
+            <div class="g-weather-desc">${icon} ${wmoDesc(cur.weathercode)}</div>
+            <div class="g-weather-sub">Humedad ${cur.relative_humidity_2m}%</div>
+          </div>
+        </div>
+        <div class="g-weather-forecast">${forecast}</div>
+      </div>`;
+  } catch { /* silently fail */ }
+}
+
+function wmoIcon(code) {
+  if (code === 0) return '☀️';
+  if (code <= 2)  return '⛅';
+  if (code <= 3)  return '☁️';
+  if (code <= 48) return '🌫';
+  if (code <= 57) return '🌦';
+  if (code <= 67) return '🌧';
+  if (code <= 77) return '🌨';
+  if (code <= 82) return '🌧';
+  if (code <= 86) return '❄️';
+  if (code <= 99) return '⛈';
+  return '🌤';
+}
+function wmoDesc(code) {
+  if (code === 0)  return 'Despejado';
+  if (code <= 2)   return 'Parcialmente nublado';
+  if (code <= 3)   return 'Nublado';
+  if (code <= 48)  return 'Niebla';
+  if (code <= 57)  return 'Llovizna';
+  if (code <= 67)  return 'Lluvia';
+  if (code <= 77)  return 'Nevada';
+  if (code <= 82)  return 'Chubascos';
+  if (code <= 99)  return 'Tormenta';
+  return 'Variable';
+}
+
+// ── Helpers ──
+function toggleFaq(i) {
+  document.getElementById('faq-' + i).classList.toggle('open');
+}
+function filterCat(btn, containerId) {
+  const cat = btn.dataset.cat;
+  btn.closest('.g-cat-filter').querySelectorAll('.g-cat-pill').forEach(p => p.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById(containerId).querySelectorAll('.g-place-item').forEach(el => {
+    el.style.display = (cat === 'all' || el.dataset.cat === cat) ? '' : 'none';
+  });
+}
+function copyText(text, msg) {
+  navigator.clipboard.writeText(text).then(() => showToast(msg)).catch(() => showToast('Error al copiar'));
+}
+function showToast(msg) {
+  const t = document.getElementById('g-toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2200);
+}
+async function shareGuide() {
+  const url = window.location.href;
+  if (navigator.share) {
+    navigator.share({ title: document.title, url }).catch(() => {});
+  } else {
+    copyText(url, 'Enlace copiado ✓');
+  }
+}
+function showError(msg) {
+  document.getElementById('g-loading').innerHTML = `<div style="font-size:1rem;color:#fff;text-align:center;padding:20px">${msg}</div>`;
+}
+function esc(s) {
+  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+async function trackView(hotelId, section) {
+  try {
+    await fetch(`${SUPABASE_URL}/rest/v1/guide_views`, {
+      method: 'POST',
+      headers: { apikey: SUPABASE_ANON, Authorization: `Bearer ${SUPABASE_ANON}`, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+      body: JSON.stringify({ hotel_id: hotelId, section })
+    });
+  } catch {}
+}
+function setupScrollSpy() {
+  const sections = document.querySelectorAll('section[id^="sec-"]');
+  const pills = document.querySelectorAll('.g-nav-pill');
+  const fab = document.getElementById('g-fab-top');
+  const observer = new IntersectionObserver(entries => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        const id = e.target.id.replace('sec-','');
+        pills.forEach(p => p.classList.toggle('active', p.href.includes('#sec-'+id)));
+      }
+    });
+  }, { threshold: 0.3 });
+  sections.forEach(s => observer.observe(s));
+  window.addEventListener('scroll', () => {
+    fab.classList.toggle('hidden', window.scrollY < 300);
+  }, { passive: true });
+}
+
+// ── Replace placeholders with real env vars ──
+// This file gets processed by Vite at build time
+// The constants above use __PLACEHOLDER__ which vite.config.js replaces
+
+// Start
+document.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>

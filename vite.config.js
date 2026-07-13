@@ -56,6 +56,7 @@ export default defineConfig({
         main:    'index.html',
         landing: 'landing.html',
         setup:   'setup.html',
+        guia:    'guia.html',
       },
       output: {
         // Code splitting manual: separa los módulos más pesados en chunks lazy
