@@ -2,13 +2,10 @@
 // river-notifications.js — Nivel del Río Uruguay
 // Estación: Concepción del Uruguay (cercana a Colón).
 //
-// Problema conocido: las APIs del INA bloquean CORS desde
-// el browser. Solución: se usa un proxy CORS público.
+// Fuente principal: /api/rio (Vercel serverless, server-side → sin CORS)
+// Fallback:         proxies CORS públicos (por si /api/rio falla)
 //
-// Proxy primario:  corsproxy.io
-// Proxy fallback:  allorigins.win
-//
-// Desde consola: window._checkRio() para forzar check.
+// Diagnóstico desde consola: window._checkRio()
 // ═══════════════════════════════════════════════════
 
 import { addNotification } from './notification-center.js';
@@ -16,7 +13,10 @@ import { addNotification } from './notification-center.js';
 const LASTRUN_KEY       = 'mila_river_notif_lastrun';
 const CHECK_INTERVAL_MS = 4 * 60 * 60 * 1000; // 4 horas
 
-// ── URLs INA (sin proxy) ────────────────────────────────────────────────────
+// ── Endpoint propio (same-origin, sin CORS) ─────────────────────────────────
+const OWN_PROXY = '/api/rio';
+
+// ── URL INA directa (para proxies externos) ─────────────────────────────────
 const INA_WFS_RAW =
   'https://alerta.ina.gob.ar/geoserver/wfs' +
   '?service=WFS&version=2.0.0&request=GetFeature' +
@@ -24,63 +24,68 @@ const INA_WFS_RAW =
   '&outputFormat=application/json' +
   '&count=500';
 
-// ── Proxies CORS (en orden de preferencia) ──────────────────────────────────
-const PROXIES = [
+// ── Proxies CORS públicos (fallback si /api/rio no está disponible) ──────────
+const PUBLIC_PROXIES = [
   url => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
   url => `https://thingproxy.freeboard.io/fetch/${url}`,
   url => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
   url => `https://corsproxy.io/?${encodeURIComponent(url)}`,
 ];
 
-// ── Umbral de alerta manual si la API no lo informa ────────────────────────
-// Concepción del Uruguay: alerta amarilla ≈ 5.50 m
-const FALLBACK_ALERT_M = 5.50;
+// ── Umbral manual si el INA no lo informa ───────────────────────────────────
+const FALLBACK_ALERT_M = 5.50; // m — alerta amarilla Concepción del Uruguay
 
-// ── Nombres para buscar la estación ────────────────────────────────────────
+// ── Palabras clave para identificar la estación ─────────────────────────────
 const KEYWORDS = ['concepcion', 'uruguay'];
 
 // ────────────────────────────────────────────────────────────────────────────
 
-async function fetchWithProxy(rawUrl) {
-  for (const proxyFn of PROXIES) {
-    const proxyUrl = proxyFn(rawUrl);
+async function fetchJSON(url, timeoutMs = 8000) {
+  const res = await fetch(url, { signal: AbortSignal.timeout(timeoutMs) });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const text = await res.text();
+  if (text.trimStart().startsWith('<')) throw new Error('respuesta XML (no JSON)');
+  return JSON.parse(text);
+}
+
+async function getInaData() {
+  // 1. Endpoint propio en Vercel (sin CORS, más confiable)
+  try {
+    const data = await fetchJSON(OWN_PROXY, 10000);
+    console.info('[Río] /api/rio OK');
+    return data;
+  } catch (e) {
+    console.warn('[Río] /api/rio falló:', e.message, '— probando proxies públicos…');
+  }
+
+  // 2. Proxies públicos (fallback)
+  for (const proxyFn of PUBLIC_PROXIES) {
+    const proxyUrl = proxyFn(INA_WFS_RAW);
     try {
-      const res = await fetch(proxyUrl, { signal: AbortSignal.timeout(6000) });
-      if (!res.ok) {
-        console.warn(`[Río] proxy → HTTP ${res.status}:`, proxyUrl.slice(0, 55) + '…');
-        continue;
-      }
-      const text = await res.text();
-      if (text.trimStart().startsWith('<')) {
-        console.warn('[Río] respuesta XML (error WFS), próximo proxy…');
-        continue;
-      }
-      const data = JSON.parse(text);
-      console.info('[Río] proxy OK:', proxyUrl.slice(0, 55) + '…');
+      const data = await fetchJSON(proxyUrl, 7000);
+      console.info('[Río] proxy OK:', proxyUrl.slice(0, 50) + '…');
       return data;
-    } catch (err) {
-      console.warn(`[Río] proxy falló (${err?.message?.slice(0,40)}):`, proxyUrl.slice(0, 55) + '…');
+    } catch (e) {
+      console.warn('[Río] proxy falló:', proxyUrl.slice(0, 50) + '… —', e.message);
     }
   }
+
   return null;
 }
 
-// ── Buscar la estación Concepción del Uruguay en el GeoJSON ─────────────────
 function findStation(geojson) {
   const features = geojson?.features ?? [];
   if (!features.length) return null;
 
-  // Buscar por nombre
   const match = features.find(f => {
     const nombre = (f?.properties?.nombre ?? '').toLowerCase();
     return KEYWORDS.every(k => nombre.includes(k));
   });
 
-  // Si no hay match exacto, loguear las estaciones disponibles para diagnóstico
   if (!match) {
-    const nombres = features.slice(0, 20).map(f => f?.properties?.nombre).filter(Boolean);
-    console.info('[Río] estaciones disponibles (primeras 20):', nombres);
-    // Intentar con solo "concepcion"
+    // Log estaciones disponibles para diagnóstico
+    const nombres = features.slice(0, 15).map(f => f?.properties?.nombre).filter(Boolean);
+    console.info('[Río] estaciones disponibles:', nombres);
     return features.find(f =>
       (f?.properties?.nombre ?? '').toLowerCase().includes('concepcion')
     ) ?? null;
@@ -96,16 +101,15 @@ export async function checkRiverLevel(force = false) {
 
   console.info('[Río] consultando nivel del río Uruguay…');
 
-  const data = await fetchWithProxy(INA_WFS_RAW);
-
+  const data = await getInaData();
   if (!data) {
-    console.warn('[Río] ambos proxies fallaron — sin datos de nivel.');
+    console.warn('[Río] no se pudo obtener datos — /api/rio y todos los proxies fallaron.');
     return;
   }
 
   const feat = findStation(data);
   if (!feat) {
-    console.warn('[Río] no se encontró la estación Concepción del Uruguay en la respuesta.');
+    console.warn('[Río] datos obtenidos pero no se encontró la estación Concepción del Uruguay.');
     return;
   }
 
@@ -119,7 +123,9 @@ export async function checkRiverLevel(force = false) {
     return;
   }
 
-  console.info(`[Río] ✓ ${nombre}: ${nivel} m (alerta: ${alerta} m)`);
+  const nivelStr = typeof nivel === 'number' ? nivel.toFixed(2) : nivel;
+  const alertaStr = typeof alerta === 'number' ? alerta.toFixed(2) : alerta;
+  console.info(`[Río] ✓ ${nombre}: ${nivelStr} m (alerta: ${alertaStr} m)`);
 
   const enAlerta = nivel >= alerta;
 
@@ -131,24 +137,23 @@ export async function checkRiverLevel(force = false) {
     title:    enAlerta
       ? '⚠️ Río Uruguay por encima del nivel de alerta'
       : 'Nivel del Río Uruguay',
-    message: `${nombre}: ${typeof nivel === 'number' ? nivel.toFixed(2) : nivel} m`
-      + ` (alerta: ${typeof alerta === 'number' ? alerta.toFixed(2) : alerta} m)`,
-    data: { nivel, alerta, nombre },
+    message:  `${nombre}: ${nivelStr} m (alerta: ${alertaStr} m)`,
+    data:     { nivel, alerta, nombre },
   });
 
   localStorage.setItem(LASTRUN_KEY, String(now));
 }
 
-let _riverInitialized = false;
+let _initialized = false;
 export function initRiverNotifications() {
-  if (_riverInitialized) return;
-  _riverInitialized = true;
+  if (_initialized) return;
+  _initialized = true;
   checkRiverLevel();
   setInterval(() => checkRiverLevel(), CHECK_INTERVAL_MS);
 }
 
-// Diagnóstico desde consola del navegador:
-//   _checkRio()       → fuerza check ahora
+// Diagnóstico desde consola:
+//   _checkRio()       → fuerza check inmediato
 //   _checkRio(false)  → respeta cooldown de 4 horas
 if (typeof window !== 'undefined') {
   window._checkRio = (force = true) => checkRiverLevel(force);
