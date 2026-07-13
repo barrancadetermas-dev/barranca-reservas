@@ -39,20 +39,38 @@ function findStation(geojson) {
     return null;
   }
 
+  // Buscar por nombre — solo "concepcion" alcanza (el INA no incluye "uruguay" en el nombre)
   const match = features.find(f => {
     const nombre = (f?.properties?.nombre ?? '').toLowerCase();
-    return KEYWORDS.every(k => nombre.includes(k));
+    return nombre.includes('concepcion');
   });
 
   if (!match) {
     const nombres = features.slice(0, 20).map(f => f?.properties?.nombre).filter(Boolean);
-    console.info('[Río] estaciones disponibles (primeras 20):', nombres);
-    return features.find(f =>
-      (f?.properties?.nombre ?? '').toLowerCase().includes('concepcion')
-    ) ?? null;
+    console.info('[Río] estaciones disponibles:', nombres);
   }
 
-  return match;
+  return match ?? null;
+}
+
+// Extraer el nivel del día: el INA devuelve propiedades con clave fecha "YYYY-MM-DD"
+function extractNivel(props) {
+  // Primero intentar campos estándar
+  const std = props.valor ?? props.altura ?? props.nivel ?? props.value;
+  if (std != null && !isNaN(parseFloat(std))) return parseFloat(std);
+
+  // Si no hay campo estándar, buscar la fecha de hoy o la más reciente
+  const today = new Date().toISOString().slice(0, 10);
+  const dateKeys = Object.keys(props)
+    .filter(k => /^\d{4}-\d{2}-\d{2}$/.test(k))
+    .sort()
+    .reverse(); // más reciente primero
+
+  // Preferir hoy, sino la fecha más cercana disponible
+  const key = dateKeys.includes(today) ? today : dateKeys[0];
+  if (key) return parseFloat(props[key]);
+
+  return null;
 }
 
 export async function checkRiverLevel(force = false) {
@@ -71,18 +89,26 @@ export async function checkRiverLevel(force = false) {
   }
 
   const props    = feat.properties ?? {};
-  const nivel    = props.valor ?? props.altura ?? props.value ?? props.nivel ?? null;
+  const nivel    = extractNivel(props);
   const alerta   = props.nivel_alerta ?? props.alerta ?? FALLBACK_ALERT_M;
   const nombre   = props.nombre ?? 'Concepción del Uruguay';
 
-  if (nivel == null) {
-    console.warn('[Río] estación encontrada pero sin nivel. Props:', props);
+  if (nivel == null || isNaN(nivel)) {
+    console.warn('[Río] estación encontrada pero sin nivel. Props:', Object.keys(props));
     return;
   }
 
-  const nivelStr  = typeof nivel  === 'number' ? nivel.toFixed(2)  : nivel;
+  // Próximos días (pronóstico si el INA los incluye)
+  const today   = new Date().toISOString().slice(0, 10);
+  const dateKeys = Object.keys(props).filter(k => /^\d{4}-\d{2}-\d{2}$/.test(k)).sort();
+  const futureKeys = dateKeys.filter(k => k > today).slice(0, 3);
+  const forecastStr = futureKeys.length > 0
+    ? ' · próx: ' + futureKeys.map(k => `${k.slice(5)}: ${parseFloat(props[k]).toFixed(2)}m`).join(', ')
+    : '';
+
+  const nivelStr  = nivel.toFixed(2);
   const alertaStr = typeof alerta === 'number' ? alerta.toFixed(2) : alerta;
-  console.info(`[Río] ✓ ${nombre}: ${nivelStr} m (alerta: ${alertaStr} m)`);
+  console.info(`[Río] ✓ ${nombre}: ${nivelStr} m (alerta: ${alertaStr} m)${forecastStr}`);
 
   const enAlerta = nivel >= alerta;
   addNotification({
@@ -93,7 +119,7 @@ export async function checkRiverLevel(force = false) {
     title:    enAlerta
       ? '⚠️ Río Uruguay por encima del nivel de alerta'
       : 'Nivel del Río Uruguay',
-    message:  `${nombre}: ${nivelStr} m (alerta: ${alertaStr} m)`,
+    message:  `${nombre}: ${nivelStr} m (alerta: ${alertaStr} m)${forecastStr}`,
     data:     { nivel, alerta, nombre },
   });
 
