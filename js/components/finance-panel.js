@@ -163,12 +163,12 @@ export class FinancePanel {
     const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
     let activeBookings = [];
     try {
-      // Intento 1: con FK explícita (como usa el resto del codebase)
+      // Sin join a payments (payment_method puede no existir hasta correr el SQL)
+      // Usamos total_paid del booking para estimar la seña
       const { data: ab1, error: err1 } = await this.db.from('bookings')
-        .select(`id, check_in, check_out, total_amount, status,
+        .select(`id, check_in, check_out, total_amount, total_paid, status,
                  guests!bookings_guest_id_fkey(first_name, last_name),
-                 booking_units(units(name, color)),
-                 payments(id, amount, payment_method, payment_type)`)
+                 booking_units(units(name, color))`)
         .eq('hotel_id', this.ctx.hotelId)
         .not('status', 'in', '(cancelled,blocked)')
         .gte('check_out', thirtyDaysAgo)
@@ -179,37 +179,17 @@ export class FinancePanel {
         activeBookings = ab1 ?? [];
         console.info('[FinancePanel] activeBookings OK:', activeBookings.length, 'reservas');
       } else {
-        console.warn('[FinancePanel] intento 1 falló:', err1.message, '— probando sin FK hint…');
-
-        // Intento 2: sin FK hint (Supabase infiere la relación)
-        const { data: ab2, error: err2 } = await this.db.from('bookings')
-          .select(`id, check_in, check_out, total_amount, status,
-                   guests(first_name, last_name),
-                   booking_units(units(name, color)),
-                   payments(id, amount, payment_method, payment_type)`)
+        console.warn('[FinancePanel] query con FK falló:', err1.message);
+        // Fallback mínimo sin joins
+        const { data: ab2 } = await this.db.from('bookings')
+          .select('id, check_in, check_out, total_amount, total_paid, status')
           .eq('hotel_id', this.ctx.hotelId)
           .not('status', 'in', '(cancelled,blocked)')
           .gte('check_out', thirtyDaysAgo)
           .order('check_in', { ascending: true })
           .limit(200);
-
-        if (!err2) {
-          activeBookings = ab2 ?? [];
-          console.info('[FinancePanel] activeBookings intento 2 OK:', activeBookings.length, 'reservas');
-        } else {
-          console.warn('[FinancePanel] intento 2 falló:', err2.message, '— query mínima sin joins…');
-
-          // Intento 3: query mínima sin joins (siempre funciona)
-          const { data: ab3 } = await this.db.from('bookings')
-            .select('id, check_in, check_out, total_amount, status')
-            .eq('hotel_id', this.ctx.hotelId)
-            .not('status', 'in', '(cancelled,blocked)')
-            .gte('check_out', thirtyDaysAgo)
-            .order('check_in', { ascending: true })
-            .limit(200);
-          activeBookings = ab3 ?? [];
-          console.info('[FinancePanel] activeBookings fallback (sin joins):', activeBookings.length, 'reservas');
-        }
+        activeBookings = ab2 ?? [];
+        console.info('[FinancePanel] activeBookings fallback:', activeBookings.length, 'reservas');
       }
     } catch (e) {
       console.warn('[FinancePanel] activeBookings excepción:', e?.message ?? e);
@@ -631,27 +611,25 @@ export class FinancePanel {
     const existing = document.getElementById('overlay-frasco-new');
     if (existing) existing.remove();
 
-    const fmt = n => Math.round(n ?? 0).toLocaleString('es-AR');
-
-    // Métodos que SÍ van a frasco (todo menos efectivo)
-    const FRASCO_METHODS = ['transfer','transferencia','card','tarjeta','debit','debito',
-                            'mercadopago','qr','naranja','uala','cuenta','other'];
+    const fmt   = n => Math.round(n ?? 0).toLocaleString('es-AR');
+    const today2 = new Date().toISOString().slice(0, 10);
 
     const bookingOptions = activeBookings.map(bk => {
       const g        = bk.guests;
       const apellido = (g?.last_name  ?? '').trim();
       const nombre   = (g?.first_name ?? '').trim();
-      const fullName = [apellido, nombre].filter(Boolean).join(', ') || '(sin nombre)';
-      const deptos   = (bk.booking_units ?? []).map(bu => bu?.units?.name).filter(Boolean).join(' + ') || '—';
-      const ci       = bk.check_in  ?? '';
-      const co       = bk.check_out ?? '';
-      const hoy      = new Date().toISOString().slice(0, 10);
-      const estado   = ci > hoy ? '📅' : co >= hoy ? '🏠' : '✅';
-      const montosNoEfectivo = (bk.payments ?? [])
-        .filter(p => p.payment_type === 'deposit' && !['cash','efectivo'].includes((p.payment_method ?? '').toLowerCase()))
-        .reduce((s, p) => s + (p.amount ?? 0), 0);
-      const montoStr = montosNoEfectivo > 0 ? `  —  seña: $${fmt(montosNoEfectivo)}` : '';
-      return { id: bk.id, label: `${estado} ${fullName}  ·  ${deptos}  ·  ${ci}`, monto: montosNoEfectivo, montoStr };
+      const fullName = apellido || nombre
+        ? [apellido, nombre].filter(Boolean).join(', ')
+        : '(sin nombre)';
+      const deptos  = (bk.booking_units ?? [])
+        .map(bu => bu?.units?.name).filter(Boolean).join(' + ') || '—';
+      const ci      = bk.check_in  ?? '';
+      const co      = bk.check_out ?? '';
+      const estado  = ci > today2 ? '📅' : co >= today2 ? '🏠' : '✅';
+      // total_paid = lo que ya pagó el huésped (incluye señas)
+      const monto   = bk.total_paid ?? 0;
+      const montoStr = monto > 0 ? `  —  seña: $${fmt(monto)}` : '';
+      return { id: bk.id, label: `${estado} ${fullName}  ·  ${deptos}  ·  ${ci}`, monto, montoStr };
     });
 
     const modal = document.createElement('div');
@@ -711,7 +689,7 @@ export class FinancePanel {
 
           <div class="form-group">
             <label>Fecha de acreditación <span class="req">*</span></label>
-            <input type="date" id="fn-date" class="form-input">
+            <input type="date" id="fn-date" class="form-input" value="${today2}">
           </div>
 
           <div class="form-group">

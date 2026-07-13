@@ -24,10 +24,12 @@ const INA_WFS_RAW =
   '&outputFormat=application/json' +
   '&count=500';
 
-// ── Proxies CORS ────────────────────────────────────────────────────────────
+// ── Proxies CORS (en orden de preferencia) ──────────────────────────────────
 const PROXIES = [
-  url => `https://corsproxy.io/?${encodeURIComponent(url)}`,
   url => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+  url => `https://thingproxy.freeboard.io/fetch/${url}`,
+  url => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
+  url => `https://corsproxy.io/?${encodeURIComponent(url)}`,
 ];
 
 // ── Umbral de alerta manual si la API no lo informa ────────────────────────
@@ -43,23 +45,21 @@ async function fetchWithProxy(rawUrl) {
   for (const proxyFn of PROXIES) {
     const proxyUrl = proxyFn(rawUrl);
     try {
-      const res = await fetch(proxyUrl, { signal: AbortSignal.timeout(10000) });
+      const res = await fetch(proxyUrl, { signal: AbortSignal.timeout(6000) });
       if (!res.ok) {
-        console.warn(`[Río] proxy ${proxyUrl.slice(0,40)}… → HTTP ${res.status}`);
+        console.warn(`[Río] proxy → HTTP ${res.status}:`, proxyUrl.slice(0, 55) + '…');
         continue;
       }
       const text = await res.text();
-
-      // Si el servidor devolvió XML (error WFS), loguearlo y probar siguiente proxy
       if (text.trimStart().startsWith('<')) {
-        console.warn('[Río] respuesta XML inesperada (posible error WFS):', text.slice(0, 200));
+        console.warn('[Río] respuesta XML (error WFS), próximo proxy…');
         continue;
       }
-
       const data = JSON.parse(text);
+      console.info('[Río] proxy OK:', proxyUrl.slice(0, 55) + '…');
       return data;
     } catch (err) {
-      console.warn(`[Río] proxy falló (${err?.message}):`, proxyUrl.slice(0, 60));
+      console.warn(`[Río] proxy falló (${err?.message?.slice(0,40)}):`, proxyUrl.slice(0, 55) + '…');
     }
   }
   return null;
