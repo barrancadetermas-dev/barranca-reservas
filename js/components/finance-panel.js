@@ -159,9 +159,47 @@ export class FinancePanel {
       if (el) el.innerHTML = loading;
     });
 
+    // ── Reservas activas para el frasco — query independiente ──────────────
+    // Se carga primero y aparte para que un error en frasco_items no la borre.
+    // Incluye reservas en curso + futuras + las que salieron hace ≤30 días.
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
+    let activeBookings = [];
+    try {
+      const { data: abData } = await this.db.from('bookings')
+        .select(`id, check_in, check_out, total_amount, total_paid, status,
+                 guests(first_name, last_name),
+                 booking_units(units(name, color)),
+                 payments(id, amount, payment_method, payment_type)`)
+        .eq('hotel_id', this.ctx.hotelId)
+        .not('status', 'in', '(cancelled,blocked)')
+        .gte('check_out', thirtyDaysAgo)
+        .order('check_in', { ascending: true })
+        .limit(200);
+      activeBookings = abData ?? [];
+    } catch (e) {
+      console.warn('[FinancePanel] activeBookings query error:', e);
+    }
+
+    // ── Frascos — query independiente (tabla puede no existir aún) ─────────
+    let frascoItems = [];
+    try {
+      const { data: fiData } = await this.db.from('frasco_items')
+        .select(`id, original_amount, interest_amount, frasco_date, notes,
+                 credited, credited_at, credited_amount, booking_id,
+                 bookings(id, check_in, check_out,
+                   guests(first_name, last_name),
+                   booking_units(units(name, color)))`)
+        .eq('hotel_id', this.ctx.hotelId)
+        .order('frasco_date', { ascending: true })
+        .limit(200);
+      frascoItems = fiData ?? [];
+    } catch (e) {
+      console.warn('[FinancePanel] frasco_items no disponible (¿SQL pendiente?):', e?.message);
+    }
+
     try {
       // Reservas del período + máxima reserva con nombre del huésped
-      const [periodoRes, futuroRes, maxBkRes, prevRes, frascoRes, frascoItemsRes, activeBkRes] = await Promise.all([
+      const [periodoRes, futuroRes, maxBkRes, prevRes, frascoRes] = await Promise.all([
         // Período seleccionado: todas las reservas que INICIAN en el rango
         // Incluye created_at (anticipación) y booking_units con unit_id (unidad más rentable)
         this.db.from('bookings')
@@ -201,28 +239,6 @@ export class FinancePanel {
           .not('frasco_date','is',null)
           .order('frasco_date', { ascending: true })
           .limit(100),
-        // Frascos manuales (tabla frasco_items)
-        this.db.from('frasco_items')
-          .select(`id, original_amount, interest_amount, frasco_date, notes,
-                   credited, credited_at, credited_amount,
-                   booking_id,
-                   bookings(id, check_in, check_out,
-                     guests!bookings_guest_id_fkey(first_name, last_name),
-                     booking_units(units(name, color)))`)
-          .eq('hotel_id', this.ctx.hotelId)
-          .order('frasco_date', { ascending: true })
-          .limit(200),
-        // Reservas activas para el selector del modal
-        this.db.from('bookings')
-          .select(`id, check_in, check_out, total_amount, total_paid,
-                   guests!bookings_guest_id_fkey(first_name, last_name),
-                   booking_units(units(name, color)),
-                   payments(id, amount, payment_method, payment_type)`)
-          .eq('hotel_id', this.ctx.hotelId)
-          .not('status','in','(cancelled,blocked)')
-          .gte('check_out', today)
-          .order('check_in', { ascending: true })
-          .limit(100),
       ]);
 
       if (periodoRes.error) throw periodoRes.error;
@@ -235,8 +251,7 @@ export class FinancePanel {
       const frascoAll     = frascoRes?.data ?? [];
       const frascoPending = frascoAll.filter(p => !p.frasco_credited_at);
       const frascoOverdue = frascoPending.filter(p => p.frasco_date <= today);
-      const frascoItems   = frascoItemsRes?.data ?? [];
-      const activeBookings = activeBkRes?.data ?? [];
+      // frascoItems y activeBookings ya están cargados arriba (queries independientes)
 
       // ── Métricas del período ──
       const totalVend  = bks.reduce((s,b) => s + (b.total_amount ?? 0), 0);
@@ -588,15 +603,21 @@ export class FinancePanel {
                             'mercadopago','qr','naranja','uala','cuenta','other'];
 
     const bookingOptions = activeBookings.map(bk => {
-      const g       = bk.guests;
-      const nombre  = g ? `${g.last_name ?? ''}, ${g.first_name ?? ''}`.trim().replace(/^,\s*/, '') : '—';
-      const deptos  = (bk.booking_units ?? []).map(bu => bu?.units?.name).filter(Boolean).join('+') || '—';
-      const ci      = bk.check_in ?? '';
-      // Monto de señas NO en efectivo
+      const g      = bk.guests;
+      const apellido = (g?.last_name  ?? '').trim();
+      const nombre   = (g?.first_name ?? '').trim();
+      const fullName = [apellido, nombre].filter(Boolean).join(', ') || '(sin nombre)';
+      const deptos   = (bk.booking_units ?? []).map(bu => bu?.units?.name).filter(Boolean).join(' + ') || '—';
+      const ci       = bk.check_in  ?? '';
+      const co       = bk.check_out ?? '';
+      const hoy      = new Date().toISOString().slice(0, 10);
+      const estado   = ci > hoy ? '📅 Futura' : co >= hoy ? '🏠 En curso' : '✅ Reciente';
+      // Señas no en efectivo para pre-llenar monto
       const montosNoEfectivo = (bk.payments ?? [])
-        .filter(p => p.payment_type === 'deposit' && FRASCO_METHODS.some(m => (p.payment_method ?? '').toLowerCase().includes(m)))
+        .filter(p => p.payment_type === 'deposit' && !['cash','efectivo'].includes((p.payment_method ?? '').toLowerCase()))
         .reduce((s, p) => s + (p.amount ?? 0), 0);
-      return { id: bk.id, label: `${nombre} · ${deptos} · ${ci}`, monto: montosNoEfectivo };
+      const label = `${estado}  ${fullName}  ·  ${deptos}  ·  ${ci} → ${co}`;
+      return { id: bk.id, label, monto: montosNoEfectivo };
     });
 
     const modal = document.createElement('div');
@@ -614,10 +635,17 @@ export class FinancePanel {
             <label>Reserva asociada <span style="font-size:.72rem;color:var(--color-text-3)">(opcional)</span></label>
             <select id="fn-booking" class="filter-select">
               <option value="">— Sin reserva asociada —</option>
-              ${bookingOptions.map(b =>
-                `<option value="${b.id}" data-monto="${b.monto}">${b.label}${b.monto > 0 ? ` — seña: $${fmt(b.monto)}` : ''}</option>`
-              ).join('')}
+              ${bookingOptions.length === 0
+                ? `<option disabled>Sin reservas activas o recientes</option>`
+                : bookingOptions.map(b =>
+                    `<option value="${b.id}" data-monto="${b.monto}">${b.label}${b.monto > 0 ? `  —  seña: $${fmt(b.monto)}` : ''}</option>`
+                  ).join('')
+              }
             </select>
+            ${bookingOptions.length === 0
+              ? `<small style="color:#f59e0b;font-size:.7rem">⚠️ No se encontraron reservas activas. Recargá el panel financiero.</small>`
+              : `<small style="color:var(--color-text-3);font-size:.7rem">Reservas en curso + futuras + últimas salidas</small>`
+            }
           </div>
 
           <div class="form-grid-2">
