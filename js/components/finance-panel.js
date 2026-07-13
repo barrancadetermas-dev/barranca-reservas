@@ -160,14 +160,12 @@ export class FinancePanel {
     });
 
     // ── Reservas activas para el frasco — query independiente ──────────────
-    // Se carga primero y aparte para que un error en frasco_items no la borre.
-    // Incluye reservas en curso + futuras + las que salieron hace ≤30 días.
     const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
     let activeBookings = [];
     try {
-      const { data: abData } = await this.db.from('bookings')
+      const { data: abData, error: abError } = await this.db.from('bookings')
         .select(`id, check_in, check_out, total_amount, total_paid, status,
-                 guests(first_name, last_name),
+                 guests!bookings_guest_id_fkey(first_name, last_name),
                  booking_units(units(name, color)),
                  payments(id, amount, payment_method, payment_type)`)
         .eq('hotel_id', this.ctx.hotelId)
@@ -175,9 +173,24 @@ export class FinancePanel {
         .gte('check_out', thirtyDaysAgo)
         .order('check_in', { ascending: true })
         .limit(200);
-      activeBookings = abData ?? [];
+      if (abError) {
+        console.warn('[FinancePanel] activeBookings error:', abError.message);
+        // Fallback: query mínima sin joins para asegurar que al menos tenemos las reservas
+        const { data: fallback } = await this.db.from('bookings')
+          .select('id, check_in, check_out, total_amount, total_paid, status')
+          .eq('hotel_id', this.ctx.hotelId)
+          .not('status', 'in', '(cancelled,blocked)')
+          .gte('check_out', thirtyDaysAgo)
+          .order('check_in', { ascending: true })
+          .limit(200);
+        activeBookings = fallback ?? [];
+        console.info('[FinancePanel] fallback sin joins:', activeBookings.length, 'reservas');
+      } else {
+        activeBookings = abData ?? [];
+        console.info('[FinancePanel] activeBookings OK:', activeBookings.length, 'reservas');
+      }
     } catch (e) {
-      console.warn('[FinancePanel] activeBookings query error:', e);
+      console.warn('[FinancePanel] activeBookings query exception:', e);
     }
 
     // ── Frascos — query independiente (tabla puede no existir aún) ─────────
@@ -603,7 +616,7 @@ export class FinancePanel {
                             'mercadopago','qr','naranja','uala','cuenta','other'];
 
     const bookingOptions = activeBookings.map(bk => {
-      const g      = bk.guests;
+      const g        = bk.guests;
       const apellido = (g?.last_name  ?? '').trim();
       const nombre   = (g?.first_name ?? '').trim();
       const fullName = [apellido, nombre].filter(Boolean).join(', ') || '(sin nombre)';
@@ -611,13 +624,12 @@ export class FinancePanel {
       const ci       = bk.check_in  ?? '';
       const co       = bk.check_out ?? '';
       const hoy      = new Date().toISOString().slice(0, 10);
-      const estado   = ci > hoy ? '📅 Futura' : co >= hoy ? '🏠 En curso' : '✅ Reciente';
-      // Señas no en efectivo para pre-llenar monto
+      const estado   = ci > hoy ? '📅' : co >= hoy ? '🏠' : '✅';
       const montosNoEfectivo = (bk.payments ?? [])
         .filter(p => p.payment_type === 'deposit' && !['cash','efectivo'].includes((p.payment_method ?? '').toLowerCase()))
         .reduce((s, p) => s + (p.amount ?? 0), 0);
-      const label = `${estado}  ${fullName}  ·  ${deptos}  ·  ${ci} → ${co}`;
-      return { id: bk.id, label, monto: montosNoEfectivo };
+      const montoStr = montosNoEfectivo > 0 ? `  —  seña: $${fmt(montosNoEfectivo)}` : '';
+      return { id: bk.id, label: `${estado} ${fullName}  ·  ${deptos}  ·  ${ci}`, monto: montosNoEfectivo, montoStr };
     });
 
     const modal = document.createElement('div');
@@ -638,7 +650,7 @@ export class FinancePanel {
               ${bookingOptions.length === 0
                 ? `<option disabled>Sin reservas activas o recientes</option>`
                 : bookingOptions.map(b =>
-                    `<option value="${b.id}" data-monto="${b.monto}">${b.label}${b.monto > 0 ? `  —  seña: $${fmt(b.monto)}` : ''}</option>`
+                    `<option value="${b.id}" data-monto="${b.monto}">${b.label}${b.montoStr}</option>`
                   ).join('')
               }
             </select>
