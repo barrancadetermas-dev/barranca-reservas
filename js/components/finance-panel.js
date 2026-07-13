@@ -160,34 +160,31 @@ export class FinancePanel {
     });
 
     // ── Reservas activas para el frasco — query independiente ──────────────
-    const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
+    const sevenDaysAgo = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
     let activeBookings = [];
     try {
-      // Sin join a payments (payment_method puede no existir hasta correr el SQL)
-      // Usamos total_paid del booking para estimar la seña
       const { data: ab1, error: err1 } = await this.db.from('bookings')
         .select(`id, check_in, check_out, total_amount, total_paid, status,
                  guests!bookings_guest_id_fkey(first_name, last_name),
                  booking_units(units(name, color))`)
         .eq('hotel_id', this.ctx.hotelId)
         .not('status', 'in', '(cancelled,blocked)')
-        .gte('check_out', thirtyDaysAgo)
+        .gte('check_out', sevenDaysAgo)
         .order('check_in', { ascending: true })
-        .limit(200);
+        .limit(100);
 
       if (!err1) {
         activeBookings = ab1 ?? [];
         console.info('[FinancePanel] activeBookings OK:', activeBookings.length, 'reservas');
       } else {
         console.warn('[FinancePanel] query con FK falló:', err1.message);
-        // Fallback mínimo sin joins
         const { data: ab2 } = await this.db.from('bookings')
           .select('id, check_in, check_out, total_amount, total_paid, status')
           .eq('hotel_id', this.ctx.hotelId)
           .not('status', 'in', '(cancelled,blocked)')
-          .gte('check_out', thirtyDaysAgo)
+          .gte('check_out', sevenDaysAgo)
           .order('check_in', { ascending: true })
-          .limit(200);
+          .limit(100);
         activeBookings = ab2 ?? [];
         console.info('[FinancePanel] activeBookings fallback:', activeBookings.length, 'reservas');
       }
@@ -611,7 +608,8 @@ export class FinancePanel {
     const existing = document.getElementById('overlay-frasco-new');
     if (existing) existing.remove();
 
-    const fmt   = n => Math.round(n ?? 0).toLocaleString('es-AR');
+    const fmt    = n => Math.round(n ?? 0).toLocaleString('es-AR');
+    const fmt$   = n => '$' + fmt(n);
     const today2 = new Date().toISOString().slice(0, 10);
 
     const bookingOptions = activeBookings.map(bk => {
@@ -626,7 +624,6 @@ export class FinancePanel {
       const ci      = bk.check_in  ?? '';
       const co      = bk.check_out ?? '';
       const estado  = ci > today2 ? '📅' : co >= today2 ? '🏠' : '✅';
-      // total_paid = lo que ya pagó el huésped (incluye señas)
       const monto   = bk.total_paid ?? 0;
       const montoStr = monto > 0 ? `  —  seña: $${fmt(monto)}` : '';
       return { id: bk.id, label: `${estado} ${fullName}  ·  ${deptos}  ·  ${ci}`, monto, montoStr };
@@ -643,38 +640,74 @@ export class FinancePanel {
         </div>
         <div class="modal-body">
 
-          <div class="form-group">
-            <label>Reserva asociada <span style="font-size:.72rem;color:var(--color-text-3)">(opcional)</span></label>
-            <select id="fn-booking" class="filter-select">
-              <option value="">— Sin reserva asociada —</option>
-              ${bookingOptions.length === 0
-                ? `<option disabled>Sin reservas activas o recientes</option>`
-                : bookingOptions.map(b =>
-                    `<option value="${b.id}" data-monto="${b.monto}">${b.label}${b.montoStr}</option>`
-                  ).join('')
-              }
-            </select>
-            ${bookingOptions.length === 0
-              ? `<small style="color:#f59e0b;font-size:.7rem">⚠️ No se encontraron reservas activas. Recargá el panel financiero.</small>`
-              : `<small style="color:var(--color-text-3);font-size:.7rem">Reservas en curso + futuras + últimas salidas</small>`
-            }
+          <!-- Tipo de frasco -->
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px">
+            <label id="fn-type-reserva"
+                   style="display:flex;align-items:center;gap:8px;padding:10px 12px;border-radius:10px;
+                          cursor:pointer;border:2px solid #f97316;background:#fff7ed;user-select:none">
+              <input type="radio" name="fn-type" value="reserva" checked style="display:none">
+              <span style="font-size:1.1rem">🏠</span>
+              <div>
+                <div style="font-size:.78rem;font-weight:700;color:#ea580c">Seña de reserva</div>
+                <div style="font-size:.65rem;color:#9a3412">Vinculado a un huésped</div>
+              </div>
+            </label>
+            <label id="fn-type-gastos"
+                   style="display:flex;align-items:center;gap:8px;padding:10px 12px;border-radius:10px;
+                          cursor:pointer;border:2px solid var(--color-border);background:var(--color-surface-2);user-select:none">
+              <input type="radio" name="fn-type" value="gastos" style="display:none">
+              <span style="font-size:1.1rem">💰</span>
+              <div>
+                <div style="font-size:.78rem;font-weight:700;color:var(--color-text)">Para gastos</div>
+                <div style="font-size:.65rem;color:var(--color-text-3)">Fondo propio sin reserva</div>
+              </div>
+            </label>
           </div>
 
+          <!-- Sección: vinculado a reserva -->
+          <div id="fn-section-reserva">
+            <div class="form-group">
+              <label>Reserva</label>
+              <select id="fn-booking" class="filter-select">
+                <option value="">— Elegí la reserva —</option>
+                ${bookingOptions.length === 0
+                  ? '<option disabled>Sin reservas de esta semana o futuras</option>'
+                  : bookingOptions.map(b =>
+                      '<option value="' + b.id + '" data-monto="' + b.monto + '">' + b.label + b.montoStr + '</option>'
+                    ).join('')
+                }
+              </select>
+              <small style="color:var(--color-text-3);font-size:.7rem">
+                Últimos 7 días + futuras · ordenadas por check-in
+              </small>
+            </div>
+          </div>
+
+          <!-- Sección: para gastos propios -->
+          <div id="fn-section-gastos" style="display:none">
+            <div class="form-group">
+              <label>Descripción <span class="req">*</span></label>
+              <input type="text" id="fn-desc" class="form-input"
+                     placeholder="Ej: fondo para arreglo del baño, reserva de temporada…">
+            </div>
+          </div>
+
+          <!-- Montos -->
           <div class="form-grid-2">
             <div class="form-group">
-              <label>Monto base <span class="req">*</span>
-                <span style="font-size:.68rem;color:var(--color-text-3)">(seña original)</span>
-              </label>
+              <label>Monto a guardar <span class="req">*</span></label>
               <div style="position:relative">
-                <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--color-text-3);font-size:.85rem">$</span>
+                <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);
+                             color:var(--color-text-3);font-size:.85rem">$</span>
                 <input type="number" id="fn-base" min="0" step="1" placeholder="75000"
                        style="padding-left:22px" class="form-input">
               </div>
             </div>
             <div class="form-group">
-              <label>Intereses a ganar <span style="font-size:.68rem;color:var(--color-text-3)">(en $)</span></label>
+              <label>Intereses estimados <span style="font-size:.68rem;color:var(--color-text-3)">(en $)</span></label>
               <div style="position:relative">
-                <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:#16a34a;font-size:.85rem">+$</span>
+                <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);
+                             color:#16a34a;font-size:.85rem">+$</span>
                 <input type="number" id="fn-interest" min="0" step="1" placeholder="380" value="0"
                        style="padding-left:28px" class="form-input">
               </div>
@@ -715,47 +748,76 @@ export class FinancePanel {
     };
     const escH = e => { if (e.key === 'Escape') close(); };
     document.addEventListener('keydown', escH);
-    modal.querySelector('#fn-close').onclick   = close;
-    modal.querySelector('#fn-cancel').onclick  = close;
+    modal.querySelector('#fn-close').onclick  = close;
+    modal.querySelector('#fn-cancel').onclick = close;
     modal.addEventListener('click', e => { if (e.target === modal) close(); });
 
-    // Pre-llenar monto al seleccionar reserva
+    // Toggle tipo
+    const secReserva = modal.querySelector('#fn-section-reserva');
+    const secGastos  = modal.querySelector('#fn-section-gastos');
+    const lblReserva = modal.querySelector('#fn-type-reserva');
+    const lblGastos  = modal.querySelector('#fn-type-gastos');
+
+    const activateType = type => {
+      const isR = type === 'reserva';
+      secReserva.style.display    = isR ? '' : 'none';
+      secGastos.style.display     = isR ? 'none' : '';
+      lblReserva.style.border     = isR ? '2px solid #f97316' : '2px solid var(--color-border)';
+      lblReserva.style.background = isR ? '#fff7ed' : 'var(--color-surface-2)';
+      lblGastos.style.border      = isR ? '2px solid var(--color-border)' : '2px solid #3b82f6';
+      lblGastos.style.background  = isR ? 'var(--color-surface-2)' : '#eff6ff';
+    };
+
+    lblReserva.addEventListener('click', () => {
+      modal.querySelector('input[name="fn-type"][value="reserva"]').checked = true;
+      activateType('reserva');
+    });
+    lblGastos.addEventListener('click', () => {
+      modal.querySelector('input[name="fn-type"][value="gastos"]').checked = true;
+      activateType('gastos');
+    });
+
+    // Montos
     const bookingSel = modal.querySelector('#fn-booking');
     const baseInput  = modal.querySelector('#fn-base');
     const intInput   = modal.querySelector('#fn-interest');
     const totalDisp  = modal.querySelector('#fn-total-display');
-    const fmt2 = n => '$' + Math.round(n ?? 0).toLocaleString('es-AR');
 
     const updateTotal = () => {
       const base = parseFloat(baseInput.value) || 0;
       const int  = parseFloat(intInput.value)  || 0;
-      totalDisp.textContent = fmt2(base + int);
+      totalDisp.textContent = fmt$(base + int);
     };
 
-    bookingSel.addEventListener('change', () => {
+    bookingSel?.addEventListener('change', () => {
       const opt   = bookingSel.selectedOptions[0];
       const monto = parseFloat(opt?.dataset?.monto ?? 0);
-      if (monto > 0) baseInput.value = monto;
-      updateTotal();
+      if (monto > 0) { baseInput.value = monto; updateTotal(); }
     });
     baseInput.addEventListener('input', updateTotal);
     intInput.addEventListener('input',  updateTotal);
     updateTotal();
 
-    setTimeout(() => bookingSel.focus(), 80);
-
+    // Guardar
     modal.querySelector('#fn-save').addEventListener('click', async () => {
+      const tipo     = modal.querySelector('input[name="fn-type"]:checked')?.value ?? 'reserva';
       const base     = parseFloat(baseInput.value);
       const interest = parseFloat(intInput.value) || 0;
       const date     = modal.querySelector('#fn-date').value;
-      const bkId     = bookingSel.value || null;
       const notes    = modal.querySelector('#fn-notes').value.trim() || null;
+      const bkId     = tipo === 'reserva' ? (bookingSel?.value || null) : null;
+      const desc     = tipo === 'gastos'  ? modal.querySelector('#fn-desc')?.value.trim() : null;
 
-      if (!base || base <= 0) { showToast('Ingresá el monto base', 'warning'); return; }
+      if (!base || base <= 0) { showToast('Ingresá el monto', 'warning'); return; }
       if (!date)              { showToast('Elegí la fecha de acreditación', 'warning'); return; }
+      if (tipo === 'gastos' && !desc) { showToast('Ingresá una descripción', 'warning'); return; }
 
       const saveBtn = modal.querySelector('#fn-save');
       saveBtn.disabled = true; saveBtn.textContent = 'Guardando...';
+
+      const notasFinal = desc
+        ? ('[GASTOS] ' + desc + (notes ? ' · ' + notes : ''))
+        : notes;
 
       const { error } = await this.db.from('frasco_items').insert({
         hotel_id:        this.ctx.hotelId,
@@ -763,7 +825,7 @@ export class FinancePanel {
         original_amount: base,
         interest_amount: interest,
         frasco_date:     date,
-        notes,
+        notes:           notasFinal,
         credited:        false,
       });
 
