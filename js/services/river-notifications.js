@@ -1,81 +1,156 @@
 // ═══════════════════════════════════════════════════
-// river-notifications.js — Nivel del Río Uruguay en
-// Concepción del Uruguay (estación más cercana a Colón).
+// river-notifications.js — Nivel del Río Uruguay
+// Estación: Concepción del Uruguay (la más cercana a Colón).
 //
-// Usa el servicio geoespacial público del INA (Instituto
-// Nacional del Agua) — es del Estado argentino, gratis,
-// sin clave. Capa "ultimas_alturas": última altura medida
-// en cada estación hidrométrica de la Cuenca del Plata.
+// APIs (en orden de preferencia):
+//  1. INA REST JSON (más liviana y directa)
+//  2. INA WFS GeoServer (más robusta pero más lenta)
 //
-// AVISO IMPORTANTE: a diferencia de las otras fuentes
-// (clima, fútbol, F1), esta API del Estado está mucho
-// menos documentada públicamente y no pude probarla en
-// vivo antes de entregarla — es la más propensa a necesitar
-// un ajuste una vez que la veas correr de verdad. Si falla,
-// no rompe nada más de la app (mismo resguardo que todo el
-// resto), pero puede que la notificación no aparezca hasta
-// que ajustemos el nombre exacto del campo o de la estación.
+// El localStorage cooldown se puede forzar desde la consola:
+//   localStorage.removeItem('mila_river_notif_lastrun'); checkRiverLevel();
 // ═══════════════════════════════════════════════════
 
 import { addNotification } from './notification-center.js';
 
-const LASTRUN_KEY = 'mila_river_notif_lastrun';
-const CHECK_INTERVAL_MS = 4 * 60 * 60 * 1000; // 4 horas, mismo criterio que el resto
+const LASTRUN_KEY      = 'mila_river_notif_lastrun';
+const CHECK_INTERVAL_MS = 4 * 60 * 60 * 1000; // 4 horas
 
-const WFS_URL = 'https://alerta.ina.gob.ar/geoserver/wfs' +
-  '?service=WFS&version=1.0.0&request=GetFeature' +
-  '&typeName=alerta5:ultimas_alturas' +
-  '&outputFormat=application/json' +
-  "&CQL_FILTER=nombre ILIKE '%Concepcion del Uruguay%'";
+// Nombres alternativos para la estación del INA
+const STATION_NAMES = [
+  'Concepcion del Uruguay',
+  'Concepción del Uruguay',
+  'CONCEPCION DEL URUGUAY',
+  'Concepcion',
+];
 
-export async function checkRiverLevel() {
-  const now = Date.now();
-  const lastRun = parseInt(localStorage.getItem(LASTRUN_KEY) ?? '0', 10);
-  if (now - lastRun < CHECK_INTERVAL_MS) return;
+// ── API 1: INA REST (más directa) ──────────────────────────────────────────
+// Endpoint público, no requiere clave.
+// Devuelve JSON con array de estaciones y sus últimas lecturas.
+const INA_REST_URL = 'https://alerta.ina.gob.ar/a/series/?tipo=puntual&nombre=Concepcion%20del%20Uruguay&fuentes_id=1';
 
-  try {
-    const res = await fetch(WFS_URL);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
-    const feature = data?.features?.[0]?.properties;
+// ── API 2: INA WFS (fallback) ───────────────────────────────────────────────
+const INA_WFS_URL  = 'https://alerta.ina.gob.ar/geoserver/wfs'
+  + '?service=WFS&version=1.0.0&request=GetFeature'
+  + '&typeName=alerta5:ultimas_alturas'
+  + '&outputFormat=application/json'
+  + "&CQL_FILTER=nombre%20ILIKE%20'%25Concepcion%20del%20Uruguay%25'";
 
-    if (!feature) {
-      console.warn('[Río] la consulta funcionó pero no devolvió ninguna estación — puede que el nombre de la estación o el filtro necesiten un ajuste.', data);
-      return;
-    }
+// ── Umbral de alerta manual (metros) cuando la API no lo informa ───────────
+// Concepción del Uruguay: alerta amarilla ≈ 5.50 m, naranja ≈ 7.00 m, roja ≈ 9.00 m
+const FALLBACK_ALERT_M = 5.50;
 
-    // Los nombres exactos de estos campos pueden variar — se prueban
-    // varias alternativas conocidas del esquema del INA.
-    const nivel   = feature.valor ?? feature.altura ?? feature.value ?? null;
-    const alerta  = feature.nivel_alerta ?? feature.alerta ?? null;
-    const nombre  = feature.nombre ?? 'Concepción del Uruguay';
+// ────────────────────────────────────────────────────────────────────────────
 
-    if (nivel == null) {
-      console.warn('[Río] no se encontró el campo de altura en la respuesta — revisar estructura:', feature);
-      return;
-    }
+async function tryInaRest() {
+  const res  = await fetch(INA_REST_URL, { signal: AbortSignal.timeout(8000) });
+  if (!res.ok) throw new Error(`INA REST HTTP ${res.status}`);
+  const data = await res.json();
 
-    const enAlerta = alerta != null && nivel >= alerta;
-    addNotification({
-      type: 'river_level',
-      category: 'rio',
-      icon: enAlerta ? '🌊' : '💧',
-      color: enAlerta ? '#EF4444' : '#0EA5E9',
-      title: enAlerta ? '⚠️ Río Uruguay por encima del nivel de alerta' : 'Nivel del Río Uruguay',
-      message: `${nombre}: ${nivel} m${alerta != null ? ` (nivel de alerta: ${alerta} m)` : ''}`,
-      data: { nivel, alerta, nombre },
-    });
-
-    localStorage.setItem(LASTRUN_KEY, String(now));
-  } catch (err) {
-    console.warn('[Río] no se pudo consultar el nivel del río:', err?.message ?? err);
+  // Estructura esperada: array de series con .estacion y .ultima_obs
+  const series = Array.isArray(data) ? data : (data?.series ?? data?.data ?? []);
+  if (!series.length) {
+    console.warn('[Río REST] respuesta vacía:', data);
+    return null;
   }
+
+  // Buscar la estación por nombre
+  let found = null;
+  for (const s of series) {
+    const nombre = s?.nombre ?? s?.estacion?.nombre ?? s?.estacion ?? '';
+    if (STATION_NAMES.some(n => nombre.toLowerCase().includes(n.toLowerCase().split(' ')[0]))) {
+      found = s;
+      break;
+    }
+  }
+  if (!found) found = series[0]; // fallback: primera de la lista
+
+  // Extraer nivel — múltiples nombres de campo posibles
+  const obs   = found?.ultima_obs ?? found?.last_obs ?? found?.obs ?? found;
+  const nivel = obs?.valor ?? obs?.altura ?? obs?.value ?? obs?.nivel ?? null;
+  const alerta = obs?.nivel_alerta ?? found?.nivel_alerta ?? null;
+  const nombre = found?.nombre ?? found?.estacion?.nombre ?? STATION_NAMES[0];
+
+  return { nivel, alerta, nombre, fuente: 'REST' };
+}
+
+async function tryInaWfs() {
+  const res  = await fetch(INA_WFS_URL, { signal: AbortSignal.timeout(10000) });
+  if (!res.ok) throw new Error(`INA WFS HTTP ${res.status}`);
+  const data = await res.json();
+  const feat  = data?.features?.[0]?.properties;
+  if (!feat) {
+    console.warn('[Río WFS] sin features:', data);
+    return null;
+  }
+  const nivel  = feat.valor  ?? feat.altura ?? feat.value  ?? null;
+  const alerta = feat.nivel_alerta ?? feat.alerta ?? null;
+  const nombre = feat.nombre ?? STATION_NAMES[0];
+  return { nivel, alerta, nombre, fuente: 'WFS' };
+}
+
+export async function checkRiverLevel(force = false) {
+  const now     = Date.now();
+  const lastRun = parseInt(localStorage.getItem(LASTRUN_KEY) ?? '0', 10);
+  if (!force && now - lastRun < CHECK_INTERVAL_MS) return;
+
+  let result = null;
+  try {
+    result = await tryInaRest();
+    console.info('[Río] API REST OK:', result);
+  } catch (errRest) {
+    console.warn('[Río] REST falló, intentando WFS:', errRest?.message);
+    try {
+      result = await tryInaWfs();
+      console.info('[Río] API WFS OK:', result);
+    } catch (errWfs) {
+      console.warn('[Río] WFS también falló:', errWfs?.message);
+    }
+  }
+
+  if (!result) {
+    console.warn('[Río] ambas APIs fallaron — sin notificación de nivel.');
+    return;
+  }
+
+  const { nivel, alerta, nombre, fuente } = result;
+
+  if (nivel == null) {
+    console.warn('[Río] se obtuvo respuesta pero sin dato de nivel. Estructura recibida:', result);
+    return;
+  }
+
+  const umbral   = alerta ?? FALLBACK_ALERT_M;
+  const enAlerta = nivel >= umbral;
+
+  addNotification({
+    type:     'river_level',
+    category: 'rio',
+    icon:     enAlerta ? '🌊' : '💧',
+    color:    enAlerta ? '#EF4444' : '#0EA5E9',
+    title:    enAlerta
+      ? '⚠️ Río Uruguay por encima del nivel de alerta'
+      : 'Nivel del Río Uruguay',
+    message:  `${nombre}: ${nivel.toFixed ? nivel.toFixed(2) : nivel} m`
+      + (umbral != null ? ` (alerta: ${typeof umbral === 'number' ? umbral.toFixed(2) : umbral} m)` : '')
+      + ` · Fuente: INA ${fuente}`,
+    data: { nivel, alerta: umbral, nombre, fuente },
+  });
+
+  localStorage.setItem(LASTRUN_KEY, String(now));
 }
 
 let _riverInitialized = false;
 export function initRiverNotifications() {
-  if (_riverInitialized) return; // ya está corriendo — evita duplicar el temporizador
+  if (_riverInitialized) return;
   _riverInitialized = true;
+  // Primer check inmediato (respeta el cooldown salvo que force=true)
   checkRiverLevel();
-  setInterval(checkRiverLevel, CHECK_INTERVAL_MS);
+  setInterval(() => checkRiverLevel(), CHECK_INTERVAL_MS);
+}
+
+// Exponer en window para diagnóstico desde consola:
+// window._checkRio() → fuerza check ignorando cooldown
+// window._checkRio(false) → respeta cooldown
+if (typeof window !== 'undefined') {
+  window._checkRio = (force = true) => checkRiverLevel(force);
 }

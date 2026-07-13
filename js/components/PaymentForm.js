@@ -130,6 +130,21 @@ export function renderPaymentModal(containerId, booking, supabase, onSuccess) {
               >
             </div>
 
+            <!-- Frasco (Naranja X / plazo fijo) — solo visible en señas -->
+            <div id="frasco-section" style="display:none;border:1px solid #fb923c;border-radius:10px;padding:12px 14px;background:#fff7ed;margin-top:4px">
+              <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:0">
+                <input type="checkbox" id="payment-frasco" style="width:16px;height:16px;accent-color:#f97316">
+                <span style="font-size:.82rem;font-weight:700;color:#ea580c">🫙 Poner en Frasco (Naranja X)</span>
+              </label>
+              <div id="frasco-fields" style="display:none;margin-top:10px;display:flex;flex-direction:column;gap:8px">
+                <div class="form-group" style="margin:0">
+                  <label for="frasco-date" class="form-label" style="font-size:.76rem">Fecha de acreditación</label>
+                  <input type="date" id="frasco-date" class="form-input" style="font-size:.82rem">
+                  <small style="color:#9a3412;font-size:.7rem">Ese día registrás el monto real con intereses</small>
+                </div>
+              </div>
+            </div>
+
             <!-- Error display -->
             <div id="payment-error" class="form-error" style="display:none"></div>
 
@@ -149,6 +164,25 @@ export function renderPaymentModal(containerId, booking, supabase, onSuccess) {
   `;
 
   // ── Event listeners ───────────────────────────────────────────
+
+  // Frasco: mostrar sección solo cuando tipo = seña/depósito
+  const frascoSection = document.getElementById('frasco-section');
+  const frascoFields  = document.getElementById('frasco-fields');
+  const frascoCheck   = document.getElementById('payment-frasco');
+  const paymentTypeEl = document.getElementById('payment-type');
+
+  const toggleFrascoSection = () => {
+    const isDeposit = paymentTypeEl?.value === 'deposit';
+    if (frascoSection) frascoSection.style.display = isDeposit ? 'block' : 'none';
+    if (!isDeposit && frascoCheck) frascoCheck.checked = false;
+    if (!isDeposit && frascoFields) frascoFields.style.display = 'none';
+  };
+  paymentTypeEl?.addEventListener('change', toggleFrascoSection);
+  toggleFrascoSection(); // estado inicial
+
+  frascoCheck?.addEventListener('change', () => {
+    if (frascoFields) frascoFields.style.display = frascoCheck.checked ? 'flex' : 'none';
+  });
 
   // Completar con saldo pendiente
   document.getElementById('btn-fill-balance')?.addEventListener('click', () => {
@@ -216,6 +250,9 @@ async function handlePaymentSubmit(bookingId, supabase, onSuccess) {
     return;
   }
 
+  const frascoEnabled = document.getElementById('payment-frasco')?.checked;
+  const frascoDate    = document.getElementById('frasco-date')?.value || null;
+
   const payload = {
     booking_id:     bookingId,
     amount:         amount,
@@ -223,6 +260,7 @@ async function handlePaymentSubmit(bookingId, supabase, onSuccess) {
     payment_method: paymentMethod,
     payment_date:   paymentDate || new Date().toISOString().slice(0, 10),
     notes:          notes || null,
+    frasco_date:    (frascoEnabled && frascoDate) ? frascoDate : null,
   };
 
   const { error } = await safeInsert(supabase, 'payments', payload, 'PaymentForm');

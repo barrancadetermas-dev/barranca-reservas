@@ -159,7 +159,7 @@ export class FinancePanel {
 
     try {
       // Reservas del período + máxima reserva con nombre del huésped
-      const [periodoRes, futuroRes, maxBkRes, prevRes] = await Promise.all([
+      const [periodoRes, futuroRes, maxBkRes, prevRes, frascoRes] = await Promise.all([
         // Período seleccionado: todas las reservas que INICIAN en el rango
         // Incluye created_at (anticipación) y booking_units con unit_id (unidad más rentable)
         this.db.from('bookings')
@@ -193,14 +193,24 @@ export class FinancePanel {
             .lte('check_in', pt)
             .not('status','in','(cancelled,blocked)');
         })(),
+        // Pagos en Frasco (frasco_date no nulo y aún no acreditados)
+        this.db.from('payments')
+          .select('id,amount,frasco_date,frasco_credited_amount,frasco_credited_at,payment_date,booking_id')
+          .not('frasco_date','is',null)
+          .order('frasco_date', { ascending: true })
+          .limit(100),
       ]);
 
       if (periodoRes.error) throw periodoRes.error;
 
-      const bks    = periodoRes.data ?? [];
-      const futuro = futuroRes.data ?? [];
-      const maxBk  = maxBkRes.data?.[0] ?? null;
+      const bks     = periodoRes.data ?? [];
+      const futuro  = futuroRes.data ?? [];
+      const maxBk   = maxBkRes.data?.[0] ?? null;
       const prevBks = prevRes.data ?? [];
+      // Frasco: separar pendientes (frasco_credited_at null) de acreditados
+      const frascoAll     = frascoRes?.data ?? [];
+      const frascoPending = frascoAll.filter(p => !p.frasco_credited_at);
+      const frascoOverdue = frascoPending.filter(p => p.frasco_date <= today);
 
       // ── Métricas del período ──
       const totalVend  = bks.reduce((s,b) => s + (b.total_amount ?? 0), 0);
@@ -256,7 +266,7 @@ export class FinancePanel {
 
       this._renderKPIs({ totalVend, totalCobr, totalPend, pctCobr, count: bks.length });
       this._renderChart({ totalVend, totalCobr, totalPend });
-      this._renderAsegurado({ asegVend, asegCobr, asegPend, asegPct, count: futuro.length });
+      this._renderAsegurado({ asegVend, asegCobr, asegPend, asegPct, count: futuro.length, frascoPending, frascoOverdue });
       this._renderIndicators({ maxBk, avgBk, avgNoche, avgPend, totalNoch, count: bks.length, topUnit, variacionPct, avgAnticipacion });
 
     } catch (err) {
@@ -306,10 +316,31 @@ export class FinancePanel {
       bar('Pendiente de cobro', totalPend, '#f59e0b');
   }
 
-  _renderAsegurado({ asegVend, asegCobr, asegPend, asegPct, count }) {
+  _renderAsegurado({ asegVend, asegCobr, asegPend, asegPct, count, frascoPending = [], frascoOverdue = [] }) {
     const el = document.getElementById('financ-asegurado');
     if (!el) return;
     const fmt = n => '$' + Math.round(n).toLocaleString('es-AR');
+
+    const frascoTotal = frascoPending.reduce((s, p) => s + (p.amount ?? 0), 0);
+
+    // Sección frasco
+    const frascoHTML = frascoPending.length > 0
+      ? `<div style="margin-top:14px;padding:10px 12px;border-radius:8px;background:#fff7ed;border:1px solid #fed7aa">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+            <span style="font-size:.72rem;font-weight:700;color:#ea580c">🫙 En Frasco</span>
+            <strong style="font-size:.9rem;color:#ea580c">${fmt(frascoTotal)}</strong>
+          </div>
+          ${frascoPending.map(p => `
+            <div style="display:flex;justify-content:space-between;font-size:.7rem;padding:2px 0;border-top:1px solid #fed7aa">
+              <span style="color:#9a3412">Acredita: ${p.frasco_date}${frascoOverdue.some(o => o.id === p.id) ? ' ⚠️' : ''}</span>
+              <span style="color:#ea580c;font-weight:600">${fmt(p.amount ?? 0)}</span>
+            </div>`).join('')}
+          ${frascoOverdue.length > 0
+            ? `<div style="font-size:.68rem;color:#dc2626;margin-top:6px;font-weight:600">⚠️ ${frascoOverdue.length} frasco${frascoOverdue.length > 1 ? 's' : ''} vencido${frascoOverdue.length > 1 ? 's' : ''} — registrá la acreditación</div>`
+            : ''}
+        </div>`
+      : '';
+
     el.innerHTML =
       '<div style="font-size:1.25rem;font-weight:800;color:var(--color-text);margin-bottom:4px">' + fmt(asegVend) + '</div>' +
       '<div style="font-size:.7rem;color:var(--color-text-3);margin-bottom:12px">' + count + ' reservas futuras confirmadas</div>' +
@@ -320,7 +351,8 @@ export class FinancePanel {
       '<div style="margin-top:10px;height:8px;border-radius:4px;background:var(--color-border);overflow:hidden">' +
         '<div style="height:100%;background:#16a34a;border-radius:4px;width:' + asegPct + '%;transition:width .6s"></div>' +
       '</div>' +
-      '<div style="font-size:.68rem;color:var(--color-text-3);margin-top:5px">' + asegPct + '% cobrado del dinero comprometido</div>';
+      '<div style="font-size:.68rem;color:var(--color-text-3);margin-top:5px">' + asegPct + '% cobrado del dinero comprometido</div>' +
+      frascoHTML;
   }
 
   _renderIndicators({ maxBk, avgBk, avgNoche, avgPend, totalNoch, count, topUnit, variacionPct, avgAnticipacion }) {

@@ -10,6 +10,17 @@ import { can } from '../auth/permissions.js';
 import { logAction } from '../services/audit-service.js';
 import { CATEGORIES as EXPENSE_CATEGORIES, categoryColor } from '../services/expense-categories.js';
 
+const EXPENSE_METHOD_LABELS = {
+  efectivo:      '💵 Efectivo',
+  debito:        '💳 Débito',
+  transferencia: '🏦 Transf.',
+  qr:            '📱 QR',
+  cuenta:        '🏛️ Cta.',
+};
+function _expenseMethodLabel(m) {
+  return EXPENSE_METHOD_LABELS[m] ?? m;
+}
+
 const PRIORITY_CONFIG = {
   low:    { label: 'Baja',    color: '#94a3b8', bg: '#f1f5f9' },
   medium: { label: 'Media',   color: '#f59e0b', bg: '#fffbeb' },
@@ -52,6 +63,18 @@ export class OperationsModule {
   async load() {
     const container = document.getElementById('operations-container');
     if (!container) return;
+
+    // Si el shell ya está renderizado (el usuario ya navegó a Operaciones antes),
+    // solo refrescar el tab activo sin resetear — evita volver a "Recordatorios"
+    // después de cada acción (booking:changed / debouncedCalendarLoad lo llama).
+    if (container.querySelector('.ops-tabs')) {
+      const panel  = container.querySelector('#ops-panel');
+      const header = container.querySelector('#ops-header-actions');
+      if (panel && header) {
+        await this._loadTab(this._tab, container);
+        return;
+      }
+    }
 
     container.innerHTML = this._renderShell();
     this._bindTabs(container);
@@ -1250,12 +1273,37 @@ export class OperationsModule {
     const pending = total - paid;
 
     if (summary) {
+      // ── Totales por destinatario ───────────────────────────────
+      const byBenef = {};
+      expenses.forEach(e => {
+        const key = e.beneficiary?.trim() || '(sin destinatario)';
+        byBenef[key] = (byBenef[key] ?? 0) + (e.amount ?? 0);
+      });
+      const benefEntries = Object.entries(byBenef)
+        .filter(([, v]) => v > 0)
+        .sort((a, b) => b[1] - a[1]);
+
+      const benefHTML = benefEntries.length > 1
+        ? `<details class="ops-benef-details" style="margin-top:12px;border-top:1px solid var(--color-border);padding-top:10px">
+            <summary style="font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--color-text-3);cursor:pointer;user-select:none">
+              👤 Por destinatario
+            </summary>
+            <div style="margin-top:8px;display:flex;flex-direction:column;gap:4px">
+              ${benefEntries.map(([name, amt]) => `
+                <div style="display:flex;justify-content:space-between;font-size:.78rem;padding:3px 0">
+                  <span style="color:var(--color-text-2)">${name}</span>
+                  <strong style="color:var(--color-text)">${formatARS(amt)}</strong>
+                </div>`).join('')}
+            </div>
+          </details>`
+        : '';
+
       summary.innerHTML = `
         <div class="ops-exp-summary">
           <div class="ops-exp-kpi"><label>Total</label><strong>${formatARS(total)}</strong></div>
           <div class="ops-exp-kpi" style="color:#16a34a"><label>Pagados</label><strong>${formatARS(paid)}</strong></div>
           <div class="ops-exp-kpi" style="color:#f59e0b"><label>Pendientes</label><strong>${formatARS(pending)}</strong></div>
-        </div>`;
+        </div>${benefHTML}`;
     }
 
     if (!expenses.length) {
@@ -1267,8 +1315,8 @@ export class OperationsModule {
       <div class="expense-row ${e.paid ? 'paid' : ''} ${e.amount == null ? 'needs-amount' : ''}" id="ops-exp-${e.id}">
         <div class="expense-category-dot" style="background:${categoryColor(e.category)}"></div>
         <div class="expense-info">
-          <span class="expense-desc">${e.description}</span>
-          <span class="expense-meta">· ${e.category}${e.due_date ? ` · Vence: ${e.due_date}` : ''}${e.paid && e.paid_at ? ` · Pagado: ${e.paid_at.slice(0,10)}` : ''}</span>
+          <span class="expense-desc">${e.description}${e.beneficiary ? ` <span style="font-size:.7rem;color:var(--color-text-3);font-weight:600">→ ${e.beneficiary}</span>` : ''}</span>
+          <span class="expense-meta">· ${e.category}${e.payment_method ? ` · ${_expenseMethodLabel(e.payment_method)}` : ''}${e.due_date ? ` · Vence: ${e.due_date}` : ''}${e.paid && e.paid_at ? ` · Pagado: ${e.paid_at.slice(0,10)}` : ''}</span>
         </div>
         <strong class="expense-amount" style="color:${e.paid ? 'var(--color-success)' : 'var(--color-text)'}">${e.amount == null ? '<span class="badge-no-amount">Sin cargar</span>' : formatARS(e.amount)}</strong>
         <button type="button" class="expense-paid-pill ${e.paid ? 'is-paid' : ''}" data-exp-id="${e.id}" title="${e.paid ? 'Marcar pendiente' : 'Marcar pagado'}">
@@ -1376,6 +1424,36 @@ export class OperationsModule {
             <label>Monto (ARS) <span class="req">*</span></label>
             <input type="number" id="oe-amount" min="0" step="0.01" placeholder="0.00" value="${expense?.amount ?? ''}">
           </div>
+          <div class="form-grid-2">
+            <div class="form-group">
+              <label>Forma de pago</label>
+              <select id="oe-payment-method" class="filter-select">
+                <option value="">— Sin especificar —</option>
+                <option value="efectivo"      ${expense?.payment_method === 'efectivo'      ? 'selected' : ''}>💵 Efectivo</option>
+                <option value="debito"        ${expense?.payment_method === 'debito'        ? 'selected' : ''}>💳 Débito</option>
+                <option value="transferencia" ${expense?.payment_method === 'transferencia' ? 'selected' : ''}>🏦 Transferencia</option>
+                <option value="qr"            ${expense?.payment_method === 'qr'            ? 'selected' : ''}>📱 QR</option>
+                <option value="cuenta"        ${expense?.payment_method === 'cuenta'        ? 'selected' : ''}>🏛️ Dinero a cuenta</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Destinatario</label>
+              <input type="text" id="oe-beneficiary" list="oe-beneficiary-list"
+                     placeholder="Ej: Alicia, Herza…"
+                     value="${expense?.beneficiary ?? ''}">
+              <datalist id="oe-beneficiary-list">
+                <option value="Alicia">
+                <option value="Herza">
+                <option value="Turismo Entre Ríos">
+                <option value="Municipal">
+                <option value="AFIP">
+                <option value="ARBA">
+                <option value="Gas">
+                <option value="Luz">
+                <option value="Agua">
+              </datalist>
+            </div>
+          </div>
           <div class="form-group">
             <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
               <input type="checkbox" id="oe-paid" ${expense?.paid ? 'checked' : ''}
@@ -1415,13 +1493,15 @@ export class OperationsModule {
       saveBtn.disabled = true; saveBtn.textContent = 'Guardando...';
 
       const payload = {
-        hotel_id:    this.ctx.hotelId,
-        category:    modal.querySelector('#oe-category').value,
-        description: desc,
+        hotel_id:       this.ctx.hotelId,
+        category:       modal.querySelector('#oe-category').value,
+        description:    desc,
         amount,
-        due_date:    modal.querySelector('#oe-due').value || null,
-        paid:        modal.querySelector('#oe-paid').checked,
-        paid_at:     modal.querySelector('#oe-paid').checked ? new Date().toISOString() : null,
+        due_date:       modal.querySelector('#oe-due').value || null,
+        paid:           modal.querySelector('#oe-paid').checked,
+        paid_at:        modal.querySelector('#oe-paid').checked ? new Date().toISOString() : null,
+        payment_method: modal.querySelector('#oe-payment-method').value || null,
+        beneficiary:    modal.querySelector('#oe-beneficiary').value.trim() || null,
       };
 
       try {

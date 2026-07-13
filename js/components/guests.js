@@ -341,12 +341,75 @@ export class GuestsCRM {
       this._attachOpenCreditNote(g);
     });
     const sortedGuests = this._sortGuests(primaryGuests);
-    area.innerHTML = sortedGuests.map(g => this._renderGuestCard(g)).join('');
+    const sort = localStorage.getItem('mila_guest_sort') ?? 'recent';
+    const useAlpha = (sort === 'last_az' || sort === 'last_za' || sort === 'name_az' || sort === 'name_za') && sortedGuests.length > 20;
+
+    if (useAlpha) {
+      area.innerHTML = this._renderGroupedByLetter(sortedGuests, sort);
+    } else {
+      area.innerHTML = sortedGuests.map(g => this._renderGuestCard(g)).join('');
+    }
     area.querySelectorAll('.guest-row-item').forEach(card =>
       card.addEventListener('click', () => this._openProfile(card.dataset.guestId)));
+
+    // Acordeón por letra
+    area.querySelectorAll('.alpha-group-header').forEach(header => {
+      header.addEventListener('click', () => {
+        const letter = header.dataset.letter;
+        const body   = area.querySelector(`.alpha-group-body[data-letter="${letter}"]`);
+        if (!body) return;
+        const collapsed = body.style.display === 'none';
+        body.style.display = collapsed ? '' : 'none';
+        header.querySelector('.alpha-chevron').textContent = collapsed ? '▾' : '▸';
+        // Persist
+        const key = 'mila_alpha_collapsed_' + letter;
+        if (collapsed) localStorage.removeItem(key);
+        else           localStorage.setItem(key, '1');
+      });
+    });
+
     const lbl = document.getElementById('bl-total-label');
     if (lbl) lbl.textContent = primaryGuests.length >= limit ? `Mostrando los últimos ${limit}` : `${primaryGuests.length} huéspedes`;
     this._updateLimitButtons(limit);
+  }
+
+  _renderGroupedByLetter(guests, sort) {
+    // Determinar la clave por la que agrupar
+    const keyFn = (sort === 'last_az' || sort === 'last_za')
+      ? g => (g.last_name  ?? g.first_name ?? '#').trim().charAt(0).toUpperCase()
+      : g => (g.first_name ?? g.last_name  ?? '#').trim().charAt(0).toUpperCase();
+
+    // Agrupar
+    const groups = {};
+    guests.forEach(g => {
+      const letter = /[A-ZÁÉÍÓÚÑÜ]/.test(keyFn(g)) ? keyFn(g) : '#';
+      (groups[letter] = groups[letter] ?? []).push(g);
+    });
+
+    const letters = Object.keys(groups).sort((a, b) => {
+      if (a === '#') return 1;
+      if (b === '#') return -1;
+      return a.localeCompare(b, 'es');
+    });
+
+    return letters.map(letter => {
+      const list      = groups[letter];
+      const collapsed = !!localStorage.getItem('mila_alpha_collapsed_' + letter);
+      return `
+        <div class="alpha-group" style="margin-bottom:4px">
+          <div class="alpha-group-header" data-letter="${letter}"
+               style="display:flex;align-items:center;gap:10px;padding:8px 12px;
+                      background:var(--color-surface-2);border-radius:8px;cursor:pointer;
+                      user-select:none;position:sticky;top:0;z-index:2">
+            <span style="font-size:1.1rem;font-weight:800;color:var(--color-primary);min-width:22px">${letter}</span>
+            <span style="font-size:.72rem;color:var(--color-text-3);flex:1">${list.length} huésped${list.length !== 1 ? 'es' : ''}</span>
+            <span class="alpha-chevron" style="font-size:.8rem;color:var(--color-text-3)">${collapsed ? '▸' : '▾'}</span>
+          </div>
+          <div class="alpha-group-body" data-letter="${letter}" style="${collapsed ? 'display:none' : ''}">
+            ${list.map(g => this._renderGuestCard(g)).join('')}
+          </div>
+        </div>`;
+    }).join('');
   }
 
   // ══════════════════════════════════════════════════
