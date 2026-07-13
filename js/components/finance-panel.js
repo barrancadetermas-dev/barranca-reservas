@@ -163,8 +163,9 @@ export class FinancePanel {
     const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
     let activeBookings = [];
     try {
-      const { data: abData, error: abError } = await this.db.from('bookings')
-        .select(`id, check_in, check_out, total_amount, total_paid, status,
+      // Intento 1: con FK explícita (como usa el resto del codebase)
+      const { data: ab1, error: err1 } = await this.db.from('bookings')
+        .select(`id, check_in, check_out, total_amount, status,
                  guests!bookings_guest_id_fkey(first_name, last_name),
                  booking_units(units(name, color)),
                  payments(id, amount, payment_method, payment_type)`)
@@ -173,24 +174,45 @@ export class FinancePanel {
         .gte('check_out', thirtyDaysAgo)
         .order('check_in', { ascending: true })
         .limit(200);
-      if (abError) {
-        console.warn('[FinancePanel] activeBookings error:', abError.message);
-        // Fallback: query mínima sin joins para asegurar que al menos tenemos las reservas
-        const { data: fallback } = await this.db.from('bookings')
-          .select('id, check_in, check_out, total_amount, total_paid, status')
+
+      if (!err1) {
+        activeBookings = ab1 ?? [];
+        console.info('[FinancePanel] activeBookings OK:', activeBookings.length, 'reservas');
+      } else {
+        console.warn('[FinancePanel] intento 1 falló:', err1.message, '— probando sin FK hint…');
+
+        // Intento 2: sin FK hint (Supabase infiere la relación)
+        const { data: ab2, error: err2 } = await this.db.from('bookings')
+          .select(`id, check_in, check_out, total_amount, status,
+                   guests(first_name, last_name),
+                   booking_units(units(name, color)),
+                   payments(id, amount, payment_method, payment_type)`)
           .eq('hotel_id', this.ctx.hotelId)
           .not('status', 'in', '(cancelled,blocked)')
           .gte('check_out', thirtyDaysAgo)
           .order('check_in', { ascending: true })
           .limit(200);
-        activeBookings = fallback ?? [];
-        console.info('[FinancePanel] fallback sin joins:', activeBookings.length, 'reservas');
-      } else {
-        activeBookings = abData ?? [];
-        console.info('[FinancePanel] activeBookings OK:', activeBookings.length, 'reservas');
+
+        if (!err2) {
+          activeBookings = ab2 ?? [];
+          console.info('[FinancePanel] activeBookings intento 2 OK:', activeBookings.length, 'reservas');
+        } else {
+          console.warn('[FinancePanel] intento 2 falló:', err2.message, '— query mínima sin joins…');
+
+          // Intento 3: query mínima sin joins (siempre funciona)
+          const { data: ab3 } = await this.db.from('bookings')
+            .select('id, check_in, check_out, total_amount, status')
+            .eq('hotel_id', this.ctx.hotelId)
+            .not('status', 'in', '(cancelled,blocked)')
+            .gte('check_out', thirtyDaysAgo)
+            .order('check_in', { ascending: true })
+            .limit(200);
+          activeBookings = ab3 ?? [];
+          console.info('[FinancePanel] activeBookings fallback (sin joins):', activeBookings.length, 'reservas');
+        }
       }
     } catch (e) {
-      console.warn('[FinancePanel] activeBookings query exception:', e);
+      console.warn('[FinancePanel] activeBookings excepción:', e?.message ?? e);
     }
 
     // ── Frascos — query independiente (tabla puede no existir aún) ─────────
