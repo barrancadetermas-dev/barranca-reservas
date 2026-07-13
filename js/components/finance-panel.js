@@ -195,18 +195,21 @@ export class FinancePanel {
     // ── Frascos — query independiente (tabla puede no existir aún) ─────────
     let frascoItems = [];
     try {
-      const { data: fiData } = await this.db.from('frasco_items')
-        .select(`id, original_amount, interest_amount, frasco_date, notes,
-                 credited, credited_at, credited_amount, booking_id,
-                 bookings(id, check_in, check_out,
-                   guests(first_name, last_name),
-                   booking_units(units(name, color)))`)
+      // Query simple sin joins anidados (evita ambigüedad de FK en guests/booking_units)
+      // La info del huésped/depto la tomamos de activeBookings por booking_id
+      const { data: fiData, error: fiErr } = await this.db.from('frasco_items')
+        .select('id, original_amount, interest_amount, frasco_date, notes, credited, credited_at, credited_amount, booking_id, created_at')
         .eq('hotel_id', this.ctx.hotelId)
         .order('frasco_date', { ascending: true })
         .limit(200);
-      frascoItems = fiData ?? [];
+      if (fiErr) {
+        console.warn('[FinancePanel] frasco_items error:', fiErr.message);
+      } else {
+        frascoItems = fiData ?? [];
+        console.info('[FinancePanel] frasco_items OK:', frascoItems.length);
+      }
     } catch (e) {
-      console.warn('[FinancePanel] frasco_items no disponible (¿SQL pendiente?):', e?.message);
+      console.warn('[FinancePanel] frasco_items excepción:', e?.message);
     }
 
     try {
@@ -465,21 +468,29 @@ export class FinancePanel {
 
     const vencidos = pending.filter(i => i.frasco_date <= today);
 
-    const guestName = bk => {
-      const g = bk?.guests ?? bk?.bookings?.guests;
-      if (!g) return '—';
+    // Resolver nombre/depto desde activeBookings (sin joins en frasco_items)
+    const bkMap = new Map(activeBookings.map(bk => [bk.id, bk]));
+
+    const guestName = item => {
+      // Primero intenta del join (si existe), luego del mapa de reservas activas
+      const g = item?.bookings?.guests ?? item?.guests ?? bkMap.get(item.booking_id)?.guests;
+      if (!g) {
+        // Si es frasco de gastos, mostrar descripción de notas
+        if (item.notes?.startsWith('[GASTOS]')) return item.notes.replace('[GASTOS] ', '').split(' · ')[0];
+        return '(sin reserva)';
+      }
       return `${g.last_name ?? ''} ${g.first_name ?? ''}`.trim() || '—';
     };
-    const unitName = bk => {
-      const units = (bk?.booking_units ?? bk?.bookings?.booking_units ?? []);
+    const unitName = item => {
+      const units = item?.bookings?.booking_units ?? bkMap.get(item.booking_id)?.booking_units ?? [];
       return units.map(bu => bu?.units?.name).filter(Boolean).join(' + ') || '—';
     };
 
     const rowHTML = item => {
-      const bk       = item.bookings;
+      const linkedBk = bkMap.get(item.booking_id);
       const nombre   = guestName(item);
       const depto    = unitName(item);
-      const checkIn  = bk?.check_in ?? '';
+      const checkIn  = linkedBk?.check_in ?? item?.bookings?.check_in ?? '';
       const base     = item.original_amount ?? 0;
       const interes  = item.interest_amount ?? 0;
       const total    = base + interes;
@@ -699,7 +710,7 @@ export class FinancePanel {
               <div style="position:relative">
                 <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);
                              color:var(--color-text-3);font-size:.85rem">$</span>
-                <input type="number" id="fn-base" min="0" step="1" placeholder="75000"
+                <input type="number" id="fn-base" min="0" step="0.01" placeholder="75000"
                        style="padding-left:22px" class="form-input">
               </div>
             </div>
@@ -708,7 +719,7 @@ export class FinancePanel {
               <div style="position:relative">
                 <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);
                              color:#16a34a;font-size:.85rem">+$</span>
-                <input type="number" id="fn-interest" min="0" step="1" placeholder="380" value="0"
+                <input type="number" id="fn-interest" min="0" step="0.01" placeholder="380" value="0"
                        style="padding-left:28px" class="form-input">
               </div>
             </div>
@@ -884,7 +895,7 @@ export class FinancePanel {
             <label>Monto real acreditado <span class="req">*</span></label>
             <div style="position:relative">
               <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:#16a34a;font-size:.85rem">$</span>
-              <input type="number" id="fc-amount" min="0" step="1" class="form-input"
+              <input type="number" id="fc-amount" min="0" step="0.01" class="form-input"
                      style="padding-left:22px" value="${totalExpect}">
             </div>
             <small style="color:var(--color-text-3);font-size:.7rem">
