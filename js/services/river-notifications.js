@@ -96,13 +96,31 @@ export async function checkRiverLevel(force = false) {
   const today   = new Date().toISOString().slice(0, 10);
   const nowTime = new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
 
-  // Extraer nivel de hoy (campo directo o clave fecha)
+  // Extraer nivel de hoy.
+  // El INA puede entregar el valor de tres formas:
+  //   1. props.valor = número o string numérico
+  //   2. props.valor = objeto { "YYYY-MM-DD": "X.XX", ... }   ← caso real observado
+  //   3. props["YYYY-MM-DD"] = "X.XX"  (claves de fecha directas en props)
+  const getFromDateObj = obj => {
+    if (!obj || typeof obj !== 'object') return null;
+    if (obj[today] != null) return parseFloat(obj[today]);
+    const dk = Object.keys(obj).filter(k => /^\d{4}-\d{2}-\d{2}$/.test(k)).sort().reverse();
+    return dk.length > 0 ? parseFloat(obj[dk[0]]) : null;
+  };
+
   const getNivel = props => {
     const std = props.valor ?? props.altura ?? props.nivel ?? props.value;
-    if (std != null && !isNaN(parseFloat(std))) return parseFloat(std);
-    if (props[today] != null) return parseFloat(props[today]);
-    const dk = Object.keys(props).filter(k => /^\d{4}-\d{2}-\d{2}$/.test(k)).sort().reverse();
-    return dk.length > 0 ? parseFloat(props[dk[0]]) : null;
+    // Caso 1: campo numérico directo
+    if (std != null && typeof std !== 'object' && !isNaN(parseFloat(std))) return parseFloat(std);
+    // Caso 2: props.valor es un objeto con fechas
+    if (std != null && typeof std === 'object') {
+      const v = getFromDateObj(std);
+      if (v != null && !isNaN(v)) return v;
+    }
+    // Caso 3: claves de fecha directas en props
+    const v2 = getFromDateObj(props);
+    if (v2 != null && !isNaN(v2)) return v2;
+    return null;
   };
 
   const found = [];
