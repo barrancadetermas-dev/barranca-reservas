@@ -82,50 +82,67 @@ export async function checkRiverLevel(force = false) {
   const data = await getInaData();
   if (!data) return;
 
-  const feat = findStation(data);
-  if (!feat) {
-    console.warn('[Río] no se encontró la estación Concepción del Uruguay');
-    return;
-  }
+  const features = data?.features ?? [];
+  if (!features.length) { console.warn('[Río] sin features'); return; }
 
-  const props    = feat.properties ?? {};
-  const nivel    = extractNivel(props);
-  const alerta   = props.nivel_alerta ?? props.alerta ?? FALLBACK_ALERT_M;
-  const nombre   = props.nombre ?? 'Concepción del Uruguay';
+  // Estaciones de interés
+  // No hay estación específica de Colón — Concepción del Uruguay es la más cercana (15 km mismo río).
+  // "Uruguay" es una estación general del río Uruguay incluida como referencia secundaria.
+  const STATIONS = [
+    { key: 'concepcion', label: 'Colón / Concepción del Uruguay' },
+    { key: 'uruguay',    label: 'Río Uruguay (est. Uruguay)'     },
+  ];
 
-  if (nivel == null || isNaN(nivel)) {
-    console.warn('[Río] estación encontrada pero sin nivel. Props:', Object.keys(props));
-    return;
-  }
-
-  // Próximos días (pronóstico si el INA los incluye)
   const today   = new Date().toISOString().slice(0, 10);
-  const dateKeys = Object.keys(props).filter(k => /^\d{4}-\d{2}-\d{2}$/.test(k)).sort();
-  const futureKeys = dateKeys.filter(k => k > today).slice(0, 3);
-  const forecastStr = futureKeys.length > 0
-    ? ' · próx: ' + futureKeys.map(k => `${k.slice(5)}: ${parseFloat(props[k]).toFixed(2)}m`).join(', ')
-    : '';
+  const nowTime = new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
 
-  const nivelStr  = nivel.toFixed(2);
-  const alertaStr = typeof alerta === 'number' ? alerta.toFixed(2) : alerta;
-  console.info(`[Río] ✓ ${nombre}: ${nivelStr} m (alerta: ${alertaStr} m)${forecastStr}`);
+  // Extraer nivel de hoy (campo directo o clave fecha)
+  const getNivel = props => {
+    const std = props.valor ?? props.altura ?? props.nivel ?? props.value;
+    if (std != null && !isNaN(parseFloat(std))) return parseFloat(std);
+    if (props[today] != null) return parseFloat(props[today]);
+    const dk = Object.keys(props).filter(k => /^\d{4}-\d{2}-\d{2}$/.test(k)).sort().reverse();
+    return dk.length > 0 ? parseFloat(props[dk[0]]) : null;
+  };
 
-  const enAlerta = nivel >= alerta;
+  const found = [];
+  for (const st of STATIONS) {
+    const feat = features.find(f =>
+      (f?.properties?.nombre ?? '').toLowerCase().includes(st.key)
+    );
+    if (feat) {
+      const nivel = getNivel(feat.properties);
+      if (nivel != null && !isNaN(nivel)) {
+        found.push({ label: st.label, nivel });
+        console.info(`[Río] ✓ ${st.label}: ${nivel.toFixed(2)} m`);
+      }
+    } else {
+      console.info(`[Río] "${st.key}" no encontrada`);
+    }
+  }
+
+  if (found.length === 0) {
+    const todos = features.map(f => f?.properties?.nombre).filter(Boolean);
+    console.info('[Río] estaciones disponibles:', todos);
+    return;
+  }
+
+  const enAlerta = found.some(s => s.nivel >= FALLBACK_ALERT_M);
+  const nivelLines = found.map(s => `${s.label}: ${s.nivel.toFixed(2)} m`).join(' · ');
+  const msgDate    = today.split('-').reverse().join('/') + ' ' + nowTime;
+
   addNotification({
     type:     'river_level',
     category: 'rio',
     icon:     enAlerta ? '🌊' : '💧',
     color:    enAlerta ? '#EF4444' : '#0EA5E9',
-    title:    enAlerta
-      ? '⚠️ Río Uruguay por encima del nivel de alerta'
-      : 'Nivel del Río Uruguay',
-    message:  `${nombre}: ${nivelStr} m (alerta: ${alertaStr} m)${forecastStr}`,
-    data:     { nivel, alerta, nombre },
+    title:    enAlerta ? '⚠️ Río Uruguay — Alerta' : '💧 Río Uruguay',
+    message:  `${nivelLines}\n${msgDate} · alerta: ${FALLBACK_ALERT_M.toFixed(2)} m`,
+    data:     { found, alerta: FALLBACK_ALERT_M },
   });
 
   localStorage.setItem(LASTRUN_KEY, String(now));
 }
-
 let _initialized = false;
 export function initRiverNotifications() {
   if (_initialized) return;
