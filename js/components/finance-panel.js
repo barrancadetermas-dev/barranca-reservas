@@ -519,23 +519,23 @@ export class FinancePanel {
               <span style="font-size:.72rem;color:${vencido ? '#dc2626' : 'var(--color-text-3)'}">
                 ${(() => {
                 const dias = Math.round((new Date(item.frasco_date + 'T00:00:00') - new Date(today + 'T00:00:00')) / 86400000);
-                if (dias < 0)  return '<strong style="color:#dc2626">⚠️ Vencido hace ' + Math.abs(dias) + ' día' + (Math.abs(dias)!==1?'s':'') + '</strong>';
-                if (dias === 0) return '<strong style="color:#f97316">🔔 Acredita hoy!</strong>';
-                return '⏳ Acredita ' + item.frasco_date + ' <span style=\'color:#94a3b8\'>(en ' + dias + ' día' + (dias!==1?'s':'') + ')</span>';
+                if (dias < 0)  return item.frasco_date + ' <strong style="color:#dc2626"> · ⚠️ hace ' + Math.abs(dias) + ' día' + (Math.abs(dias)!==1?'s':'') + '</strong>';
+                if (dias === 0) return item.frasco_date + ' <strong style="color:#f97316"> · ⚠️ hoy</strong>';
+                return item.frasco_date + ' <span style="color:#94a3b8"> · en ' + dias + ' día' + (dias!==1?'s':'') + '</span>';
               })()}
               </span>
             </div>
             ${item.notes ? `<div style="font-size:.7rem;color:var(--color-text-3);margin-top:3px">📝 ${item.notes}</div>` : ''}
           </div>
           <div style="display:flex;gap:6px;align-items:center;flex-shrink:0">
-            <button class="btn btn-outline btn-xs frasco-edit-btn" data-id="${item.id}"
-                    title="Editar" style="padding:4px 8px">✏️</button>
             <button class="btn btn-primary btn-xs frasco-credit-btn" data-id="${item.id}"
-                    style="background:#f97316;border-color:#f97316;white-space:nowrap">
+                    style="background:#fb923c;border-color:#fb923c;white-space:nowrap">
               💸 Acreditar
             </button>
+            <button class="btn btn-outline btn-xs frasco-edit-btn" data-id="${item.id}"
+                    title="Editar" style="padding:4px 10px">✏️</button>
             <button class="btn btn-ghost btn-xs frasco-delete-btn" data-id="${item.id}"
-                    title="Eliminar" style="padding:4px 8px;color:#ef4444">🗑️</button>
+                    title="Eliminar" style="padding:4px 10px;color:#ef4444">🗑️</button>
           </div>
         </div>`;
     };
