@@ -497,11 +497,11 @@ export class FinancePanel {
       const vencido  = item.frasco_date <= today;
       return `
         <div class="frasco-row" data-id="${item.id}"
-             style="display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;
+             style="display:flex;align-items:center;gap:12px;
                     padding:12px 14px;border-radius:10px;margin-bottom:8px;
                     background:${vencido ? '#fef9c3' : 'var(--color-surface-2)'};
                     border:1px solid ${vencido ? '#fde047' : 'var(--color-border)'}">
-          <div>
+          <div style="flex:1;min-width:0">
             <div style="font-size:.82rem;font-weight:700;color:var(--color-text)">
               ${nombre} <span style="font-weight:400;color:var(--color-text-3)">· ${depto}</span>
               ${checkIn ? `<span style="font-size:.7rem;color:var(--color-text-3)"> · check-in ${checkIn}</span>` : ''}
@@ -517,17 +517,25 @@ export class FinancePanel {
                 Total: ${fmt(total)}
               </span>
               <span style="font-size:.72rem;color:${vencido ? '#dc2626' : 'var(--color-text-3)'}">
-                ${vencido ? '⚠️ Vencido · ' : '⏳ Acredita: '}${item.frasco_date}
+                ${(() => {
+                const dias = Math.round((new Date(item.frasco_date + 'T00:00:00') - new Date(today + 'T00:00:00')) / 86400000);
+                if (dias < 0)  return '<strong style="color:#dc2626">⚠️ Vencido hace ' + Math.abs(dias) + ' día' + (Math.abs(dias)!==1?'s':'') + '</strong>';
+                if (dias === 0) return '<strong style="color:#f97316">🔔 Acredita hoy!</strong>';
+                return '⏳ Acredita ' + item.frasco_date + ' <span style=\'color:#94a3b8\'>(en ' + dias + ' día' + (dias!==1?'s':'') + ')</span>';
+              })()}
               </span>
             </div>
             ${item.notes ? `<div style="font-size:.7rem;color:var(--color-text-3);margin-top:3px">📝 ${item.notes}</div>` : ''}
           </div>
-          <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end">
+          <div style="display:flex;gap:6px;align-items:center;flex-shrink:0">
+            <button class="btn btn-outline btn-xs frasco-edit-btn" data-id="${item.id}"
+                    title="Editar" style="padding:4px 8px">✏️</button>
             <button class="btn btn-primary btn-xs frasco-credit-btn" data-id="${item.id}"
                     style="background:#f97316;border-color:#f97316;white-space:nowrap">
               💸 Acreditar
             </button>
-            <button class="btn btn-ghost btn-xs frasco-delete-btn" data-id="${item.id}">🗑️</button>
+            <button class="btn btn-ghost btn-xs frasco-delete-btn" data-id="${item.id}"
+                    title="Eliminar" style="padding:4px 8px;color:#ef4444">🗑️</button>
           </div>
         </div>`;
     };
@@ -590,6 +598,14 @@ export class FinancePanel {
     // ── Botón nuevo frasco ─────────────────────────────────────────
     el.querySelector('#frasco-add-btn')?.addEventListener('click', () => {
       this._openFrascoModal(activeBookings);
+    });
+
+    // ── Editar ─────────────────────────────────────────────────────
+    el.querySelectorAll('.frasco-edit-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const item = items.find(i => i.id === btn.dataset.id);
+        if (item) this._openEditFrascoModal(item, activeBookings);
+      });
     });
 
     // ── Acreditar ──────────────────────────────────────────────────
@@ -888,6 +904,147 @@ export class FinancePanel {
         showToast('Error inesperado: ' + (ex?.message ?? String(ex)), 'error');
         saveBtn.disabled = false; saveBtn.textContent = '🫙 Guardar frasco';
       }
+    });
+  }
+
+  // ── Modal: editar frasco ──────────────────────────────────────────────────
+  _openEditFrascoModal(item, activeBookings = []) {
+    const existing = document.getElementById('overlay-frasco-edit');
+    if (existing) existing.remove();
+
+    const fmt$   = n => '$' + Math.round(n ?? 0).toLocaleString('es-AR');
+    const today2 = new Date().toISOString().slice(0, 10);
+    const bkMap  = new Map(activeBookings.map(bk => [bk.id, bk]));
+    const linkedBk = bkMap.get(item.booking_id);
+    const isGastos = item.notes?.startsWith('[GASTOS]');
+
+    const modal = document.createElement('div');
+    modal.className = 'modal-overlay';
+    modal.id = 'overlay-frasco-edit';
+    modal.innerHTML = `
+      <div class="modal modal-sm">
+        <div class="modal-header" style="background:linear-gradient(135deg,#fff7ed,#ffedd5)">
+          <h3 class="modal-title">✏️ Editar Frasco</h3>
+          <button class="modal-close" id="fe-close">✕</button>
+        </div>
+        <div class="modal-body">
+
+          ${linkedBk ? `
+            <div style="background:var(--color-surface-2);border-radius:8px;padding:8px 12px;margin-bottom:12px;font-size:.78rem;color:var(--color-text-3)">
+              🏠 Vinculado a: <strong style="color:var(--color-text)">${
+                (() => { const g = linkedBk.guests; return g ? [g.last_name,g.first_name].filter(Boolean).join(', ') : '(sin nombre)'; })()
+              }</strong> · ${(linkedBk.booking_units??[]).map(bu=>bu?.units?.name).filter(Boolean).join('+')||'—'} · ${linkedBk.check_in??''}
+            </div>` : ''}
+
+          ${isGastos ? `
+            <div class="form-group">
+              <label>Descripción</label>
+              <input type="text" id="fe-desc" class="form-input"
+                     value="${(item.notes ?? '').replace('[GASTOS] ','').split(' · ')[0]}">
+            </div>` : ''}
+
+          <div class="form-grid-2">
+            <div class="form-group">
+              <label>Monto base <span class="req">*</span></label>
+              <div style="position:relative">
+                <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--color-text-3);font-size:.85rem">$</span>
+                <input type="number" id="fe-base" min="0" step="0.01" class="form-input"
+                       style="padding-left:22px" value="${item.original_amount ?? ''}">
+              </div>
+            </div>
+            <div class="form-group">
+              <label>Intereses estimados</label>
+              <div style="position:relative">
+                <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:#16a34a;font-size:.85rem">+$</span>
+                <input type="number" id="fe-interest" min="0" step="0.01" class="form-input"
+                       style="padding-left:28px" value="${item.interest_amount ?? 0}">
+              </div>
+            </div>
+          </div>
+
+          <div style="background:#f0fdf4;border-radius:8px;padding:8px 14px;margin-bottom:12px;
+                      display:flex;justify-content:space-between;align-items:center">
+            <span style="font-size:.78rem;color:#166534;font-weight:600">Total al acreditar</span>
+            <span id="fe-total" style="font-size:1rem;font-weight:800;color:#16a34a">${fmt$((item.original_amount??0)+(item.interest_amount??0))}</span>
+          </div>
+
+          <div class="form-group">
+            <label>Fecha de acreditación <span class="req">*</span></label>
+            <input type="date" id="fe-date" class="form-input" value="${item.frasco_date ?? today2}">
+          </div>
+
+          <div class="form-group">
+            <label>Notas</label>
+            <input type="text" id="fe-notes" class="form-input"
+                   value="${isGastos
+                     ? (item.notes ?? '').split(' · ').slice(1).join(' · ')
+                     : (item.notes ?? '')}"
+                   placeholder="Plazo, tasa, observaciones…">
+          </div>
+
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-outline" id="fe-cancel">Cancelar</button>
+          <button class="btn btn-primary" id="fe-save">💾 Guardar cambios</button>
+        </div>
+      </div>`;
+
+    document.body.appendChild(modal);
+    modal.style.zIndex = '210';
+
+    const close = () => { modal.remove(); if (escH) document.removeEventListener('keydown', escH); };
+    const escH  = e => { if (e.key === 'Escape') close(); };
+    document.addEventListener('keydown', escH);
+    modal.querySelector('#fe-close').onclick  = close;
+    modal.querySelector('#fe-cancel').onclick = close;
+    modal.addEventListener('click', e => { if (e.target === modal) close(); });
+
+    // Total en tiempo real
+    const baseI = modal.querySelector('#fe-base');
+    const intI  = modal.querySelector('#fe-interest');
+    const totEl = modal.querySelector('#fe-total');
+    const updateT = () => {
+      const b = parseFloat(baseI.value) || 0;
+      const i = parseFloat(intI.value)  || 0;
+      totEl.textContent = fmt$(b + i);
+    };
+    baseI.addEventListener('input', updateT);
+    intI.addEventListener('input',  updateT);
+
+    modal.querySelector('#fe-save').addEventListener('click', async () => {
+      const base     = parseFloat(baseI.value);
+      const interest = parseFloat(intI.value) || 0;
+      const date     = modal.querySelector('#fe-date').value;
+      const notesRaw = modal.querySelector('#fe-notes').value.trim() || null;
+      const desc     = isGastos ? modal.querySelector('#fe-desc')?.value.trim() : null;
+
+      if (!base || base <= 0) { showToast('Ingresá el monto base', 'warning'); return; }
+      if (!date)              { showToast('Elegí la fecha', 'warning'); return; }
+
+      const notesFinal = desc
+        ? ('[GASTOS] ' + desc + (notesRaw ? ' · ' + notesRaw : ''))
+        : notesRaw;
+
+      const saveBtn = modal.querySelector('#fe-save');
+      saveBtn.disabled = true; saveBtn.textContent = 'Guardando…';
+
+      const { error } = await this.db.from('frasco_items').update({
+        original_amount: base,
+        interest_amount: interest,
+        frasco_date:     date,
+        notes:           notesFinal,
+      }).eq('id', item.id);
+
+      if (error) {
+        showToast('Error: ' + error.message, 'error');
+        saveBtn.disabled = false; saveBtn.textContent = '💾 Guardar cambios';
+        return;
+      }
+
+      showToast('Frasco actualizado ✓', 'success');
+      close();
+      const container = document.getElementById('financ-container');
+      if (container) await this._fetchAndRender(container);
     });
   }
 
