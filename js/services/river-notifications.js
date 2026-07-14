@@ -109,17 +109,29 @@ export async function checkRiverLevel(force = false) {
   };
 
   const getNivel = props => {
-    const std = props.valor ?? props.altura ?? props.nivel ?? props.value;
-    // Caso 1: campo numérico directo
-    if (std != null && typeof std !== 'object' && !isNaN(parseFloat(std))) return parseFloat(std);
-    // Caso 2: props.valor es un objeto con fechas
-    if (std != null && typeof std === 'object') {
-      const v = getFromDateObj(std);
+    let raw = props.valor ?? props.altura ?? props.nivel ?? props.value;
+
+    // El INA devuelve props.valor como STRING JSON: '{"2026-07-11":"2.410",...}'
+    if (typeof raw === 'string') {
+      const n = parseFloat(raw);
+      if (!isNaN(n)) return n;        // string numérico directo "2.39"
+      try { raw = JSON.parse(raw); }  // intentar parsear como JSON
+      catch { return null; }
+    }
+
+    // Si es objeto (ya sea por JSON.parse o porque vino como objeto)
+    if (raw !== null && typeof raw === 'object') {
+      const v = getFromDateObj(raw);
       if (v != null && !isNaN(v)) return v;
     }
-    // Caso 3: claves de fecha directas en props
+
+    // Número directo
+    if (typeof raw === 'number' && !isNaN(raw)) return raw;
+
+    // Último recurso: claves de fecha directas en props
     const v2 = getFromDateObj(props);
     if (v2 != null && !isNaN(v2)) return v2;
+
     return null;
   };
 
