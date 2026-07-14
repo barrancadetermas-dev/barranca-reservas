@@ -89,6 +89,28 @@ async function discoverLayer() {
   } catch { return null; }
 }
 
+
+// Normaliza las propiedades de cada feature:
+// El INA devuelve props.valor como STRING JSON '{"YYYY-MM-DD":"X.XX",...}'
+// Lo convertimos a número (nivel de hoy) para que el cliente lo use directamente.
+function normalizeFeatures(geojson) {
+  const today = new Date().toISOString().slice(0, 10);
+  for (const feat of geojson?.features ?? []) {
+    const p = feat.properties ?? {};
+    let raw = p.valor ?? p.altura ?? p.nivel;
+    if (typeof raw === 'string') {
+      const n = parseFloat(raw);
+      if (!isNaN(n)) { p.valor = n; continue; }
+      try { raw = JSON.parse(raw); } catch { continue; }
+    }
+    if (raw !== null && typeof raw === 'object') {
+      const v = raw[today] ?? Object.values(raw).find(v => v != null);
+      if (v != null) p.valor = parseFloat(v);
+    }
+  }
+  return geojson;
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
 
@@ -117,5 +139,5 @@ export default async function handler(req, res) {
   res.setHeader('Cache-Control', 's-maxage=3600, stale-while-revalidate=600');
   res.setHeader('X-INA-Layer',  result.layer ?? PRIMARY_LAYER);
   res.setHeader('X-INA-Method', result.method ?? 'unknown');
-  return res.status(200).json(result.data);
+  return res.status(200).json(normalizeFeatures(result.data));
 }

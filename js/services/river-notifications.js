@@ -108,30 +108,23 @@ export async function checkRiverLevel(force = false) {
     return dk.length > 0 ? parseFloat(obj[dk[0]]) : null;
   };
 
+  // El servidor (/api/rio) ya normaliza props.valor a número.
+  // Este fallback cubre cualquier formato residual.
   const getNivel = props => {
-    let raw = props.valor ?? props.altura ?? props.nivel ?? props.value;
-
-    // El INA devuelve props.valor como STRING JSON: '{"2026-07-11":"2.410",...}'
-    if (typeof raw === 'string') {
-      const n = parseFloat(raw);
-      if (!isNaN(n)) return n;        // string numérico directo "2.39"
-      try { raw = JSON.parse(raw); }  // intentar parsear como JSON
-      catch { return null; }
+    const v = props.valor ?? props.altura ?? props.nivel ?? props.value;
+    if (v == null) return null;
+    if (typeof v === 'number') return isNaN(v) ? null : v;
+    if (typeof v === 'string') {
+      const n = parseFloat(v);
+      if (!isNaN(n)) return n;
+      try {
+        const obj = JSON.parse(v);
+        const today2 = new Date().toISOString().slice(0, 10);
+        const val = obj[today2] ?? Object.values(obj).find(x => x != null);
+        return val != null ? parseFloat(val) : null;
+      } catch { return null; }
     }
-
-    // Si es objeto (ya sea por JSON.parse o porque vino como objeto)
-    if (raw !== null && typeof raw === 'object') {
-      const v = getFromDateObj(raw);
-      if (v != null && !isNaN(v)) return v;
-    }
-
-    // Número directo
-    if (typeof raw === 'number' && !isNaN(raw)) return raw;
-
-    // Último recurso: claves de fecha directas en props
-    const v2 = getFromDateObj(props);
-    if (v2 != null && !isNaN(v2)) return v2;
-
+    if (typeof v === 'object') return getFromDateObj(v);
     return null;
   };
 
