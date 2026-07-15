@@ -681,8 +681,7 @@ export class Dashboard {
 
     const rows = bookings.map(b => {
       const guest  = b.guests ? (b.guests.first_name + ' ' + b.guests.last_name) : 'Sin nombre';
-      const unit   = b.booking_units?.[0]?.units;
-      const color  = unit?.color ?? '#6366f1';
+      const units  = (b.booking_units ?? []).map(bu => bu?.units).filter(Boolean);
       const nights = Math.round((new Date(b.check_out+'T12:00:00') - new Date(b.check_in+'T12:00:00')) / 86400000);
       const dAway  = Math.round((new Date(b.check_in+'T12:00:00') - new Date(today+'T12:00:00')) / 86400000);
       const dayLabel = dAway === 0
@@ -690,15 +689,26 @@ export class Dashboard {
         : dAway === 1
         ? '<span style="font-size:.65rem;padding:1px 6px;border-radius:3px;background:var(--state-yellow-bg);color:var(--state-yellow-txt);font-weight:700">MAÑANA</span>'
         : '<span style="font-size:.65rem;color:var(--color-text-3)">en ' + dAway + 'd</span>';
+
+      // Una barra por unidad, apiladas verticalmente
+      const barHeight = Math.max(12, Math.round(44 / Math.max(units.length, 1)));
+      const colorBars = units.length > 0
+        ? '<div style="display:flex;flex-direction:column;gap:2px;flex-shrink:0;margin-top:2px">' +
+            units.map(u => '<div style="width:3px;height:' + barHeight + 'px;border-radius:2px;background:' + (u?.color ?? '#6366f1') + '"></div>').join('') +
+          '</div>'
+        : '<div style="width:3px;min-height:44px;border-radius:2px;background:#6366f1;flex-shrink:0;margin-top:2px"></div>';
+
+      const unitNames = units.map(u => u?.name).filter(Boolean).join(' + ') || '—';
+
       return '<div style="display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-bottom:1px solid var(--color-border)">' +
-        '<div style="width:3px;min-height:44px;border-radius:2px;background:' + color + ';flex-shrink:0;margin-top:2px"></div>' +
+        colorBars +
         '<div style="flex:1;min-width:0">' +
           '<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">' +
             '<span style="font-size:.78rem;font-weight:700;color:var(--color-text)">' + fmt(b.check_in) + '</span>' +
             dayLabel +
           '</div>' +
           '<div style="font-size:.82rem;font-weight:600;color:var(--color-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + guest + '</div>' +
-          '<div style="font-size:.72rem;color:var(--color-text-3);margin-top:2px">' + (unit?.name ?? '—') + ' · ' + nights + ' noche' + (nights!==1?'s':'') + '</div>' +
+          '<div style="font-size:.72rem;color:var(--color-text-3);margin-top:2px">' + unitNames + ' · ' + nights + ' noche' + (nights!==1?'s':'') + '</div>' +
         '</div></div>';
     }).join('');
 

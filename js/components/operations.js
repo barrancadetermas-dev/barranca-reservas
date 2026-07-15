@@ -88,6 +88,7 @@ export class OperationsModule {
         <button class="tab" data-ops-tab="cleaning">🧹 Limpieza</button>
         <button class="tab" data-ops-tab="maintenance">🔧 Mantenimiento</button>
         <button class="tab" data-ops-tab="expenses">💰 Gastos</button>
+        <button class="tab" data-ops-tab="tenencias">💼 Tenencias</button>
         <div class="ops-tab-actions" id="ops-header-actions"></div>
       </div>
       <div id="ops-panel"></div>
@@ -116,6 +117,7 @@ export class OperationsModule {
     if (tab === 'maintenance')  await this._loadMaintenance(panel, header);
     if (tab === 'stock')        await this._loadStock(panel, header);
     if (tab === 'expenses')     await this._loadExpenses(panel, header);
+    if (tab === 'tenencias')    await this._loadTenencias(panel, header);
   }
 
   // ══════════════════════════════════════════════════
@@ -1546,3 +1548,495 @@ export class OperationsModule {
     }
   }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Extensión inyectada: tab Tenencias (Frascos + FCI Cocos + Plazo Fijo)
+// ─────────────────────────────────────────────────────────────────────────────
+OperationsModule.prototype._loadTenencias = async function(panel, header) {
+
+  const RATES_KEY = 'mila_tenencias_rates';
+  const getRates  = () => {
+    try { return JSON.parse(localStorage.getItem(RATES_KEY) ?? '{}'); } catch { return {}; }
+  };
+  const rates = { tna_cocos: 19, tea_santander: 16, ...getRates() };
+
+  const today = new Date().toISOString().slice(0, 10);
+  const fmt   = n => '$' + (n ?? 0).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const fmtN  = n => (n ?? 0).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  header.innerHTML = `
+    <button class="btn btn-outline btn-sm" id="ten-config-btn">⚙️ Tasas</button>`;
+
+  // ── Fetch tenencias ───────────────────────────────────────────────────────
+  const { data: items = [] } = await this.db.from('frasco_items')
+    .select('id, original_amount, interest_amount, frasco_date, notes, credited, credited_at, credited_amount, booking_id, created_at')
+    .eq('hotel_id', this.ctx.hotelId)
+    .order('frasco_date', { ascending: true })
+    .limit(200);
+
+  const pending  = items.filter(i => !i.credited);
+  const credited = items.filter(i =>  i.credited);
+
+  // Categorizar por tipo
+  const frascos   = pending.filter(i => !i.notes?.startsWith('[FCI]') && !i.notes?.startsWith('[PF]'));
+  const fcis      = pending.filter(i =>  i.notes?.startsWith('[FCI]'));
+  const plazos    = pending.filter(i =>  i.notes?.startsWith('[PF]'));
+
+  // ── Resumen ───────────────────────────────────────────────────────────────
+  const totalFrasco = frascos.reduce((s, i) => s + (i.original_amount ?? 0), 0);
+  const totalFCI    = fcis.reduce((s, i) => s + (i.original_amount ?? 0), 0);
+  const totalPF     = plazos.reduce((s, i) => s + (i.original_amount ?? 0), 0);
+  const totalInvert = totalFrasco + totalFCI + totalPF;
+  const totalIntereses = pending.reduce((s, i) => s + (i.interest_amount ?? 0), 0);
+
+  // ── Render de una fila ────────────────────────────────────────────────────
+  const rowHTML = (item, badgeColor, badgeLabel) => {
+    const base    = item.original_amount ?? 0;
+    const interes = item.interest_amount  ?? 0;
+    const total   = base + interes;
+    const dias    = Math.round((new Date(item.frasco_date + 'T00:00:00') - new Date(today + 'T00:00:00')) / 86400000);
+    const vencido = dias < 0;
+    const countdown = dias < 0
+      ? `<span style="color:#dc2626;font-size:.68rem">⚠️ hace ${Math.abs(dias)}d</span>`
+      : dias === 0
+      ? `<span style="color:#f97316;font-size:.68rem;font-weight:700">⚠️ hoy</span>`
+      : `<span style="color:#94a3b8;font-size:.68rem">en ${dias}d</span>`;
+
+    const desc = (item.notes ?? '').replace(/^\[(FCI|PF|GASTOS)\] /, '').split(' · ')[0] || '—';
+
+    return `<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:10px;
+                         margin-bottom:6px;background:${vencido ? '#fef9c3' : 'var(--color-surface-2)'};
+                         border:1px solid ${vencido ? '#fde047' : 'var(--color-border)'}">
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">
+          <span style="font-size:.62rem;font-weight:700;padding:1px 7px;border-radius:4px;
+                       background:${badgeColor}22;color:${badgeColor}">${badgeLabel}</span>
+          <span style="font-size:.8rem;font-weight:600;color:var(--color-text)">${desc}</span>
+        </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap">
+          <span style="font-size:.72rem;color:var(--color-text-3)">Base: <strong>${fmt(base)}</strong></span>
+          ${interes > 0 ? `<span style="font-size:.72rem;color:#16a34a">+${fmt(interes)}</span>` : ''}
+          <span style="font-size:.72rem;color:#ea580c;font-weight:700">= ${fmt(total)}</span>
+          <span style="font-size:.68rem;color:var(--color-text-3)">${item.frasco_date} ${countdown}</span>
+        </div>
+      </div>
+      <div style="display:flex;gap:5px;flex-shrink:0">
+        <button class="btn btn-primary btn-xs ten-credit-btn" data-id="${item.id}"
+                style="background:#fb923c;border-color:#fb923c;white-space:nowrap;font-size:.7rem">💸</button>
+        <button class="btn btn-outline btn-xs ten-edit-btn" data-id="${item.id}" style="padding:3px 7px;font-size:.7rem">✏️</button>
+        <button class="btn btn-ghost btn-xs ten-delete-btn" data-id="${item.id}" style="padding:3px 7px;color:#ef4444;font-size:.7rem">🗑️</button>
+      </div>
+    </div>`;
+  };
+
+  const sectionHTML = (title, icon, color, items2, badgeColor, badgeLabel, totalAmt, addId) => {
+    const venc = items2.filter(i => i.frasco_date <= today).length;
+    return `<details open style="margin-bottom:16px">
+      <summary style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:10px 14px;
+                      border-radius:10px;background:${color}11;border:1px solid ${color}33;user-select:none">
+        <span style="font-size:1rem">${icon}</span>
+        <span style="font-size:.82rem;font-weight:700;color:var(--color-text);flex:1">${title}</span>
+        ${totalAmt > 0 ? `<span style="font-size:.8rem;font-weight:700;color:${color}">${fmt(totalAmt)}</span>` : ''}
+        ${venc > 0 ? `<span style="font-size:.65rem;background:#fef2f2;color:#dc2626;padding:1px 7px;border-radius:4px;font-weight:700">⚠️ ${venc} vencido${venc>1?'s':''}</span>` : ''}
+        <button class="btn btn-outline btn-xs ten-add-btn" data-type="${addId}"
+                style="font-size:.68rem;padding:2px 8px" onclick="event.preventDefault()">+ Agregar</button>
+      </summary>
+      <div style="padding:8px 0">
+        ${items2.length ? items2.map(i => rowHTML(i, badgeColor, badgeLabel)).join('') : `<p style="font-size:.78rem;color:var(--color-text-3);padding:8px 14px">Sin posiciones activas</p>`}
+      </div>
+    </details>`;
+  };
+
+  panel.innerHTML = `
+    <div style="padding:16px">
+
+      <!-- Resumen total -->
+      ${totalInvert > 0 ? `
+      <div style="display:flex;gap:16px;margin-bottom:18px;padding:12px 16px;
+                  border-radius:10px;background:var(--color-surface-2);flex-wrap:wrap">
+        <div><div style="font-size:.65rem;color:var(--color-text-3);text-transform:uppercase;font-weight:700">Total invertido</div>
+             <div style="font-size:1.1rem;font-weight:800;color:var(--color-text)">${fmt(totalInvert)}</div></div>
+        <div><div style="font-size:.65rem;color:var(--color-text-3);text-transform:uppercase;font-weight:700">Intereses a cobrar</div>
+             <div style="font-size:1.1rem;font-weight:800;color:#16a34a">+${fmt(totalIntereses)}</div></div>
+        <div><div style="font-size:.65rem;color:var(--color-text-3);text-transform:uppercase;font-weight:700">Total al acreditar</div>
+             <div style="font-size:1.1rem;font-weight:800;color:#ea580c">${fmt(totalInvert + totalIntereses)}</div></div>
+      </div>` : ''}
+
+      ${sectionHTML('Frascos — Naranja X', '🫙', '#f97316', frascos, '#f97316', 'NARANJA', totalFrasco, 'frasco')}
+      ${sectionHTML('FCI — Cocos Capital (COCOA)', '📈', '#8b5cf6', fcis, '#8b5cf6', 'FCI', totalFCI, 'fci')}
+      ${sectionHTML('Plazo Fijo — Santander Río', '🏦', '#0ea5e9', plazos, '#0ea5e9', 'PF', totalPF, 'pf')}
+
+      <!-- Acreditados -->
+      ${credited.length > 0 ? `
+      <details style="margin-top:8px">
+        <summary style="font-size:.72rem;color:var(--color-text-3);cursor:pointer;font-weight:600;padding:6px 0">
+          ✅ Acreditados (${credited.length})
+        </summary>
+        <div style="margin-top:8px;opacity:.75">
+          ${credited.map(i => {
+            const total  = i.credited_amount ?? ((i.original_amount ?? 0) + (i.interest_amount ?? 0));
+            const interes = total - (i.original_amount ?? 0);
+            const tipo = i.notes?.startsWith('[FCI]') ? '📈 FCI' : i.notes?.startsWith('[PF]') ? '🏦 PF' : '🫙 NARANJA';
+            const desc = (i.notes ?? '').replace(/^\[(FCI|PF|GASTOS)\] /, '').split(' · ')[0] || '—';
+            return `<div style="display:flex;justify-content:space-between;font-size:.76rem;padding:6px 0;border-top:1px solid var(--color-border)">
+              <span style="color:var(--color-text-2)">${tipo} · ${desc} · ${i.credited_at ?? ''}</span>
+              <span style="color:#16a34a;font-weight:700">${fmt(total)}${interes>0?` <span style="color:var(--color-text-3)">(+${fmt(interes)})</span>`:''}</span>
+            </div>`;
+          }).join('')}
+        </div>
+      </details>` : ''}
+
+    </div>`;
+
+  // ── Botón configurar tasas ─────────────────────────────────────────────────
+  header.querySelector('#ten-config-btn')?.addEventListener('click', () => {
+    this._openTasasModal(rates);
+  });
+
+  // ── Botones agregar ────────────────────────────────────────────────────────
+  panel.querySelectorAll('.ten-add-btn').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      this._openTenenciaModal(btn.dataset.type, rates);
+    });
+  });
+
+  // ── Acreditar ──────────────────────────────────────────────────────────────
+  panel.querySelectorAll('.ten-credit-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const item = items.find(i => i.id === btn.dataset.id);
+      if (item) this._openTenenciaCreditModal(item);
+    });
+  });
+
+  // ── Editar ─────────────────────────────────────────────────────────────────
+  panel.querySelectorAll('.ten-edit-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const item = items.find(i => i.id === btn.dataset.id);
+      if (item) this._openTenenciaModal(
+        item.notes?.startsWith('[FCI]') ? 'fci' : item.notes?.startsWith('[PF]') ? 'pf' : 'frasco',
+        rates, item
+      );
+    });
+  });
+
+  // ── Eliminar ───────────────────────────────────────────────────────────────
+  panel.querySelectorAll('.ten-delete-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (!confirm('¿Eliminar esta posición?')) return;
+      const { error } = await this.db.from('frasco_items').delete().eq('id', btn.dataset.id);
+      if (error) { showToast('Error: ' + error.message, 'error'); return; }
+      showToast('Eliminado ✓', 'success');
+      await this._loadTenencias(panel, header);
+    });
+  });
+};
+
+// ── Modal: nueva/editar tenencia ───────────────────────────────────────────────
+OperationsModule.prototype._openTenenciaModal = function(tipo, rates, item = null) {
+  const ex = document.getElementById('overlay-tenencia-modal');
+  if (ex) ex.remove();
+
+  const isEdit = !!item;
+  const today2 = new Date().toISOString().slice(0, 10);
+
+  const config = {
+    frasco: { icon: '🫙', label: 'Frasco — Naranja X',      color: '#f97316', prefix: '' },
+    fci:    { icon: '📈', label: 'FCI — Cocos Capital',     color: '#8b5cf6', prefix: '[FCI] ' },
+    pf:     { icon: '🏦', label: 'Plazo Fijo — Santander',  color: '#0ea5e9', prefix: '[PF] '  },
+  }[tipo] ?? { icon: '💰', label: tipo, color: '#6366f1', prefix: '' };
+
+  const tasa = tipo === 'fci'
+    ? `TNA ${rates.tna_cocos}% · rendimiento diario`
+    : tipo === 'pf'
+    ? `TEA ${rates.tea_santander}%`
+    : '';
+
+  const existingDesc  = isEdit ? (item.notes ?? '').replace(/^\[(FCI|PF|GASTOS)\] /, '').split(' · ')[0] : '';
+  const existingNotes = isEdit ? (item.notes ?? '').split(' · ').slice(1).join(' · ') : '';
+
+  const modal = document.createElement('div');
+  modal.className = 'modal-overlay';
+  modal.id = 'overlay-tenencia-modal';
+  modal.innerHTML = `
+    <div class="modal modal-sm">
+      <div class="modal-header" style="background:linear-gradient(135deg,${config.color}11,${config.color}22)">
+        <h3 class="modal-title">${config.icon} ${isEdit ? 'Editar' : 'Nueva'} — ${config.label}</h3>
+        <button class="modal-close" id="tm-close">✕</button>
+      </div>
+      <div class="modal-body">
+        ${tasa ? `<div style="font-size:.7rem;color:var(--color-text-3);margin-bottom:12px;padding:6px 10px;background:var(--color-surface-2);border-radius:6px">📊 ${tasa}</div>` : ''}
+
+        <div class="form-group">
+          <label>Descripción <span class="req">*</span></label>
+          <input type="text" id="tm-desc" class="form-input"
+                 placeholder="${tipo === 'frasco' ? 'Ej: seña Algún Huésped' : tipo === 'fci' ? 'Ej: acreditación reserva julio' : 'Ej: PF 30 días'}"
+                 value="${existingDesc}">
+        </div>
+
+        <div class="form-grid-2">
+          <div class="form-group">
+            <label>Monto <span class="req">*</span></label>
+            <div style="position:relative">
+              <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--color-text-3)">$</span>
+              <input type="number" id="tm-base" min="0" step="0.01" class="form-input"
+                     style="padding-left:22px" value="${item?.original_amount ?? ''}">
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Intereses <span style="font-size:.68rem;color:var(--color-text-3)">(en $)</span></label>
+            <div style="position:relative">
+              <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:#16a34a">+$</span>
+              <input type="number" id="tm-interest" min="0" step="0.01" class="form-input"
+                     style="padding-left:28px" value="${item?.interest_amount ?? 0}">
+            </div>
+          </div>
+        </div>
+
+        <div style="background:#f0fdf4;border-radius:8px;padding:8px 14px;margin-bottom:12px;
+                    display:flex;justify-content:space-between">
+          <span style="font-size:.78rem;color:#166534;font-weight:600">Total al acreditar</span>
+          <span id="tm-total" style="font-size:1rem;font-weight:800;color:#16a34a">$0</span>
+        </div>
+
+        <div class="form-grid-2">
+          <div class="form-group">
+            <label>Fecha emisión</label>
+            <input type="date" id="tm-from" class="form-input"
+                   value="${item?.created_at?.slice(0,10) ?? today2}">
+          </div>
+          <div class="form-group">
+            <label>Fecha acreditación <span class="req">*</span></label>
+            <input type="date" id="tm-date" class="form-input" value="${item?.frasco_date ?? today2}">
+          </div>
+        </div>
+
+        <div id="tm-pct" style="text-align:right;font-size:.7rem;color:#16a34a;margin-top:-8px;margin-bottom:12px;min-height:16px"></div>
+
+        <div class="form-group">
+          <label>Notas</label>
+          <input type="text" id="tm-notes" class="form-input"
+                 placeholder="Observaciones opcionales" value="${existingNotes}">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline" id="tm-cancel">Cancelar</button>
+        <button class="btn btn-primary" id="tm-save"
+                style="background:${config.color};border-color:${config.color}">
+          💾 ${isEdit ? 'Guardar cambios' : 'Agregar'}
+        </button>
+      </div>
+    </div>`;
+
+  document.body.appendChild(modal);
+  modal.style.zIndex = '210';
+
+  const close = () => { modal.remove(); if (escH) document.removeEventListener('keydown', escH); };
+  const escH  = e => { if (e.key === 'Escape') close(); };
+  document.addEventListener('keydown', escH);
+  modal.querySelector('#tm-close').onclick  = close;
+  modal.querySelector('#tm-cancel').onclick = close;
+  modal.addEventListener('click', e => { if (e.target === modal) close(); });
+
+  const baseI    = modal.querySelector('#tm-base');
+  const intI     = modal.querySelector('#tm-interest');
+  const totEl    = modal.querySelector('#tm-total');
+  const pctEl    = modal.querySelector('#tm-pct');
+  const dateEl   = modal.querySelector('#tm-date');
+  const fromEl   = modal.querySelector('#tm-from');
+  const fmt2     = n => '$' + (n||0).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  const updateT = () => {
+    const b = parseFloat(baseI.value) || 0;
+    const i = parseFloat(intI.value)  || 0;
+    totEl.textContent = fmt2(b + i);
+    if (pctEl && b > 0 && i > 0 && dateEl.value && fromEl.value) {
+      const dias = Math.round((new Date(dateEl.value + 'T00:00:00') - new Date(fromEl.value + 'T00:00:00')) / 86400000);
+      const pct  = (i / b * 100).toFixed(2).replace('.', ',');
+      pctEl.textContent = dias > 0 ? `${pct}% de rendimiento en ${dias} día${dias!==1?'s':''}` : '';
+    } else if (pctEl) pctEl.textContent = '';
+  };
+  [baseI, intI, dateEl, fromEl].forEach(el => el?.addEventListener('input', updateT));
+  updateT();
+  setTimeout(() => baseI.focus(), 80);
+
+  modal.querySelector('#tm-save').addEventListener('click', async () => {
+    const base     = parseFloat(baseI.value);
+    const interest = parseFloat(intI.value) || 0;
+    const date     = dateEl.value;
+    const desc     = modal.querySelector('#tm-desc').value.trim();
+    const notes    = modal.querySelector('#tm-notes').value.trim();
+    if (!base || base <= 0) { showToast('Ingresá el monto', 'warning'); return; }
+    if (!date)              { showToast('Elegí la fecha de acreditación', 'warning'); return; }
+    if (!desc)              { showToast('Ingresá una descripción', 'warning'); return; }
+
+    const notesFinal = config.prefix + desc + (notes ? ' · ' + notes : '');
+    const saveBtn = modal.querySelector('#tm-save');
+    saveBtn.disabled = true;
+
+    const payload = { original_amount: base, interest_amount: interest, frasco_date: date, notes: notesFinal, credited: false };
+    let error;
+    if (isEdit) {
+      ({ error } = await this.db.from('frasco_items').update(payload).eq('id', item.id));
+    } else {
+      ({ error } = await this.db.from('frasco_items').insert({ ...payload, hotel_id: this.ctx.hotelId }));
+    }
+    if (error) { showToast('Error: ' + error.message, 'error'); saveBtn.disabled = false; return; }
+    showToast(isEdit ? 'Actualizado ✓' : 'Posición agregada ✓', 'success');
+    close();
+    const panel2 = document.getElementById('ops-panel');
+    const header2 = document.getElementById('ops-header-actions');
+    if (panel2 && header2) await this._loadTenencias(panel2, header2);
+  });
+};
+
+// ── Modal: acreditar tenencia ──────────────────────────────────────────────────
+OperationsModule.prototype._openTenenciaCreditModal = function(item) {
+  const ex = document.getElementById('overlay-ten-credit');
+  if (ex) ex.remove();
+
+  const today2 = new Date().toISOString().slice(0, 10);
+  const base   = item.original_amount ?? 0;
+  const expInt = item.interest_amount  ?? 0;
+  const expTotal = base + expInt;
+  const fmt2   = n => '$' + (n||0).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  const modal = document.createElement('div');
+  modal.className = 'modal-overlay';
+  modal.id = 'overlay-ten-credit';
+  modal.innerHTML = `
+    <div class="modal modal-sm">
+      <div class="modal-header" style="background:linear-gradient(135deg,#f0fdf4,#dcfce7)">
+        <h3 class="modal-title">💸 Acreditar posición</h3>
+        <button class="modal-close" id="tc-close">✕</button>
+      </div>
+      <div class="modal-body">
+        <div style="background:#fff7ed;border-radius:8px;padding:10px 14px;margin-bottom:14px">
+          <div style="font-size:.72rem;color:#9a3412;font-weight:700;margin-bottom:6px">Posición original</div>
+          <div style="display:flex;gap:14px;flex-wrap:wrap;font-size:.76rem">
+            <span>Base: <strong>${fmt2(base)}</strong></span>
+            ${expInt > 0 ? `<span style="color:#16a34a">+${fmt2(expInt)} intereses</span>` : ''}
+            <span>Total esperado: <strong>${fmt2(expTotal)}</strong></span>
+            <span style="color:var(--color-text-3)">Acredita: ${item.frasco_date}</span>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Monto real acreditado <span class="req">*</span></label>
+          <div style="position:relative">
+            <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:#16a34a">$</span>
+            <input type="number" id="tc-amount" min="0" step="0.01" class="form-input"
+                   style="padding-left:22px" value="${expTotal}">
+          </div>
+        </div>
+        <div style="background:#f0fdf4;border-radius:8px;padding:8px 14px;margin-bottom:12px;
+                    display:flex;justify-content:space-between">
+          <span style="font-size:.78rem;color:#166534;font-weight:600">Intereses reales</span>
+          <span id="tc-int" style="font-size:1rem;font-weight:800;color:#16a34a">+${fmt2(expInt)}</span>
+        </div>
+        <div class="form-group">
+          <label>Fecha de acreditación real</label>
+          <input type="date" id="tc-date" class="form-input" value="${today2}">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline" id="tc-cancel">Cancelar</button>
+        <button class="btn btn-primary" id="tc-save" style="background:#16a34a;border-color:#16a34a">✅ Registrar</button>
+      </div>
+    </div>`;
+
+  document.body.appendChild(modal);
+  modal.style.zIndex = '210';
+
+  const close = () => { modal.remove(); if (escH) document.removeEventListener('keydown', escH); };
+  const escH  = e => { if (e.key === 'Escape') close(); };
+  document.addEventListener('keydown', escH);
+  modal.querySelector('#tc-close').onclick  = close;
+  modal.querySelector('#tc-cancel').onclick = close;
+  modal.addEventListener('click', e => { if (e.target === modal) close(); });
+
+  const amtI  = modal.querySelector('#tc-amount');
+  const intEl = modal.querySelector('#tc-int');
+  const fmt3  = n => '$' + (n||0).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  amtI.addEventListener('input', () => {
+    const real = parseFloat(amtI.value) || 0;
+    const int2 = real - base;
+    intEl.textContent = (int2 >= 0 ? '+' : '') + fmt3(int2);
+    intEl.style.color = int2 >= 0 ? '#16a34a' : '#ef4444';
+  });
+  setTimeout(() => { amtI.select(); }, 80);
+
+  modal.querySelector('#tc-save').addEventListener('click', async () => {
+    const credited_amount = parseFloat(amtI.value);
+    const credited_at     = modal.querySelector('#tc-date').value;
+    if (!credited_amount || credited_amount <= 0) { showToast('Ingresá el monto', 'warning'); return; }
+    const saveBtn = modal.querySelector('#tc-save');
+    saveBtn.disabled = true;
+    const { error } = await this.db.from('frasco_items').update({
+      credited: true, credited_amount, credited_at: credited_at || today2,
+      interest_amount: credited_amount - base,
+    }).eq('id', item.id);
+    if (error) { showToast('Error: ' + error.message, 'error'); saveBtn.disabled = false; return; }
+    showToast(`✅ Acreditado ${fmt3(credited_amount)}`, 'success');
+    close();
+    const panel2 = document.getElementById('ops-panel');
+    const header2 = document.getElementById('ops-header-actions');
+    if (panel2 && header2) await this._loadTenencias(panel2, header2);
+  });
+};
+
+// ── Modal: configurar tasas ────────────────────────────────────────────────────
+OperationsModule.prototype._openTasasModal = function(rates) {
+  const ex = document.getElementById('overlay-tasas');
+  if (ex) ex.remove();
+
+  const modal = document.createElement('div');
+  modal.className = 'modal-overlay';
+  modal.id = 'overlay-tasas';
+  modal.innerHTML = `
+    <div class="modal modal-sm">
+      <div class="modal-header">
+        <h3 class="modal-title">⚙️ Configurar tasas de referencia</h3>
+        <button class="modal-close" id="tr-close">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label>📈 Cocos Capital — TNA (%)</label>
+          <input type="number" id="tr-tna" class="form-input" min="0" step="0.01"
+                 value="${rates.tna_cocos}" placeholder="19">
+          <small style="color:var(--color-text-3);font-size:.7rem">Tasa Nominal Anual del fondo COCOA</small>
+        </div>
+        <div class="form-group">
+          <label>🏦 Santander Río — TEA (%)</label>
+          <input type="number" id="tr-tea" class="form-input" min="0" step="0.01"
+                 value="${rates.tea_santander}" placeholder="16">
+          <small style="color:var(--color-text-3);font-size:.7rem">Tasa Efectiva Anual del plazo fijo</small>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline" id="tr-cancel">Cancelar</button>
+        <button class="btn btn-primary" id="tr-save">💾 Guardar tasas</button>
+      </div>
+    </div>`;
+
+  document.body.appendChild(modal);
+  modal.style.zIndex = '210';
+
+  const close = () => { modal.remove(); if (escH) document.removeEventListener('keydown', escH); };
+  const escH  = e => { if (e.key === 'Escape') close(); };
+  document.addEventListener('keydown', escH);
+  modal.querySelector('#tr-close').onclick  = close;
+  modal.querySelector('#tr-cancel').onclick = close;
+  modal.addEventListener('click', e => { if (e.target === modal) close(); });
+
+  modal.querySelector('#tr-save').addEventListener('click', async () => {
+    const tna = parseFloat(modal.querySelector('#tr-tna').value);
+    const tea = parseFloat(modal.querySelector('#tr-tea').value);
+    if (isNaN(tna) || isNaN(tea)) { showToast('Valores inválidos', 'warning'); return; }
+    localStorage.setItem('mila_tenencias_rates', JSON.stringify({ tna_cocos: tna, tea_santander: tea }));
+    showToast('Tasas guardadas ✓', 'success');
+    close();
+    const panel2 = document.getElementById('ops-panel');
+    const header2 = document.getElementById('ops-header-actions');
+    if (panel2 && header2) await this._loadTenencias(panel2, header2);
+  });
+};
