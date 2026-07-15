@@ -1578,15 +1578,19 @@ OperationsModule.prototype._loadTenencias = async function(panel, header) {
   const credited = items.filter(i =>  i.credited);
 
   // Categorizar por tipo
-  const frascos   = pending.filter(i => !i.notes?.startsWith('[FCI]') && !i.notes?.startsWith('[PF]'));
+  const frascos   = pending.filter(i => !i.notes?.startsWith('[FCI]') && !i.notes?.startsWith('[PF]') && !i.notes?.startsWith('[USD]') && !i.notes?.startsWith('[CTA]'));
   const fcis      = pending.filter(i =>  i.notes?.startsWith('[FCI]'));
   const plazos    = pending.filter(i =>  i.notes?.startsWith('[PF]'));
+  const dolares   = pending.filter(i =>  i.notes?.startsWith('[USD]'));
+  const cuenta    = pending.filter(i =>  i.notes?.startsWith('[CTA]'));
 
   // ── Resumen ───────────────────────────────────────────────────────────────
   const totalFrasco = frascos.reduce((s, i) => s + (i.original_amount ?? 0), 0);
   const totalFCI    = fcis.reduce((s, i) => s + (i.original_amount ?? 0), 0);
   const totalPF     = plazos.reduce((s, i) => s + (i.original_amount ?? 0), 0);
-  const totalInvert = totalFrasco + totalFCI + totalPF;
+  const totalUSD    = dolares.reduce((s, i) => s + (i.original_amount ?? 0), 0);
+  const totalCTA    = cuenta.reduce((s, i) => s + (i.original_amount ?? 0), 0);
+  const totalInvert = totalFrasco + totalFCI + totalPF + totalUSD + totalCTA;
   const totalIntereses = pending.reduce((s, i) => s + (i.interest_amount ?? 0), 0);
 
   // ── Render de una fila ────────────────────────────────────────────────────
@@ -1663,8 +1667,10 @@ OperationsModule.prototype._loadTenencias = async function(panel, header) {
       </div>` : ''}
 
       ${sectionHTML('Frascos — Naranja X', '🫙', '#f97316', frascos, '#f97316', 'NARANJA', totalFrasco, 'frasco')}
-      ${sectionHTML('FCI — Cocos Capital (COCOA)', '📈', '#8b5cf6', fcis, '#8b5cf6', 'FCI', totalFCI, 'fci')}
-      ${sectionHTML('Plazo Fijo — Santander Río', '🏦', '#0ea5e9', plazos, '#0ea5e9', 'PF', totalPF, 'pf')}
+      ${sectionHTML('FCI — Cocos Capital (COCOA)', '📈', '#3b82f6', fcis, '#3b82f6', 'FCI', totalFCI, 'fci')}
+      ${sectionHTML('Plazo Fijo — Santander Río', '🏦', '#dc2626', plazos, '#dc2626', 'PF', totalPF, 'pf')}
+      ${sectionHTML('Dólares', '💵', '#16a34a', dolares, '#16a34a', 'USD', totalUSD, 'usd')}
+      ${sectionHTML('En cuenta', '🏛️', '#64748b', cuenta, '#64748b', 'CTA', totalCTA, 'cuenta')}
 
       <!-- Acreditados -->
       ${credited.length > 0 ? `
@@ -1676,7 +1682,7 @@ OperationsModule.prototype._loadTenencias = async function(panel, header) {
           ${credited.map(i => {
             const total  = i.credited_amount ?? ((i.original_amount ?? 0) + (i.interest_amount ?? 0));
             const interes = total - (i.original_amount ?? 0);
-            const tipo = i.notes?.startsWith('[FCI]') ? '📈 FCI' : i.notes?.startsWith('[PF]') ? '🏦 PF' : '🫙 NARANJA';
+            const tipo = i.notes?.startsWith('[FCI]') ? '📈 FCI' : i.notes?.startsWith('[PF]') ? '🏦 PF' : i.notes?.startsWith('[USD]') ? '💵 USD' : i.notes?.startsWith('[CTA]') ? '🏛️ CTA' : '🫙 NARANJA';
             const desc = (i.notes ?? '').replace(/^\[(FCI|PF|GASTOS)\] /, '').split(' · ')[0] || '—';
             return `<div style="display:flex;justify-content:space-between;font-size:.76rem;padding:6px 0;border-top:1px solid var(--color-border)">
               <span style="color:var(--color-text-2)">${tipo} · ${desc} · ${i.credited_at ?? ''}</span>
@@ -1741,9 +1747,11 @@ OperationsModule.prototype._openTenenciaModal = function(tipo, rates, item = nul
   const today2 = new Date().toISOString().slice(0, 10);
 
   const config = {
-    frasco: { icon: '🫙', label: 'Frasco — Naranja X',      color: '#f97316', prefix: '' },
-    fci:    { icon: '📈', label: 'FCI — Cocos Capital',     color: '#8b5cf6', prefix: '[FCI] ' },
-    pf:     { icon: '🏦', label: 'Plazo Fijo — Santander',  color: '#0ea5e9', prefix: '[PF] '  },
+    frasco:  { icon: '🫙', label: 'Frasco — Naranja X',       color: '#f97316', prefix: ''      },
+    fci:     { icon: '📈', label: 'FCI — Cocos Capital',      color: '#3b82f6', prefix: '[FCI] '},
+    pf:      { icon: '🏦', label: 'Plazo Fijo — Santander',   color: '#dc2626', prefix: '[PF] ' },
+    usd:     { icon: '💵', label: 'Dólares',                  color: '#16a34a', prefix: '[USD] '},
+    cuenta:  { icon: '🏛️',label: 'En cuenta',                 color: '#64748b', prefix: '[CTA] '},
   }[tipo] ?? { icon: '💰', label: tipo, color: '#6366f1', prefix: '' };
 
   const tasa = tipo === 'fci'
