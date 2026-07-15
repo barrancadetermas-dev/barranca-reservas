@@ -580,165 +580,124 @@ export class Statistics {
       const avgOccPct = Math.round(dailyOcc.reduce((s,v) => s+v, 0) / daysInMonth);
       const peakDays  = dailyOcc.filter(v => v >= 90).length;
       const freeDays  = dailyOcc.filter(v => v === 0).length;
-      // ── Estadísticas adicionales para los gráficos ─────────────────────────
-      // 1. Unidad más alquilada
+      // ── Extra stats para graficos ──────────────────────────────────────────
       const unitStats = this.ctx.units.map(u => ({
-        name:    u.name,
-        color:   getUnitColor(u),
-        nights:  occMap[u.id].size,
-        pct:     Math.round((occMap[u.id].size / daysInMonth) * 100),
+        name:   u.name, color: getUnitColor(u),
+        nights: occMap[u.id].size,
+        pct:    Math.round((occMap[u.id].size / daysInMonth) * 100),
       })).sort((a, b) => b.nights - a.nights);
       const maxNights = unitStats[0]?.nights || 1;
 
-      // 2. Promedio de estadías (duración de reservas en el mes)
-      const stayLengths = bookings.map(b => {
-        const ci  = new Date(b.check_in + 'T00:00:00');
-        const co  = new Date(b.check_out + 'T00:00:00');
-        return Math.round((co - ci) / 86400000);
-      }).filter(n => n > 0 && n <= 60);
+      const stayLengths = bookings.map(b => Math.round(
+        (new Date(b.check_out+'T00:00:00') - new Date(b.check_in+'T00:00:00')) / 86400000
+      )).filter(n => n > 0 && n <= 60);
       const avgStay = stayLengths.length
-        ? (stayLengths.reduce((s,v) => s+v, 0) / stayLengths.length).toFixed(1)
-        : 0;
-
-      // Distribución de estadías para el gráfico de línea
+        ? (stayLengths.reduce((s,v)=>s+v,0)/stayLengths.length).toFixed(1) : '0';
       const stayDist = {};
-      stayLengths.forEach(n => { stayDist[n] = (stayDist[n] ?? 0) + 1; });
-      const stayKeys = Array.from({ length: Math.max(...stayLengths, 1) }, (_, i) => i + 1);
+      stayLengths.forEach(n => { stayDist[n] = (stayDist[n]??0)+1; });
+      const stayMax  = stayLengths.length ? Math.max.apply(null,stayLengths) : 0;
+      const stayKeys = stayMax > 0 ? Array.from({length:stayMax},(_,i)=>i+1) : [];
 
-      // 3. % ocupación vs libre
-      const occupiedNights = Math.round(dailyOcc.reduce((s,v) => s + v/100, 0));
       const totalUnitNights = this.ctx.units.length * daysInMonth;
-      const occupiedPct     = Math.round((occupiedNights / totalUnitNights) * 100);
+      const occupiedUnitN   = dailyOcc.reduce((s,v)=>s+v/100,0);
+      const occupiedPct     = totalUnitNights > 0 ? Math.round((occupiedUnitN/totalUnitNights)*100) : 0;
       const freePct         = 100 - occupiedPct;
 
-      // ── SVG Gráfico 1: Unidades más alquiladas ─────────────────────────────
+      // Chart 1: barras horizontales
       const barW = 320, barH = Math.max(60, unitStats.length * 32 + 20);
-      const barsHTML = unitStats.map((u, i) => {
-        const barLen = Math.round((u.nights / maxNights) * 240);
-        const y = 10 + i * 32;
-        return \`<text x="80" y="\${y+14}" text-anchor="end" font-size="10" fill="var(--color-text-3)">\${u.name.slice(0,12)}</text>
-          <rect x="85" y="\${y}" width="\${barLen}" height="18" rx="3" fill="\${u.color}" opacity=".85"/>
-          <text x="\${90+barLen}" y="\${y+13}" font-size="10" fill="\${u.color}" font-weight="700">\${u.nights}n · \${u.pct}%</text>\`;
-      }).join('');
+      let barsHTML = '';
+      unitStats.forEach(function(u,i) {
+        const bl = Math.round((u.nights/maxNights)*220), y = 10+i*32;
+        barsHTML += '<text x="78" y="'+(y+14)+'" text-anchor="end" font-size="10" fill="var(--color-text-3)">'+u.name.slice(0,12)+'</text>'
+          +'<rect x="82" y="'+y+'" width="'+bl+'" height="18" rx="3" fill="'+u.color+'" opacity=".85"/>'
+          +'<text x="'+(86+bl)+'" y="'+(y+13)+'" font-size="10" fill="'+u.color+'" font-weight="700">'+u.nights+'n · '+u.pct+'%</text>';
+      });
 
-      // ── SVG Gráfico 2: Donut ocupación ──────────────────────────────────────
-      const r = 50, cx = 70, cy = 70;
-      const toRad = d => (d - 90) * Math.PI / 180;
-      const arc = (pct, total, color, offset) => {
-        const angle = (pct / total) * 360;
-        const large = angle > 180 ? 1 : 0;
-        const x1 = cx + r * Math.cos(toRad(offset));
-        const y1 = cy + r * Math.sin(toRad(offset));
-        const x2 = cx + r * Math.cos(toRad(offset + angle));
-        const y2 = cy + r * Math.sin(toRad(offset + angle));
-        return \`<path d="M\${cx}\${cy} L\${x1}\${y1} A\${r}\${r} 0 \${large} 1 \${x2}\${y2} Z" fill="\${color}" opacity=".85"/>\`;
-      };
-      const donutHTML = occupiedPct < 100
-        ? arc(occupiedPct, 100, '#22c55e', 0) + arc(freePct, 100, '#e2e8f0', occupiedPct * 3.6)
-        : \`<circle cx="\${cx}" cy="\${cy}" r="\${r}" fill="#22c55e"/>\`;
+      // Chart 2: donut
+      const cx=70,cy=70,r=50;
+      function toRad2(d){return(d-90)*Math.PI/180;}
+      let donutHTML='';
+      if(occupiedPct>0&&occupiedPct<100){
+        const ang=(occupiedPct/100)*360,lg1=ang>180?1:0;
+        const x1=(cx+r*Math.cos(toRad2(0))).toFixed(1),y1=(cy+r*Math.sin(toRad2(0))).toFixed(1);
+        const x2=(cx+r*Math.cos(toRad2(ang))).toFixed(1),y2=(cy+r*Math.sin(toRad2(ang))).toFixed(1);
+        donutHTML+='<path d="M'+cx+' '+cy+' L'+x1+' '+y1+' A'+r+' '+r+' 0 '+lg1+' 1 '+x2+' '+y2+' Z" fill="#22c55e" opacity=".85"/>';
+        const ang2=(freePct/100)*360,lg2=ang2>180?1:0;
+        const x4=(cx+r*Math.cos(toRad2(ang+ang2))).toFixed(1),y4=(cy+r*Math.sin(toRad2(ang+ang2))).toFixed(1);
+        donutHTML+='<path d="M'+cx+' '+cy+' L'+x2+' '+y2+' A'+r+' '+r+' 0 '+lg2+' 1 '+x4+' '+y4+' Z" fill="#e2e8f0"/>';
+      }else{donutHTML='<circle cx="'+cx+'" cy="'+cy+'" r="'+r+'" fill="'+(occupiedPct>=100?'#22c55e':'#e2e8f0')+'"/>';}
+      donutHTML+='<circle cx="'+cx+'" cy="'+cy+'" r="28" fill="var(--color-surface-2)"/>'
+        +'<text x="'+cx+'" y="'+(cy-4)+'" text-anchor="middle" font-size="14" font-weight="800" fill="var(--color-text)">'+occupiedPct+'%</text>'
+        +'<text x="'+cx+'" y="'+(cy+12)+'" text-anchor="middle" font-size="9" fill="var(--color-text-3)">ocupado</text>';
 
-      // ── SVG Gráfico 3: Distribución duración de estadías ──────────────────
-      const lineW = 320, lineH = 90;
-      const maxDist = Math.max(...Object.values(stayDist), 1);
-      const stayMax = Math.max(...stayKeys, 1);
-      const pts = stayKeys.map(k => {
-        const x = 20 + ((k - 1) / Math.max(stayMax - 1, 1)) * (lineW - 40);
-        const y = lineH - 15 - ((stayDist[k] ?? 0) / maxDist) * (lineH - 25);
-        return \`\${x},\${y}\`;
-      }).join(' ');
-      const lineHTML = stayLengths.length > 0
-        ? \`<polyline points="\${pts}" fill="none" stroke="#6366f1" stroke-width="2.5" stroke-linejoin="round"/>
-           \${stayKeys.map(k => {
-             const x = 20 + ((k-1)/Math.max(stayMax-1,1))*(lineW-40);
-             const y = lineH - 15 - ((stayDist[k]??0)/maxDist)*(lineH-25);
-             return (stayDist[k]??0) > 0
-               ? \`<circle cx="\${x}" cy="\${y}" r="3.5" fill="#6366f1"/>
-                  <text x="\${x}" y="\${lineH-2}" text-anchor="middle" font-size="8" fill="var(--color-text-3)">\${k}n</text>\`
-               : '';
-           }).join('')}
-           \${stayKeys.filter(k=>(stayDist[k]??0)>0).map(k=>{
-             const x=20+((k-1)/Math.max(stayMax-1,1))*(lineW-40);
-             const y=lineH-15-((stayDist[k]??0)/maxDist)*(lineH-25);
-             return \`<text x="\${x}" y="\${y-6}" text-anchor="middle" font-size="8" fill="#6366f1" font-weight="700">\${stayDist[k]}</text>\`;
-           }).join('')}\`
-        : \`<text x="160" y="45" text-anchor="middle" font-size="11" fill="var(--color-text-3)">Sin datos</text>\`;
+      // Chart 3: linea estadias
+      const lineW=300,lineH=90;
+      const maxDist=stayKeys.length>0?Math.max.apply(null,stayKeys.map(k=>stayDist[k]??0)):1;
+      let lineHTML='<line x1="15" y1="'+(lineH-15)+'" x2="'+(lineW-10)+'" y2="'+(lineH-15)+'" stroke="var(--color-border)" stroke-width="1"/>';
+      if(stayKeys.length>1){
+        const span=Math.max(stayKeys.length-1,1);
+        const pts=stayKeys.map(function(k,idx){
+          const x=(15+(idx/span)*(lineW-25)).toFixed(1);
+          const y=((lineH-15)-((stayDist[k]??0)/maxDist)*(lineH-25)).toFixed(1);
+          return x+','+y;
+        }).join(' ');
+        lineHTML+='<polyline points="'+pts+'" fill="none" stroke="#6366f1" stroke-width="2" stroke-linejoin="round"/>';
+        stayKeys.forEach(function(k,idx){
+          const v=stayDist[k]??0;
+          if(!v)return;
+          const x=(15+(idx/span)*(lineW-25)).toFixed(1);
+          const y=((lineH-15)-(v/maxDist)*(lineH-25)).toFixed(1);
+          lineHTML+='<circle cx="'+x+'" cy="'+y+'" r="3.5" fill="#6366f1"/>'
+            +'<text x="'+x+'" y="'+(lineH-2)+'" text-anchor="middle" font-size="8" fill="var(--color-text-3)">'+k+'n</text>'
+            +'<text x="'+x+'" y="'+(parseFloat(y)-6).toFixed(1)+'" text-anchor="middle" font-size="8" fill="#6366f1" font-weight="700">'+v+'</text>';
+        });
+      }else{lineHTML+='<text x="150" y="45" text-anchor="middle" font-size="11" fill="var(--color-text-3)">Sin reservas</text>';}
 
-      panel.innerHTML = \`
-        <div class="hm-header-row">
-          <h4>Mapa de Ocupación — \${MONTH_NAMES[month]} \${year}</h4>
-          <div class="hm-summary-stats">
-            <span class="hm-stat"><strong>\${avgOccPct}%</strong> ocup. promedio</span>
-            <span class="hm-stat-sep">·</span>
-            <span class="hm-stat"><strong>\${peakDays}</strong> días al 100%</span>
-            <span class="hm-stat-sep">·</span>
-            <span class="hm-stat"><strong>\${freeDays}</strong> días libres</span>
-            <span class="hm-stat-sep">·</span>
-            <span class="hm-stat"><strong>\${avgStay}</strong> noches prom./reserva</span>
-            <span class="hm-stat-sep">·</span>
-            <span class="hm-stat"><strong>\${bookings.length}</strong> reserva\${bookings.length!==1?'s':''}</span>
-          </div>
-          <div class="hm-legend">
-            <span class="hm-leg-item"><span class="hm-leg-dot" style="background:#93c5fd"></span>1–39%</span>
-            <span class="hm-leg-item"><span class="hm-leg-dot" style="background:#22c55e"></span>40–69%</span>
-            <span class="hm-leg-item"><span class="hm-leg-dot" style="background:#f59e0b"></span>70–89%</span>
-            <span class="hm-leg-item"><span class="hm-leg-dot" style="background:#ef4444"></span>90–100%</span>
-          </div>
-        </div>
-        <div class="heatmap-scroll">
-          <div class="heatmap-grid" style="--days:\${daysInMonth}">
-            <div class="hm-corner"></div>
-            <div class="hm-days-header">\${daysHeaderHTML}</div>
-            \${rowsHTML}
-            <div class="hm-row">
-              <div class="hm-unit-label" style="font-size:.7rem;font-weight:700;color:var(--color-text-3)">TOTAL %</div>
-              <div class="hm-cells-row">\${heatRow}</div>
-            </div>
-          </div>
-        </div>
-
-        <!-- 3 gráficos debajo del heatmap -->
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-top:20px;padding:0 2px">
-
-          <!-- Gráfico 1: Unidades más alquiladas -->
-          <div style="background:var(--color-surface-2);border-radius:12px;padding:14px 16px">
-            <div style="font-size:.72rem;font-weight:700;color:var(--color-text-3);text-transform:uppercase;
-                        letter-spacing:.05em;margin-bottom:12px">📊 Unidad más alquilada</div>
-            <svg width="100%" viewBox="0 0 \${barW} \${barH}" overflow="visible" style="font-family:inherit">
-              \${barsHTML}
-            </svg>
-          </div>
-
-          <!-- Gráfico 2: % Ocupación vs libre -->
-          <div style="background:var(--color-surface-2);border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;align-items:center">
-            <div style="font-size:.72rem;font-weight:700;color:var(--color-text-3);text-transform:uppercase;
-                        letter-spacing:.05em;margin-bottom:8px;align-self:flex-start">🥧 Ocupación vs libre</div>
-            <svg width="140" height="140" viewBox="0 0 140 140" style="font-family:inherit">
-              \${donutHTML}
-              <circle cx="\${cx}" cy="\${cy}" r="28" fill="var(--color-surface-2)"/>
-              <text x="\${cx}" y="\${cy-4}" text-anchor="middle" font-size="14" font-weight="800" fill="var(--color-text)">\${occupiedPct}%</text>
-              <text x="\${cx}" y="\${cy+12}" text-anchor="middle" font-size="9" fill="var(--color-text-3)">ocupado</text>
-            </svg>
-            <div style="display:flex;gap:14px;font-size:.72rem">
-              <span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#22c55e;margin-right:4px"></span>Ocupado \${occupiedPct}%</span>
-              <span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#e2e8f0;margin-right:4px"></span>Libre \${freePct}%</span>
-            </div>
-          </div>
-
-          <!-- Gráfico 3: Distribución de estadías -->
-          <div style="background:var(--color-surface-2);border-radius:12px;padding:14px 16px">
-            <div style="font-size:.72rem;font-weight:700;color:var(--color-text-3);text-transform:uppercase;
-                        letter-spacing:.05em;margin-bottom:8px">📈 Duración de estadías</div>
-            <div style="font-size:.68rem;color:var(--color-text-3);margin-bottom:8px">
-              Promedio: <strong style="color:#6366f1">\${avgStay} noches</strong>
-              · \${stayLengths.length} reserva\${stayLengths.length!==1?'s':''}
-            </div>
-            <svg width="100%" viewBox="0 0 \${lineW} \${lineH}" style="font-family:inherit;overflow:visible">
-              <line x1="20" y1="\${lineH-15}" x2="\${lineW-20}" y2="\${lineH-15}" stroke="var(--color-border)" stroke-width="1"/>
-              \${lineHTML}
-            </svg>
-          </div>
-
-        </div>\`;
+      panel.innerHTML =
+        '<div class="hm-header-row">'
+        +'<h4>Mapa de Ocupaci\u00f3n \u2014 '+MONTH_NAMES[month]+' '+year+'</h4>'
+        +'<div class="hm-summary-stats">'
+        +'<span class="hm-stat"><strong>'+avgOccPct+'%</strong> ocup. promedio</span>'
+        +'<span class="hm-stat-sep">\u00b7</span>'
+        +'<span class="hm-stat"><strong>'+peakDays+'</strong> d\u00edas al 100%</span>'
+        +'<span class="hm-stat-sep">\u00b7</span>'
+        +'<span class="hm-stat"><strong>'+freeDays+'</strong> d\u00edas libres</span>'
+        +'<span class="hm-stat-sep">\u00b7</span>'
+        +'<span class="hm-stat"><strong>'+avgStay+'</strong> noches prom.</span>'
+        +'<span class="hm-stat-sep">\u00b7</span>'
+        +'<span class="hm-stat"><strong>'+bookings.length+'</strong> reserva'+(bookings.length!==1?'s':'')+'</span>'
+        +'</div>'
+        +'<div class="hm-legend">'
+        +'<span class="hm-leg-item"><span class="hm-leg-dot" style="background:#93c5fd"></span>1\u201339%</span>'
+        +'<span class="hm-leg-item"><span class="hm-leg-dot" style="background:#22c55e"></span>40\u201369%</span>'
+        +'<span class="hm-leg-item"><span class="hm-leg-dot" style="background:#f59e0b"></span>70\u201389%</span>'
+        +'<span class="hm-leg-item"><span class="hm-leg-dot" style="background:#ef4444"></span>90\u2013100%</span>'
+        +'</div></div>'
+        +'<div class="heatmap-scroll"><div class="heatmap-grid" style="--days:'+daysInMonth+'">'
+        +'<div class="hm-corner"></div>'
+        +'<div class="hm-days-header">'+daysHeaderHTML+'</div>'
+        +rowsHTML
+        +'<div class="hm-row"><div class="hm-unit-label" style="font-size:.7rem;font-weight:700;color:var(--color-text-3)">TOTAL %</div>'
+        +'<div class="hm-cells-row">'+heatRow+'</div></div>'
+        +'</div></div>'
+        +'<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-top:20px;padding:0 2px">'
+        +'<div style="background:var(--color-surface-2);border-radius:12px;padding:14px 16px">'
+        +'<div style="font-size:.72rem;font-weight:700;color:var(--color-text-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:12px">&#x1F4CA; Unidad m\u00e1s alquilada</div>'
+        +'<svg width="100%" viewBox="0 0 '+barW+' '+barH+'" overflow="visible" style="font-family:inherit">'+barsHTML+'</svg>'
+        +'</div>'
+        +'<div style="background:var(--color-surface-2);border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;align-items:center">'
+        +'<div style="font-size:.72rem;font-weight:700;color:var(--color-text-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;align-self:flex-start">&#x1F967; Ocupaci\u00f3n vs libre</div>'
+        +'<svg width="140" height="140" viewBox="0 0 140 140" style="font-family:inherit">'+donutHTML+'</svg>'
+        +'<div style="display:flex;gap:14px;font-size:.72rem;margin-top:4px">'
+        +'<span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#22c55e;margin-right:4px;vertical-align:middle"></span>Ocupado '+occupiedPct+'%</span>'
+        +'<span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#e2e8f0;margin-right:4px;vertical-align:middle"></span>Libre '+freePct+'%</span>'
+        +'</div></div>'
+        +'<div style="background:var(--color-surface-2);border-radius:12px;padding:14px 16px">'
+        +'<div style="font-size:.72rem;font-weight:700;color:var(--color-text-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">&#x1F4C8; Duraci\u00f3n de estad\u00edas</div>'
+        +'<div style="font-size:.68rem;color:var(--color-text-3);margin-bottom:8px">Promedio: <strong style="color:#6366f1">'+avgStay+' noches</strong> \u00b7 '+stayLengths.length+' reserva'+(stayLengths.length!==1?'s':'')+'</div>'
+        +'<svg width="100%" viewBox="0 0 '+lineW+' '+lineH+'" style="font-family:inherit;overflow:visible">'+lineHTML+'</svg>'
+        +'</div>'
+        +'</div>';
 
     } catch (err) {
       console.error('[Statistics] heatmap error:', err);
