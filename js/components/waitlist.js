@@ -64,10 +64,18 @@ export class WaitlistPanel {
     if (!listEl) return;
     const today = new Date().toISOString().slice(0, 10);
 
-    const { data, error } = await this.db.from('waitlist')
-      .select('*')
-      .eq('hotel_id', this.ctx.hotelId)
-      .order('created_at', { ascending: false });
+    // Cargar waitlist y reservas activas en paralelo para detectar solapamientos
+    const [{ data, error }, { data: bookings }] = await Promise.all([
+      this.db.from('waitlist')
+        .select('*')
+        .eq('hotel_id', this.ctx.hotelId)
+        .order('created_at', { ascending: false }),
+      this.db.from('bookings')
+        .select('id, check_in, check_out, status, booking_units(unit_id)')
+        .eq('hotel_id', this.ctx.hotelId)
+        .not('status', 'in', '(cancelled,blocked)')
+        .gte('check_out', today),
+    ]);
 
     if (error) {
       listEl.innerHTML = `<div class="error-state" style="padding:24px;text-align:center">Error: ${error.message}</div>`;
@@ -88,18 +96,48 @@ export class WaitlistPanel {
       return;
     }
 
+    // Helper: detectar solapamiento para una entrada de espera
+    const checkOverlap = (w) => {
+      if (!bookings?.length) return null;
+      const wci = w.check_in, wco = w.check_out;
+      const wUnits = w.unit_ids ?? [];
+      const overlapping = bookings.filter(b => {
+        // Solapamiento de fechas: (bci < wco) && (bco > wci)
+        if (b.check_in >= wco || b.check_out <= wci) return false;
+        // Si la espera pide unidades específicas, verificar intersección
+        if (wUnits.length > 0) {
+          const bUnits = (b.booking_units ?? []).map(bu => String(bu.unit_id));
+          return wUnits.some(uid => bUnits.includes(String(uid)));
+        }
+        return true; // pide cualquier unidad → solapamiento total
+      });
+      if (!overlapping.length) return { label: '✓ Disponible', color: '#16a34a', bg: '#f0fdf4' };
+      // Verificar si todos los deptos pedidos están ocupados
+      if (wUnits.length > 0) {
+        const occupiedUnits = new Set(overlapping.flatMap(b =>
+          (b.booking_units ?? []).map(bu => String(bu.unit_id))
+        ));
+        const allOccupied = wUnits.every(uid => occupiedUnits.has(String(uid)));
+        if (allOccupied) return { label: '✗ Ocupado', color: '#dc2626', bg: '#fef2f2' };
+        return { label: '~ Parcial', color: '#f59e0b', bg: '#fffbeb' };
+      }
+      return { label: '✗ Ocupado', color: '#dc2626', bg: '#fef2f2' };
+    };
+
     listEl.innerHTML = rows.map(w => {
       const st = STATUS_LABELS[w._effectiveStatus] ?? STATUS_LABELS.open;
+      const overlap = w._effectiveStatus === 'open' ? checkOverlap(w) : null;
       const unitNames = (w.unit_ids?.length
         ? w.unit_ids.map(id => this.ctx.units?.find(u => String(u.id) === String(id))?.name).filter(Boolean).join(', ')
         : 'Cualquier unidad');
       return `
-        <div class="card" style="margin-bottom:10px;padding:14px 16px" data-wl-id="${w.id}">
+        <div class="card" style="margin-bottom:10px;padding:14px 16px;${overlap ? 'border-left:3px solid ' + overlap.color : ''}" data-wl-id="${w.id}">
           <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap">
             <div style="flex:1;min-width:200px">
-              <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;flex-wrap:wrap">
                 <span style="font-weight:700;color:var(--color-text)">${w.guest_name}</span>
                 <span style="font-size:.68rem;font-weight:700;padding:2px 8px;border-radius:999px;background:${st.bg};color:${st.color}">${st.label}</span>
+                ${overlap ? `<span style="font-size:.68rem;font-weight:700;padding:2px 8px;border-radius:999px;background:${overlap.bg};color:${overlap.color}">${overlap.label}</span>` : ''}
               </div>
               <div style="font-size:.8rem;color:var(--color-text-2)">
                 📅 ${formatDate(w.check_in)} → ${formatDate(w.check_out)} · 🏠 ${unitNames}${w.pax ? ` · 👥 ${w.pax}` : ''}

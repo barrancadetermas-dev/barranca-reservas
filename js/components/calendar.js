@@ -606,16 +606,27 @@ export class Calendar {
       const _unitName = this._getUnitDisplayName(unit)
         .replace('Planta Baja','P. Baja').replace('Planta Alta','P. Alta');
       label.dataset.unitId = unit.id;
+
+      // % de días visibles ocupados para esta unidad
+      const occupiedDays = this._dateRange.filter(iso => (cellMap[unit.id]?.[iso]?.length ?? 0) > 0).length;
+      const totalDays    = this._dateRange.length || 1;
+      const occPct       = Math.round(occupiedDays / totalDays * 100);
+      const occColor     = occPct >= 80 ? '#ef4444' : occPct >= 50 ? '#f59e0b' : '#16a34a';
+
       label.innerHTML =
         '<div style="display:flex;align-items:center;gap:3px">' +
           '<span class="cal-unit-dot" style="background-color:' + unitColor + ';width:7px;height:7px;border-radius:50%;flex-shrink:0;margin-right:1px"></span>' +
           '<span class="cal-unit-name" style="font-size:.78rem;font-weight:700;color:var(--color-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;min-width:0">' + _unitName + '</span>' +
           _notesSpan + _editBtn +
         '</div>' +
-        '<span class="unit-floor" style="padding-left:14px;font-size:.63rem;color:var(--color-text-3)">' +
-          '<span style="color:var(--color-text-3);font-weight:600;opacity:.7">#' + _unitNum + '</span>' +
-          ' \xb7 Hasta ' + unit.max_guests + ' pers.' +
-        '</span>';
+        '<div style="display:flex;align-items:center;gap:4px;padding-left:12px;margin-top:2px">' +
+          '<span style="font-size:.63rem;color:var(--color-text-3)"><span style="color:var(--color-text-3);font-weight:600;opacity:.7">#' + _unitNum + '</span> · Hasta ' + unit.max_guests + ' pers.</span>' +
+          '<span style="flex:1"></span>' +
+          '<span style="font-size:.6rem;font-weight:700;color:' + occColor + '">' + occPct + '%</span>' +
+        '</div>' +
+        '<div style="margin:3px 0 1px 12px;height:2px;background:var(--color-border);border-radius:1px;overflow:hidden">' +
+          '<div style="height:100%;background:' + occColor + ';border-radius:1px;width:' + occPct + '%;transition:width .5s"></div>' +
+        '</div>';
       grid.appendChild(label);
 
       // Celdas

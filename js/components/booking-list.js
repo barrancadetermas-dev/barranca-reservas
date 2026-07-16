@@ -544,8 +544,51 @@ export class BookingList {
     }
     html += `</div>`;
 
-    // Filas
-    html += showing.map(b => this._renderRow(b, today)).join('');
+    // Filas — agrupadas por mes cuando el orden es por fecha de check-in
+    const shouldGroup = !this._sortBy || this._sortBy.startsWith('check_in');
+    if (shouldGroup) {
+      const MONTHS_ES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+      // Agrupar por YYYY-MM
+      const groups = {};
+      showing.forEach(b => {
+        const key = (b.check_in ?? '0000-00').slice(0, 7);
+        if (!groups[key]) groups[key] = [];
+        groups[key].push(b);
+      });
+      const sortedKeys = Object.keys(groups).sort(
+        this._sortBy === 'check_in_desc' ? (a, b) => b.localeCompare(a) : (a, b) => a.localeCompare(b)
+      );
+      sortedKeys.forEach(key => {
+        const [yr, mo] = key.split('-');
+        const label = (MONTHS_ES[parseInt(mo, 10) - 1] ?? mo) + ' ' + yr;
+        const grp   = groups[key];
+        const grpTotal   = grp.reduce((s,b) => s + (b.total_amount ?? 0), 0);
+        const grpPaid    = grp.reduce((s,b) => s + (b.total_paid  ?? 0), 0);
+        const grpBalance = grp.reduce((s,b) => s + (b.balance     ?? 0), 0);
+        const grpPct     = grpTotal > 0 ? Math.round(grpPaid / grpTotal * 100) : 0;
+        html += `<div class="bl-month-group" data-month="${key}">
+          <div class="bl-month-header" style="display:flex;align-items:center;gap:10px;padding:8px 14px;
+               background:var(--color-surface-2);border-top:1px solid var(--color-border);
+               border-bottom:1px solid var(--color-border);margin-top:4px;cursor:pointer;user-select:none"
+               onclick="this.closest('.bl-month-group').querySelector('.bl-month-body').classList.toggle('bl-hidden')">
+            <span style="font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--color-text-3)">${label}</span>
+            <span style="font-size:.7rem;color:var(--color-text-3)">${grp.length} reserva${grp.length!==1?'s':''}</span>
+            <div style="flex:1;height:4px;background:var(--color-border);border-radius:2px;overflow:hidden;max-width:80px">
+              <div style="height:100%;background:#16a34a;border-radius:2px;width:${grpPct}%;transition:width .5s"></div>
+            </div>
+            <span style="font-size:.7rem;font-weight:700;color:#16a34a">${formatARS(grpPaid)}</span>
+            ${grpBalance > 0 ? `<span style="font-size:.7rem;color:#f59e0b">+ ${formatARS(grpBalance)} pend.</span>` : ''}
+            <span style="font-size:.65rem;color:var(--color-text-3);margin-left:auto">▾</span>
+          </div>
+          <div class="bl-month-body">
+            ${grp.map(b => this._renderRow(b, today)).join('')}
+          </div>
+        </div>`;
+      });
+    } else {
+      html += showing.map(b => this._renderRow(b, today)).join('');
+    }
+
 
     // Load more
     if (hasMore) {
@@ -718,7 +761,12 @@ export class BookingList {
                     : b.balance <= 0
                       ? `<div class="bl-amount-paid">✓ Pagado</div>`
                       : ''
-                  }`;
+                  }
+                  ${b.total_amount > 0 ? `<div style="margin-top:4px;height:3px;background:var(--color-border);border-radius:2px;overflow:hidden">
+                    <div style="height:100%;border-radius:2px;transition:width .4s;background:${
+                      (b.balance ?? 0) <= 0 ? '#16a34a' : (b.total_paid ?? 0) > 0 ? '#f59e0b' : 'var(--color-border)'
+                    };width:${Math.min(100,Math.round(((b.total_paid??0)/(b.total_amount))*100))}%"></div>
+                  </div>` : ''}`;
               })()}
             </div>
             <div class="bl-col-status">

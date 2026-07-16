@@ -742,17 +742,22 @@ export class OperationsModule {
                      'General';
     const isOpen   = issue.status !== 'resolved';
 
+    // Borde izquierdo y fondo tenue según prioridad (solo para issues abiertos)
+    const priorityStyle = isOpen
+      ? `border-left:3px solid ${pr.color};background:${pr.bg}08`
+      : 'border-left:3px solid var(--color-border);opacity:.6';
+
     return `
-      <div class="ops-row ${!isOpen ? 'ops-done' : ''}" data-id="${issue.id}">
+      <div class="ops-row ${!isOpen ? 'ops-done' : ''}" data-id="${issue.id}"
+           style="${priorityStyle}">
         <div class="ops-row-left">
-          <span class="ops-priority-dot" style="background:${pr.color}" title="${pr.label}"></span>
           <div class="ops-row-info">
             <div class="ops-row-title">
               <span class="ops-unit-badge" style="margin-right:6px">${unitName}</span>
               ${issue.category ?? 'General'} — ${issue.title ?? issue.description ?? ''}
             </div>
             <div class="ops-row-meta">
-              <span class="ops-badge" style="background:${pr.bg};color:${pr.color}">${pr.label}</span>
+              <span class="ops-badge" style="background:${pr.bg};color:${pr.color};font-weight:700">${pr.label}</span>
               ${formatDate(issue.created_at)}
               ${issue.assigned_to ? ` · 👤 ${issue.assigned_to}` : ''}
               ${issue.status === 'resolved' ? ` · ✅ Resuelto ${formatDate(issue.resolved_at)}` : ''}
