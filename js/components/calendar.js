@@ -1013,20 +1013,19 @@ export class Calendar {
     const makeCalAvatar = (size) =>
       '<span style="width:' + size + 'px;height:' + size + 'px;border-radius:50%;'
       + 'display:inline-flex;align-items:center;justify-content:center;'
-      + 'font-size:' + Math.max(7, Math.round(size * .42)) + 'px;font-weight:800;'
-      + 'background:rgba(255,255,255,.28);color:' + textColor + ';'
+      + 'font-size:' + Math.max(7, Math.round(size * .44)) + 'px;font-weight:800;'
+      + 'background:rgba(255,255,255,.55);color:' + textColor + ';'
       + 'flex-shrink:0;line-height:1;margin-right:' + (isSolo ? '0' : '4') + 'px;'
       + '">' + calInitials + '</span>';
 
-    const avatar    = !isBlock ? makeCalAvatar(isSolo ? 22 : 16) : '';
+    const avatar    = !isBlock ? makeCalAvatar(isSolo ? 22 : 15) : '';
     const nameStyle = 'color:' + textColor + ';font-size:.68rem;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0';
     const lateChip  = !isSolo && booking.late_checkout
       ? '<span title="🌅 Late check-out" style="flex-shrink:0;font-size:.65rem;margin-left:3px">🌅</span>'
       : '';
 
     if (isSolo) {
-      bar.style.justifyContent = 'center';
-      bar.style.padding = '0 2px';
+      bar.style.cssText += ';display:flex;align-items:center;justify-content:center;padding:0 1px';
       bar.innerHTML = avatar;
     } else {
       bar.innerHTML = avatar + canalChip + splitChip + '<span style="' + nameStyle + '">' + guestFull + '</span>' + lateChip;
