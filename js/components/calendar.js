@@ -1002,12 +1002,21 @@ export class Calendar {
 
     const unitColors = (booking.booking_units ?? [])
       .map(bu => bu?.units?.color ?? bu?.color).filter(Boolean);
-    const avatar = !isBlock ? Calendar._guestAvatar(booking.guests, 16, unitColors) : '';
+    const isSolo   = booking._cellType === 'solo';
+    const avatar   = !isBlock ? Calendar._guestAvatar(booking.guests, isSolo ? 20 : 16, unitColors) : '';
     const nameStyle = 'color:' + textColor + ';font-size:.68rem;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0';
-    const lateChip = booking.late_checkout
+    const lateChip = !isSolo && booking.late_checkout
       ? '<span title="🌅 Late check-out" style="flex-shrink:0;font-size:.65rem;margin-left:3px">🌅</span>'
       : '';
-    bar.innerHTML = avatar + canalChip + splitChip + '<span style="' + nameStyle + '">' + guestFull + '</span>' + lateChip;
+
+    if (isSolo) {
+      // 1 noche: solo el avatar centrado, sin texto (no hay espacio)
+      bar.style.justifyContent = 'center';
+      bar.style.padding = '0 2px';
+      bar.innerHTML = avatar;
+    } else {
+      bar.innerHTML = avatar + canalChip + splitChip + '<span style="' + nameStyle + '">' + guestFull + '</span>' + lateChip;
+    }
 
     // 🔄 Recambio: al centro superior de la celda, entre las dos barras
     if (isRecambio) {
