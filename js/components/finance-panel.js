@@ -157,6 +157,7 @@ export class FinancePanel {
       if (el) el.innerHTML = loading;
     });
 
+    try {
       // Reservas del período + máxima reserva con nombre del huésped
       const [periodoRes, futuroRes, maxBkRes, prevRes] = await Promise.all([
         // Período seleccionado: todas las reservas que INICIAN en el rango
