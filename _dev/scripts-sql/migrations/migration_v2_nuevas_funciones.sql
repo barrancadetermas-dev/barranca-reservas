@@ -72,3 +72,7 @@ CREATE INDEX IF NOT EXISTS idx_frasco_items_hotel
   ON frasco_items (hotel_id, credited, frasco_date);
 
 NOTIFY pgrst, 'reload schema';
+
+-- ── 5. Permitir frasco_date nulo (para saldos estáticos: USD, En cuenta) ────
+ALTER TABLE frasco_items ALTER COLUMN frasco_date DROP NOT NULL;
+NOTIFY pgrst, 'reload schema';
