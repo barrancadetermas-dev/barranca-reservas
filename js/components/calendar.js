@@ -1003,14 +1003,28 @@ export class Calendar {
     const unitColors = (booking.booking_units ?? [])
       .map(bu => bu?.units?.color ?? bu?.color).filter(Boolean);
     const isSolo   = booking._cellType === 'solo';
-    const avatar   = !isBlock ? Calendar._guestAvatar(booking.guests, isSolo ? 20 : 16, unitColors) : '';
+
+    // Dentro de las barras de calendario el avatar va sobre fondo de color
+    // → fondo blanco semitransparente, texto = textColor para buen contraste
+    const calInitials = (
+      ((booking.guests?.first_name ?? '')[0] ?? '') +
+      ((booking.guests?.last_name  ?? '')[0] ?? '')
+    ).toUpperCase() || '?';
+    const makeCalAvatar = (size) =>
+      '<span style="width:' + size + 'px;height:' + size + 'px;border-radius:50%;'
+      + 'display:inline-flex;align-items:center;justify-content:center;'
+      + 'font-size:' + Math.max(7, Math.round(size * .42)) + 'px;font-weight:800;'
+      + 'background:rgba(255,255,255,.28);color:' + textColor + ';'
+      + 'flex-shrink:0;line-height:1;margin-right:' + (isSolo ? '0' : '4') + 'px;'
+      + '">' + calInitials + '</span>';
+
+    const avatar    = !isBlock ? makeCalAvatar(isSolo ? 22 : 16) : '';
     const nameStyle = 'color:' + textColor + ';font-size:.68rem;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0';
-    const lateChip = !isSolo && booking.late_checkout
+    const lateChip  = !isSolo && booking.late_checkout
       ? '<span title="🌅 Late check-out" style="flex-shrink:0;font-size:.65rem;margin-left:3px">🌅</span>'
       : '';
 
     if (isSolo) {
-      // 1 noche: solo el avatar centrado, sin texto (no hay espacio)
       bar.style.justifyContent = 'center';
       bar.style.padding = '0 2px';
       bar.innerHTML = avatar;
