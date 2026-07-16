@@ -116,7 +116,11 @@ export class ConfigPanel {
     const unitsHTML = `
       <div class="config-group" id="cfg-acc-units">
         <button class="config-acc-header" data-acc="units">
-          <span><span class="config-acc-icon">🏠</span> Departamentos / Unidades</span>
+          <span><span class="config-acc-icon">🏠</span> Departamentos / Unidades
+            <span style="font-size:.62rem;padding:1px 6px;border-radius:4px;margin-left:6px;font-weight:600;background:${(this.ctx.units?.length > 0) ? '#f0fdf4' : '#fef2f2'};color:${(this.ctx.units?.length > 0) ? '#16a34a' : '#dc2626'}">
+              ${this.ctx.units?.length > 0 ? '✓ ' + this.ctx.units.length + ' unidades' : '⚠️ Sin unidades'}
+            </span>
+          </span>
           <svg class="config-acc-chevron" style="transform:" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="14" height="14"><polyline points="6 9 12 15 18 9"/></svg>
         </button>
         <div class="config-acc-body" id="cfg-body-units">
@@ -192,7 +196,9 @@ export class ConfigPanel {
     const tariffHTML = `
       <div class="config-group" id="cfg-acc-tariffs">
         <button class="config-acc-header" data-acc="tariffs">
-          <span><span class="config-acc-icon">🏷️</span> Cuadro Tarifario</span>
+          <span><span class="config-acc-icon">🏷️</span> Cuadro Tarifario
+            <span style="font-size:.62rem;padding:1px 6px;border-radius:4px;margin-left:6px;font-weight:600;background:#f0fdf4;color:#16a34a">✓ Configurado</span>
+          </span>
           <svg class="config-acc-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="14" height="14"><polyline points="6 9 12 15 18 9"/></svg>
         </button>
         <div class="config-acc-body" id="cfg-body-tariffs">

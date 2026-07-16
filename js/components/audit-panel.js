@@ -57,21 +57,13 @@ export class AuditPanel {
 
   _renderShell() {
     return `
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:10px">
         <div>
           <p style="font-size:.78rem;color:var(--color-text-3);margin:0">
             🔒 Solo administradores
           </p>
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <select id="audit-filter-action" class="filter-select" style="min-width:160px">
-            <option value="">Todas las acciones</option>
-            ${[...new Set(Object.entries(ACTION_LABELS).map(([,v]) => v.label))]
-              .map(label => {
-                const key = Object.entries(ACTION_LABELS).find(([,v]) => v.label === label)?.[0] ?? '';
-                return `<option value="${key}">${label}</option>`;
-              }).join('')}
-          </select>
           <button class="btn btn-outline btn-sm" id="audit-refresh" title="Actualizar">⟳ Actualizar</button>
           <button class="btn btn-outline btn-sm" id="audit-clear-view" title="Colapsar todo" style="color:var(--color-text-3)">
             Colapsar
@@ -82,6 +74,29 @@ export class AuditPanel {
           </button>
         </div>
       </div>
+
+      <!-- Pills de filtro rápido -->
+      <div id="audit-filter-pills" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">
+        <button class="audit-pill audit-pill-active" data-filter="" data-filter-multi="">
+          Todas
+        </button>
+        <button class="audit-pill" data-filter="booking_created" data-filter-multi="CREATE">
+          ➕ Creadas
+        </button>
+        <button class="audit-pill" data-filter="payment_added" data-filter-multi="payment_added">
+          💰 Pagos
+        </button>
+        <button class="audit-pill" data-filter="booking_cancelled" data-filter-multi="CANCEL">
+          🚫 Canceladas
+        </button>
+        <button class="audit-pill" data-filter="checkin" data-filter-multi="CHECKIN">
+          ✅ Check-ins
+        </button>
+        <button class="audit-pill" data-filter="checkout" data-filter-multi="CHECKOUT">
+          👋 Check-outs
+        </button>
+      </div>
+
       <div id="audit-log-list"></div>
       <div id="audit-load-more" style="text-align:center;padding:16px;display:none">
         <button class="btn btn-outline btn-sm" id="btn-audit-more">Cargar más registros</button>
@@ -89,7 +104,31 @@ export class AuditPanel {
   }
 
   _bindEvents(container) {
+    // Inject pill styles once
+    if (!document.getElementById('audit-pill-styles')) {
+      const s = document.createElement('style');
+      s.id = 'audit-pill-styles';
+      s.textContent = `.audit-pill{font-size:.7rem;padding:3px 10px;border-radius:999px;border:0.5px solid var(--color-border);background:var(--color-surface-2);color:var(--color-text-2);cursor:pointer;font-weight:500;transition:all .15s}
+      .audit-pill:hover{background:var(--color-surface);border-color:var(--color-border-strong)}
+      .audit-pill-active{background:var(--color-primary);border-color:var(--color-primary);color:#fff}
+      .audit-timeline{border-left:2px solid var(--color-border);padding-left:12px;margin-left:14px}`;
+      document.head.appendChild(s);
+    }
+
     container.querySelector('#audit-refresh')?.addEventListener('click', () => this._loadLogs(container, true));
+
+    // Filter pills
+    container.querySelectorAll('.audit-pill').forEach(pill => {
+      pill.addEventListener('click', () => {
+        container.querySelectorAll('.audit-pill').forEach(p => p.classList.remove('audit-pill-active'));
+        pill.classList.add('audit-pill-active');
+        this._filter = pill.dataset.filter ?? '';
+        this._page = 0;
+        this._displayed = 0;
+        this._loadLogs(container, true);
+      });
+    });
+
     container.querySelector('#audit-filter-action')?.addEventListener('change', (e) => {
       this._filter = e.target.value;
       this._loadLogs(container, true);
@@ -230,7 +269,7 @@ export class AuditPanel {
               <polyline points="6 9 12 15 18 9"/>
             </svg>
           </button>
-          <div class="audit-day-body ${isFirst ? 'open' : ''}" style="display:${isFirst ? 'block' : 'none'}">
+          <div class="audit-day-body ${isFirst ? 'open' : ''}" style="display:${isFirst ? 'block' : 'none'};border-left:2px solid var(--color-border);margin-left:13px;padding-left:10px;margin-top:2px">
             ${entries.map(log => this._renderRow(log)).join('')}
           </div>
         </div>`;
@@ -270,16 +309,19 @@ export class AuditPanel {
       : log.entity_type ?? '';
 
     return `
-      <div class="audit-row">
-        <div class="audit-icon" style="background:${cfg.color}18;color:${cfg.color}">${cfg.icon}</div>
-        <div class="audit-info">
-          <div class="audit-action">
-            <span style="font-weight:600">${cfg.label}</span>
-            ${entity ? `<span class="audit-entity">${entity}</span>` : ''}
+      <div class="audit-row" style="display:flex;gap:10px;padding:8px 0;align-items:flex-start;position:relative">
+        <div class="audit-icon" style="width:28px;height:28px;border-radius:50%;flex-shrink:0;
+             display:flex;align-items:center;justify-content:center;font-size:.9rem;
+             background:${cfg.color}18;color:${cfg.color};border:1.5px solid ${cfg.color}33;
+             position:relative;z-index:1">${cfg.icon}</div>
+        <div class="audit-info" style="flex:1;min-width:0;padding-top:4px">
+          <div class="audit-action" style="font-size:.8rem">
+            <span style="font-weight:600;color:var(--color-text)">${cfg.label}</span>
+            ${entity ? `<span class="audit-entity" style="font-size:.7rem;color:var(--color-text-3);margin-left:5px">${entity}</span>` : ''}
           </div>
-          <div class="audit-meta">
-            <span class="audit-user">👤 ${user}</span>
-            <span class="audit-time">🕐 ${time}</span>
+          <div class="audit-meta" style="display:flex;gap:8px;margin-top:2px;flex-wrap:wrap">
+            <span class="audit-user" style="font-size:.7rem;color:var(--color-text-3)">👤 ${user}</span>
+            <span class="audit-time" style="font-size:.7rem;color:var(--color-text-3)">🕐 ${time}</span>
             ${log.description ? `<span style="color:var(--color-text-3);font-size:.7rem">· ${log.description}</span>` : ''}
           </div>
         </div>

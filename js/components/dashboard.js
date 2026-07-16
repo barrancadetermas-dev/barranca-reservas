@@ -420,7 +420,7 @@ export class Dashboard {
     const next7str = localDateISO(next7);
     const { data: upcoming } = await this.db
       .from('bookings')
-      .select('check_in, check_out, guests!bookings_guest_id_fkey(first_name,last_name), booking_units(units(name,color))')
+      .select('check_in, check_out, total_amount, source, guests!bookings_guest_id_fkey(first_name,last_name), booking_units(units(name,color))')
       .eq('hotel_id', hotelId)
       .neq('status', 'cancelled')
       .gt('check_in', today)
@@ -710,16 +710,22 @@ export class Dashboard {
         : '<div style="width:3px;min-height:36px;border-radius:2px;background:#6366f1;flex-shrink:0"></div>';
 
       const unitNames = units.map(u => u?.name).filter(Boolean).join(' + ') || '—';
+      const SRC_ICONS = { 'booking.com':'🔵', 'airbnb':'🔴', 'directo':'🟢', 'whatsapp':'💬', 'instagram':'📸', 'referido':'👥' };
+      const srcIcon   = SRC_ICONS[(b.source ?? '').toLowerCase()] ?? '';
 
       return '<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--color-border)">' +
         upBars + upAvatar +
         '<div style="flex:1;min-width:0">' +
-          '<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">' +
+          '<div style="display:flex;align-items:center;gap:5px;margin-bottom:2px">' +
             '<span style="font-size:.78rem;font-weight:700;color:var(--color-text)">' + fmt(b.check_in) + '</span>' +
             dayLabel +
+            (srcIcon ? '<span style="font-size:.72rem" title="' + (b.source ?? '') + '">' + srcIcon + '</span>' : '') +
           '</div>' +
           '<div style="font-size:.82rem;font-weight:600;color:var(--color-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + guest + '</div>' +
-          '<div style="font-size:.72rem;color:var(--color-text-3);margin-top:2px">' + unitNames + ' · ' + nights + ' noche' + (nights!==1?'s':'') + '</div>' +
+          '<div style="display:flex;align-items:center;justify-content:space-between;margin-top:1px">' +
+            '<span style="font-size:.7rem;color:var(--color-text-3)">' + unitNames + ' · ' + nights + ' noche' + (nights!==1?'s':'') + '</span>' +
+            (b.total_amount > 0 ? '<span style="font-size:.7rem;font-weight:700;color:var(--color-text-2)">$' + Math.round(b.total_amount).toLocaleString('es-AR') + '</span>' : '') +
+          '</div>' +
         '</div></div>';
     }).join('');
 

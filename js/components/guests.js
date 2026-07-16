@@ -586,6 +586,7 @@ export class GuestsCRM {
             <span style="font-weight:600;font-size:.82rem;color:var(--color-text);
               white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${g.first_name} ${g.last_name}</span>
             ${g.bad_experience ? `<span style="font-size:.57rem;font-weight:700;padding:1px 4px;border-radius:3px;background:#FEE2E2;color:#DC2626;white-space:nowrap;flex-shrink:0">⚠️ Conducta</span>` : ''}
+            ${(g.total_bookings >= 3 && !g.tags?.includes('frecuente')) ? `<span style="font-size:.57rem;font-weight:700;padding:1px 5px;border-radius:999px;background:#fef9c3;color:#854d0e;white-space:nowrap;flex-shrink:0">⭐ Frecuente</span>` : ''}
             ${tagsBadge ? `<span style="font-size:.65rem;flex-shrink:0">${tagsBadge}</span>` : ''}
             ${g.open_credit_note ? `<span style="font-size:.57rem;font-weight:700;padding:1px 4px;border-radius:999px;${g.open_credit_note.stale ? 'background:var(--state-red-bg);color:var(--state-red-txt)' : 'background:rgba(124,58,237,.1);color:#7c3aed'};white-space:nowrap;flex-shrink:0">${g.open_credit_note.stale ? '⚠️' : '🔄'} NC</span>` : ''}
           </div>
@@ -601,8 +602,13 @@ export class GuestsCRM {
         <!-- Columna derecha: estadías + total + botones -->
         <div style="display:flex;align-items:center;gap:4px;flex-shrink:0">
           <div style="text-align:right;min-width:55px">
-            <div style="font-size:.77rem;font-weight:700;color:var(--color-text)">${g.total_bookings ?? 0} <span style="font-weight:400;font-size:.6rem;color:var(--color-text-3)">est.</span></div>
+            <div style="font-size:.77rem;font-weight:700;color:${
+              (g.total_bookings ?? 0) >= 5 ? '#16a34a' :
+              (g.total_bookings ?? 0) >= 3 ? '#0ea5e9' :
+              'var(--color-text)'
+            }">${g.total_bookings ?? 0} <span style="font-weight:400;font-size:.6rem;color:var(--color-text-3)">est.</span></div>
             ${g.total_spent ? `<div style="font-size:.64rem;color:var(--color-success);font-weight:600">${formatARS(g.total_spent)}</div>` : ''}
+            ${g.last_checkin ? `<div style="font-size:.6rem;color:var(--color-text-3);margin-top:1px">${g.last_checkin.slice(0,7).replace('-','/')}</div>` : ''}
           </div>
           <button onclick="event.stopPropagation();window._guestsCRM?._openEditModal('${g.id}')"
             style="width:22px;height:22px;border-radius:5px;border:none;background:transparent;cursor:pointer;font-size:.7rem;opacity:.2;transition:all .15s;display:flex;align-items:center;justify-content:center"
