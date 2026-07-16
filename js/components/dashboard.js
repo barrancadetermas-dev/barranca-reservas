@@ -945,11 +945,20 @@ export class Dashboard {
     // mode: 'arrival' | 'departure' | 'upcoming'
     const b        = booking;
     const guest    = b.guests ? (b.guests.first_name + ' ' + b.guests.last_name) : 'Sin nombre';
-    const unit     = b.booking_units?.[0]?.units;
-    const color    = unit?.color ?? 'var(--color-primary)';
-    const unitName = (b.booking_units ?? []).map(bu => bu.units?.name ?? '').filter(Boolean).join(', ') || '—';
+    const units    = (b.booking_units ?? []).map(bu => bu?.units).filter(Boolean);
+    const unitName = units.map(u => u?.name ?? '').filter(Boolean).join(' + ') || '—';
     const nights   = Math.round((new Date(b.check_out+'T12:00:00') - new Date(b.check_in+'T12:00:00')) / 86400000);
     const isCancelled = b.status === 'cancelled';
+
+    // Barras de color: una por unidad, apiladas verticalmente
+    const barHeight = Math.max(12, Math.round(44 / Math.max(units.length, 1)));
+    const colorBars = isCancelled
+      ? '<div style="width:3px;min-height:44px;border-radius:2px;background:var(--color-text-3);flex-shrink:0;align-self:stretch"></div>'
+      : units.length > 0
+        ? '<div style="display:flex;flex-direction:column;gap:2px;flex-shrink:0;align-self:center">'
+            + units.map(u => '<div style="width:3px;height:' + barHeight + 'px;border-radius:2px;background:' + (u?.color ?? '#6366f1') + '"></div>').join('')
+            + '</div>'
+        : '<div style="width:3px;min-height:44px;border-radius:2px;background:#6366f1;flex-shrink:0;align-self:stretch"></div>';
 
     let statusChip = '';
     let actionBtn  = '';
@@ -967,7 +976,7 @@ export class Dashboard {
 
       const idAttr = mode === 'arrival' ? ('arr-' + b.id) : mode === 'departure' ? ('dep-' + b.id) : '';
       return '<div id="' + idAttr + '" style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--color-border);opacity:.55">' +
-        '<div style="width:3px;min-height:44px;border-radius:2px;background:var(--color-text-3);flex-shrink:0;align-self:stretch"></div>' +
+        colorBars +
         '<div style="flex:1;min-width:0">' +
           '<div style="display:flex;align-items:center;gap:6px;margin-bottom:2px">' +
             '<span style="font-size:.72rem;font-weight:700;color:var(--color-text-3);text-decoration:line-through;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + unitName + '</span>' +
@@ -1006,7 +1015,7 @@ export class Dashboard {
     const idAttr = mode === 'arrival' ? ('arr-' + b.id) : mode === 'departure' ? ('dep-' + b.id) : '';
 
     return '<div id="' + idAttr + '" style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--color-border)">' +
-      '<div style="width:3px;min-height:44px;border-radius:2px;background:' + color + ';flex-shrink:0;align-self:stretch"></div>' +
+      colorBars +
       '<div style="flex:1;min-width:0">' +
         '<div style="display:flex;align-items:center;gap:6px;margin-bottom:2px">' +
           '<span style="font-size:.72rem;font-weight:700;color:var(--color-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + unitName + '</span>' +
