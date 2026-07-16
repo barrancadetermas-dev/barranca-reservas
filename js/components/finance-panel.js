@@ -271,17 +271,33 @@ export class FinancePanel {
     const el = document.getElementById('financ-kpis');
     if (!el) return;
     const fmt = n => '$' + Math.round(n).toLocaleString('es-AR');
-    const kpi = (label, val, sub, color, bg) =>
-      '<div class="card" style="padding:14px 16px;border-left:3px solid ' + color + '">' +
-        '<div style="font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--color-text-3);margin-bottom:6px">' + label + '</div>' +
-        '<div style="font-size:1.35rem;font-weight:800;color:' + color + ';line-height:1">' + val + '</div>' +
-        '<div style="font-size:.72rem;color:var(--color-text-3);margin-top:4px">' + sub + '</div>' +
+    const pctColor = pctCobr >= 80 ? '#16a34a' : pctCobr >= 50 ? '#f59e0b' : '#ef4444';
+    const pctBg    = pctCobr >= 80 ? '#f0fdf4' : pctCobr >= 50 ? '#fffbeb' : '#fef2f2';
+
+    // KPI grande: fondo semántico de color, sin borde izquierdo
+    const kpiMain = (label, val, sub, color, bg) =>
+      '<div class="card" style="padding:14px 16px;background:' + bg + ';border:1px solid ' + color + '22">' +
+        '<div style="font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:' + color + ';margin-bottom:6px">' + label + '</div>' +
+        '<div style="font-size:1.45rem;font-weight:800;color:' + color + ';line-height:1">' + val + '</div>' +
+        '<div style="font-size:.72rem;color:' + color + 'bb;margin-top:4px">' + sub + '</div>' +
+        '<div style="margin-top:8px;height:3px;background:' + color + '22;border-radius:2px;overflow:hidden">' +
+          '<div style="height:100%;background:' + color + ';border-radius:2px;width:100%"></div>' +
+        '</div>' +
       '</div>';
+
+    // KPI secundario: más chico, sin fondo
+    const kpiSec = (label, val, sub, color) =>
+      '<div class="card" style="padding:12px 14px;border-left:3px solid ' + color + '">' +
+        '<div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--color-text-3);margin-bottom:4px">' + label + '</div>' +
+        '<div style="font-size:1.1rem;font-weight:700;color:' + color + ';line-height:1">' + val + '</div>' +
+        '<div style="font-size:.68rem;color:var(--color-text-3);margin-top:3px">' + sub + '</div>' +
+      '</div>';
+
     el.innerHTML =
-      kpi('Total vendido',    fmt(totalVend),  count + ' reserva' + (count!==1?'s':''), 'var(--color-primary)', '') +
-      kpi('Total cobrado',    fmt(totalCobr),  pctCobr + '% del total vendido',         '#16a34a',               '') +
-      kpi('Por cobrar',       fmt(totalPend),  'pendiente de ingreso',                   '#f59e0b',               '') +
-      kpi('% Cobrado',        pctCobr + '%',  fmt(totalCobr) + ' / ' + fmt(totalVend), pctCobr >= 80 ? '#16a34a' : pctCobr >= 50 ? '#f59e0b' : '#ef4444', '');
+      kpiMain('Total vendido', fmt(totalVend),  count + ' reserva' + (count!==1?'s':''), 'var(--color-primary)', '#eff6ff') +
+      kpiMain('Total cobrado', fmt(totalCobr),  pctCobr + '% del vendido',              '#16a34a',               '#f0fdf4') +
+      kpiSec('Por cobrar',     fmt(totalPend),  'pendiente de ingreso',                  '#f59e0b') +
+      kpiSec('% Cobrado',      pctCobr + '%',  fmt(totalCobr) + ' / ' + fmt(totalVend), pctColor);
   }
 
   _renderChart({ totalVend, totalCobr, totalPend }) {

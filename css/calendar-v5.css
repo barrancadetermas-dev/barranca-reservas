@@ -830,7 +830,8 @@
   color: var(--color-text-3) !important;
   position: sticky !important;
   left: 0 !important;
-  z-index: 5 !important;
+  top: 0 !important;
+  z-index: 30 !important;   /* corner: encima de todo */
 }
 .cal-unit-label {
   background: var(--color-surface-2) !important;
@@ -845,7 +846,7 @@
   min-height: var(--cal-cell-h) !important;
   position: sticky !important;
   left: 0 !important;
-  z-index: 3 !important;
+  z-index: 20 !important;   /* columna izq: encima de headers de día */
 }
 [data-theme="dark"] .cal-unit-label,
 [data-theme="dark"] .cal-unit-label-header { background: #1a2438 !important; }
@@ -864,6 +865,9 @@
   color: var(--color-text) !important;
   line-height: 1.2 !important;
   user-select: none !important;
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 10 !important;  /* debajo de .cal-unit-label (20) y .cal-unit-label-header (30) */
 }
 .cal-day-header .dh-month {
   font-size: .5rem !important; font-weight: 800 !important;

@@ -84,9 +84,9 @@ export class OperationsModule {
   _renderShell() {
     return `
       <div class="tabs-bar ops-tabs">
-        <button class="tab active" data-ops-tab="reminders">🔔 Recordatorios</button>
-        <button class="tab" data-ops-tab="cleaning">🧹 Limpieza</button>
-        <button class="tab" data-ops-tab="maintenance">🔧 Mantenimiento</button>
+        <button class="tab active" data-ops-tab="reminders">🔔 Recordatorios<span class="ops-tab-badge" id="badge-reminders" style="display:none;margin-left:5px;font-size:.6rem;padding:1px 5px;border-radius:8px;background:#ef4444;color:#fff;font-weight:700;vertical-align:middle"></span></button>
+        <button class="tab" data-ops-tab="cleaning">🧹 Limpieza<span class="ops-tab-badge" id="badge-cleaning" style="display:none;margin-left:5px;font-size:.6rem;padding:1px 5px;border-radius:8px;background:#f59e0b;color:#fff;font-weight:700;vertical-align:middle"></span></button>
+        <button class="tab" data-ops-tab="maintenance">🔧 Mantenimiento<span class="ops-tab-badge" id="badge-maintenance" style="display:none;margin-left:5px;font-size:.6rem;padding:1px 5px;border-radius:8px;background:#ef4444;color:#fff;font-weight:700;vertical-align:middle"></span></button>
         <button class="tab" data-ops-tab="expenses">💰 Gastos</button>
         <button class="tab" data-ops-tab="tenencias">💼 Tenencias</button>
         <div class="ops-tab-actions" id="ops-header-actions"></div>
@@ -104,6 +104,13 @@ export class OperationsModule {
         this._loadTab(this._tab, container);
       });
     });
+  }
+
+  _setTabBadge(id, count) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (count > 0) { el.textContent = count; el.style.display = 'inline'; }
+    else           { el.style.display = 'none'; }
   }
 
   async _loadTab(tab, container) {
@@ -275,6 +282,7 @@ export class OperationsModule {
     // Update badge — las notas (📌) no cuentan como pendientes, no son tareas
     const pending = reminders.filter(r => !r.is_note && !r.completed && r.scheduled_date <= today).length;
     document.dispatchEvent(new CustomEvent('reminders:badge', { detail: { count: pending } }));
+    this._setTabBadge('badge-reminders', pending);
   }
 
   // ══════════════════════════════════════════════════
@@ -315,6 +323,7 @@ export class OperationsModule {
       const pending  = data.filter(t => t.status === 'pending'   && t.scheduled_date === today).length;
       const done     = data.filter(t => t.status === 'completed' && t.scheduled_date === today).length;
       const overdue  = data.filter(t => t.status !== 'completed' && t.scheduled_date < today).length;
+      this._setTabBadge('badge-cleaning', pending + overdue);
 
       panel.innerHTML = `
         <div class="kpi-grid" style="margin-bottom:16px">
@@ -596,6 +605,7 @@ export class OperationsModule {
 
       const open   = issues.filter(i => i.status !== 'resolved').length + orphanBlocks.length;
       const urgent = issues.filter(i => i.priority === 'urgent' && i.status !== 'resolved').length;
+      this._setTabBadge('badge-maintenance', open);
 
       const hasContent = issues.length > 0 || orphanBlocks.length > 0;
       if (!hasContent) {

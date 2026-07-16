@@ -1056,6 +1056,7 @@ export class Dashboard {
         '<div style="font-size:.82rem;font-weight:600;color:var(--color-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + guest + '</div>' +
         '<div style="font-size:.72rem;color:var(--color-text-3);margin-top:1px">' + nights + ' noche' + (nights !== 1 ? 's' : '') + '</div>' +
       '</div>' +
+      (b.total_amount > 0 ? '<span style="font-size:.75rem;font-weight:700;color:var(--color-text-2);flex-shrink:0">$' + Math.round(b.total_amount).toLocaleString('es-AR') + '</span>' : '') +
       actionBtn +
     '</div>';
   }
