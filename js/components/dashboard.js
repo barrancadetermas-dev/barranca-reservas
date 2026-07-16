@@ -690,18 +690,23 @@ export class Dashboard {
         ? '<span style="font-size:.65rem;padding:1px 6px;border-radius:3px;background:var(--state-yellow-bg);color:var(--state-yellow-txt);font-weight:700">MAÑANA</span>'
         : '<span style="font-size:.65rem;color:var(--color-text-3)">en ' + dAway + 'd</span>';
 
-      // Una barra por unidad, apiladas verticalmente
-      const barHeight = Math.max(12, Math.round(44 / Math.max(units.length, 1)));
-      const colorBars = units.length > 0
-        ? '<div style="display:flex;flex-direction:column;gap:2px;flex-shrink:0;margin-top:2px">' +
-            units.map(u => '<div style="width:3px;height:' + barHeight + 'px;border-radius:2px;background:' + (u?.color ?? '#6366f1') + '"></div>').join('') +
-          '</div>'
-        : '<div style="width:3px;min-height:44px;border-radius:2px;background:#6366f1;flex-shrink:0;margin-top:2px"></div>';
+      // Avatar con colores de unidades
+      const nameParts2 = guest.trim().split(' ').filter(Boolean);
+      const initials2  = (nameParts2.length >= 2
+        ? nameParts2[0][0] + nameParts2[nameParts2.length-1][0]
+        : (nameParts2[0]??'S').slice(0,2)).toUpperCase();
+      const colors2 = units.map(u => u?.color ?? '#6366f1');
+      let avBg2, avCol2;
+      if (colors2.length === 0)      { avBg2='var(--color-surface-2)'; avCol2='var(--color-text-3)'; }
+      else if (colors2.length === 1) { avBg2=colors2[0]+'33'; avCol2=colors2[0]; }
+      else if (colors2.length === 2) { avBg2='linear-gradient(135deg,'+colors2[0]+'44 50%,'+colors2[1]+'44 50%)'; avCol2='var(--color-text)'; }
+      else { const s=Math.round(360/colors2.length); avBg2='conic-gradient('+colors2.map((c,i)=>c+'44 '+(i*s)+'deg '+((i+1)*s)+'deg').join(',')+')'; avCol2='var(--color-text)'; }
+      const upAvatar = '<div style="width:38px;height:38px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:500;background:'+avBg2+';color:'+avCol2+'">'+initials2+'</div>';
 
       const unitNames = units.map(u => u?.name).filter(Boolean).join(' + ') || '—';
 
-      return '<div style="display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-bottom:1px solid var(--color-border)">' +
-        colorBars +
+      return '<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--color-border)">' +
+        upAvatar +
         '<div style="flex:1;min-width:0">' +
           '<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">' +
             '<span style="font-size:.78rem;font-weight:700;color:var(--color-text)">' + fmt(b.check_in) + '</span>' +
@@ -950,15 +955,37 @@ export class Dashboard {
     const nights   = Math.round((new Date(b.check_out+'T12:00:00') - new Date(b.check_in+'T12:00:00')) / 86400000);
     const isCancelled = b.status === 'cancelled';
 
-    // Barras de color: una por unidad, apiladas verticalmente
-    const barHeight = Math.max(12, Math.round(44 / Math.max(units.length, 1)));
-    const colorBars = isCancelled
-      ? '<div style="width:3px;min-height:44px;border-radius:2px;background:var(--color-text-3);flex-shrink:0;align-self:stretch"></div>'
-      : units.length > 0
-        ? '<div style="display:flex;flex-direction:column;gap:2px;flex-shrink:0;align-self:center">'
-            + units.map(u => '<div style="width:3px;height:' + barHeight + 'px;border-radius:2px;background:' + (u?.color ?? '#6366f1') + '"></div>').join('')
-            + '</div>'
-        : '<div style="width:3px;min-height:44px;border-radius:2px;background:#6366f1;flex-shrink:0;align-self:stretch"></div>';
+    // Avatar con iniciales + color(es) de unidad
+    const nameParts = guest.trim().split(' ').filter(Boolean);
+    const initials  = (nameParts.length >= 2
+      ? nameParts[0][0] + nameParts[nameParts.length - 1][0]
+      : (nameParts[0] ?? 'S').slice(0, 2)).toUpperCase();
+
+    const colors = units.map(u => u?.color ?? '#6366f1');
+    let avatarBg, avatarColor;
+    if (isCancelled || colors.length === 0) {
+      avatarBg    = 'var(--color-surface-2)';
+      avatarColor = 'var(--color-text-3)';
+    } else if (colors.length === 1) {
+      avatarBg    = colors[0] + '33';  // pastel: color al 20%
+      avatarColor = colors[0];
+    } else if (colors.length === 2) {
+      avatarBg    = 'linear-gradient(135deg,' + colors[0] + '44 50%,' + colors[1] + '44 50%)';
+      avatarColor = 'var(--color-text)';
+    } else if (colors.length === 3) {
+      avatarBg    = 'conic-gradient(' + colors[0] + '44 0deg 120deg,' + colors[1] + '44 120deg 240deg,' + colors[2] + '44 240deg 360deg)';
+      avatarColor = 'var(--color-text)';
+    } else {
+      const step = Math.round(360 / colors.length);
+      avatarBg    = 'conic-gradient(' + colors.map((c, i) => c + '44 ' + (i*step) + 'deg ' + ((i+1)*step) + 'deg').join(',') + ')';
+      avatarColor = 'var(--color-text)';
+    }
+
+    const avatar = '<div style="width:40px;height:40px;border-radius:50%;flex-shrink:0;'
+      + 'display:flex;align-items:center;justify-content:center;'
+      + 'font-size:13px;font-weight:500;'
+      + 'background:' + avatarBg + ';color:' + avatarColor + '">'
+      + initials + '</div>';
 
     let statusChip = '';
     let actionBtn  = '';
@@ -976,7 +1003,7 @@ export class Dashboard {
 
       const idAttr = mode === 'arrival' ? ('arr-' + b.id) : mode === 'departure' ? ('dep-' + b.id) : '';
       return '<div id="' + idAttr + '" style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--color-border);opacity:.55">' +
-        colorBars +
+        avatar +
         '<div style="flex:1;min-width:0">' +
           '<div style="display:flex;align-items:center;gap:6px;margin-bottom:2px">' +
             '<span style="font-size:.72rem;font-weight:700;color:var(--color-text-3);text-decoration:line-through;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + unitName + '</span>' +
@@ -1015,7 +1042,7 @@ export class Dashboard {
     const idAttr = mode === 'arrival' ? ('arr-' + b.id) : mode === 'departure' ? ('dep-' + b.id) : '';
 
     return '<div id="' + idAttr + '" style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--color-border)">' +
-      colorBars +
+      avatar +
       '<div style="flex:1;min-width:0">' +
         '<div style="display:flex;align-items:center;gap:6px;margin-bottom:2px">' +
           '<span style="font-size:.72rem;font-weight:700;color:var(--color-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + unitName + '</span>' +
