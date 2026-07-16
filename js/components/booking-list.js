@@ -91,19 +91,28 @@ export class BookingList {
 
   // ── Carga principal ────────────────────────────────
   // ── Avatar con iniciales y color consistente ─────
-  static _avatar(guest) {
+  static _avatar(guest, unitColors = []) {
     if (!guest) return '<div class="bl-avatar bl-avatar-empty">?</div>';
     const fn = guest.first_name ?? '';
     const ln = guest.last_name  ?? '';
     const initials = ((fn[0] ?? '') + (ln[0] ?? '')).toUpperCase() || '?';
-    // Hash simple para color consistente por huésped
-    const str   = (fn + ln).toLowerCase();
-    let hash    = 0;
-    for (let i = 0; i < str.length; i++) hash = str.charCodeAt(i) + ((hash << 5) - hash);
-    const hue   = Math.abs(hash) % 360;
-    const bg    = `hsl(${hue},55%,88%)`;
-    const color = `hsl(${hue},55%,32%)`;
-    return `<div class="bl-avatar" style="background:${bg};color:${color}" title="${fn} ${ln}">${initials}</div>`;
+    let bg, color;
+    if (unitColors.length === 1) {
+      bg = unitColors[0] + '33'; color = unitColors[0];
+    } else if (unitColors.length === 2) {
+      bg = 'linear-gradient(135deg,' + unitColors[0] + '44 50%,' + unitColors[1] + '44 50%)'; color = 'var(--color-text)';
+    } else if (unitColors.length >= 3) {
+      const step = Math.round(360 / unitColors.length);
+      bg = 'conic-gradient(' + unitColors.map((c,i) => c+'44 '+(i*step)+'deg '+((i+1)*step)+'deg').join(',') + ')';
+      color = 'var(--color-text)';
+    } else {
+      const str = (fn + ln).toLowerCase();
+      let hash  = 0;
+      for (let i = 0; i < str.length; i++) hash = str.charCodeAt(i) + ((hash << 5) - hash);
+      const hue = Math.abs(hash) % 360;
+      bg = 'hsl(' + hue + ',55%,88%)'; color = 'hsl(' + hue + ',55%,32%)';
+    }
+    return '<div class="bl-avatar" style="background:' + bg + ';color:' + color + '" title="' + fn + ' ' + ln + '">' + initials + '</div>';
   }
 
   async load() {
@@ -675,7 +684,7 @@ export class BookingList {
         <div class="booking-row-body">
           <div class="bl-row-main">
             <div class="bl-col-guest">
-              ${BookingList._avatar(g)}
+              ${BookingList._avatar(g, unitColorsForAccent)}
               <div class="bl-guest-info">
                 <div class="bl-guest-name bl-guest-name-hover" data-booking-id="${b.id}">${getNationalityFlag(g?.nationality) ? getNationalityFlag(g?.nationality) + ' ' : ''}${guest}${flagHTML ? ' '+flagHTML : ''}</div>
                 <div class="bl-guest-meta">${unitChipsHTML}${getSourceBadgeHTML(b.source)}${b.late_checkout ? '<span style="font-size:.65rem;padding:1px 5px;border-radius:3px;background:rgba(251,191,36,.15);color:#b45309;font-weight:600;white-space:nowrap">🌅 Late CO</span>' : ''}</div>

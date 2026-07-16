@@ -1000,7 +1000,9 @@ export class Calendar {
         'flex-shrink:0;margin-right:4px;background:rgba(255,255,255,.25);color:' + textColor + '">🔗</span>'
       : '';
 
-    const avatar = !isBlock ? Calendar._guestAvatar(booking.guests, 16) : '';
+    const unitColors = (booking.booking_units ?? [])
+      .map(bu => bu?.units?.color ?? bu?.color).filter(Boolean);
+    const avatar = !isBlock ? Calendar._guestAvatar(booking.guests, 16, unitColors) : '';
     const nameStyle = 'color:' + textColor + ';font-size:.68rem;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0';
     const lateChip = booking.late_checkout
       ? '<span title="🌅 Late check-out" style="flex-shrink:0;font-size:.65rem;margin-left:3px">🌅</span>'
@@ -1191,23 +1193,41 @@ export class Calendar {
   }
 
   // ── Avatar de iniciales ──────────────────────────
-  static _guestAvatar(guest, size = 18) {
+  static _guestAvatar(guest, size = 18, colors = []) {
     if (!guest) return '';
     const fn = guest.first_name ?? '';
     const ln = guest.last_name  ?? '';
     if (!fn && !ln) return '';
     const initials = ((fn[0] ?? '') + (ln[0] ?? '')).toUpperCase();
-    const str  = (fn + ln).toLowerCase();
-    let hash   = 0;
-    for (let i = 0; i < str.length; i++) hash = str.charCodeAt(i) + ((hash << 5) - hash);
-    const hue  = Math.abs(hash) % 360;
-    return `<span class="bar-avatar" style="
-      display:inline-flex;align-items:center;justify-content:center;
-      width:${size}px;height:${size}px;min-width:${size}px;border-radius:50%;
-      background:hsl(${hue},55%,88%);color:hsl(${hue},55%,28%);
-      font-size:${Math.max(8, Math.round(size*.44))}px;font-weight:800;
-      flex-shrink:0;line-height:1;margin-right:5px;
-    ">${initials}</span>`;
+
+    // Si vienen colores de unidad, usarlos; sino fallback hash
+    let bg, color;
+    if (colors && colors.length === 1) {
+      bg    = colors[0] + '55';
+      color = colors[0];
+    } else if (colors && colors.length === 2) {
+      bg    = 'linear-gradient(135deg,' + colors[0] + '55 50%,' + colors[1] + '55 50%)';
+      color = '#fff';
+    } else if (colors && colors.length >= 3) {
+      const step = Math.round(360 / colors.length);
+      bg    = 'conic-gradient(' + colors.map((c, i) => c + '55 ' + (i*step) + 'deg ' + ((i+1)*step) + 'deg').join(',') + ')';
+      color = '#fff';
+    } else {
+      const str  = (fn + ln).toLowerCase();
+      let hash   = 0;
+      for (let i = 0; i < str.length; i++) hash = str.charCodeAt(i) + ((hash << 5) - hash);
+      const hue  = Math.abs(hash) % 360;
+      bg    = 'hsl(' + hue + ',55%,88%)';
+      color = 'hsl(' + hue + ',55%,28%)';
+    }
+
+    return '<span class="bar-avatar" style="'
+      + 'display:inline-flex;align-items:center;justify-content:center;'
+      + 'width:' + size + 'px;height:' + size + 'px;min-width:' + size + 'px;border-radius:50%;'
+      + 'background:' + bg + ';color:' + color + ';'
+      + 'font-size:' + Math.max(8, Math.round(size*.44)) + 'px;font-weight:800;'
+      + 'flex-shrink:0;line-height:1;margin-right:5px;'
+      + '">' + initials + '</span>';
   }
 
   // ══════════════════════════════════════════════════
