@@ -1002,26 +1002,39 @@ export class Calendar {
 
     const unitColors = (booking.booking_units ?? [])
       .map(bu => bu?.units?.color ?? bu?.color).filter(Boolean);
-    const isSolo     = booking._cellType === 'solo';
+    const isSolo      = booking._cellType === 'solo';
     const calInitials = (
       ((booking.guests?.first_name ?? '')[0] ?? '') +
       ((booking.guests?.last_name  ?? '')[0] ?? '')
     ).toUpperCase() || '?';
 
-    // Barra de 1 noche: avatar blanco semitransparente (visible sobre cualquier color)
-    // Barra de 2+ noches: avatar con colores de unidad (el fondo no es el color de barra)
-    let avatar = '';
-    if (!isBlock) {
-      if (isSolo) {
-        avatar = '<span style="width:22px;height:22px;border-radius:50%;'
-          + 'display:inline-flex;align-items:center;justify-content:center;'
-          + 'font-size:9px;font-weight:800;'
-          + 'background:rgba(255,255,255,.6);color:' + textColor + ';'
-          + 'flex-shrink:0;line-height:1;">' + calInitials + '</span>';
-      } else {
-        avatar = Calendar._guestAvatar(booking.guests, 15, unitColors);
-      }
+    // Avatar con colores de unidad, siempre visible sobre la barra:
+    // · 0 unidades  → blanco semitransparente
+    // · 1 unidad    → fondo blanco + texto en color de la unidad
+    // · 2+ unidades → fondo con los colores de cada unidad (full opacity) + texto blanco
+    let avBg, avColor;
+    if (unitColors.length === 0) {
+      avBg = 'rgba(255,255,255,.7)'; avColor = textColor;
+    } else if (unitColors.length === 1) {
+      avBg = 'rgba(255,255,255,.88)'; avColor = unitColors[0];
+    } else if (unitColors.length === 2) {
+      avBg = 'linear-gradient(135deg,' + unitColors[0] + ' 50%,' + unitColors[1] + ' 50%)';
+      avColor = '#fff';
+    } else {
+      const step = Math.round(360 / unitColors.length);
+      avBg = 'conic-gradient(' + unitColors.map((c,i) => c + ' ' + (i*step) + 'deg ' + ((i+1)*step) + 'deg').join(',') + ')';
+      avColor = '#fff';
     }
+
+    const avSize  = isSolo ? 22 : 15;
+    const avStyle = 'width:' + avSize + 'px;height:' + avSize + 'px;border-radius:50%;'
+      + 'display:inline-flex;align-items:center;justify-content:center;'
+      + 'font-size:' + Math.max(7, Math.round(avSize * .44)) + 'px;font-weight:800;'
+      + 'background:' + avBg + ';color:' + avColor + ';'
+      + 'flex-shrink:0;line-height:1;' + (isSolo ? '' : 'margin-right:4px;');
+    const avatar = !isBlock
+      ? '<span style="' + avStyle + '">' + calInitials + '</span>'
+      : '';
 
     const nameStyle = 'color:' + textColor + ';font-size:.68rem;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0';
     const lateChip  = !isSolo && booking.late_checkout
