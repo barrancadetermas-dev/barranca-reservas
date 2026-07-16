@@ -1002,23 +1002,27 @@ export class Calendar {
 
     const unitColors = (booking.booking_units ?? [])
       .map(bu => bu?.units?.color ?? bu?.color).filter(Boolean);
-    const isSolo   = booking._cellType === 'solo';
-
-    // Dentro de las barras de calendario el avatar va sobre fondo de color
-    // → fondo blanco semitransparente, texto = textColor para buen contraste
+    const isSolo     = booking._cellType === 'solo';
     const calInitials = (
       ((booking.guests?.first_name ?? '')[0] ?? '') +
       ((booking.guests?.last_name  ?? '')[0] ?? '')
     ).toUpperCase() || '?';
-    const makeCalAvatar = (size) =>
-      '<span style="width:' + size + 'px;height:' + size + 'px;border-radius:50%;'
-      + 'display:inline-flex;align-items:center;justify-content:center;'
-      + 'font-size:' + Math.max(7, Math.round(size * .44)) + 'px;font-weight:800;'
-      + 'background:rgba(255,255,255,.55);color:' + textColor + ';'
-      + 'flex-shrink:0;line-height:1;margin-right:' + (isSolo ? '0' : '4') + 'px;'
-      + '">' + calInitials + '</span>';
 
-    const avatar    = !isBlock ? makeCalAvatar(isSolo ? 22 : 15) : '';
+    // Barra de 1 noche: avatar blanco semitransparente (visible sobre cualquier color)
+    // Barra de 2+ noches: avatar con colores de unidad (el fondo no es el color de barra)
+    let avatar = '';
+    if (!isBlock) {
+      if (isSolo) {
+        avatar = '<span style="width:22px;height:22px;border-radius:50%;'
+          + 'display:inline-flex;align-items:center;justify-content:center;'
+          + 'font-size:9px;font-weight:800;'
+          + 'background:rgba(255,255,255,.6);color:' + textColor + ';'
+          + 'flex-shrink:0;line-height:1;">' + calInitials + '</span>';
+      } else {
+        avatar = Calendar._guestAvatar(booking.guests, 15, unitColors);
+      }
+    }
+
     const nameStyle = 'color:' + textColor + ';font-size:.68rem;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0';
     const lateChip  = !isSolo && booking.late_checkout
       ? '<span title="🌅 Late check-out" style="flex-shrink:0;font-size:.65rem;margin-left:3px">🌅</span>'
