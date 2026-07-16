@@ -1792,9 +1792,10 @@ OperationsModule.prototype._openTenenciaModal = function(tipo, rates, item = nul
         <div class="form-group">
           <label>Monto ${tipo==='usd'?'(USD)':'(ARS)'} <span class="req">*</span></label>
           <div style="position:relative">
-            <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:${cfg.color};font-size:.85rem">${tipo==='usd'?'U$S':'$'}</span>
+            <span style="position:absolute;left:9px;top:50%;transform:translateY(-50%);color:${cfg.color};font-size:.78rem;font-weight:600;letter-spacing:-.02em">${tipo==='usd'?'USD':'$'}</span>
             <input type="number" id="tm-base" min="0" step="0.01" class="form-input"
-                   style="padding-left:30px" value="${item?.original_amount??''}">
+                   placeholder="0.00"
+                   style="padding-left:${tipo==='usd'?'38':'22'}px" value="${item?.original_amount??''}">
           </div>
         </div>
 
