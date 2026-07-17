@@ -42,7 +42,7 @@ export class BookingList {
     this._page     = 1;
     this._pageSize = 30;
     this._sortBy   = 'check_in_asc'; // más próximas primero por defecto
-    this._allBookings = [];
+    this._allBookings = null;  // null = no cargó aún, [] = vacío real
 
     this._bindTabs();
     this._bindFilters();
@@ -478,6 +478,14 @@ export class BookingList {
     const container = document.getElementById('bookings-list');
     if (!container) return;
 
+    // Aún no cargó datos — mostrar skeleton
+    if (this._allBookings === null) {
+      container.innerHTML = '<div style="padding:20px">' +
+        Array(6).fill('<div style="height:52px;border-radius:8px;background:var(--color-surface-2);margin-bottom:8px;animation:pulse 1.5s infinite"></div>').join('') +
+        '</div>';
+      return;
+    }
+
     const filtered = this._applyFilters(this._allBookings, today);
     const sorted   = this._sortBookings(filtered);
     const showing  = sorted.slice(0, this._page * this._pageSize);
@@ -566,21 +574,23 @@ export class BookingList {
         const grpPaid    = grp.reduce((s,b) => s + (b.total_paid  ?? 0), 0);
         const grpBalance = grp.reduce((s,b) => s + (b.balance     ?? 0), 0);
         const grpPct     = grpTotal > 0 ? Math.round(grpPaid / grpTotal * 100) : 0;
+        const isCurrent = key === today.slice(0, 7);
+        const isOpen    = isCurrent;
         html += `<div class="bl-month-group" data-month="${key}">
-          <div class="bl-month-header" style="display:flex;align-items:center;gap:10px;padding:8px 14px;
+          <div class="bl-month-header" data-toggle="month"
+               style="display:flex;align-items:center;gap:10px;padding:8px 14px;
                background:var(--color-surface-2);border-top:1px solid var(--color-border);
-               border-bottom:1px solid var(--color-border);margin-top:4px;cursor:pointer;user-select:none"
-               onclick="this.closest('.bl-month-group').querySelector('.bl-month-body').classList.toggle('bl-hidden')">
-            <span style="font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--color-text-3)">${label}</span>
+               border-bottom:1px solid var(--color-border);margin-top:4px;cursor:pointer;user-select:none">
+            <span class="bl-month-chevron" style="font-size:.65rem;color:var(--color-text-3);transition:transform .2s;display:inline-block;${isOpen ? '' : 'transform:rotate(-90deg)'}">▾</span>
+            <span style="font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:${isCurrent ? 'var(--color-text)' : 'var(--color-text-3)'}">${label}</span>
             <span style="font-size:.7rem;color:var(--color-text-3)">${grp.length} reserva${grp.length!==1?'s':''}</span>
             <div style="flex:1;height:4px;background:var(--color-border);border-radius:2px;overflow:hidden;max-width:80px">
               <div style="height:100%;background:#16a34a;border-radius:2px;width:${grpPct}%;transition:width .5s"></div>
             </div>
             <span style="font-size:.7rem;font-weight:700;color:#16a34a">${formatARS(grpPaid)}</span>
-            ${grpBalance > 0 ? `<span style="font-size:.7rem;color:#f59e0b">+ ${formatARS(grpBalance)} pend.</span>` : ''}
-            <span style="font-size:.65rem;color:var(--color-text-3);margin-left:auto">▾</span>
+            ${grpBalance > 0 ? `<span style="font-size:.7rem;color:#f59e0b">+${formatARS(grpBalance)} pend.</span>` : ''}
           </div>
-          <div class="bl-month-body">
+          <div class="bl-month-body${isOpen ? '' : ' bl-hidden'}">
             ${grp.map(b => this._renderRow(b, today)).join('')}
           </div>
         </div>`;
@@ -599,6 +609,16 @@ export class BookingList {
     }
 
     container.innerHTML = html;
+
+    // Bind month header toggles — event delegation segura en módulos ES
+    container.querySelectorAll('[data-toggle="month"]').forEach(hdr => {
+      hdr.addEventListener('click', () => {
+        const body    = hdr.closest('.bl-month-group').querySelector('.bl-month-body');
+        const chevron = hdr.querySelector('.bl-month-chevron');
+        const nowHidden = body.classList.toggle('bl-hidden');
+        if (chevron) chevron.style.transform = nowHidden ? 'rotate(-90deg)' : '';
+      });
+    });
 
     // Bind sort tabs
     container.querySelector('#bl-sort-select')?.addEventListener('change', (e) => {

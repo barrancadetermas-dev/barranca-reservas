@@ -461,11 +461,11 @@ export class Calendar {
     const corner = document.createElement('div');
     corner.className = 'cal-unit-label-header';
     corner.textContent = 'Unidad';
-    // setProperty con 'important' — gana sobre cualquier CSS !important
+    // Corner: sticky solo en eje horizontal (izquierda), scrollea vertical con el contenido
     corner.style.setProperty('position', 'sticky',  'important');
     corner.style.setProperty('left',     '0',        'important');
-    corner.style.setProperty('top',      '0',        'important');
-    corner.style.setProperty('z-index',  '300',      'important');
+    // sin top:0 — no queremos sticky vertical
+    corner.style.setProperty('z-index',  '200',      'important');
     corner.style.setProperty('background', 'var(--color-surface-2)', 'important');
     corner.style.setProperty('width',    '100%',     'important');
     corner.style.setProperty('min-width','0',        'important');
@@ -508,9 +508,9 @@ export class Calendar {
       dh.dataset.date = iso;
       dh.title = holiday?.label ?? '';
       // z-index bajo inline — siempre DETRÁS de la columna sticky de departamentos
-      dh.style.setProperty('position', 'sticky', 'important');
-      dh.style.setProperty('top',      '0',      'important');
-      dh.style.setProperty('z-index',  '2',      'important');
+      // Sin sticky vertical — los headers de día scrollean junto con el contenido
+      dh.style.setProperty('position', 'relative', 'important');
+      dh.style.setProperty('z-index',  '1',        'important');
 
       dh.innerHTML = (showMonth ? '<span class="dh-month' + (dayOfMon === 1 && colIdx !== 0 ? ' dh-month-new' : '') + '">' + MONTH_SHORT[date.getMonth()] + '</span>' : '') +
         '<span class="dh-num">' + dayOfMon + '</span>' +
