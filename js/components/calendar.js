@@ -3490,7 +3490,7 @@ export class Calendar {
       }
       const fn    = b.guests?.first_name ?? '';
       const ln    = b.guests?.last_name  ?? '';
-      const guest = fn ? (fn + (ln ? ' ' + ln[0] + '.' : '')) : '—';
+      const guest = fn ? (fn + (ln ? ' ' + ln : '')) : '—';
       const bUnits = b.booking_units ?? [];
       const unit   = bUnits[0]?.units;
       const nights = Math.round((new Date(b.check_out+'T12:00:00') - new Date(b.check_in+'T12:00:00')) / 86400000);
