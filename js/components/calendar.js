@@ -943,22 +943,31 @@ export class Calendar {
       ));
       const passedPct  = Math.round((passedDays / span2) * 100);
       const todayPct   = Math.round(((passedDays + 1) / span2) * 100);
-      // Días futuros: mezcla con blanco 30% → apenas más claro que el color pleno
-      const lighten = (hex, f) => {
+      const darkStart  = darken(color, 0.15);
+      const lighten    = (hex, f) => {
         const h = hex.replace('#','');
         const r = Math.min(255, Math.round(parseInt(h.slice(0,2),16) + (255-parseInt(h.slice(0,2),16))*f));
         const g = Math.min(255, Math.round(parseInt(h.slice(2,4),16) + (255-parseInt(h.slice(2,4),16))*f));
         const b = Math.min(255, Math.round(parseInt(h.slice(4,6),16) + (255-parseInt(h.slice(4,6),16))*f));
         return '#'+[r,g,b].map(v=>v.toString(16).padStart(2,'0')).join('');
       };
-      const ghost      = lighten(color, 0.30);  // 30% más claro que el color original
-      const darkStart  = darken(color, 0.15);
+      // Días futuros: heredan el indicador de precio si lo hay
+      let futureColor;
+      if (freeN > 0 && totalN > 0) {
+        futureColor = yellow;                    // noche gratis → amarillo
+      } else if (discPct > 0) {
+        futureColor = orange;                    // descuento → naranja
+      } else if (surcharge > 0 && total > 0) {
+        futureColor = darken(color, 0.75);       // recargo → verde más oscuro
+      } else {
+        futureColor = lighten(color, 0.30);      // normal → apenas más claro
+      }
       if (span2 > 1) {
         if (passedDays === 0) {
-          barBg = 'linear-gradient(to right, ' + color + ' 0%, ' + color + ' ' + todayPct + '%, ' + ghost + ' ' + todayPct + '%)';
+          barBg = 'linear-gradient(to right, ' + color + ' 0%, ' + color + ' ' + todayPct + '%, ' + futureColor + ' ' + todayPct + '%)';
         } else {
           const midPct = Math.max(1, passedPct - 2);
-          barBg = 'linear-gradient(to right, ' + darkStart + ' 0%, ' + color + ' ' + midPct + '%, ' + color + ' ' + todayPct + '%, ' + ghost + ' ' + todayPct + '%)';
+          barBg = 'linear-gradient(to right, ' + darkStart + ' 0%, ' + color + ' ' + midPct + '%, ' + color + ' ' + todayPct + '%, ' + futureColor + ' ' + todayPct + '%)';
         }
       }
     }
@@ -3512,16 +3521,38 @@ export class Calendar {
         unitLabel = (unit?.name ?? '—') + ' · ' + nStr;
       }
 
+      // Avatar con colores de unidad
+      const uColors   = bUnits.map(bu => bu.units?.color).filter(Boolean);
+      const nameParts = (fn + ' ' + ln).trim().split(' ').filter(Boolean);
+      const initials  = ((nameParts[0]?.[0] ?? '') + (nameParts[nameParts.length-1]?.[0] ?? '')).toUpperCase() || '?';
+      let avBg, avColor;
+      if      (uColors.length === 0) { avBg='var(--color-surface-2)'; avColor='var(--color-text-3)'; }
+      else if (uColors.length === 1) { avBg=uColors[0]+'33'; avColor=uColors[0]; }
+      else if (uColors.length === 2) { avBg='linear-gradient(135deg,'+uColors[0]+'44 50%,'+uColors[1]+'44 50%)'; avColor='var(--color-text)'; }
+      else { const step=Math.round(360/uColors.length); avBg='conic-gradient('+uColors.map((col,i)=>col+'44 '+(i*step)+'deg '+((i+1)*step)+'deg').join(',')+')'; avColor='var(--color-text)'; }
+
+      const SRC_MAP   = {'booking.com':'🔵','airbnb':'🔴','directo':'🟢','whatsapp':'💬','instagram':'📸','referido':'👥'};
+      const srcIcon   = SRC_MAP[(b.source ?? '').toLowerCase()] ?? '';
+      const amtStr    = b.total_amount > 0 ? '$' + Math.round(b.total_amount / 1000) + 'k' : '';
+      const isToday2  = days === 0;
+
       cards.push(
-        '<div class="cal-agenda-slot">' +
+        '<div class="cal-agenda-slot"' + (isToday2 ? ' style="border:1.5px solid var(--color-primary)"' : '') + '>' +
           barHTML +
           '<div class="cal-agenda-slot-body">' +
-            '<div style="display:flex;align-items:baseline;justify-content:space-between;gap:4px">' +
+            '<div style="display:flex;align-items:center;justify-content:space-between;gap:4px;margin-bottom:4px">' +
               '<span class="cal-agenda-slot-date">' + dStr + '</span>' +
-              '<span class="cal-agenda-slot-days">' + daysLabel + '</span>' +
+              '<span class="cal-agenda-slot-days"' + (isToday2 ? ' style="font-weight:700"' : '') + '>' + daysLabel + '</span>' +
             '</div>' +
-            '<div class="cal-agenda-slot-guest">' + guest + '</div>' +
-            '<div class="cal-agenda-slot-unit">' + unitLabel + '</div>' +
+            '<div style="display:flex;align-items:center;gap:5px;margin-bottom:3px">' +
+              '<div style="width:24px;height:24px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;background:' + avBg + ';color:' + avColor + '">' + initials + '</div>' +
+              '<span class="cal-agenda-slot-guest" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + guest + '</span>' +
+              (srcIcon ? '<span style="font-size:12px;flex-shrink:0">' + srcIcon + '</span>' : '') +
+            '</div>' +
+            '<div style="display:flex;align-items:center;justify-content:space-between;gap:4px">' +
+              '<span class="cal-agenda-slot-unit" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + unitLabel + '</span>' +
+              (amtStr ? '<span style="font-size:10px;font-weight:600;color:var(--color-text-2);flex-shrink:0">' + amtStr + '</span>' : '') +
+            '</div>' +
           '</div>' +
         '</div>'
       );
