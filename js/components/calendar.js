@@ -927,6 +927,34 @@ export class Calendar {
     const winStart  = this._windowStart;
     const winEndExcl= this._addDays(winStart, this._visibleDays);
 
+    // ── Degradé de progreso para reservas en curso ─────────────────────────
+    // En curso = check_in <= hoy < check_out
+    // Días pasados → oscuros; hoy → color pleno; días futuros → fantasma (13%)
+    const isInProgress = co > todayISO && ci <= todayISO;
+    if (isInProgress) {
+      const msDay     = 86400000;
+      const visStart2 = ci < winStart ? winStart : ci;
+      const visEnd2   = co > winEndExcl ? winEndExcl : co;
+      const span2     = Math.max(1, Math.round(
+        (new Date(visEnd2+'T00:00:00') - new Date(visStart2+'T00:00:00')) / msDay
+      ));
+      const passedDays = Math.max(0, Math.round(
+        (new Date(todayISO+'T00:00:00') - new Date(visStart2+'T00:00:00')) / msDay
+      ));
+      const passedPct  = Math.round((passedDays / span2) * 100);
+      const todayPct   = Math.round(((passedDays + 1) / span2) * 100);
+      const ghost      = color + '22';
+      const darkStart  = darken(color, 0.15);
+      if (span2 > 1) {
+        if (passedDays === 0) {
+          barBg = 'linear-gradient(to right, ' + color + ' 0%, ' + color + ' ' + todayPct + '%, ' + ghost + ' ' + todayPct + '%)';
+        } else {
+          const midPct = Math.max(1, passedPct - 2);
+          barBg = 'linear-gradient(to right, ' + darkStart + ' 0%, ' + color + ' ' + midPct + '%, ' + color + ' ' + todayPct + '%, ' + ghost + ' ' + todayPct + '%)';
+        }
+      }
+    }
+
     // Fecha de inicio visual (puede ser windowStart si el check-in es anterior)
     const visStart  = ci < winStart ? winStart : ci;
     // Fecha de fin visual (puede ser windowEnd si el check-out supera la vista)

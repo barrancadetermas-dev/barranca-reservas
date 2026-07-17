@@ -1615,6 +1615,19 @@ OperationsModule.prototype._loadTenencias = async function(panel, header) {
   const totalIntereses = conRend.reduce((s,i) => s + (i.interest_amount??0), 0);
   const totalEstat  = estatic.reduce((s,i) => s + (i.original_amount??0), 0);
 
+  // Gastos pagados "en cuenta" → se deducen automáticamente del saldo CTA
+  const { data: gastosCtaRaw = [] } = await this.db
+    .from('expenses')
+    .select('amount, description, date')
+    .eq('hotel_id', this.ctx.hotelId)
+    .eq('payment_method', 'cuenta')
+    .order('date', { ascending: false })
+    .limit(200);
+  const gastosEnCuenta      = gastosCtaRaw ?? [];
+  const totalGastosEnCuenta = gastosEnCuenta.reduce((s,g) => s + (g.amount??0), 0);
+  const totalCtaBase        = estatic.filter(i => i.notes?.startsWith('[CTA]')).reduce((s,i) => s + (i.original_amount??0), 0);
+  const saldoEnCuenta       = totalCtaBase - totalGastosEnCuenta;
+
   // ── Fila de inversión con rendimiento ────────────────────────────────────
   const rendRow = item => {
     const cfg   = tenCfgFromNotes(item.notes);
@@ -1657,18 +1670,38 @@ OperationsModule.prototype._loadTenencias = async function(panel, header) {
 
   // ── Fila de saldo estático ────────────────────────────────────────────────
   const estatRow = item => {
-    const cfg  = tenCfgFromNotes(item.notes);
+    const cfg    = tenCfgFromNotes(item.notes);
+    const isCTA  = item.notes?.startsWith('[CTA]');
+    const base   = item.original_amount ?? 0;
+    const desc2  = (item.notes ?? '').replace(/^\[(USD|CTA)\] /, '').split(' · ')[0] || '—';
+    const saldo  = isCTA ? (base - totalGastosEnCuenta) : base;
+    const hasDed = isCTA && totalGastosEnCuenta > 0;
+    const deducHTML = hasDed
+      ? '<div style="font-size:.68rem;color:var(--color-text-3);margin-top:4px">'
+        + 'Ingresado: <strong>' + fmt(base) + '</strong>'
+        + ' · <span style="color:#f59e0b">Gastos débito: −' + fmt(totalGastosEnCuenta) + '</span>'
+        + gastosEnCuenta.slice(0,2).map(g => ' · ' + (g.date||'').slice(5) + ' ' + (g.description||'').slice(0,15) + ': −' + fmt(g.amount)).join('')
+        + (gastosEnCuenta.length > 2 ? ' · y ' + (gastosEnCuenta.length-2) + ' más…' : '')
+        + '</div>'
+      : '';
+    // override cfg fields for rendering
+    const _cfg = cfg;
     const monto = item.original_amount ?? 0;
-    const desc  = (item.notes ?? '').replace(/^\[(USD|CTA)\] /, '').split(' · ')[0] || '—';
-    return `<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:10px;
-                        margin-bottom:6px;background:var(--color-surface-2);border:1px solid var(--color-border)">
+    const desc  = desc2;
+    return `<div style="display:flex;align-items:flex-start;gap:10px;padding:10px 14px;border-radius:10px;
+                        margin-bottom:6px;background:var(--color-surface-2);
+                        border:1px solid var(--color-border);border-left:3px solid ${cfg.color}">
+      <div style="width:36px;height:36px;border-radius:8px;background:${cfg.color}18;color:${cfg.color};
+                  display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">${cfg.icon}</div>
       <div style="flex:1;min-width:0">
-        <div style="display:flex;align-items:center;gap:8px">
-          <span style="font-size:.62rem;font-weight:700;padding:1px 7px;border-radius:4px;
-                       background:${cfg.color}22;color:${cfg.color}">${cfg.icon} ${cfg.label}</span>
-          <span style="font-size:.8rem;font-weight:600;color:var(--color-text)">${desc}</span>
-          <span style="font-size:.85rem;font-weight:700;color:${cfg.color};margin-left:auto">${fmt(monto)}</span>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:2px">
+          <div style="display:flex;align-items:center;gap:6px">
+            <span style="font-size:.8rem;font-weight:600;color:var(--color-text)">${desc}</span>
+            <span style="font-size:.6rem;padding:1px 6px;border-radius:4px;background:${cfg.color}18;color:${cfg.color};font-weight:700">${cfg.label}</span>
+          </div>
+          <span style="font-size:.9rem;font-weight:700;color:${saldo < 0 ? '#ef4444' : cfg.color}">${fmt(saldo)}</span>
         </div>
+        ${deducHTML}
       </div>
       <div style="display:flex;gap:5px;flex-shrink:0">
         <button class="btn btn-outline btn-xs ten-edit-btn" data-id="${item.id}" style="padding:3px 8px;font-size:.7rem">✏️</button>
