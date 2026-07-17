@@ -3536,36 +3536,33 @@ export class Calendar {
       const amtStr    = b.total_amount > 0 ? '$' + Math.round(b.total_amount / 1000) + 'k' : '';
       const isToday2  = days === 0;
 
-      // Barra superior de color (horizontal, usa mismo barHTML pero rediseñado)
-      const barTop = bUnits.length > 1
-        ? '<div style="height:4px;width:100%;background:conic-gradient('
-            + uColors.map((col,i) => { const step=Math.round(360/uColors.length); return col+' '+(i*step)+'deg '+((i+1)*step)+'deg'; }).join(',')
-            + ')"></div>'
-        : '<div style="height:4px;width:100%;background:' + (uColors[0] ?? 'var(--color-primary)') + '"></div>';
+      // Barra lateral segmentada (estructura original del CSS)
+      const barTopInner = bUnits.length > 1
+        ? '<div class="cal-agenda-slot-bar cal-agenda-slot-bar--multi">'
+            + bUnits.map(bu => '<div style="flex:1;background:' + (bu.units?.color ?? 'var(--color-primary)') + '"></div>').join('')
+            + '</div>'
+        : '<div class="cal-agenda-slot-bar" style="background:' + (uColors[0] ?? 'var(--color-primary)') + '"></div>';
 
       const todayPill = isToday2
-        ? '<span style="font-size:10px;font-weight:700;padding:1px 7px;border-radius:99px;background:var(--state-green-bg,#f0fdf4);color:var(--state-green-txt,#16a34a)">HOY</span>'
-        : '<span style="font-size:10px;color:var(--color-text-3)">' + daysLabel + '</span>';
+        ? '<span style="font-size:.6rem;font-weight:700;padding:1px 6px;border-radius:99px;background:#f0fdf4;color:#16a34a;white-space:nowrap">HOY</span>'
+        : '<span class="cal-agenda-slot-days">' + daysLabel + '</span>';
 
       cards.push(
-        '<div class="cal-agenda-slot"'
-          + ' style="border-radius:12px;overflow:hidden;' + (isToday2 ? 'border:1.5px solid var(--color-primary);' : '') + '">' +
-          barTop +
-          '<div class="cal-agenda-slot-body" style="padding:8px 10px">' +
-            '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">' +
-              '<span class="cal-agenda-slot-date" style="font-size:10px;color:var(--color-text-3)">' + dStr + '</span>' +
+        '<div class="cal-agenda-slot"' + (isToday2 ? ' style="border-color:var(--color-primary);border-width:1.5px"' : '') + '>' +
+          barTopInner +
+          '<div class="cal-agenda-slot-body">' +
+            '<div style="display:flex;align-items:center;justify-content:space-between;gap:3px;margin-bottom:4px">' +
+              '<span class="cal-agenda-slot-date">' + dStr + '</span>' +
               todayPill +
             '</div>' +
-            '<div style="display:flex;align-items:center;gap:7px;margin-bottom:6px">' +
-              '<div style="width:30px;height:30px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;background:' + avBg + ';color:' + avColor + '">' + initials + '</div>' +
-              '<div style="flex:1;min-width:0">' +
-                '<div class="cal-agenda-slot-guest" style="font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + guest + '</div>' +
-                '<div class="cal-agenda-slot-unit" style="font-size:10px;color:var(--color-text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + unitLabel + '</div>' +
-              '</div>' +
+            '<div style="display:flex;align-items:center;gap:5px;margin-bottom:3px">' +
+              '<div style="width:26px;height:26px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;background:' + avBg + ';color:' + avColor + '">' + initials + '</div>' +
+              '<span class="cal-agenda-slot-guest" style="flex:1;min-width:0">' + guest + '</span>' +
+              (srcIcon ? '<span style="font-size:11px;flex-shrink:0">' + srcIcon + '</span>' : '') +
             '</div>' +
-            '<div style="display:flex;align-items:center;justify-content:space-between;padding-top:5px;border-top:0.5px solid var(--color-border)">' +
-              '<span style="font-size:12px">' + (srcIcon || '📋') + '</span>' +
-              (amtStr ? '<span style="font-size:11px;font-weight:600;color:var(--color-text)">' + amtStr + '</span>' : '') +
+            '<div style="display:flex;align-items:center;justify-content:space-between;padding-top:3px;border-top:0.5px solid var(--color-border)">' +
+              '<span class="cal-agenda-slot-unit" style="flex:1;min-width:0">' + unitLabel + '</span>' +
+              (amtStr ? '<span style="font-size:.58rem;font-weight:600;color:var(--color-text-2);flex-shrink:0;margin-left:3px">' + amtStr + '</span>' : '') +
             '</div>' +
           '</div>' +
         '</div>'
