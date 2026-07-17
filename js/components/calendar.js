@@ -943,7 +943,15 @@ export class Calendar {
       ));
       const passedPct  = Math.round((passedDays / span2) * 100);
       const todayPct   = Math.round(((passedDays + 1) / span2) * 100);
-      const ghost      = color + '22';
+      // Días futuros: mezcla con blanco 30% → apenas más claro que el color pleno
+      const lighten = (hex, f) => {
+        const h = hex.replace('#','');
+        const r = Math.min(255, Math.round(parseInt(h.slice(0,2),16) + (255-parseInt(h.slice(0,2),16))*f));
+        const g = Math.min(255, Math.round(parseInt(h.slice(2,4),16) + (255-parseInt(h.slice(2,4),16))*f));
+        const b = Math.min(255, Math.round(parseInt(h.slice(4,6),16) + (255-parseInt(h.slice(4,6),16))*f));
+        return '#'+[r,g,b].map(v=>v.toString(16).padStart(2,'0')).join('');
+      };
+      const ghost      = lighten(color, 0.30);  // 30% más claro que el color original
       const darkStart  = darken(color, 0.15);
       if (span2 > 1) {
         if (passedDays === 0) {
