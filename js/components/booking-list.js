@@ -373,24 +373,12 @@ export class BookingList {
       { value: 'amount_desc',   label: '💰 Mayor'    },
       { value: 'balance_desc',  label: '🔴 Saldo pendiente' },
     ];
-    // NUEVO (aditivo): toggle Lista / Kanban a la derecha del selector
-    const vm = this._viewMode === 'kanban' ? 'kanban' : 'list';
-    const toggleBtn = (mode, icon, label) =>
-      `<button type="button" data-view-toggle="${mode}"
-        style="font-size:.72rem;font-weight:600;padding:4px 10px;border-radius:7px;cursor:pointer;
-        border:1px solid ${vm === mode ? 'var(--color-primary)' : 'var(--color-border)'};
-        background:${vm === mode ? 'var(--color-primary)' : 'var(--color-surface)'};
-        color:${vm === mode ? '#fff' : 'var(--color-text-2)'}">${icon} ${label}</button>`;
     return `
-      <div class="bl-sort-wrap" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+      <div class="bl-sort-wrap">
         <span class="bl-sort-label">Ordenar:</span>
         <select id="bl-sort-select" class="filter-select" style="font-size:.78rem;padding:4px 8px">
           ${OPTS.map(o => `<option value="${o.value}" ${this._sortBy === o.value ? 'selected' : ''}>${o.label}</option>`).join('')}
         </select>
-        <span style="display:flex;gap:4px;margin-left:auto">
-          ${toggleBtn('list', '📋', 'Lista')}
-          ${toggleBtn('kanban', '🗂️', 'Kanban')}
-        </span>
       </div>`;
   }
 
@@ -399,87 +387,6 @@ export class BookingList {
   // de eventos existente (.booking-row + data-booking-id → abre detalle).
   // Solo lectura por diseño: el cambio de estado se hace desde el detalle,
   // así los triggers de la base siguen siendo la única fuente de verdad.
-  _renderKanban(bookings, today) {
-    const COLS = [
-      { key: 'pending',   label: '🟡 Pendiente',  color:'#ca8a04', test: b => b.status === 'pending' },
-      { key: 'confirmed', label: '🔴 Confirmada', color:'#dc2626', test: b => (b.status === 'confirmed' || b.status === 'partial' || b.status === 'paid') && b.check_in > today },
-      { key: 'active',    label: '🟢 En curso',   color:'#16a34a', test: b => b.status !== 'cancelled' && b.check_in <= today && b.check_out > today && !b.checked_out_at },
-      { key: 'out_today', label: '🔵 Sale hoy',   color:'#2563eb', test: b => b.status !== 'cancelled' && b.check_out === today && !b.checked_out_at },
-      { key: 'done',      label: '⚪ Completada', color:'#64748b', test: b => b.status !== 'cancelled' && (b.check_out < today || !!b.checked_out_at) },
-    ];
-    const assigned = new Set();
-    const colData = COLS.map(col => {
-      const items = bookings.filter(b => {
-        if (assigned.has(b.id) || b.status === 'cancelled') return false;
-        // "Sale hoy" tiene prioridad sobre "En curso"
-        if (col.key === 'active' && b.check_out === today) return false;
-        if (!col.test(b)) return false;
-        assigned.add(b.id);
-        return true;
-      });
-      return { ...col, items };
-    });
-
-    const card = (b) => {
-      const g = b.guests;
-      const firstName = g?.first_name ?? '';
-      const lastName  = g?.last_name  ?? '';
-      const guest = (firstName + ' ' + lastName).trim() || 'Sin huésped';
-      const units = (b.booking_units ?? []).map(bu => {
-        const full = bu.units?.color ? bu.units : (AppContext.units?.find(x => String(x.id) === String(bu.unit_id)) ?? bu.units);
-        return full;
-      }).filter(Boolean);
-      const color  = units[0]?.color ?? '#6366f1';
-      const uName  = units.map(u => (u?.name ?? '').replace('Planta Baja','P.Baja').replace('Planta Alta','P.Alta')).filter(Boolean).join(' + ') || '—';
-      const balance = Number(b.balance ?? 0);
-      const total   = Number(b.total_amount ?? 0);
-      const paid    = Number(b.total_paid   ?? 0);
-      const pct     = total > 0 ? Math.min(100, Math.round(paid / total * 100)) : 0;
-      const nights  = b.nights ?? Math.round((new Date(b.check_out+'T12:00:00') - new Date(b.check_in+'T12:00:00')) / 86400000);
-      const barColor = pct === 100 ? '#16a34a' : pct > 0 ? '#f59e0b' : '#ef4444';
-
-      return `<div class="booking-row" data-booking-id="${b.id}" data-action="edit"
-        style="background:var(--color-surface);border:1px solid var(--color-border);border-left:3px solid ${color};
-        border-radius:8px;padding:9px 10px 8px;margin-bottom:6px;cursor:pointer">
-
-        <div style="font-size:.8rem;font-weight:700;color:var(--color-text);
-                    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:3px">${guest}</div>
-
-        <div style="display:flex;align-items:center;gap:5px;margin-bottom:5px">
-          <span style="width:6px;height:6px;border-radius:50%;background:${color};flex-shrink:0"></span>
-          <span style="font-size:.66rem;color:var(--color-text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${uName}</span>
-        </div>
-
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">
-          <span style="font-size:.64rem;color:var(--color-text-3)">${formatDate(b.check_in)} → ${formatDate(b.check_out)} · ${nights}n</span>
-        </div>
-
-        <div style="height:3px;background:var(--color-border);border-radius:2px;overflow:hidden;margin-bottom:4px">
-          <div style="height:100%;width:${pct}%;background:${barColor};border-radius:2px;transition:width .3s"></div>
-        </div>
-
-        <div style="display:flex;justify-content:space-between;align-items:center">
-          <span style="font-size:.6rem;color:var(--color-text-3)">${pct}% cobrado</span>
-          ${balance > 0
-            ? `<span style="font-size:.68rem;font-weight:700;color:#dc2626">$${Math.round(balance).toLocaleString('es-AR')} pendiente</span>`
-            : `<span style="font-size:.68rem;font-weight:700;color:#16a34a">✓ Saldado</span>`}
-        </div>
-      </div>`;
-    };
-
-    return `<div style="display:flex;gap:10px;overflow-x:auto;padding:12px 2px;align-items:flex-start;-webkit-overflow-scrolling:touch">
-      ${colData.map(col => `
-        <div style="min-width:200px;max-width:230px;flex:1;background:var(--color-surface-2);border-radius:10px;padding:10px;border-top:3px solid ${col.color};align-self:flex-start">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-            <span style="font-size:.7rem;font-weight:700;color:${col.color}">${col.label}</span>
-            <span style="font-size:.64rem;font-weight:700;padding:1px 7px;border-radius:999px;background:var(--color-surface);color:var(--color-text-3)">${col.items.length}</span>
-          </div>
-          <div style="max-height:260px;overflow-y:auto;scrollbar-width:thin">
-            ${col.items.length ? col.items.map(card).join('') : '<div style="font-size:.7rem;color:var(--color-text-3);text-align:center;padding:14px 0;font-style:italic">Vacío</div>'}
-          </div>
-        </div>`).join('')}
-    </div>`;
-  }
 
   // ── Pago total desde la lista ─────────────────────
   async _payFull(id) {
@@ -652,30 +559,7 @@ export class BookingList {
     }
     html += `</div>`;
 
-    // ── NUEVO (aditivo): VISTA KANBAN por estado ─────────────────────────────
-    // Se activa con el toggle 🗂️. Es un render alternativo que NO toca el
-    // camino de lista: si _viewMode no es 'kanban', todo sigue exactamente
-    // igual que antes. Columnas: Pendiente / Confirmada / En curso / Sale hoy
-    // / Completada. Click en card abre la reserva.
-    if (this._viewMode === 'kanban') {
-      html += this._renderKanban(sorted, today);
-      container.innerHTML = html;
-      // Los clicks en cards funcionan solos por la delegación de eventos ya
-      // existente en el container (.booking-row + data-booking-id).
-      container.querySelector('#bl-sort-select')?.addEventListener('change', (e) => {
-        this._sortBy = e.target.value;
-        this._page = 1;
-        this._rebuildList();
-      });
-      container.querySelectorAll('[data-view-toggle]').forEach(btn => {
-        btn.addEventListener('click', () => {
-          this._viewMode = btn.dataset.viewToggle;
-          this._rebuildList();
-        });
-      });
-      return;
-    }
-    // ── fin kanban ───────────────────────────────────────────────────────────
+
 
     // Filas — agrupadas por mes cuando el orden es por fecha de check-in
     const shouldGroup = !this._sortBy || this._sortBy.startsWith('check_in');
@@ -765,13 +649,6 @@ export class BookingList {
       this._rebuildList();
     });;
 
-    // NUEVO (aditivo): toggle de vista Lista / Kanban
-    container.querySelectorAll('[data-view-toggle]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        this._viewMode = btn.dataset.viewToggle;
-        this._rebuildList();
-      });
-    });
 
     // Bind botón único EXPORTAR ▾
     document.getElementById('btn-share-encargada')?.addEventListener('click', () => {
