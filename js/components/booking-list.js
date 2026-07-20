@@ -339,8 +339,9 @@ export class BookingList {
         const g    = b.guests;
         const name = g ? `${g.first_name} ${g.last_name}`.toLowerCase() : '';
         const dni  = (g?.dni ?? '').toLowerCase();
+        const phone = (g?.phone ?? '').toLowerCase();
         const unit = (b.booking_units ?? []).map(bu => bu.units?.name ?? '').join(' ').toLowerCase();
-        if (!name.includes(this._search) && !dni.includes(this._search) && !unit.includes(this._search)) return false;
+        if (!name.includes(this._search) && !dni.includes(this._search) && !phone.includes(this._search) && !unit.includes(this._search)) return false;
       }
 
       return true;
@@ -372,13 +373,89 @@ export class BookingList {
       { value: 'amount_desc',   label: '💰 Mayor'    },
       { value: 'balance_desc',  label: '🔴 Saldo pendiente' },
     ];
+    // NUEVO (aditivo): toggle Lista / Kanban a la derecha del selector
+    const vm = this._viewMode === 'kanban' ? 'kanban' : 'list';
+    const toggleBtn = (mode, icon, label) =>
+      `<button type="button" data-view-toggle="${mode}"
+        style="font-size:.72rem;font-weight:600;padding:4px 10px;border-radius:7px;cursor:pointer;
+        border:1px solid ${vm === mode ? 'var(--color-primary)' : 'var(--color-border)'};
+        background:${vm === mode ? 'var(--color-primary)' : 'var(--color-surface)'};
+        color:${vm === mode ? '#fff' : 'var(--color-text-2)'}">${icon} ${label}</button>`;
     return `
-      <div class="bl-sort-wrap">
+      <div class="bl-sort-wrap" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
         <span class="bl-sort-label">Ordenar:</span>
         <select id="bl-sort-select" class="filter-select" style="font-size:.78rem;padding:4px 8px">
           ${OPTS.map(o => `<option value="${o.value}" ${this._sortBy === o.value ? 'selected' : ''}>${o.label}</option>`).join('')}
         </select>
+        <span style="display:flex;gap:4px;margin-left:auto">
+          ${toggleBtn('list', '📋', 'Lista')}
+          ${toggleBtn('kanban', '🗂️', 'Kanban')}
+        </span>
       </div>`;
+  }
+
+  // ── NUEVO: vista Kanban por estado ─────────────────────────────────────────
+  // Columnas fijas por estado operativo. Las cards reutilizan la delegación
+  // de eventos existente (.booking-row + data-booking-id → abre detalle).
+  // Solo lectura por diseño: el cambio de estado se hace desde el detalle,
+  // así los triggers de la base siguen siendo la única fuente de verdad.
+  _renderKanban(bookings, today) {
+    const COLS = [
+      { key: 'pending',   label: '🟡 Pendiente',  test: b => b.status === 'pending' },
+      { key: 'confirmed', label: '🔵 Confirmada', test: b => (b.status === 'confirmed' || b.status === 'partial' || b.status === 'paid') && b.check_in > today },
+      { key: 'active',    label: '🏠 En curso',   test: b => b.status !== 'cancelled' && b.check_in <= today && b.check_out > today && !b.checked_out_at },
+      { key: 'out_today', label: '👋 Sale hoy',   test: b => b.status !== 'cancelled' && b.check_out === today && !b.checked_out_at },
+      { key: 'done',      label: '✅ Completada', test: b => b.status !== 'cancelled' && (b.check_out < today || !!b.checked_out_at) },
+    ];
+    const assigned = new Set();
+    const colData = COLS.map(col => {
+      const items = bookings.filter(b => {
+        if (assigned.has(b.id) || b.status === 'cancelled') return false;
+        // "Sale hoy" tiene prioridad sobre "En curso"
+        if (col.key === 'active' && b.check_out === today) return false;
+        if (!col.test(b)) return false;
+        assigned.add(b.id);
+        return true;
+      });
+      return { ...col, items };
+    });
+
+    const card = (b) => {
+      const g = b.guests;
+      const guest = g ? `${g.first_name ?? ''} ${g.last_name ?? ''}`.trim() : 'Sin huésped';
+      const units = (b.booking_units ?? []).map(bu => {
+        const full = bu.units?.color ? bu.units : (AppContext.units?.find(x => String(x.id) === String(bu.unit_id)) ?? bu.units);
+        return full;
+      }).filter(Boolean);
+      const color = units[0]?.color ?? '#6366f1';
+      const uNames = units.map(u => u?.name).filter(Boolean).join(' + ') || '—';
+      const balance = Number(b.balance ?? 0);
+      return `<div class="booking-row" data-booking-id="${b.id}"
+        style="background:var(--color-surface);border:1px solid var(--color-border);border-left:3px solid ${color};
+        border-radius:8px;padding:8px 10px;margin-bottom:6px;cursor:pointer">
+        <div style="font-size:.78rem;font-weight:600;color:var(--color-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${guest}</div>
+        <div style="font-size:.66rem;color:var(--color-text-3);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${uNames}</div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:3px">
+          <span style="font-size:.64rem;color:var(--color-text-3)">${formatDate(b.check_in)} → ${formatDate(b.check_out)}</span>
+          ${balance > 0
+            ? `<span style="font-size:.62rem;font-weight:700;color:#dc2626">$${Math.round(balance).toLocaleString('es-AR')}</span>`
+            : `<span style="font-size:.62rem;font-weight:700;color:#16a34a">✓</span>`}
+        </div>
+      </div>`;
+    };
+
+    return `<div style="display:flex;gap:10px;overflow-x:auto;padding:12px 2px;align-items:flex-start;-webkit-overflow-scrolling:touch">
+      ${colData.map(col => `
+        <div style="min-width:200px;max-width:230px;flex:1;background:var(--color-surface-2);border-radius:10px;padding:10px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+            <span style="font-size:.7rem;font-weight:700;color:var(--color-text-2)">${col.label}</span>
+            <span style="font-size:.64rem;font-weight:700;padding:1px 7px;border-radius:999px;background:var(--color-surface);color:var(--color-text-3)">${col.items.length}</span>
+          </div>
+          <div style="max-height:60vh;overflow-y:auto">
+            ${col.items.length ? col.items.map(card).join('') : '<div style="font-size:.7rem;color:var(--color-text-3);text-align:center;padding:14px 0;font-style:italic">Vacío</div>'}
+          </div>
+        </div>`).join('')}
+    </div>`;
   }
 
   // ── Pago total desde la lista ─────────────────────
@@ -552,6 +629,31 @@ export class BookingList {
     }
     html += `</div>`;
 
+    // ── NUEVO (aditivo): VISTA KANBAN por estado ─────────────────────────────
+    // Se activa con el toggle 🗂️. Es un render alternativo que NO toca el
+    // camino de lista: si _viewMode no es 'kanban', todo sigue exactamente
+    // igual que antes. Columnas: Pendiente / Confirmada / En curso / Sale hoy
+    // / Completada. Click en card abre la reserva.
+    if (this._viewMode === 'kanban') {
+      html += this._renderKanban(sorted, today);
+      container.innerHTML = html;
+      // Los clicks en cards funcionan solos por la delegación de eventos ya
+      // existente en el container (.booking-row + data-booking-id).
+      container.querySelector('#bl-sort-select')?.addEventListener('change', (e) => {
+        this._sortBy = e.target.value;
+        this._page = 1;
+        this._rebuildList();
+      });
+      container.querySelectorAll('[data-view-toggle]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          this._viewMode = btn.dataset.viewToggle;
+          this._rebuildList();
+        });
+      });
+      return;
+    }
+    // ── fin kanban ───────────────────────────────────────────────────────────
+
     // Filas — agrupadas por mes cuando el orden es por fecha de check-in
     const shouldGroup = !this._sortBy || this._sortBy.startsWith('check_in');
     if (shouldGroup) {
@@ -574,6 +676,18 @@ export class BookingList {
         const grpPaid    = grp.reduce((s,b) => s + (b.total_paid  ?? 0), 0);
         const grpBalance = grp.reduce((s,b) => s + (b.balance     ?? 0), 0);
         const grpPct     = grpTotal > 0 ? Math.round(grpPaid / grpTotal * 100) : 0;
+        // NUEVO (aditivo): mini-estadística del mes — noches, ADR y ocupación
+        const grpActive  = grp.filter(b => b.status !== 'cancelled');
+        const grpNights  = grpActive.reduce((s,b) => s + (b.nights ?? 0), 0);
+        const grpADR     = grpNights > 0 ? Math.round(grpActive.reduce((s,b) => s + (b.total_amount ?? 0), 0) / grpNights) : 0;
+        const grpDays    = new Date(parseInt(yr), parseInt(mo), 0).getDate();
+        const grpUnitsN  = AppContext.units?.length || 7;
+        const grpOcc     = Math.min(100, Math.round((grpNights / (grpUnitsN * grpDays)) * 100));
+        const miniStats  = grpNights > 0
+          ? `<span style="font-size:.66rem;color:var(--color-text-3);white-space:nowrap" title="Noches vendidas · tarifa promedio · ocupación estimada del mes">
+               🌙 ${grpNights}n · ADR ${formatARS(grpADR)} · 📊 ${grpOcc}%
+             </span>`
+          : '';
         const isCurrent = key === today.slice(0, 7);
         const isOpen    = isCurrent;
         html += `<div class="bl-month-group" data-month="${key}">
@@ -584,6 +698,7 @@ export class BookingList {
             <span class="bl-month-chevron" style="font-size:.65rem;color:var(--color-text-3);transition:transform .2s;display:inline-block;${isOpen ? '' : 'transform:rotate(-90deg)'}">▾</span>
             <span style="font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:${isCurrent ? 'var(--color-text)' : 'var(--color-text-3)'}">${label}</span>
             <span style="font-size:.7rem;color:var(--color-text-3)">${grp.length} reserva${grp.length!==1?'s':''}</span>
+            ${miniStats}
             <div style="flex:1;height:4px;background:var(--color-border);border-radius:2px;overflow:hidden;max-width:80px">
               <div style="height:100%;background:#16a34a;border-radius:2px;width:${grpPct}%;transition:width .5s"></div>
             </div>
@@ -626,6 +741,14 @@ export class BookingList {
       this._page = 1;
       this._rebuildList();
     });;
+
+    // NUEVO (aditivo): toggle de vista Lista / Kanban
+    container.querySelectorAll('[data-view-toggle]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        this._viewMode = btn.dataset.viewToggle;
+        this._rebuildList();
+      });
+    });
 
     // Bind botón único EXPORTAR ▾
     document.getElementById('btn-share-encargada')?.addEventListener('click', () => {
@@ -678,7 +801,13 @@ export class BookingList {
           return `linear-gradient(to bottom, ${stops.join(', ')})`;
         })();
     const unitChips = units.map(bu => {
-      const u = { ...bu.units, id: bu.unit_id };
+      // NUEVO (aditivo): si el join no trajo el color de la unidad, buscarla
+      // en AppContext para que el chip NUNCA quede gris — siempre con el
+      // color real del depto, igual que en el calendario.
+      const full = bu.units?.color
+        ? bu.units
+        : (AppContext.units?.find(x => String(x.id) === String(bu.unit_id)) ?? bu.units);
+      const u = { ...full, id: bu.unit_id };
       return getUnitChipHTML(u, 'sm');
     });
     // Con más de 2 unidades, en vez de que el wrap dependa del ancho

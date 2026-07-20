@@ -1820,3 +1820,18 @@
     grid-template-columns: 1fr !important;
   }
 }
+
+/* -----------------------------------------------------------------------
+   NUEVO (aditivo): Swipe horizontal en filas de Reservas (mobile)
+   Cuando los botones de acción no entran en el ancho, la fila se puede
+   deslizar con el dedo para revelarlos. Si todo entra, no cambia nada.
+   ----------------------------------------------------------------------- */
+@media (max-width: 640px) {
+  .bl-row-main {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .bl-row-main::-webkit-scrollbar { display: none; }
+  .booking-actions-cell { flex-shrink: 0; }
+}

@@ -247,6 +247,9 @@ export class Dashboard {
       this._renderOccupancyRing(kpis.occupiedUnits ?? 0, this.ctx.units?.length ?? 7);
       this._renderArrivals(kpis.arrivals ?? []);
       this._renderDepartures(kpis.checkouts ?? []);
+      this._renderStayingNow(kpis.activeBookings ?? [], today);
+      this._renderUnitMapWidget(kpis.activeBookings ?? [], kpis.arrivals ?? [], kpis.checkouts ?? [], today);
+      this._renderDailyNote(today);
       // Widget de Limpieza — estaba definido pero nunca se llamaba
       this._fetchTodayCleaningTasks(today).then(tasks => this._renderCleaningWidget(tasks));
       // Recordatorio automático de saldo pendiente antes del check-in —
@@ -308,9 +311,9 @@ export class Dashboard {
     const { data: activeBookings } = await this.db
       .from('bookings')
       .select(`
-        id, check_in, check_out, status, guest_id, checked_in_at, checked_out_at,
+        id, check_in, check_out, status, guest_id, checked_in_at, checked_out_at, pax, nights, total_amount, total_paid, balance,
         guests!bookings_guest_id_fkey(first_name, last_name),
-        booking_units!inner(unit_id, units!inner(name))
+        booking_units!inner(unit_id, units!inner(name, color, sort_order))
       `)
       .eq('hotel_id', hotelId)
       .neq('status', 'cancelled')
@@ -324,7 +327,7 @@ export class Dashboard {
     const { data: checkins } = await this.db
       .from('bookings')
       .select(`
-        id, check_in, check_out, checked_in_at, total_amount, total_paid, balance, status, notes,
+        id, check_in, check_out, checked_in_at, total_amount, total_paid, balance, status, notes, pax,
         guests!bookings_guest_id_fkey(first_name, last_name, phone),
         booking_units(unit_id, units(name, color, sort_order))
       `)
@@ -336,7 +339,7 @@ export class Dashboard {
     const { data: checkouts } = await this.db
       .from('bookings')
       .select(`
-        id, check_in, check_out, checked_out_at,
+        id, check_in, check_out, checked_out_at, total_amount, total_paid, balance, pax,
         guests!bookings_guest_id_fkey(first_name, last_name),
         booking_units(unit_id, units(name, color, sort_order))
       `)
@@ -440,6 +443,7 @@ export class Dashboard {
     return {
       checkins:      checkins ?? [],
       checkouts:     checkouts ?? [],
+      activeBookings: activeBookings ?? [],
       recambios,
       occupiedUnits: occupiedUnitIds.size,
       occupiedDetail,
@@ -958,6 +962,23 @@ export class Dashboard {
   // COMPONENTE UNIFICADO: tarjeta de reserva
   // Usado en Llegadas, Salidas y Próximas
   // ══════════════════════════════════════════════════
+  // ── Chip de estado de pago: 🟢 saldado · 🔴 parcial · 🟡 sin pagos ──
+  // Nuevo (aditivo): usa total_amount/total_paid si están presentes en la
+  // query; si faltan, devuelve '' y la card se ve exactamente igual que antes.
+  static _payStatusChip(b) {
+    const total = b?.total_amount ?? null;
+    const paid  = b?.total_paid   ?? null;
+    if (total === null || total <= 0 || paid === null) return '';
+    if (paid >= total) {
+      return '<span title="Saldado" style="font-size:.6rem;font-weight:700;padding:1px 6px;border-radius:999px;background:var(--state-green-bg,#f0fdf4);color:var(--state-green-txt,#16a34a);white-space:nowrap">🟢 Saldado</span>';
+    }
+    if (paid > 0) {
+      const resta = total - paid;
+      return '<span title="Pago parcial — resta $' + Math.round(resta).toLocaleString('es-AR') + '" style="font-size:.6rem;font-weight:700;padding:1px 6px;border-radius:999px;background:#fef2f2;color:#dc2626;white-space:nowrap">🔴 Resta $' + Math.round(resta).toLocaleString('es-AR') + '</span>';
+    }
+    return '<span title="Sin pagos registrados" style="font-size:.6rem;font-weight:700;padding:1px 6px;border-radius:999px;background:var(--state-yellow-bg,#fefce8);color:var(--state-yellow-txt,#ca8a04);white-space:nowrap">🟡 Sin pagos</span>';
+  }
+
   _bookingCard({ booking, mode }) {
     // mode: 'arrival' | 'departure' | 'upcoming'
     const b        = booking;
@@ -1060,9 +1081,13 @@ export class Dashboard {
           statusChip +
         '</div>' +
         '<div style="font-size:.82rem;font-weight:600;color:var(--color-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + guest + '</div>' +
-        '<div style="display:flex;align-items:center;justify-content:space-between;margin-top:1px">' +
-          '<span style="font-size:.7rem;color:var(--color-text-3)">' + nights + ' noche' + (nights !== 1 ? 's' : '') + '</span>' +
-          (b.total_amount > 0 ? '<span style="font-size:.72rem;font-weight:700;color:var(--color-text-2)">$' + Math.round(b.total_amount).toLocaleString('es-AR') + '</span>' : '') +
+        '<div style="display:flex;align-items:center;justify-content:space-between;margin-top:1px;gap:6px;flex-wrap:wrap">' +
+          '<span style="font-size:.7rem;color:var(--color-text-3)">' + nights + ' noche' + (nights !== 1 ? 's' : '') +
+            (b.pax ? ' · 👥 ' + b.pax : '') + '</span>' +
+          '<span style="display:flex;align-items:center;gap:5px">' +
+            Dashboard._payStatusChip(b) +
+            (b.total_amount > 0 ? '<span style="font-size:.72rem;font-weight:700;color:var(--color-text-2)">$' + Math.round(b.total_amount).toLocaleString('es-AR') + '</span>' : '') +
+          '</span>' +
         '</div>' +
       '</div>' +
       actionBtn +
@@ -1081,6 +1106,222 @@ export class Dashboard {
     if (!container) return;
     if (!departures.length) { container.innerHTML = '<p class="empty-state-sm">Sin salidas hoy</p>'; return; }
     container.innerHTML = departures.map(b => this._bookingCard({ booking: b, mode: 'departure' })).join('');
+  }
+
+  // ── NUEVO: "Alojados ahora" — card inyectada entre Llegadas y Salidas ──
+  // Aditivo: crea su propio contenedor si no existe; no toca el HTML estático
+  // ni las cards existentes. Lista reservas con check-in hecho y sin check-out.
+  _renderStayingNow(activeBookings, today) {
+    try {
+      const arrivalsCard = document.querySelector('[data-card-id="arrivals"]');
+      if (!arrivalsCard) return;
+
+      // Alojado = ya está adentro: check-in registrado (o empezó antes de hoy)
+      // y todavía no hizo check-out.
+      const staying = (activeBookings ?? []).filter(b => {
+        if (b.checked_out_at) return false;
+        const arrivingToday = b.check_in === today;
+        if (arrivingToday && !b.checked_in_at) return false;
+        return true;
+      });
+
+      let card = document.getElementById('dash-staying-card');
+      if (!staying.length) { if (card) card.remove(); return; }
+
+      if (!card) {
+        card = document.createElement('div');
+        card.className = 'card dash-card-uniform';
+        card.id = 'dash-staying-card';
+        card.dataset.cardId = 'staying-now';
+        arrivalsCard.insertAdjacentElement('afterend', card);
+      }
+
+      const fmtD = s => { const [,m,d] = (s??'').split('-'); return d && m ? d+'/'+m : s; };
+      const rows = staying.map(b => {
+        const guest = b.guests ? ((b.guests.first_name??'')+' '+(b.guests.last_name??'')).trim() : 'Sin nombre';
+        const units = (b.booking_units ?? []).map(bu => bu?.units).filter(Boolean);
+        const uNames = units.map(u => u?.name).filter(Boolean).join(' + ') || '—';
+        const color  = units[0]?.color ?? '#6366f1';
+        const nights = b.nights ?? Math.round((new Date(b.check_out+'T12:00:00') - new Date(b.check_in+'T12:00:00'))/86400000);
+        const leavesToday = b.check_out === today;
+        return '<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--color-border)">'
+          + '<span style="width:8px;height:8px;border-radius:50%;background:'+color+';flex-shrink:0"></span>'
+          + '<div style="flex:1;min-width:0">'
+          +   '<div style="font-size:.8rem;font-weight:600;color:var(--color-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+guest+'</div>'
+          +   '<div style="font-size:.68rem;color:var(--color-text-3)">'
+          +     uNames+' · '+fmtD(b.check_in)+' → '+fmtD(b.check_out)+' · '+nights+'n'
+          +     (b.pax ? ' · 👥 '+b.pax : '')
+          +   '</div>'
+          + '</div>'
+          + (leavesToday
+              ? '<span style="font-size:.6rem;font-weight:700;padding:1px 7px;border-radius:4px;background:var(--info-blue-bg,#eff6ff);color:var(--info-blue-txt,#2563eb);white-space:nowrap;flex-shrink:0">Sale hoy</span>'
+              : '<span style="font-size:.6rem;font-weight:700;padding:1px 7px;border-radius:4px;background:var(--state-green-bg,#f0fdf4);color:var(--state-green-txt,#16a34a);white-space:nowrap;flex-shrink:0">Alojado</span>')
+          + '</div>';
+      }).join('');
+
+      card.innerHTML =
+        '<div class="card-header"><h3>🛏️ Alojados ahora</h3>'
+        + '<span style="font-size:.65rem;font-weight:700;padding:2px 8px;border-radius:4px;background:var(--color-surface-2);color:var(--color-text-2)">'+staying.length+'</span></div>'
+        + '<div style="flex:1;overflow-y:auto;max-height:220px">'+rows+'</div>';
+    } catch (err) { console.warn('[Dashboard] staying-now:', err); }
+  }
+
+  // ── NUEVO: Widget "Mapa de unidades ahora" ───────────────────────────────
+  // Grilla de los deptos coloreada por estado. Click abre la reserva.
+  // Aditivo: crea su propio contenedor; si falla no afecta ningún otro bloque.
+  _renderUnitMapWidget(activeBookings, arrivals, departures, today) {
+    try {
+      const grid = document.getElementById('dashboard-cards');
+      if (!grid || !this.ctx.units?.length) return;
+
+      let card = document.getElementById('dash-unit-map-card');
+      if (!card) {
+        card = document.createElement('div');
+        card.className = 'card';
+        card.id = 'dash-unit-map-card';
+        card.dataset.cardId = 'unit-map';
+        // Inserta antes del widget de notas para que quede antes del final
+        const noteCard = document.getElementById('dash-daily-note-card');
+        noteCard ? noteCard.insertAdjacentElement('beforebegin', card)
+                 : grid.appendChild(card);
+      }
+
+      const units  = [...(this.ctx.units ?? [])].sort((a,b) => (a.sort_order??99)-(b.sort_order??99));
+      const nCols  = Math.min(units.length, 4);
+
+      // Mapear bookings por unit_id
+      const byUnit = {};
+      [...activeBookings, ...arrivals, ...departures].forEach(b => {
+        (b.booking_units ?? []).forEach(bu => {
+          const uid = String(bu.unit_id ?? bu.id ?? '');
+          if (!byUnit[uid]) byUnit[uid] = b;
+        });
+      });
+
+      const STATE = {
+        checkin_today:  { label: 'Entrada hoy',  bg:'#bbf7d0', txt:'#15803d', ring:'#16a34a' },
+        checkout_today: { label: 'Salida hoy',   bg:'#bfdbfe', txt:'#1d4ed8', ring:'#3b82f6' },
+        occupied:       { label: 'Ocupado',       bg:'#fca5a5', txt:'#991b1b', ring:'#ef4444' },
+        free:           { label: 'Libre',         bg:'#f1f5f9', txt:'#64748b', ring:'#cbd5e1' },
+      };
+
+      const tiles = units.map(u => {
+        const uid  = String(u.id);
+        const bk   = byUnit[uid];
+        const isCI = bk && bk.check_in === today;
+        const isCO = bk && bk.check_out === today;
+        let stKey  = 'free';
+        if (bk)  stKey = 'occupied';
+        if (isCO) stKey = 'checkout_today';
+        if (isCI) stKey = 'checkin_today';
+        const st   = STATE[stKey];
+        const color = u.color ?? '#6366f1';
+        const guest = bk?.guests ? ((bk.guests.first_name??'')+' '+(bk.guests.last_name??'')).trim() : '';
+        const pax   = bk?.pax ? '👥 '+bk.pax : '';
+        const nights= bk?.nights ?? (bk ? Math.round((new Date(bk.check_out+'T12:00:00')-new Date(bk.check_in+'T12:00:00'))/86400000) : 0);
+        return `<div data-unit-map-bid="${bk?.id ?? ''}"
+          title="${u.name}${guest ? ' · '+guest : ''}${bk ? ' · '+bk.check_in+'→'+bk.check_out : ''}"
+          style="border-radius:12px;padding:10px 8px;cursor:${bk?'pointer':'default'};
+                 background:${bk ? color+'22' : 'var(--color-surface-2)'};
+                 border:2px solid ${bk ? color : 'var(--color-border)'};
+                 transition:transform .12s,box-shadow .12s;position:relative;user-select:none"
+          onmouseover="if(this.dataset.unitMapBid)this.style.transform='scale(1.04)';this.style.boxShadow='0 4px 16px rgba(0,0,0,.1)'"
+          onmouseout="this.style.transform='';this.style.boxShadow=''">
+          <div style="font-size:.6rem;font-weight:800;text-transform:uppercase;letter-spacing:.05em;
+                      color:${bk ? color : 'var(--color-text-3)'};margin-bottom:4px">
+            #${u.sort_order??''} ${(u.name??'').replace(/\d+AMB /,'').replace(' Baja','').replace(' Alta','')}
+          </div>
+          ${bk
+            ? `<div style="font-size:.68rem;font-weight:700;color:${color};line-height:1.3;
+                           white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
+                 ${guest || '—'}
+               </div>
+               <div style="font-size:.6rem;color:var(--color-text-3);margin-top:2px">
+                 ${nights}n${pax ? ' · '+pax : ''}
+               </div>
+               <span style="position:absolute;top:6px;right:6px;font-size:.55rem;font-weight:700;
+                            padding:1px 5px;border-radius:4px;background:${st.bg};color:${st.txt}">
+                 ${st.label}
+               </span>`
+            : `<div style="font-size:.72rem;color:var(--color-text-3);font-style:italic">Libre</div>`
+          }
+        </div>`;
+      }).join('');
+
+      const total  = units.length;
+      const occ    = Object.keys(byUnit).length;
+      const pct    = total > 0 ? Math.round(occ/total*100) : 0;
+
+      card.innerHTML =
+        `<div class="card-header" style="margin-bottom:10px">
+          <h3>🏘️ Estado de unidades</h3>
+          <span style="font-size:.7rem;font-weight:700;color:var(--color-text-3)">
+            ${occ}/${total} ocupadas · ${pct}%
+          </span>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(${nCols},1fr);gap:8px">${tiles}</div>`;
+
+      // Click → abrir reserva
+      card.querySelectorAll('[data-unit-map-bid]').forEach(tile => {
+        const bid = tile.dataset.unitMapBid;
+        if (!bid) return;
+        tile.addEventListener('click', () => {
+          if (window._bookingFormInstance?.openEdit) window._bookingFormInstance.openEdit(bid);
+        });
+      });
+    } catch(err) { console.warn('[Dashboard] unit-map:', err); }
+  }
+  // Aditivo: crea su contenedor si no existe. Persiste en Supabase en la
+  // tabla daily_notes (una nota por hotel+fecha). Si la tabla no existe
+  // todavía, el bloque muestra el aviso y no rompe nada más.
+  async _renderDailyNote(today) {
+    try {
+      const grid = document.getElementById('dashboard-cards');
+      if (!grid) return;
+
+      let card = document.getElementById('dash-daily-note-card');
+      if (!card) {
+        card = document.createElement('div');
+        card.className = 'card';
+        card.id = 'dash-daily-note-card';
+        card.dataset.cardId = 'daily-note';
+        card.style.gridColumn = '1 / -1';
+        grid.insertAdjacentElement('beforeend', card);
+      }
+
+      card.innerHTML =
+        '<div class="card-header" style="margin-bottom:8px"><h3>📝 Notas del día</h3>'
+        + '<span id="dash-note-status" style="font-size:.65rem;color:var(--color-text-3)"></span></div>'
+        + '<textarea id="dash-note-input" rows="2" placeholder="Avisos para el turno: llaves, pedidos especiales, pendientes…"'
+        + ' style="width:100%;border:1px solid var(--color-border);border-radius:8px;padding:10px 12px;font-size:.82rem;'
+        + 'font-family:inherit;background:var(--color-surface);color:var(--color-text);resize:vertical;box-sizing:border-box"></textarea>';
+
+      const input  = card.querySelector('#dash-note-input');
+      const status = card.querySelector('#dash-note-status');
+
+      // Cargar nota existente de hoy
+      try {
+        const { data } = await this.db.from('daily_notes')
+          .select('note').eq('hotel_id', this.ctx.hotelId).eq('note_date', today).maybeSingle();
+        if (data?.note) input.value = data.note;
+      } catch { if (status) status.textContent = '(tabla daily_notes pendiente de crear)'; }
+
+      // Guardado con debounce al escribir
+      let t = null;
+      input.addEventListener('input', () => {
+        clearTimeout(t);
+        if (status) status.textContent = 'Escribiendo…';
+        t = setTimeout(async () => {
+          try {
+            const { error } = await this.db.from('daily_notes').upsert(
+              { hotel_id: this.ctx.hotelId, note_date: today, note: input.value },
+              { onConflict: 'hotel_id,note_date' }
+            );
+            if (status) status.textContent = error ? '⚠ No se pudo guardar' : '✓ Guardado';
+          } catch { if (status) status.textContent = '⚠ No se pudo guardar'; }
+        }, 700);
+      });
+    } catch (err) { console.warn('[Dashboard] daily-note:', err); }
   }
 
   // ── Render Reminders ──────────────────────────────
@@ -1371,6 +1612,41 @@ export class Dashboard {
     if (el)  el.textContent  = total > 0 ? formatARS(total) : '$0';
     if (sub) sub.textContent = count > 0 ? `En ${count} pago${count !== 1 ? 's' : ''} registrado${count !== 1 ? 's' : ''} hoy` : 'Sin pagos registrados hoy';
     if (cnt) cnt.textContent = count;
+
+    // NUEVO (aditivo): chips con desglose por método de cobro, debajo del
+    // subtítulo. Crea su propio contenedor; si no hay pagos, lo limpia.
+    try {
+      if (!sub) return;
+      let chipsEl = document.getElementById('dash-rec-hoy-methods');
+      if (!chipsEl) {
+        chipsEl = document.createElement('div');
+        chipsEl.id = 'dash-rec-hoy-methods';
+        chipsEl.style.cssText = 'display:flex;gap:5px;flex-wrap:wrap;margin-top:2px;margin-bottom:4px';
+        sub.insertAdjacentElement('afterend', chipsEl);
+      }
+      if (!payments.length) { chipsEl.innerHTML = ''; return; }
+
+      const byMethod = {};
+      payments.forEach(p => {
+        const m = (p.method ?? 'otro').toLowerCase();
+        byMethod[m] = (byMethod[m] ?? 0) + (p.amount_ars ?? p.amount ?? 0);
+      });
+      const METHOD_CFG = {
+        transferencia: { icon: '🟩', label: 'Transferencia', bg: '#f0fdf4', txt: '#16a34a' },
+        efectivo:      { icon: '🟨', label: 'Efectivo',      bg: '#fefce8', txt: '#ca8a04' },
+        qr:            { icon: '🟦', label: 'QR',            bg: '#eff6ff', txt: '#2563eb' },
+        debito:        { icon: '💳', label: 'Débito',        bg: '#faf5ff', txt: '#7c3aed' },
+        tarjeta:       { icon: '💳', label: 'Tarjeta',       bg: '#faf5ff', txt: '#7c3aed' },
+        usd:           { icon: '💵', label: 'USD',           bg: '#f0fdf4', txt: '#15803d' },
+      };
+      chipsEl.innerHTML = Object.entries(byMethod)
+        .sort((a,b) => b[1]-a[1])
+        .map(([m, amt]) => {
+          const cfg = METHOD_CFG[m] ?? { icon: '💰', label: m.charAt(0).toUpperCase()+m.slice(1), bg: 'var(--color-surface-2)', txt: 'var(--color-text-2)' };
+          return '<span style="font-size:.62rem;font-weight:700;padding:2px 7px;border-radius:4px;background:'+cfg.bg+';color:'+cfg.txt+';white-space:nowrap">'
+            + cfg.icon + ' ' + cfg.label + ' $' + Math.round(amt).toLocaleString('es-AR') + '</span>';
+        }).join('');
+    } catch (err) { console.warn('[Dashboard] rec-methods:', err); }
   }
 
   // EXTRA STATS — RevPAR, Cobros, Reservas del mes

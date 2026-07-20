@@ -95,6 +95,9 @@ export class AuditPanel {
             <input id="audit-date-to"   type="date" style="font-size:.75rem;border:1px solid var(--color-border);border-radius:6px;padding:3px 6px;background:var(--color-surface);color:var(--color-text)">
             <button id="audit-date-clear" class="btn btn-ghost btn-xs" style="font-size:.7rem;color:var(--color-text-3)" title="Limpiar fechas">✕</button>
           </div>
+          <select id="audit-user-filter" style="font-size:.75rem;border:1px solid var(--color-border);border-radius:6px;padding:3px 6px;background:var(--color-surface);color:var(--color-text);max-width:180px">
+            <option value="">👤 Todos los usuarios</option>
+          </select>
         </div>
       </div>
 
@@ -122,8 +125,16 @@ export class AuditPanel {
     this._searchText = '';
     this._dateFrom   = '';
     this._dateTo     = '';
+    this._userFilter = '';
 
     container.querySelector('#audit-refresh')?.addEventListener('click', () => this._loadLogs(container, true));
+
+    // NUEVO (aditivo): filtro por usuario específico
+    container.querySelector('#audit-user-filter')?.addEventListener('change', (e) => {
+      this._userFilter = e.target.value;
+      this._displayed  = PAGE_SIZE;
+      this._renderLogs(container);
+    });
 
     // Filter pills — client-side sobre _allLogs
     container.querySelectorAll('.audit-pill').forEach(pill => {
@@ -244,6 +255,16 @@ export class AuditPanel {
       if (error) throw error;
 
       this._allLogs = data ?? [];
+      // NUEVO (aditivo): poblar el filtro de usuarios con los que aparecen en el log
+      try {
+        const sel = container.querySelector('#audit-user-filter');
+        if (sel) {
+          const users = [...new Set(this._allLogs.map(l => l.user_email).filter(Boolean))].sort();
+          const cur = this._userFilter ?? '';
+          sel.innerHTML = '<option value="">👤 Todos los usuarios</option>'
+            + users.map(u => '<option value="' + u + '"' + (u === cur ? ' selected' : '') + '>' + u.split('@')[0] + '</option>').join('');
+        }
+      } catch {}
       this._renderStatsBar(container);
       this._renderLogs(container);
 
@@ -313,11 +334,14 @@ export class AuditPanel {
 
     if (this._dateFrom) logs = logs.filter(l => (l.created_at ?? '').slice(0,10) >= this._dateFrom);
     if (this._dateTo)   logs = logs.filter(l => (l.created_at ?? '').slice(0,10) <= this._dateTo);
+    // NUEVO (aditivo): filtro por usuario
+    if (this._userFilter) logs = logs.filter(l => l.user_email === this._userFilter);
 
     if (infoEl) {
       const filters = [];
       if (this._filter)     filters.push('acción: ' + this._filter);
       if (this._searchText) filters.push('texto: "' + this._searchText + '"');
+      if (this._userFilter) filters.push('usuario: ' + this._userFilter.split('@')[0]);
       if (this._dateFrom || this._dateTo)
         filters.push('fechas: ' + (this._dateFrom || '…') + ' → ' + (this._dateTo || '…'));
       infoEl.textContent = logs.length + ' registro' + (logs.length !== 1 ? 's' : '') +
@@ -394,6 +418,20 @@ export class AuditPanel {
       });
     });
 
+    // NUEVO (aditivo): click en registro navegable → abre la entidad
+    list.querySelectorAll('.audit-row-nav').forEach(row => {
+      row.addEventListener('click', () => {
+        const type = row.dataset.navType;
+        const id   = row.dataset.navId;
+        if (!id) return;
+        if (type === 'booking') {
+          if (window._bookingFormInstance?.openEdit) window._bookingFormInstance.openEdit(id);
+        } else if (type === 'expense') {
+          if (window.milaNav) window.milaNav('operations');
+        }
+      });
+    });
+
     if (moreWrap) {
       const hasMore = logs.length > this._displayed;
       moreWrap.style.display = hasMore ? 'block' : 'none';
@@ -439,8 +477,44 @@ export class AuditPanel {
       ? log.entity_type + ' #' + String(log.entity_id).slice(0,8)
       : log.entity_type ?? '';
 
-    return '<div class="audit-row" style="display:flex;gap:10px;padding:8px 4px;align-items:flex-start;'
-      + 'border-bottom:1px solid var(--color-border-2)">'
+    // NUEVO (aditivo): navegación a la entidad — solo para tipos conocidos
+    const eType = (log.entity_type ?? '').toLowerCase();
+    const navigable = log.entity_id && (eType.includes('booking') || eType.includes('reserva') || eType.includes('expense') || eType.includes('gasto'));
+    const navAttrs = navigable
+      ? ' data-nav-type="' + (eType.includes('booking') || eType.includes('reserva') ? 'booking' : 'expense') + '" data-nav-id="' + log.entity_id + '"'
+      : '';
+
+    // NUEVO (aditivo): diff de cambios si el log trae changes {before, after}
+    let diffHTML = '';
+    try {
+      const ch = typeof log.changes === 'string' ? JSON.parse(log.changes) : log.changes;
+      if (ch?.before && ch?.after) {
+        const IGNORE = new Set(['updated_at','created_at','id','hotel_id']);
+        const keys = [...new Set([...Object.keys(ch.before), ...Object.keys(ch.after)])]
+          .filter(k => !IGNORE.has(k) && JSON.stringify(ch.before[k]) !== JSON.stringify(ch.after[k]))
+          .slice(0, 4);
+        if (keys.length) {
+          const fmtV = v => {
+            if (v === null || v === undefined || v === '') return '—';
+            if (typeof v === 'number') return v.toLocaleString('es-AR');
+            const s = String(v);
+            return s.length > 24 ? s.slice(0, 24) + '…' : s;
+          };
+          diffHTML = '<div style="display:flex;flex-direction:column;gap:2px;margin-top:4px;padding:6px 9px;background:var(--color-surface-2);border-radius:6px;border-left:2px solid ' + cfg.color + '">'
+            + keys.map(k =>
+                '<div style="font-size:.66rem;color:var(--color-text-3)"><strong style="color:var(--color-text-2)">' + k + ':</strong> '
+                + '<span style="text-decoration:line-through;opacity:.6">' + fmtV(ch.before[k]) + '</span>'
+                + ' <span style="color:' + cfg.color + '">→ ' + fmtV(ch.after[k]) + '</span></div>'
+              ).join('')
+            + '</div>';
+        }
+      }
+    } catch {}
+
+    return '<div class="audit-row' + (navigable ? ' audit-row-nav' : '') + '"' + navAttrs
+      + ' style="display:flex;gap:10px;padding:8px 4px;align-items:flex-start;'
+      + 'border-bottom:1px solid var(--color-border-2)' + (navigable ? ';cursor:pointer' : '') + '"'
+      + (navigable ? ' title="Click para abrir ' + (eType.includes('booking') || eType.includes('reserva') ? 'la reserva' : 'el gasto en Operaciones') + '"' : '') + '>'
       + '<div style="width:30px;height:30px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;'
       + 'justify-content:center;font-size:.7rem;font-weight:700;'
       + 'background:' + cfg.color + '18;color:' + cfg.color + ';border:1.5px solid ' + cfg.color + '33">'
@@ -449,8 +523,10 @@ export class AuditPanel {
       + '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">'
       + '<span style="font-size:.8rem;font-weight:600;color:var(--color-text)">' + cfg.label + '</span>'
       + (entity ? '<span style="font-size:.68rem;color:var(--color-text-3);background:var(--color-surface-2);padding:1px 6px;border-radius:4px">' + entity + '</span>' : '')
+      + (navigable ? '<span style="font-size:.62rem;color:var(--color-primary)">↗</span>' : '')
       + '</div>'
       + (log.description ? '<div style="font-size:.72rem;color:var(--color-text-2);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + log.description + '</div>' : '')
+      + diffHTML
       + '<div style="display:flex;gap:10px;margin-top:3px;align-items:center">'
       + '<span style="font-size:.68rem;color:var(--color-text-3)" title="' + rawUser + '">'
       + '<span style="display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:50%;background:var(--color-border);font-size:.55rem;font-weight:700;margin-right:3px">' + initials + '</span>'

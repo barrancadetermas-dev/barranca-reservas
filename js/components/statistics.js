@@ -208,9 +208,102 @@ export class Statistics {
         stats = this._computeUnitStats(bookings ?? [], firstDay, lastDayStr, daysInMonth);
       }
       this._renderUnitStats(stats, month, year, daysInMonth);
+      // NUEVO (aditivo, no bloqueante): deltas vs mes anterior + proyección
+      this._injectKpiExtras(month, year, daysInMonth).catch(e => console.warn('[Statistics] kpi extras:', e));
     } catch (err) {
       console.error('[Statistics] loadUnits error:', err);
       showToast('Error al cargar estadísticas', 'error');
+    }
+  }
+
+  // ── NUEVO: deltas vs mes anterior + proyección de cierre ─────────────────
+  // Se inyecta en el DOM después del render normal. Si algo falla, los KPIs
+  // quedan exactamente como estaban — nunca rompe el render existente.
+  async _injectKpiExtras(month, year, daysInMonth) {
+    const row = document.querySelector('#stats-units-grid .stats-kpi-row');
+    if (!row) return;
+
+    const units = this.ctx.units?.length || 1;
+
+    // ── 1. Mes anterior ────────────────────────────────────────────────────
+    const prevD     = new Date(year, month - 1, 1);
+    const py = prevD.getFullYear(), pm = prevD.getMonth();
+    const pFirst    = `${py}-${String(pm+1).padStart(2,'0')}-01`;
+    const pLastObj  = new Date(py, pm + 1, 0);
+    const pLast     = `${py}-${String(pm+1).padStart(2,'0')}-${String(pLastObj.getDate()).padStart(2,'0')}`;
+    const pDays     = pLastObj.getDate();
+
+    const { data: prevBks } = await this.db.from('bookings')
+      .select('total_amount, nights, status')
+      .eq('hotel_id', this.ctx.hotelId)
+      .not('status', 'in', '(cancelled,blocked)')
+      .lte('check_in', pLast).gt('check_out', pFirst);
+
+    const pRev    = (prevBks ?? []).reduce((s,b) => s + (b.total_amount ?? 0), 0);
+    const pNights = (prevBks ?? []).reduce((s,b) => s + (b.nights ?? 0), 0);
+    const pADR    = pNights > 0 ? pRev / pNights : 0;
+    const pRevPAR = pRev / (units * pDays);
+    const pOcc    = Math.min(100, (pNights / (units * pDays)) * 100);
+
+    // Valores actuales desde el caché que _renderUnitStats ya dejó
+    const stats = this._lastUnitStats ?? [];
+    const cRev    = stats.reduce((s,u) => s + u.revenue, 0);
+    const cNights = stats.reduce((s,u) => s + u.nightsOcc, 0);
+    const cADR    = cNights > 0 ? cRev / cNights : 0;
+    const cRevPAR = cRev / (units * daysInMonth);
+    const cOcc    = Math.round(stats.reduce((s,u) => s + u.occupancyPct, 0) / (stats.length || 1));
+
+    const deltaHTML = (cur, prev) => {
+      if (!prev || prev <= 0) return '';
+      const pct = Math.round(((cur - prev) / prev) * 100);
+      if (!isFinite(pct)) return '';
+      const up = pct >= 0;
+      return ' <span style="font-size:.62rem;font-weight:700;color:'+(up ? '#16a34a' : '#dc2626')+'" '
+        + 'title="vs '+MONTH_NAMES[pm]+' '+py+'">'+(up ? '▲ +' : '▼ ')+pct+'% vs mes ant.</span>';
+    };
+
+    const injectDelta = (label, html) => {
+      if (!html) return;
+      row.querySelectorAll('.stat-kpi-card').forEach(card => {
+        const lbl = card.querySelector('.stat-kpi-lbl');
+        const sub = card.querySelector('.stat-kpi-sub');
+        if (lbl && sub && lbl.textContent.trim() === label && !sub.querySelector('.kpi-delta')) {
+          sub.insertAdjacentHTML('beforeend', '<span class="kpi-delta">'+html+'</span>');
+        }
+      });
+    };
+    injectDelta('ADR',       deltaHTML(cADR,    pADR));
+    injectDelta('RevPAR',    deltaHTML(cRevPAR, pRevPAR));
+    injectDelta('Ocupación', deltaHTML(cOcc,    pOcc));
+
+    // ── 2. Proyección de cierre del mes ────────────────────────────────────
+    const firstDay = `${year}-${String(month+1).padStart(2,'0')}-01`;
+    const lastDay  = `${year}-${String(month+1).padStart(2,'0')}-${String(new Date(year, month+1, 0).getDate()).padStart(2,'0')}`;
+    const { data: mBks } = await this.db.from('bookings')
+      .select('total_amount, total_paid, status')
+      .eq('hotel_id', this.ctx.hotelId)
+      .not('status', 'in', '(cancelled,blocked)')
+      .gte('check_in', firstDay).lte('check_in', lastDay);
+
+    const cobrado   = (mBks ?? []).reduce((s,b) => s + Math.min(b.total_paid ?? 0, b.total_amount ?? 0), 0);
+    const proyTotal = (mBks ?? []).reduce((s,b) => s + (b.total_amount ?? 0), 0);
+    const pendiente = Math.max(0, proyTotal - cobrado);
+    const pctCob    = proyTotal > 0 ? Math.round((cobrado / proyTotal) * 100) : 0;
+    const fmtP      = n => '$' + Math.round(n).toLocaleString('es-AR');
+
+    if (!row.querySelector('#kpi-proyeccion-card') && proyTotal > 0) {
+      row.insertAdjacentHTML('beforeend',
+        '<div class="stat-kpi-card" id="kpi-proyeccion-card" style="background:#eef2ff">'
+        + '<div class="stat-kpi-val" style="color:#4338ca">'+fmtP(proyTotal)+'</div>'
+        + '<div class="stat-kpi-lbl">Proyección cierre</div>'
+        + '<div class="stat-kpi-sub" style="line-height:1.5">'
+        +   '<span style="color:#16a34a;font-weight:700">'+fmtP(cobrado)+' real</span>'
+        +   ' · <span style="color:#f59e0b;font-weight:700">'+fmtP(pendiente)+' proy.</span>'
+        + '</div>'
+        + '<div style="height:4px;background:var(--color-border);border-radius:2px;overflow:hidden;margin-top:5px">'
+        +   '<div style="height:100%;width:'+pctCob+'%;background:#16a34a;border-radius:2px"></div>'
+        + '</div>'
+        + '</div>');
     }
   }
 
@@ -471,7 +564,7 @@ export class Statistics {
       } else {
         const { data } = await this.db
           .from('bookings')
-          .select('check_in, check_out, status, source, booking_units(unit_id)')
+          .select('id, check_in, check_out, status, source, pax, booking_units(unit_id), guests!bookings_guest_id_fkey(first_name, last_name)')
           .eq('hotel_id', this.ctx.hotelId)
           .neq('status', 'cancelled')
           .lte('check_in', lastDayStr)
@@ -550,7 +643,8 @@ export class Statistics {
           const borderL = isCheckIn  ? `border-left:2px solid ${color};border-radius:3px 0 0 3px` : '';
           const borderR = isCheckOut && !occupied ? `border-right:2px solid #22c55e;border-radius:0 3px 3px 0` : '';
           return `<div class="hm-cell ${occupied ? 'hm-occ' : 'hm-free'} ${isToday ? 'hm-today-cell' : ''} ${isCheckIn ? 'hm-checkin' : ''}"
-                       style="${cellBg};${borderL};${borderR}"
+                       style="${cellBg};${borderL};${borderR}${occupied && booking ? ';cursor:pointer' : ''}"
+                       ${occupied && booking ? 'data-bid="' + booking.id + '"' : ''}
                        title="${tip}">
             ${isCheckIn ? '<span class="hm-ci-dot"></span>' : ''}
           </div>`;
@@ -702,6 +796,62 @@ export class Statistics {
         +'<svg width="100%" viewBox="0 0 '+lineW+' '+lineH+'" style="font-family:inherit;overflow:visible">'+lineHTML+'</svg>'
         +'</div>'
         +'</div>';
+
+      // ── NUEVO (aditivo): click en celda ocupada → popup con datos y
+      //    botón "Ver reserva". Popup liviano (no modal), se cierra al
+      //    clickear afuera o con Escape. No modifica nada del render previo.
+      try {
+        const _bkById = {};
+        bookings.forEach(b => { if (b.id) _bkById[b.id] = b; });
+        const _closePopup = () => {
+          document.getElementById('hm-cell-popup')?.remove();
+          document.removeEventListener('click', _outsideH, true);
+          document.removeEventListener('keydown', _escH);
+        };
+        const _outsideH = (e) => { if (!e.target.closest('#hm-cell-popup') && !e.target.closest('.hm-cell[data-bid]')) _closePopup(); };
+        const _escH = (e) => { if (e.key === 'Escape') _closePopup(); };
+
+        panel.querySelectorAll('.hm-cell[data-bid]').forEach(cell => {
+          cell.addEventListener('click', (e) => {
+            e.stopPropagation();
+            _closePopup();
+            const b = _bkById[cell.dataset.bid];
+            if (!b) return;
+            const guest = b.guests ? ((b.guests.first_name??'')+' '+(b.guests.last_name??'')).trim() : 'Sin nombre';
+            const unitNames = (b.booking_units ?? [])
+              .map(bu => this.ctx.units?.find(u => u.id === bu.unit_id)?.name).filter(Boolean).join(' + ') || '—';
+            const pop = document.createElement('div');
+            pop.id = 'hm-cell-popup';
+            pop.style.cssText = 'position:fixed;z-index:300;background:var(--color-surface);border:1px solid var(--color-border);'
+              + 'border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.16);padding:12px 14px;min-width:200px;max-width:260px';
+            pop.innerHTML =
+              '<div style="font-size:.85rem;font-weight:700;color:var(--color-text);margin-bottom:3px">'+guest+'</div>'
+              + '<div style="font-size:.72rem;color:var(--color-text-2);margin-bottom:2px">🏠 '+unitNames+'</div>'
+              + '<div style="font-size:.72rem;color:var(--color-text-3);margin-bottom:8px">📅 '+b.check_in+' → '+b.check_out
+              + (b.pax ? ' · 👥 '+b.pax : '')+'</div>'
+              + '<button class="btn btn-primary btn-sm" id="hm-pop-open" style="width:100%;font-size:.75rem">Ver reserva →</button>';
+            document.body.appendChild(pop);
+            // Posicionar cerca de la celda sin salirse de la ventana
+            const r = cell.getBoundingClientRect();
+            const pw = pop.offsetWidth, ph = pop.offsetHeight;
+            let px = r.left + r.width/2 - pw/2;
+            let py = r.bottom + 6;
+            if (px + pw > window.innerWidth - 10) px = window.innerWidth - pw - 10;
+            if (px < 10) px = 10;
+            if (py + ph > window.innerHeight - 10) py = r.top - ph - 6;
+            pop.style.left = px + 'px';
+            pop.style.top  = py + 'px';
+            pop.querySelector('#hm-pop-open').addEventListener('click', () => {
+              _closePopup();
+              if (window._bookingFormInstance?.openEdit) window._bookingFormInstance.openEdit(b.id);
+            });
+            setTimeout(() => {
+              document.addEventListener('click', _outsideH, true);
+              document.addEventListener('keydown', _escH);
+            }, 0);
+          });
+        });
+      } catch (e2) { console.warn('[Statistics] heatmap popup:', e2); }
 
     } catch (err) {
       console.error('[Statistics] heatmap error:', err);
@@ -991,20 +1141,27 @@ export class Statistics {
     const total  = data.reduce((s,d) => s+d.revenue, 0);
     const n = data.length;
     const bars = data.map((d, i) => {
+      const isZero = (d.revenue ?? 0) === 0;
       const h      = Math.max(3, Math.round((d.revenue / maxVal) * 100));
       const isLast = i === n - 1;
       const showLabel = isLast || i % 3 === 0;
       const c = this._perfColor(h);
       const ring = isLast ? 'box-shadow:0 0 0 2px var(--color-primary) inset;' : '';
-      return `<div class="sdc-bar" style="height:${h}%;background:linear-gradient(180deg, ${c.top}, ${c.bottom});${ring}">
-        ${showLabel ? `<span class="sdc-bar-value${isLast?' is-current':''}" style="color:${c.bottom}">${fmtK(d.revenue)}</span>` : ''}
-        <div class="sdc-bar-tooltip">${d.fullLabel ?? d.label}: ${fmtK(d.revenue)}</div>
+      // Meses sin datos: barra en cero visible (fondo punteado gris) en vez
+      // de barra de color — así el mes no "desaparece" del gráfico.
+      const bg = isZero
+        ? 'background:transparent;border-bottom:3px solid var(--color-border);border-radius:0;'
+        : `background:linear-gradient(180deg, ${c.top}, ${c.bottom});`;
+      return `<div class="sdc-bar" style="height:${isZero ? '3' : h}%;${bg}${ring}" ${isZero ? 'title="Sin reservas"' : ''}>
+        ${showLabel && !isZero ? `<span class="sdc-bar-value${isLast?' is-current':''}" style="color:${c.bottom}">${fmtK(d.revenue)}</span>` : ''}
+        <div class="sdc-bar-tooltip">${d.fullLabel ?? d.label}: ${isZero ? 'sin reservas' : fmtK(d.revenue)}</div>
       </div>`;
     }).join('');
+    // Todas las etiquetas de mes visibles — antes solo se mostraban cada 3
+    // meses y parecía que los meses intermedios "desaparecían" del eje.
     const axis = data.map((d, i) => {
       const isLast = i === n - 1;
-      const show = isLast || i % 3 === 0;
-      return `<span class="sdc-chart-axis-label${isLast?' is-current':''}">${show ? d.label : ''}</span>`;
+      return `<span class="sdc-chart-axis-label${isLast?' is-current':''}" style="font-size:.55rem">${d.label}</span>`;
     }).join('');
     const deltaClass = delta >= 0 ? '' : 'down';
     return `<div class="stats-dashboard-card" style="--accent:var(--color-primary)">

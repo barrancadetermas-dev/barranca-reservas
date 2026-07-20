@@ -320,6 +320,19 @@ export class OperationsModule {
         return;
       }
 
+      // NUEVO (aditivo): re-ordenar en memoria por urgencia operativa —
+      // 1° check-outs de HOY pendientes, 2° atrasadas de días anteriores,
+      // 3° pendientes futuras, 4° completadas al final. Dentro de cada
+      // grupo, por fecha. No cambia la query ni los datos, solo el orden.
+      const _prio = (t) => {
+        const isDone = t.status === 'completed';
+        if (isDone) return 4;
+        if (t.scheduled_date === today) return 1;
+        if (t.scheduled_date <  today)  return 2;
+        return 3;
+      };
+      data.sort((a, b) => (_prio(a) - _prio(b)) || String(a.scheduled_date ?? '').localeCompare(String(b.scheduled_date ?? '')));
+
       const pending  = data.filter(t => t.status === 'pending'   && t.scheduled_date === today).length;
       const done     = data.filter(t => t.status === 'completed' && t.scheduled_date === today).length;
       const overdue  = data.filter(t => t.status !== 'completed' && t.scheduled_date < today).length;
@@ -1285,6 +1298,47 @@ export class OperationsModule {
     const list    = panel.querySelector('#ops-expenses-list');
     if (!list) return;
 
+    // ── NUEVO (aditivo): chips de filtro rápido por categoría ──────────────
+    // Guarda la lista completa, renderiza los chips con conteo, y si hay un
+    // filtro activo pasa la lista filtrada al resto del método (que queda
+    // intacto). Al no haber filtro, todo funciona exactamente igual que antes.
+    try {
+      this._opsExpAll = expenses;
+      let chipsBar = panel.querySelector('#ops-exp-cat-chips');
+      if (!chipsBar) {
+        chipsBar = document.createElement('div');
+        chipsBar.id = 'ops-exp-cat-chips';
+        chipsBar.style.cssText = 'display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px';
+        list.insertAdjacentElement('beforebegin', chipsBar);
+      }
+      const catCounts = {};
+      expenses.forEach(e => {
+        const c = (e.category ?? 'otros').toLowerCase();
+        catCounts[c] = (catCounts[c] ?? 0) + 1;
+      });
+      const activeCat = this._opsExpCatFilter ?? '';
+      const chip = (val, label, count) => {
+        const on = activeCat === val;
+        return '<button type="button" class="ops-exp-cat-chip" data-cat="'+val+'" '
+          + 'style="font-size:.7rem;font-weight:600;padding:3px 10px;border-radius:999px;cursor:pointer;'
+          + 'border:1px solid '+(on ? 'var(--color-primary)' : 'var(--color-border)')+';'
+          + 'background:'+(on ? 'var(--color-primary)' : 'var(--color-surface-2)')+';'
+          + 'color:'+(on ? '#fff' : 'var(--color-text-2)')+'">'
+          + label + (count != null ? ' <span style="opacity:.7">('+count+')</span>' : '') + '</button>';
+      };
+      chipsBar.innerHTML = chip('', 'Todos', expenses.length)
+        + Object.keys(catCounts).sort()
+            .map(c => chip(c, c.charAt(0).toUpperCase()+c.slice(1), catCounts[c])).join('');
+      chipsBar.querySelectorAll('.ops-exp-cat-chip').forEach(btn => {
+        btn.addEventListener('click', () => {
+          this._opsExpCatFilter = btn.dataset.cat || '';
+          this._renderExpensesInOps(panel, this._opsExpAll);
+        });
+      });
+      if (activeCat) expenses = expenses.filter(e => (e.category ?? 'otros').toLowerCase() === activeCat);
+    } catch (e2) { console.warn('[Operations] cat chips:', e2); }
+    // ── fin chips ──────────────────────────────────────────────────────────
+
     const total   = expenses.reduce((s, e) => s + (e.amount ?? 0), 0);
     const paid    = expenses.filter(e => e.paid).reduce((s, e) => s + (e.amount ?? 0), 0);
     const pending = total - paid;
@@ -1786,6 +1840,53 @@ OperationsModule.prototype._loadTenencias = async function(panel, header) {
       </div>
     </details>` : '';
 
+  // ── NUEVO (aditivo): gráfico de evolución de acreditaciones ──────────────
+  // Línea acumulada usando credited_at + credited_amount. Solo se muestra
+  // si hay 2+ acreditaciones; si no, no aparece nada y todo sigue igual.
+  let evolutionHTML = '';
+  try {
+    const credOrdered = credited
+      .filter(i => i.credited_at)
+      .map(i => ({
+        date: String(i.credited_at).slice(0, 10),
+        amt:  i.credited_amount ?? ((i.original_amount??0)+(i.interest_amount??0)),
+        int:  (i.credited_amount ?? ((i.original_amount??0)+(i.interest_amount??0))) - (i.original_amount??0),
+      }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+
+    if (credOrdered.length >= 2) {
+      let acc = 0, accInt = 0;
+      const pts = credOrdered.map(c => { acc += c.amt; accInt += Math.max(0, c.int); return { ...c, acc, accInt }; });
+      const evW = 560, evH = 120, padL = 10, padR = 10, padT = 14, padB = 22;
+      const maxAcc = pts[pts.length-1].acc || 1;
+      const n2 = pts.length;
+      const px2 = i => padL + (i / Math.max(n2-1, 1)) * (evW - padL - padR);
+      const py2 = v => (evH - padB) - (v / maxAcc) * (evH - padT - padB);
+      const line = pts.map((p, i) => px2(i).toFixed(1) + ',' + py2(p.acc).toFixed(1)).join(' ');
+      const dots = pts.map((p, i) =>
+        '<circle cx="'+px2(i).toFixed(1)+'" cy="'+py2(p.acc).toFixed(1)+'" r="3.5" fill="#f97316">'
+        + '<title>'+p.date+' · +'+fmt(p.amt)+' · acumulado '+fmt(p.acc)+'</title></circle>'
+      ).join('');
+      const labels = pts.map((p, i) => {
+        if (n2 > 6 && i % Math.ceil(n2/6) !== 0 && i !== n2-1) return '';
+        return '<text x="'+px2(i).toFixed(1)+'" y="'+(evH-6)+'" text-anchor="middle" font-size="8" fill="var(--color-text-3)">'+p.date.slice(5)+'</text>';
+      }).join('');
+      evolutionHTML = `
+        <div style="margin-top:16px;background:var(--color-surface-2);border-radius:10px;padding:12px 14px;border:1px solid var(--color-border)">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+            <span style="font-size:.7rem;font-weight:700;color:var(--color-text-3);text-transform:uppercase;letter-spacing:.05em">📈 Evolución de acreditaciones</span>
+            <span style="font-size:.7rem;color:var(--color-text-3)">Total acreditado: <strong style="color:#f97316">${fmt(pts[pts.length-1].acc)}</strong>${pts[pts.length-1].accInt > 0 ? ' · intereses <strong style="color:#16a34a">+'+fmt(pts[pts.length-1].accInt)+'</strong>' : ''}</span>
+          </div>
+          <svg width="100%" viewBox="0 0 ${evW} ${evH}" style="font-family:inherit;overflow:visible">
+            <line x1="${padL}" y1="${evH-padB}" x2="${evW-padR}" y2="${evH-padB}" stroke="var(--color-border)" stroke-width="1"/>
+            <polyline points="${line}" fill="none" stroke="#f97316" stroke-width="2" stroke-linejoin="round"/>
+            ${dots}${labels}
+          </svg>
+        </div>`;
+    }
+  } catch (e2) { console.warn('[Operations] tenencias chart:', e2); }
+  // ── fin gráfico evolución ──────────────────────────────────────────────────
+
   panel.innerHTML = `<div style="padding:16px">
     ${addBtns}
 
@@ -1816,6 +1917,8 @@ OperationsModule.prototype._loadTenencias = async function(panel, header) {
     <div style="text-align:center;padding:30px;color:var(--color-text-3);font-size:.82rem">
       Sin posiciones activas · usá los botones de arriba para agregar
     </div>` : ''}
+
+    ${evolutionHTML}
 
     ${creditedHTML}
   </div>`;

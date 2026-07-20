@@ -338,6 +338,11 @@ export class GuestsCRM {
       g.prev_units     = [...new Set(bksSorted.slice(1,4).flatMap(b => (b.booking_units ?? []).map(bu => bu.units?.name)).filter(Boolean))];
       const allNotes   = (g.guest_notes ?? []).sort((a,b) => b.created_at.localeCompare(a.created_at));
       g.latest_note    = allNotes[0]?.body ?? null;
+      // NUEVO (aditivo): próxima reserva futura del huésped, para la card
+      const _todayNB = new Date().toISOString().slice(0,10);
+      g.next_booking = allBks
+        .filter(b => b.check_in >= _todayNB)
+        .sort((a,b) => a.check_in.localeCompare(b.check_in))[0] ?? null;
       this._attachOpenCreditNote(g);
     });
     const sortedGuests = this._sortGuests(primaryGuests);
@@ -491,6 +496,11 @@ export class GuestsCRM {
       g.prev_units     = [...new Set(bksSorted2.slice(1,4).flatMap(b => (b.booking_units ?? []).map(bu => bu.units?.name)).filter(Boolean))];
       const allNotes   = (g.guest_notes ?? []).sort((a,b) => b.created_at.localeCompare(a.created_at));
       g.latest_note    = allNotes[0]?.body ?? null;
+      // NUEVO (aditivo): próxima reserva futura del huésped, para la card
+      const _todayNB2 = new Date().toISOString().slice(0,10);
+      g.next_booking = allBks
+        .filter(b => b.check_in >= _todayNB2)
+        .sort((a,b) => a.check_in.localeCompare(b.check_in))[0] ?? null;
       this._attachOpenCreditNote(g);
     });
 
@@ -596,6 +606,11 @@ export class GuestsCRM {
             <span style="font-size:.64rem;color:var(--color-text-3);white-space:nowrap">${lastCI} → ${lastCO ?? ''}</span>
             ${g.prev_units?.length ? `<span style="font-size:.6rem;opacity:.35;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">· tb: ${g.prev_units.slice(0,2).join(', ')}</span>` : ''}
           </div>` : contactLine ? `<div style="font-size:.64rem;color:var(--color-text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px">${contactLine}</div>` : ''}
+          ${g.next_booking ? `<div style="display:flex;align-items:center;gap:3px;margin-top:1px;overflow:hidden">
+            <span style="font-size:.59rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:#16a34a;flex-shrink:0">✈️ Próxima</span>
+            <span style="font-size:.64rem;color:#16a34a;font-weight:600;white-space:nowrap">${g.next_booking.check_in}</span>
+            ${(g.next_booking.booking_units ?? []).map(bu => bu.units?.name).filter(Boolean).length ? `<span style="font-size:.62rem;color:var(--color-text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">· ${(g.next_booking.booking_units ?? []).map(bu => bu.units?.name).filter(Boolean).join(', ')}</span>` : ''}
+          </div>` : ''}
           ${noteText ? `<div style="font-size:.62rem;color:var(--color-text-3);font-style:italic;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;opacity:.75">📝 ${noteText}</div>` : ''}
         </div>
 
@@ -1522,9 +1537,11 @@ export class GuestsCRM {
     const CATS = [
       { value: 'general',     label: '💬 General' },
       { value: 'preferencia', label: '⭐ Preferencia' },
+      { value: 'advertencia', label: '⚠️ Advertencia' },
+      { value: 'informacion', label: 'ℹ️ Información' },
       { value: 'pedido',      label: '📋 Pedido especial' },
       { value: 'positivo',    label: '👍 Comentario positivo' },
-      { value: 'incidente',   label: '⚠️ Incidente' },
+      { value: 'incidente',   label: '🚨 Incidente' },
     ];
     return `
       <div style="background:var(--color-surface-2);border-radius:var(--r-lg);padding:14px;border:1px solid var(--color-border)">
@@ -1542,7 +1559,17 @@ export class GuestsCRM {
   }
 
   _renderNotesList(section, notes, guestId) {
-    const ICONS = { general:'💬', preferencia:'⭐', pedido:'📋', positivo:'👍', incidente:'⚠️' };
+    const ICONS = { general:'💬', preferencia:'⭐', advertencia:'⚠️', informacion:'ℹ️', pedido:'📋', positivo:'👍', incidente:'🚨' };
+    // NUEVO (aditivo): color por categoría — borde izquierdo + tinte del ícono.
+    // Las categorías viejas sin color mapeado usan el gris neutro de siempre.
+    const COLORS = {
+      preferencia: { border:'#f59e0b', bg:'#fefce8', txt:'#a16207' },
+      advertencia: { border:'#dc2626', bg:'#fef2f2', txt:'#dc2626' },
+      incidente:   { border:'#dc2626', bg:'#fef2f2', txt:'#dc2626' },
+      informacion: { border:'#3b82f6', bg:'#eff6ff', txt:'#2563eb' },
+      positivo:    { border:'#16a34a', bg:'#f0fdf4', txt:'#16a34a' },
+      pedido:      { border:'#7c3aed', bg:'#faf5ff', txt:'#7c3aed' },
+    };
     const list  = section.querySelector('#guest-notes-list');
     if (!list) return;
 
@@ -1555,11 +1582,13 @@ export class GuestsCRM {
 
     list.innerHTML = notes.map(n => {
       const icon = ICONS[n.category] ?? '💬';
+      const col  = COLORS[n.category] ?? null;
       const date = new Date(n.created_at).toLocaleDateString('es-AR',
         { day:'2-digit', month:'short', year:'numeric' });
-      return `<div class="guest-note-card" data-note-id="${n.id}">
+      return `<div class="guest-note-card" data-note-id="${n.id}"${col ? ` style="border-left:3px solid ${col.border}"` : ''}>
         <div class="gnc-header">
-          <span class="gnc-icon">${icon}</span>
+          <span class="gnc-icon"${col ? ` style="background:${col.bg};border-radius:6px;padding:1px 5px"` : ''}>${icon}</span>
+          ${col ? `<span style="font-size:.6rem;font-weight:700;padding:1px 6px;border-radius:4px;background:${col.bg};color:${col.txt};text-transform:uppercase;letter-spacing:.03em">${n.category}</span>` : ''}
           <span class="gnc-author">${n.author_name ?? 'Staff'}</span>
           <span class="gnc-date">${date}</span>
           <button class="gnc-delete btn btn-ghost btn-xs" data-id="${n.id}" title="Eliminar nota" aria-label="Eliminar nota">🗑️</button>

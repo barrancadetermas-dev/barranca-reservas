@@ -130,6 +130,24 @@ export class WaitlistPanel {
       const unitNames = (w.unit_ids?.length
         ? w.unit_ids.map(id => this.ctx.units?.find(u => String(u.id) === String(id))?.name).filter(Boolean).join(', ')
         : 'Cualquier unidad');
+      // NUEVO (aditivo): countdown de vencimiento respecto al check-in pedido
+      let countdownHTML = '';
+      try {
+        if (w.check_in && (w._effectiveStatus === 'open' || w._effectiveStatus === 'notified' || w._effectiveStatus === 'expired')) {
+          const dias = Math.round((new Date(w.check_in + 'T00:00:00') - new Date(today + 'T00:00:00')) / 86400000);
+          if (dias < 0) {
+            countdownHTML = '<span style="font-size:.66rem;font-weight:700;padding:1px 7px;border-radius:999px;background:#fef2f2;color:#dc2626;white-space:nowrap">⌛ Venció hace ' + Math.abs(dias) + ' día' + (Math.abs(dias) !== 1 ? 's' : '') + '</span>';
+          } else if (dias === 0) {
+            countdownHTML = '<span style="font-size:.66rem;font-weight:700;padding:1px 7px;border-radius:999px;background:#fff7ed;color:#ea580c;white-space:nowrap">⚠️ Vence hoy</span>';
+          } else if (dias <= 7) {
+            countdownHTML = '<span style="font-size:.66rem;font-weight:700;padding:1px 7px;border-radius:999px;background:#fefce8;color:#ca8a04;white-space:nowrap">⏳ Vence en ' + dias + ' día' + (dias !== 1 ? 's' : '') + '</span>';
+          }
+        }
+      } catch {}
+      // NUEVO (aditivo): badge de origen de la consulta si está cargado
+      const sourceBadge = w.source
+        ? '<span style="font-size:.66rem;font-weight:600;padding:1px 7px;border-radius:999px;background:var(--color-surface-2);color:var(--color-text-2);white-space:nowrap">' + ({instagram:'📷 Instagram',whatsapp:'💬 WhatsApp',booking:'🅱️ Booking',airbnb:'🏠 Airbnb',directo:'🤝 Directo',telefono:'📞 Teléfono',otro:'📌 Otro'}[w.source] ?? w.source) + '</span>'
+        : '';
       return `
         <div class="card" style="margin-bottom:10px;padding:14px 16px;${overlap ? 'border-left:3px solid ' + overlap.color : ''}" data-wl-id="${w.id}">
           <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap">
@@ -138,6 +156,8 @@ export class WaitlistPanel {
                 <span style="font-weight:700;color:var(--color-text)">${w.guest_name}</span>
                 <span style="font-size:.68rem;font-weight:700;padding:2px 8px;border-radius:999px;background:${st.bg};color:${st.color}">${st.label}</span>
                 ${overlap ? `<span style="font-size:.68rem;font-weight:700;padding:2px 8px;border-radius:999px;background:${overlap.bg};color:${overlap.color}">${overlap.label}</span>` : ''}
+                ${countdownHTML}
+                ${sourceBadge}
               </div>
               <div style="font-size:.8rem;color:var(--color-text-2)">
                 📅 ${formatDate(w.check_in)} → ${formatDate(w.check_out)} · 🏠 ${unitNames}${w.pax ? ` · 👥 ${w.pax}` : ''}
@@ -146,6 +166,8 @@ export class WaitlistPanel {
               ${w.notes ? `<div style="font-size:.76rem;color:var(--color-text-3);margin-top:4px;font-style:italic">${w.notes}</div>` : ''}
             </div>
             <div style="display:flex;gap:6px;flex-wrap:wrap">
+              ${w._effectiveStatus === 'open' || w._effectiveStatus === 'notified' ? `
+                <button class="btn btn-primary btn-sm wl-book-btn" data-id="${w.id}" title="Abrir formulario de reserva con estos datos">📝 Reservar</button>` : ''}
               ${w.phone && w._effectiveStatus !== 'converted' && w._effectiveStatus !== 'cancelled' ? `
                 <button class="btn btn-outline btn-sm wl-whatsapp-btn" data-id="${w.id}" title="Avisar por WhatsApp">💬 Avisar</button>` : ''}
               ${w._effectiveStatus === 'open' || w._effectiveStatus === 'notified' ? `
@@ -169,6 +191,44 @@ export class WaitlistPanel {
     listEl.querySelectorAll('.wl-delete-btn').forEach(btn => {
       btn.addEventListener('click', () => this._deleteEntry(btn.dataset.id));
     });
+    // NUEVO (aditivo): abrir formulario de reserva pre-llenado
+    listEl.querySelectorAll('.wl-book-btn').forEach(btn => {
+      btn.addEventListener('click', () => this._convertToBooking(btn.dataset.id));
+    });
+  }
+
+  // ── NUEVO: abrir el formulario de nueva reserva con los datos de la espera ──
+  // Pre-completa fechas, unidad, nombre, teléfono y PAX. No marca la entrada
+  // como convertida (eso lo sigue haciendo el botón ✅ una vez confirmada).
+  async _convertToBooking(id) {
+    const { data: w } = await this.db.from('waitlist').select('*').eq('id', id).single();
+    if (!w) { showToast('No se encontró la entrada', 'error'); return; }
+    const bf = window._bookingFormInstance;
+    if (!bf?.open) { showToast('El formulario de reservas no está disponible', 'error'); return; }
+
+    bf.open({
+      checkIn:  w.check_in,
+      checkOut: w.check_out,
+      unitId:   w.unit_ids?.[0] ?? undefined,
+    });
+
+    // Completar campos de huésped después de que el modal renderice.
+    // Solo escribe en campos vacíos para no pisar nada.
+    setTimeout(() => {
+      try {
+        const parts = (w.guest_name ?? '').trim().split(/\s+/);
+        const fn = document.getElementById('f-firstname');
+        const ln = document.getElementById('f-lastname');
+        const ph = document.getElementById('f-phone');
+        const px = document.getElementById('f-pax');
+        if (fn && !fn.value) fn.value = parts[0] ?? '';
+        if (ln && !ln.value) ln.value = parts.slice(1).join(' ');
+        if (ph && w.phone && !ph.value) ph.value = w.phone;
+        if (px && w.pax) px.value = w.pax;
+      } catch {}
+    }, 350);
+
+    showToast('Formulario pre-cargado con los datos de la espera — al confirmar, marcá la entrada como ✅ Convertida', 'info');
   }
 
   async _sendWhatsApp(id) {
@@ -232,6 +292,19 @@ export class WaitlistPanel {
         </div>
         <div class="form-group"><label>Cantidad de personas</label><input type="number" id="wl-pax" min="1" style="max-width:100px"></div>
         <div class="form-group">
+          <label>Origen de la consulta</label>
+          <select id="wl-source" class="filter-select" style="max-width:220px">
+            <option value="">— Sin especificar —</option>
+            <option value="instagram">📷 Instagram</option>
+            <option value="whatsapp">💬 WhatsApp</option>
+            <option value="booking">🅱️ Booking</option>
+            <option value="airbnb">🏠 Airbnb</option>
+            <option value="directo">🤝 Directo</option>
+            <option value="telefono">📞 Teléfono</option>
+            <option value="otro">📌 Otro</option>
+          </select>
+        </div>
+        <div class="form-group">
           <label>Departamento(s) <span class="label-hint">Sin marcar ninguno = cualquiera sirve</span></label>
           <div class="r-unit-checks">${unitOptions}</div>
         </div>
@@ -275,6 +348,7 @@ export class WaitlistPanel {
       pax:        parseInt(document.getElementById('wl-pax')?.value) || null,
       unit_ids:   unitIds,
       notes:      document.getElementById('wl-notes')?.value.trim() || null,
+      source:     document.getElementById('wl-source')?.value || null,
       status:     'open',
     });
 
