@@ -80,6 +80,7 @@ export class BookingList {
       if (action === 'pay-full')  this._payFull(id);
       if (action === 'reprogram') this._reprogramBooking(id);
       if (action === 'void-credit-note') this._voidCreditNote(btn.dataset.id);
+      if (action === 'delete-block') this._deleteBlock(id);
     }, true); // ← capture phase: recibe el evento ANTES de que los hijos llamen stopPropagation
 
     document.addEventListener('booking:changed', () => {
@@ -681,6 +682,76 @@ export class BookingList {
 
   // ── Fila individual ────────────────────────────────
   _renderRow(b, today) {
+    // ── Bloqueo de calendario — card diferenciada, gris ──────────────────────
+    if (b.status === 'blocked' || b.is_blocked) {
+      const units  = b.booking_units ?? [];
+      const uChips = units.map(bu => {
+        const full = bu.units?.color ? bu.units : (AppContext.units?.find(x => String(x.id) === String(bu.unit_id)) ?? bu.units);
+        return getUnitChipHTML({ ...full, id: bu.unit_id }, 'sm');
+      }).join(' ');
+      const nights = b.nights ?? Math.round((new Date(b.check_out) - new Date(b.check_in)) / 86400000);
+      const motivo = b.block_reason?.trim() || 'Bloqueo';
+      return `
+        <div class="booking-row" data-booking-id="${b.id}" style="cursor:pointer;
+              background:#f8f9fa;border-left:none;position:relative">
+          <div class="booking-row-accent" style="background:repeating-linear-gradient(
+                45deg,#9ca3af44,#9ca3af44 4px,transparent 4px,transparent 10px);
+                min-width:5px;border-radius:3px 0 0 3px"></div>
+          <div class="booking-row-body" style="padding:10px 14px">
+            <div class="bl-row-main">
+              <div class="bl-col-guest">
+                <div style="width:34px;height:34px;border-radius:8px;flex-shrink:0;
+                            background:#e5e7eb;border:1.5px solid #d1d5db;
+                            display:flex;align-items:center;justify-content:center">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" width="16" height="16">
+                    <rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                  </svg>
+                </div>
+                <div class="bl-guest-info">
+                  <div style="font-size:.82rem;font-weight:600;color:#374151">${motivo}</div>
+                  <div class="bl-guest-meta" style="margin-top:2px">${uChips}</div>
+                </div>
+              </div>
+              <div class="bl-col-dates">
+                <span class="bl-dates">${formatDate(b.check_in)} → ${formatDate(b.check_out)}</span>
+                <span class="bl-nights">${nights} ${nights === 1 ? 'noche' : 'noches'}</span>
+              </div>
+              <div class="bl-col-amount" style="color:#9ca3af;font-size:.75rem">—</div>
+              <div class="bl-col-status">
+                <span class="status-badge" style="background:#f3f4f6;color:#6b7280;
+                      border:1px solid #e5e7eb">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                       width="10" height="10" style="margin-right:3px;vertical-align:-1px">
+                    <rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                  </svg>
+                  Bloqueado
+                </span>
+              </div>
+              <div class="booking-actions-cell" onclick="event.stopPropagation()">
+                <button data-action="edit" class="bl-action-btn"
+                        title="Editar motivo y fechas"
+                        style="color:#6b7280">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                  </svg>
+                </button>
+                <button data-action="delete-block" class="bl-action-btn"
+                        title="Eliminar bloqueo"
+                        style="color:#ef4444"
+                        data-booking-id="${b.id}">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                    <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/>
+                    <path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/>
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>`;
+    }
+    // ─────────────────────────────────────────────────────────────────────────
+
     const g      = b.guests;
     const guest  = g ? `${g.first_name ?? ''} ${g.last_name ?? ''}`.trim() : (b.is_blocked ? 'Bloqueo' : 'Sin huésped');
     const { color: barColor, label: barLabel } = getBookingBarColor(b);
@@ -1294,6 +1365,15 @@ export class BookingList {
   }
 
   // ── Eliminar ──────────────────────────────────────
+  async _deleteBlock(id) {
+    if (!confirm('¿Eliminar este bloqueo del calendario?')) return;
+    const { error } = await this.db.from('bookings').delete().eq('id', id);
+    if (error) { showToast('Error al eliminar el bloqueo', 'error'); return; }
+    showToast('Bloqueo eliminado', 'success');
+    this._allBookings = null;
+    await this._loadAll();
+  }
+
   async _deleteBooking(id) {
     if (!can('deleteBooking')) {
       showToast('🔒 Sin permiso para eliminar reservas', 'warning');
