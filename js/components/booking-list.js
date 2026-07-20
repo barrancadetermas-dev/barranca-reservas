@@ -422,25 +422,47 @@ export class BookingList {
 
     const card = (b) => {
       const g = b.guests;
-      const guest = g ? `${g.first_name ?? ''} ${g.last_name ?? ''}`.trim() : 'Sin huésped';
+      const firstName = g?.first_name ?? '';
+      const lastName  = g?.last_name  ?? '';
+      const guest = (firstName + ' ' + lastName).trim() || 'Sin huésped';
       const units = (b.booking_units ?? []).map(bu => {
         const full = bu.units?.color ? bu.units : (AppContext.units?.find(x => String(x.id) === String(bu.unit_id)) ?? bu.units);
         return full;
       }).filter(Boolean);
-      const color = units[0]?.color ?? '#6366f1';
-      const uNames = units.map(u => u?.name).filter(Boolean).join(' + ') || '—';
+      const color  = units[0]?.color ?? '#6366f1';
+      const uName  = units.map(u => (u?.name ?? '').replace('Planta Baja','P.Baja').replace('Planta Alta','P.Alta')).filter(Boolean).join(' + ') || '—';
       const balance = Number(b.balance ?? 0);
-      // data-action="edit" para que el delegation handler abra el formulario de edición
+      const total   = Number(b.total_amount ?? 0);
+      const paid    = Number(b.total_paid   ?? 0);
+      const pct     = total > 0 ? Math.min(100, Math.round(paid / total * 100)) : 0;
+      const nights  = b.nights ?? Math.round((new Date(b.check_out+'T12:00:00') - new Date(b.check_in+'T12:00:00')) / 86400000);
+      const barColor = pct === 100 ? '#16a34a' : pct > 0 ? '#f59e0b' : '#ef4444';
+
       return `<div class="booking-row" data-booking-id="${b.id}" data-action="edit"
         style="background:var(--color-surface);border:1px solid var(--color-border);border-left:3px solid ${color};
-        border-radius:8px;padding:8px 10px;margin-bottom:6px;cursor:pointer">
-        <div style="font-size:.78rem;font-weight:600;color:var(--color-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${guest}</div>
-        <div style="font-size:.66rem;color:var(--color-text-3);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${uNames}</div>
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:3px">
-          <span style="font-size:.64rem;color:var(--color-text-3)">${formatDate(b.check_in)} → ${formatDate(b.check_out)}</span>
+        border-radius:8px;padding:9px 10px 8px;margin-bottom:6px;cursor:pointer">
+
+        <div style="font-size:.8rem;font-weight:700;color:var(--color-text);
+                    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:3px">${guest}</div>
+
+        <div style="display:flex;align-items:center;gap:5px;margin-bottom:5px">
+          <span style="width:6px;height:6px;border-radius:50%;background:${color};flex-shrink:0"></span>
+          <span style="font-size:.66rem;color:var(--color-text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${uName}</span>
+        </div>
+
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">
+          <span style="font-size:.64rem;color:var(--color-text-3)">${formatDate(b.check_in)} → ${formatDate(b.check_out)} · ${nights}n</span>
+        </div>
+
+        <div style="height:3px;background:var(--color-border);border-radius:2px;overflow:hidden;margin-bottom:4px">
+          <div style="height:100%;width:${pct}%;background:${barColor};border-radius:2px;transition:width .3s"></div>
+        </div>
+
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <span style="font-size:.6rem;color:var(--color-text-3)">${pct}% cobrado</span>
           ${balance > 0
-            ? `<span style="font-size:.62rem;font-weight:700;color:#dc2626">$${Math.round(balance).toLocaleString('es-AR')}</span>`
-            : `<span style="font-size:.62rem;font-weight:700;color:#16a34a">✓</span>`}
+            ? `<span style="font-size:.68rem;font-weight:700;color:#dc2626">$${Math.round(balance).toLocaleString('es-AR')} pendiente</span>`
+            : `<span style="font-size:.68rem;font-weight:700;color:#16a34a">✓ Saldado</span>`}
         </div>
       </div>`;
     };
