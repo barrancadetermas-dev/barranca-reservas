@@ -57,45 +57,49 @@ export class AuditPanel {
 
   _renderShell() {
     return `
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:10px">
-        <div>
-          <p style="font-size:.78rem;color:var(--color-text-3);margin:0">
-            🔒 Solo administradores
-          </p>
+      <!-- Barra de herramientas -->
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-size:.78rem;color:var(--color-text-3)">🔒 Solo admin</span>
+          <button class="btn btn-outline btn-sm" id="audit-refresh" title="Actualizar">⟳</button>
+          <button class="btn btn-outline btn-sm" id="audit-clear-view" style="color:var(--color-text-3)" title="Colapsar todo">Colapsar</button>
         </div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <button class="btn btn-outline btn-sm" id="audit-refresh" title="Actualizar">⟳ Actualizar</button>
-          <button class="btn btn-outline btn-sm" id="audit-clear-view" title="Colapsar todo" style="color:var(--color-text-3)">
-            Colapsar
-          </button>
-          <button class="btn btn-outline btn-sm" id="audit-clear-all" title="Borrar todo el registro (solo admin)"
-            style="color:#ef4444;border-color:#fecaca;margin-left:auto">
-            🗑 Limpiar registro
-          </button>
+        <button class="btn btn-outline btn-sm" id="audit-clear-all" style="color:#ef4444;border-color:#fecaca">🗑 Limpiar registro</button>
+      </div>
+
+      <!-- Stats rápidas -->
+      <div id="audit-stats-bar" style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px"></div>
+
+      <!-- Filtros: pills + búsqueda + fechas -->
+      <div style="background:var(--color-surface-2);border-radius:10px;padding:10px 12px;margin-bottom:14px;display:flex;flex-direction:column;gap:8px">
+        <div id="audit-filter-pills" style="display:flex;gap:5px;flex-wrap:wrap">
+          <button class="audit-pill audit-pill-active" data-filter="" data-filter-multi="">Todas</button>
+          <button class="audit-pill" data-filter="booking_created"   data-filter-multi="CREATE">➕ Creadas</button>
+          <button class="audit-pill" data-filter="payment_added"     data-filter-multi="payment_added">💰 Pagos</button>
+          <button class="audit-pill" data-filter="booking_cancelled" data-filter-multi="CANCEL">🚫 Canceladas</button>
+          <button class="audit-pill" data-filter="checkin"           data-filter-multi="CHECKIN">✅ Check-ins</button>
+          <button class="audit-pill" data-filter="checkout"          data-filter-multi="CHECKOUT">👋 Check-outs</button>
+          <button class="audit-pill" data-filter="expense_added"     data-filter-multi="expense_added">📊 Gastos</button>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+          <div style="position:relative;flex:1;min-width:160px">
+            <span style="position:absolute;left:9px;top:50%;transform:translateY(-50%);color:var(--color-text-3);font-size:.82rem">🔍</span>
+            <input id="audit-search" type="text" placeholder="Buscar por usuario, descripción…"
+                   style="width:100%;padding:5px 10px 5px 28px;border:1px solid var(--color-border);border-radius:7px;
+                          background:var(--color-surface);font-size:.78rem;color:var(--color-text);box-sizing:border-box">
+          </div>
+          <div style="display:flex;align-items:center;gap:6px;font-size:.75rem;color:var(--color-text-3)">
+            <span>Del</span>
+            <input id="audit-date-from" type="date" style="font-size:.75rem;border:1px solid var(--color-border);border-radius:6px;padding:3px 6px;background:var(--color-surface);color:var(--color-text)">
+            <span>al</span>
+            <input id="audit-date-to"   type="date" style="font-size:.75rem;border:1px solid var(--color-border);border-radius:6px;padding:3px 6px;background:var(--color-surface);color:var(--color-text)">
+            <button id="audit-date-clear" class="btn btn-ghost btn-xs" style="font-size:.7rem;color:var(--color-text-3)" title="Limpiar fechas">✕</button>
+          </div>
         </div>
       </div>
 
-      <!-- Pills de filtro rápido -->
-      <div id="audit-filter-pills" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">
-        <button class="audit-pill audit-pill-active" data-filter="" data-filter-multi="">
-          Todas
-        </button>
-        <button class="audit-pill" data-filter="booking_created" data-filter-multi="CREATE">
-          ➕ Creadas
-        </button>
-        <button class="audit-pill" data-filter="payment_added" data-filter-multi="payment_added">
-          💰 Pagos
-        </button>
-        <button class="audit-pill" data-filter="booking_cancelled" data-filter-multi="CANCEL">
-          🚫 Canceladas
-        </button>
-        <button class="audit-pill" data-filter="checkin" data-filter-multi="CHECKIN">
-          ✅ Check-ins
-        </button>
-        <button class="audit-pill" data-filter="checkout" data-filter-multi="CHECKOUT">
-          👋 Check-outs
-        </button>
-      </div>
+      <!-- Resultado del filtro activo -->
+      <div id="audit-filter-info" style="font-size:.72rem;color:var(--color-text-3);margin-bottom:8px;min-height:16px"></div>
 
       <div id="audit-log-list"></div>
       <div id="audit-load-more" style="text-align:center;padding:16px;display:none">
@@ -115,26 +119,52 @@ export class AuditPanel {
       document.head.appendChild(s);
     }
 
+    this._searchText = '';
+    this._dateFrom   = '';
+    this._dateTo     = '';
+
     container.querySelector('#audit-refresh')?.addEventListener('click', () => this._loadLogs(container, true));
 
-    // Filter pills
+    // Filter pills — client-side sobre _allLogs
     container.querySelectorAll('.audit-pill').forEach(pill => {
       pill.addEventListener('click', () => {
         container.querySelectorAll('.audit-pill').forEach(p => p.classList.remove('audit-pill-active'));
         pill.classList.add('audit-pill-active');
-        this._filter = pill.dataset.filter ?? '';
-        this._page = 0;
-        this._displayed = 0;
-        this._loadLogs(container, true);
+        this._filter   = pill.dataset.filter ?? '';
+        this._displayed = PAGE_SIZE;
+        this._renderLogs(container);
       });
     });
 
-    container.querySelector('#audit-filter-action')?.addEventListener('change', (e) => {
-      this._filter = e.target.value;
-      this._loadLogs(container, true);
+    // Búsqueda de texto en tiempo real
+    let _sTimer = null;
+    container.querySelector('#audit-search')?.addEventListener('input', (e) => {
+      clearTimeout(_sTimer);
+      _sTimer = setTimeout(() => {
+        this._searchText = e.target.value.trim().toLowerCase();
+        this._displayed  = PAGE_SIZE;
+        this._renderLogs(container);
+      }, 200);
     });
+
+    // Filtro de fechas
+    const applyDates = () => {
+      this._dateFrom  = container.querySelector('#audit-date-from')?.value ?? '';
+      this._dateTo    = container.querySelector('#audit-date-to')?.value   ?? '';
+      this._displayed = PAGE_SIZE;
+      this._renderLogs(container);
+    };
+    container.querySelector('#audit-date-from')?.addEventListener('change', applyDates);
+    container.querySelector('#audit-date-to')?.addEventListener('change',   applyDates);
+    container.querySelector('#audit-date-clear')?.addEventListener('click', () => {
+      const fi = container.querySelector('#audit-date-from'), ti = container.querySelector('#audit-date-to');
+      if (fi) fi.value = ''; if (ti) ti.value = '';
+      this._dateFrom = ''; this._dateTo = '';
+      this._displayed = PAGE_SIZE;
+      this._renderLogs(container);
+    });
+
     container.querySelector('#audit-clear-view')?.addEventListener('click', () => {
-      // Colapsar todos los grupos abiertos
       container.querySelectorAll('.audit-day-body.open').forEach(b => {
         b.classList.remove('open');
         b.style.display = 'none';
@@ -195,23 +225,26 @@ export class AuditPanel {
     if (!list) return;
     if (reset) {
       this._displayed = PAGE_SIZE;
+      this._searchText = this._searchText ?? '';
+      this._dateFrom   = this._dateFrom   ?? '';
+      this._dateTo     = this._dateTo     ?? '';
       list.innerHTML = '<div class="loading-state" style="padding:24px;text-align:center">Cargando registros...</div>';
     }
 
     try {
-      let query = this.db
+      // Traemos todo sin filtro server-side de action — el filtrado combinado
+      // (pill + texto + fechas) se hace client-side sobre _allLogs
+      const { data, error } = await this.db
         .from('audit_log')
         .select('*')
         .eq('hotel_id', this.ctx.hotelId)
         .order('created_at', { ascending: false })
         .limit(500);
 
-      if (this._filter) query = query.eq('action', this._filter);
-
-      const { data, error } = await query;
       if (error) throw error;
 
       this._allLogs = data ?? [];
+      this._renderStatsBar(container);
       this._renderLogs(container);
 
     } catch (err) {
@@ -226,24 +259,84 @@ export class AuditPanel {
     }
   }
 
+  _renderStatsBar(container) {
+    const bar = container.querySelector('#audit-stats-bar');
+    if (!bar || !this._allLogs?.length) return;
+
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const weekAgo  = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
+
+    const hoy     = this._allLogs.filter(l => (l.created_at ?? '').slice(0, 10) === todayStr).length;
+    const semana  = this._allLogs.filter(l => (l.created_at ?? '').slice(0, 10) >= weekAgo).length;
+    const pagos   = this._allLogs.filter(l => (l.action ?? '').includes('payment')).length;
+    const usuarios = [...new Set(this._allLogs.map(l => l.user_email ?? l.user_id).filter(Boolean))].length;
+
+    const card = (n, label, color) =>
+      '<div class="audit-stat-card" style="border-top:3px solid ' + color + '">' +
+      '<div class="asn">' + n + '</div>' +
+      '<div class="asl">' + label + '</div></div>';
+
+    bar.innerHTML =
+      card(hoy,     'Acciones hoy',   '#6366f1') +
+      card(semana,  'Esta semana',    '#0ea5e9') +
+      card(pagos,   'Pagos totales',  '#22c55e') +
+      card(usuarios,'Usuarios activos','#f59e0b');
+  }
+
   _renderLogs(container) {
-    const list = container.querySelector('#audit-log-list');
+    const list     = container.querySelector('#audit-log-list');
     const moreWrap = container.querySelector('#audit-load-more');
+    const infoEl   = container.querySelector('#audit-filter-info');
     if (!list) return;
 
-    const logs = this._allLogs;
+    // ── Filtrado combinado ─────────────────────────────────────────────────
+    let logs = this._allLogs ?? [];
+
+    if (this._filter) {
+      const f = this._filter.toLowerCase();
+      logs = logs.filter(l => {
+        const a = (l.action ?? '').toLowerCase();
+        return a === f || a.startsWith(f);
+      });
+    }
+
+    if (this._searchText) {
+      const q = this._searchText;
+      logs = logs.filter(l =>
+        (l.user_email  ?? '').toLowerCase().includes(q) ||
+        (l.description ?? '').toLowerCase().includes(q) ||
+        (l.action      ?? '').toLowerCase().includes(q) ||
+        (l.entity_type ?? '').toLowerCase().includes(q) ||
+        (l.entity_id   ?? '').toLowerCase().includes(q)
+      );
+    }
+
+    if (this._dateFrom) logs = logs.filter(l => (l.created_at ?? '').slice(0,10) >= this._dateFrom);
+    if (this._dateTo)   logs = logs.filter(l => (l.created_at ?? '').slice(0,10) <= this._dateTo);
+
+    if (infoEl) {
+      const filters = [];
+      if (this._filter)     filters.push('acción: ' + this._filter);
+      if (this._searchText) filters.push('texto: "' + this._searchText + '"');
+      if (this._dateFrom || this._dateTo)
+        filters.push('fechas: ' + (this._dateFrom || '…') + ' → ' + (this._dateTo || '…'));
+      infoEl.textContent = logs.length + ' registro' + (logs.length !== 1 ? 's' : '') +
+        (filters.length ? ' · filtros: ' + filters.join(', ') : '');
+    }
 
     if (!logs.length) {
-      list.innerHTML = `<div class="empty-state">
-        <span class="empty-state-icon">📋</span>
-        <p>Sin registros de auditoría aún.</p>
-      </div>`;
+      list.innerHTML = '<div class="empty-state"><span class="empty-state-icon">📋</span>'
+        + '<p>' + (this._filter || this._searchText || this._dateFrom || this._dateTo
+          ? 'Sin resultados para los filtros activos.'
+          : 'Sin registros de auditoría aún.') + '</p></div>';
       if (moreWrap) moreWrap.style.display = 'none';
       return;
     }
 
-    // Agrupar por día
+    // ── Agrupar por día ───────────────────────────────────────────────────
     const byDay = {};
+    const todayLocale = new Date().toLocaleDateString('es-AR', { weekday:'long', day:'2-digit', month:'long', year:'numeric' });
+
     logs.slice(0, this._displayed).forEach(log => {
       const day = log.created_at
         ? new Date(log.created_at).toLocaleDateString('es-AR', { weekday:'long', day:'2-digit', month:'long', year:'numeric' })
@@ -253,29 +346,42 @@ export class AuditPanel {
     });
 
     list.innerHTML = Object.entries(byDay).map(([day, entries], di) => {
-      const isToday = day === new Date().toLocaleDateString('es-AR', { weekday:'long', day:'2-digit', month:'long', year:'numeric' });
+      const isToday = day === todayLocale;
       const isFirst = di === 0;
 
-      return `
-        <div class="audit-day-group">
-          <button class="audit-day-header ${isFirst ? 'open' : ''}" data-day="${di}">
-            <span class="audit-day-label">
-              ${isToday ? '📅 Hoy · ' : ''}<strong>${day}</strong>
-              <span class="audit-day-count">${entries.length} acción${entries.length !== 1 ? 'es' : ''}</span>
-            </span>
-            <svg class="audit-day-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                 stroke-width="2.5" width="14" height="14"
-                 style="transform:${isFirst ? 'rotate(180deg)' : 'rotate(0)'}">
-              <polyline points="6 9 12 15 18 9"/>
-            </svg>
-          </button>
-          <div class="audit-day-body ${isFirst ? 'open' : ''}" style="display:${isFirst ? 'block' : 'none'};border-left:2px solid var(--color-border);margin-left:13px;padding-left:10px;margin-top:2px">
-            ${entries.map(log => this._renderRow(log)).join('')}
-          </div>
-        </div>`;
+      // Mini-resumen de tipos de acciones del día
+      const counts = {};
+      entries.forEach(e => {
+        const cfg = ACTION_LABELS[e.action] ?? ACTION_LABELS[(e.action ?? '').toLowerCase()];
+        const k = cfg ? cfg.icon : '📌';
+        counts[k] = (counts[k] ?? 0) + 1;
+      });
+      const miniBar = Object.entries(counts)
+        .map(([icon, n]) => '<span style="font-size:.68rem">' + icon + (n > 1 ? ' ×' + n : '') + '</span>')
+        .join(' ');
+
+      return '<div class="audit-day-group" style="margin-bottom:4px">'
+        + '<button class="audit-day-header ' + (isFirst ? 'open' : '') + '" data-day="' + di + '"'
+        + ' style="display:flex;align-items:center;width:100%;text-align:left;padding:7px 10px;'
+        + 'border-radius:8px;border:none;cursor:pointer;gap:8px;'
+        + 'background:' + (isToday ? 'var(--color-primary)0d' : 'var(--color-surface-2)') + ';'
+        + 'border-left:3px solid ' + (isToday ? 'var(--color-primary)' : 'var(--color-border)') + '">'
+        + '<span style="flex:1;display:flex;align-items:center;gap:8px;min-width:0">'
+        + (isToday ? '<span style="font-size:.65rem;font-weight:700;padding:1px 7px;border-radius:4px;background:var(--color-primary);color:#fff;flex-shrink:0">HOY</span>' : '')
+        + '<strong style="font-size:.78rem;color:var(--color-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + day + '</strong>'
+        + '<span style="font-size:.68rem;color:var(--color-text-3);white-space:nowrap;flex-shrink:0">' + entries.length + ' acción' + (entries.length !== 1 ? 'es' : '') + '</span>'
+        + '<span style="display:flex;gap:4px;flex-shrink:0">' + miniBar + '</span>'
+        + '</span>'
+        + '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="13" height="13"'
+        + ' class="audit-day-chevron" style="flex-shrink:0;transition:transform .2s;transform:' + (isFirst ? 'rotate(180deg)' : 'rotate(0)') + '">'
+        + '<polyline points="6 9 12 15 18 9"/></svg>'
+        + '</button>'
+        + '<div class="audit-day-body ' + (isFirst ? 'open' : '') + '"'
+        + ' style="display:' + (isFirst ? 'block' : 'none') + ';border-left:2px solid var(--color-border);margin-left:13px;padding-left:10px;margin-top:2px">'
+        + entries.map(log => this._renderRow(log)).join('')
+        + '</div></div>';
     }).join('');
 
-    // Toggle de grupos
     list.querySelectorAll('.audit-day-header').forEach(btn => {
       btn.addEventListener('click', () => {
         const body    = btn.nextElementSibling;
@@ -288,13 +394,37 @@ export class AuditPanel {
       });
     });
 
-    // Mostrar/ocultar "Cargar más"
     if (moreWrap) {
       const hasMore = logs.length > this._displayed;
       moreWrap.style.display = hasMore ? 'block' : 'none';
-      const moreBtn = moreWrap.querySelector('#btn-audit-more');
-      if (moreBtn) moreBtn.textContent = `Cargar más (${logs.length - this._displayed} restantes)`;
+      const oldMore = moreWrap.querySelector('#btn-audit-more');
+      if (oldMore) {
+        oldMore.textContent = 'Cargar más (' + (logs.length - this._displayed) + ' restantes)';
+        const newMore = oldMore.cloneNode(true);
+        oldMore.replaceWith(newMore);
+        newMore.addEventListener('click', () => { this._displayed += PAGE_SIZE; this._renderLogs(container); });
+      }
     }
+  }
+
+  _renderStatsBar(container) {
+    const bar = container.querySelector('#audit-stats-bar');
+    if (!bar || !this._allLogs?.length) return;
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const weekAgo  = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
+    const hoy      = this._allLogs.filter(l => (l.created_at ?? '').slice(0,10) === todayStr).length;
+    const semana   = this._allLogs.filter(l => (l.created_at ?? '').slice(0,10) >= weekAgo).length;
+    const pagos    = this._allLogs.filter(l => (l.action ?? '').includes('payment')).length;
+    const usuarios = new Set(this._allLogs.map(l => l.user_email ?? l.user_id).filter(Boolean)).size;
+    const card = (n, label, color) =>
+      '<div class="audit-stat-card" style="border-top:3px solid ' + color + '">'
+      + '<div class="asn">' + n + '</div>'
+      + '<div class="asl">' + label + '</div></div>';
+    bar.innerHTML =
+      card(hoy,      'Acciones hoy',    '#6366f1') +
+      card(semana,   'Esta semana',     '#0ea5e9') +
+      card(pagos,    'Pagos totales',   '#22c55e') +
+      card(usuarios, 'Usuarios activos','#f59e0b');
   }
 
   _renderRow(log) {
@@ -303,28 +433,29 @@ export class AuditPanel {
     const time   = log.created_at
       ? new Date(log.created_at).toLocaleTimeString('es-AR', { hour:'2-digit', minute:'2-digit' })
       : '—';
-    const user   = log.user_email ?? log.user_id?.slice(0,8) ?? 'Sistema';
-    const entity = log.entity_type && log.entity_id
-      ? `${log.entity_type} #${String(log.entity_id).slice(0,8)}`
+    const rawUser  = log.user_email ?? log.user_id?.slice(0,8) ?? 'Sistema';
+    const initials = rawUser === 'Sistema' ? '⚙' : rawUser.slice(0,2).toUpperCase();
+    const entity   = log.entity_type && log.entity_id
+      ? log.entity_type + ' #' + String(log.entity_id).slice(0,8)
       : log.entity_type ?? '';
 
-    return `
-      <div class="audit-row" style="display:flex;gap:10px;padding:8px 0;align-items:flex-start;position:relative">
-        <div class="audit-icon" style="width:28px;height:28px;border-radius:50%;flex-shrink:0;
-             display:flex;align-items:center;justify-content:center;font-size:.9rem;
-             background:${cfg.color}18;color:${cfg.color};border:1.5px solid ${cfg.color}33;
-             position:relative;z-index:1">${cfg.icon}</div>
-        <div class="audit-info" style="flex:1;min-width:0;padding-top:4px">
-          <div class="audit-action" style="font-size:.8rem">
-            <span style="font-weight:600;color:var(--color-text)">${cfg.label}</span>
-            ${entity ? `<span class="audit-entity" style="font-size:.7rem;color:var(--color-text-3);margin-left:5px">${entity}</span>` : ''}
-          </div>
-          <div class="audit-meta" style="display:flex;gap:8px;margin-top:2px;flex-wrap:wrap">
-            <span class="audit-user" style="font-size:.7rem;color:var(--color-text-3)">👤 ${user}</span>
-            <span class="audit-time" style="font-size:.7rem;color:var(--color-text-3)">🕐 ${time}</span>
-            ${log.description ? `<span style="color:var(--color-text-3);font-size:.7rem">· ${log.description}</span>` : ''}
-          </div>
-        </div>
-      </div>`;
+    return '<div class="audit-row" style="display:flex;gap:10px;padding:8px 4px;align-items:flex-start;'
+      + 'border-bottom:1px solid var(--color-border-2)">'
+      + '<div style="width:30px;height:30px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;'
+      + 'justify-content:center;font-size:.7rem;font-weight:700;'
+      + 'background:' + cfg.color + '18;color:' + cfg.color + ';border:1.5px solid ' + cfg.color + '33">'
+      + cfg.icon + '</div>'
+      + '<div style="flex:1;min-width:0">'
+      + '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">'
+      + '<span style="font-size:.8rem;font-weight:600;color:var(--color-text)">' + cfg.label + '</span>'
+      + (entity ? '<span style="font-size:.68rem;color:var(--color-text-3);background:var(--color-surface-2);padding:1px 6px;border-radius:4px">' + entity + '</span>' : '')
+      + '</div>'
+      + (log.description ? '<div style="font-size:.72rem;color:var(--color-text-2);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + log.description + '</div>' : '')
+      + '<div style="display:flex;gap:10px;margin-top:3px;align-items:center">'
+      + '<span style="font-size:.68rem;color:var(--color-text-3)" title="' + rawUser + '">'
+      + '<span style="display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:50%;background:var(--color-border);font-size:.55rem;font-weight:700;margin-right:3px">' + initials + '</span>'
+      + rawUser.split('@')[0] + '</span>'
+      + '<span style="font-size:.68rem;color:var(--color-text-3)">🕐 ' + time + '</span>'
+      + '</div></div></div>';
   }
 }

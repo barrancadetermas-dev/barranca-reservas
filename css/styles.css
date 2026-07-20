@@ -2280,8 +2280,8 @@ select { appearance: auto; cursor: pointer; }
 .fleg-dot { width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:4px; }
 
 /* ── HEATMAP ─────────────────────────────────────── */
-.heatmap-scroll  { overflow-x:auto; padding-bottom:8px; }
-.heatmap-grid    { display:grid; grid-template-columns:120px repeat(var(--days,31),1fr); min-width:600px; }
+.heatmap-scroll  { overflow-x:auto; padding-bottom:8px; -webkit-overflow-scrolling:touch; }
+.heatmap-grid    { display:grid; grid-template-columns:120px repeat(var(--days,31),minmax(22px,1fr)); min-width:calc(120px + var(--days,31)*22px); width:max-content; }
 .hm-corner       { }
 .hm-days-header  { display:contents; }
 .hm-day-head     { display:flex;flex-direction:column;align-items:center;padding:4px 2px;font-size:.6rem; }

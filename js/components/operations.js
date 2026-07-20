@@ -1433,9 +1433,12 @@ export class OperationsModule {
               <input type="date" id="oe-due" value="${expense?.due_date ?? ''}">
             </div>
           </div>
-          <div class="form-group">
+          <div class="form-group" style="position:relative">
             <label>Descripción <span class="req">*</span></label>
-            <input type="text" id="oe-desc" placeholder="Ej: Factura de gas" value="${expense?.description ?? ''}">
+            <input type="text" id="oe-desc" placeholder="Ej: Factura de gas" value="${expense?.description ?? ''}" autocomplete="off">
+            <div id="oe-desc-suggestions" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:300;
+                 background:var(--color-surface);border:1px solid var(--color-border);border-radius:8px;
+                 box-shadow:0 4px 16px rgba(0,0,0,.12);max-height:180px;overflow-y:auto;margin-top:2px"></div>
           </div>
           <div class="form-group">
             <label>Monto (ARS) <span class="req">*</span></label>
@@ -1456,11 +1459,10 @@ export class OperationsModule {
             <div class="form-group">
               <label>Destinatario</label>
               <input type="text" id="oe-beneficiary" list="oe-beneficiary-list"
-                     placeholder="Ej: Alicia, Herza…"
+                     placeholder="Ej: Alicia, Municipalidad…"
                      value="${expense?.beneficiary ?? ''}">
               <datalist id="oe-beneficiary-list">
                 <option value="Alicia">
-                <option value="Herza">
                 <option value="Turismo Entre Ríos">
                 <option value="Municipal">
                 <option value="AFIP">
@@ -1498,6 +1500,49 @@ export class OperationsModule {
     modal.querySelector('#oe-cancel').onclick = close;
     modal.addEventListener('click', e => { if (e.target === modal) close(); });
     setTimeout(() => modal.querySelector('#oe-desc')?.focus(), 80);
+
+    // ── Autocomplete de descripción basado en historial de gastos ─────────
+    const descInput = modal.querySelector('#oe-desc');
+    const suggBox   = modal.querySelector('#oe-desc-suggestions');
+    let _suggTimer  = null;
+    descInput?.addEventListener('input', () => {
+      clearTimeout(_suggTimer);
+      const val = descInput.value.trim();
+      if (val.length < 5) { suggBox.style.display = 'none'; return; }
+      _suggTimer = setTimeout(async () => {
+        try {
+          const { data } = await this.db.from('expenses')
+            .select('description')
+            .eq('hotel_id', this.ctx.hotelId)
+            .ilike('description', '%' + val + '%')
+            .limit(30);
+          if (!data?.length) { suggBox.style.display = 'none'; return; }
+          // Dedup + excluir el valor exacto actual
+          const uniq = [...new Set(data.map(r => r.description))]
+            .filter(d => d && d.toLowerCase() !== val.toLowerCase())
+            .slice(0, 6);
+          if (!uniq.length) { suggBox.style.display = 'none'; return; }
+          suggBox.innerHTML = uniq.map(d =>
+            '<div style="padding:8px 12px;cursor:pointer;font-size:.82rem;border-bottom:1px solid var(--color-border);' +
+            'white-space:nowrap;overflow:hidden;text-overflow:ellipsis" data-val="' + d.replace(/"/g,'&quot;') + '">' +
+            d.replace(new RegExp(val.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'gi'), m => '<strong>' + m + '</strong>') +
+            '</div>'
+          ).join('');
+          suggBox.style.display = 'block';
+          suggBox.querySelectorAll('[data-val]').forEach(item => {
+            item.addEventListener('mousedown', e => {
+              e.preventDefault();
+              descInput.value = item.dataset.val;
+              suggBox.style.display = 'none';
+            });
+            item.addEventListener('mouseover', () => item.style.background = 'var(--color-surface-2)');
+            item.addEventListener('mouseout',  () => item.style.background = '');
+          });
+        } catch { suggBox.style.display = 'none'; }
+      }, 300);
+    });
+    descInput?.addEventListener('blur', () => { setTimeout(() => { suggBox.style.display = 'none'; }, 150); });
+    // ─────────────────────────────────────────────────────────────────────────
 
     modal.querySelector('#oe-save').addEventListener('click', async () => {
       const desc   = modal.querySelector('#oe-desc').value.trim();
@@ -1598,7 +1643,7 @@ OperationsModule.prototype._loadTenencias = async function(panel, header) {
   header.innerHTML = '<button class="btn btn-outline btn-sm" id="ten-config-btn">⚙️ Tasas</button>';
 
   const { data: all = [] } = await this.db.from('frasco_items')
-    .select('id, original_amount, interest_amount, frasco_date, notes, credited, credited_at, credited_amount, created_at')
+    .select('id, original_amount, interest_amount, frasco_date, notes, credited, credited_at, credited_amount, created_at, booking_id')
     .eq('hotel_id', this.ctx.hotelId)
     .order('created_at', { ascending: false })
     .limit(300);
@@ -1647,10 +1692,11 @@ OperationsModule.prototype._loadTenencias = async function(panel, header) {
                         margin-bottom:6px;background:${vencido?'#fef9c3':'var(--color-surface-2)'};
                         border:1px solid ${vencido?'#fde047':'var(--color-border)'}">
       <div style="flex:1;min-width:0">
-        <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;flex-wrap:wrap">
           <span style="font-size:.62rem;font-weight:700;padding:1px 7px;border-radius:4px;
                        background:${cfg.color}22;color:${cfg.color}">${cfg.icon} ${cfg.label}</span>
           <span style="font-size:.8rem;font-weight:600;color:var(--color-text)">${desc}</span>
+          ${item.booking_id ? '<span style="font-size:.62rem;padding:1px 7px;border-radius:4px;background:#6366f111;color:#6366f1;font-weight:600">🔗 con reserva</span>' : ''}
         </div>
         <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
           <span style="font-size:.72rem;color:var(--color-text-3)">Base: <strong>${fmt(base)}</strong></span>
@@ -1818,8 +1864,11 @@ OperationsModule.prototype._openTenenciaModal = function(tipo, rates, item = nul
   const today2 = new Date().toISOString().slice(0, 10);
   const isEstat = cfg.tipo === 'estatico';
 
-  const existingDesc  = isEdit ? (item.notes??'').replace(/^\[(FCI|PF|USD|CTA|GASTOS)\] /,'').split(' · ')[0] : '';
-  const existingNotes = isEdit ? (item.notes??'').split(' · ').slice(1).join(' · ') : '';
+  const existingDesc    = isEdit ? (item.notes??'').replace(/^\[(FCI|PF|USD|CTA|GASTOS)\] /,'').split(' · ')[0] : '';
+  const existingNotes   = isEdit ? (item.notes??'').split(' · ').slice(1).join(' · ') : '';
+  const existingBooking = isEdit ? (item.booking_id ?? null) : null;
+
+  const isFrasco = tipo === 'frasco';
 
   const modal = document.createElement('div');
   modal.className = 'modal-overlay';
@@ -1831,6 +1880,27 @@ OperationsModule.prototype._openTenenciaModal = function(tipo, rates, item = nul
         <button class="modal-close" id="tm-close">✕</button>
       </div>
       <div class="modal-body">
+
+        ${isFrasco ? `
+        <div id="tm-booking-section" style="background:var(--color-surface-2);border-radius:10px;padding:12px 14px;margin-bottom:14px;border:1px solid var(--color-border)">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+            <label style="font-size:.78rem;font-weight:600;color:var(--color-text-2);margin:0">
+              🔗 Asociar a reserva <span style="font-weight:400;color:var(--color-text-3)">(opcional)</span>
+            </label>
+            <button type="button" id="tm-booking-clear" style="display:none;font-size:.7rem;color:var(--color-text-3);background:none;border:none;cursor:pointer;padding:0">✕ Quitar</button>
+          </div>
+          <div id="tm-booking-selected" style="display:none;background:${cfg.color}11;border:1px solid ${cfg.color}33;border-radius:8px;padding:8px 12px;font-size:.8rem;margin-bottom:8px">
+            <div id="tm-booking-info" style="font-weight:600;color:var(--color-text)"></div>
+            <div id="tm-booking-dates" style="font-size:.7rem;color:var(--color-text-3);margin-top:2px"></div>
+          </div>
+          <div style="display:flex;gap:6px">
+            <input type="text" id="tm-booking-search" class="form-input" placeholder="Buscar por huésped o fecha…" style="font-size:.8rem;flex:1" autocomplete="off">
+            <button type="button" id="tm-booking-search-btn" class="btn btn-outline btn-sm" style="white-space:nowrap">🔍 Buscar</button>
+          </div>
+          <div id="tm-booking-results" style="display:none;max-height:160px;overflow-y:auto;margin-top:6px;border:1px solid var(--color-border);border-radius:8px;background:var(--color-surface)"></div>
+          <input type="hidden" id="tm-booking-id" value="${existingBooking ?? ''}">
+        </div>` : ''}
+
         <div class="form-group">
           <label>Descripción <span class="req">*</span></label>
           <input type="text" id="tm-desc" class="form-input"
@@ -1913,6 +1983,99 @@ OperationsModule.prototype._openTenenciaModal = function(tipo, rates, item = nul
     setTimeout(()=>baseI?.focus(),80);
   }
 
+  // ── Booking picker para Naranja X (frasco) ────────────────────────────────
+  if (isFrasco) {
+    const searchInput   = modal.querySelector('#tm-booking-search');
+    const searchBtn     = modal.querySelector('#tm-booking-search-btn');
+    const resultsBox    = modal.querySelector('#tm-booking-results');
+    const selectedBox   = modal.querySelector('#tm-booking-selected');
+    const clearBtn      = modal.querySelector('#tm-booking-clear');
+    const bookingIdInp  = modal.querySelector('#tm-booking-id');
+    const bookingInfo   = modal.querySelector('#tm-booking-info');
+    const bookingDates  = modal.querySelector('#tm-booking-dates');
+
+    const _applyBooking = (b) => {
+      const guest = b.guests ? (b.guests.first_name + ' ' + b.guests.last_name).trim() : 'Huésped';
+      const desc  = modal.querySelector('#tm-desc');
+      const dateF = modal.querySelector('#tm-date');
+      bookingIdInp.value  = b.id;
+      bookingInfo.textContent  = guest;
+      bookingDates.textContent = 'Check-in: ' + b.check_in + ' → ' + b.check_out;
+      selectedBox.style.display = 'block';
+      clearBtn.style.display    = 'inline';
+      resultsBox.style.display  = 'none';
+      // Pre-fill description y fecha si están vacíos
+      if (!desc?.value.trim()) desc.value = 'Seña ' + guest;
+      if (dateF && !dateF.value) dateF.value = b.check_in;
+    };
+
+    // Si hay booking previo (edit), cargarlo
+    if (existingBooking) {
+      this.db.from('bookings')
+        .select('id, check_in, check_out, guests!bookings_guest_id_fkey(first_name,last_name)')
+        .eq('id', existingBooking).single()
+        .then(({ data }) => { if (data) _applyBooking(data); });
+    }
+
+    const _doSearch = async () => {
+      const q = searchInput.value.trim();
+      resultsBox.innerHTML = '<div style="padding:10px;font-size:.78rem;color:var(--color-text-3)">Buscando…</div>';
+      resultsBox.style.display = 'block';
+      try {
+        let query = this.db.from('bookings')
+          .select('id, check_in, check_out, guests!bookings_guest_id_fkey(first_name,last_name)')
+          .eq('hotel_id', this.ctx.hotelId)
+          .not('status','in','(cancelled)')
+          .order('check_in', { ascending: false })
+          .limit(20);
+        if (q) {
+          // Filtro aproximado por fecha o nombre (side-filter en cliente)
+          query = query.gte('check_in', q.match(/^\d{4}/) ? q : '2020-01-01');
+        }
+        const { data } = await query;
+        const rows = (data ?? []).filter(b => {
+          if (!q) return true;
+          const name = b.guests ? (b.guests.first_name+' '+b.guests.last_name).toLowerCase() : '';
+          return name.includes(q.toLowerCase()) || b.check_in.includes(q) || b.check_out.includes(q);
+        }).slice(0,8);
+        if (!rows.length) {
+          resultsBox.innerHTML = '<div style="padding:10px;font-size:.78rem;color:var(--color-text-3)">Sin resultados</div>';
+          return;
+        }
+        resultsBox.innerHTML = rows.map(b => {
+          const gName = b.guests ? (b.guests.first_name+' '+b.guests.last_name).trim() : 'Huésped';
+          return '<div data-bid="'+b.id+'" style="padding:9px 12px;cursor:pointer;border-bottom:1px solid var(--color-border);font-size:.8rem">'
+            +'<strong>'+gName+'</strong>'
+            +'<span style="color:var(--color-text-3);margin-left:8px;font-size:.72rem">'+b.check_in+' → '+b.check_out+'</span>'
+            +'</div>';
+        }).join('');
+        resultsBox.querySelectorAll('[data-bid]').forEach(row => {
+          row.addEventListener('mouseover', () => row.style.background = 'var(--color-surface-2)');
+          row.addEventListener('mouseout',  () => row.style.background = '');
+          row.addEventListener('click', () => {
+            const found = rows.find(b => b.id === row.dataset.bid);
+            if (found) _applyBooking(found);
+          });
+        });
+      } catch { resultsBox.innerHTML = '<div style="padding:10px;font-size:.78rem;color:var(--color-text-3)">Error al buscar</div>'; }
+    };
+
+    searchBtn.addEventListener('click', _doSearch);
+    searchInput.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); _doSearch(); } });
+    clearBtn.addEventListener('click', () => {
+      bookingIdInp.value        = '';
+      selectedBox.style.display = 'none';
+      clearBtn.style.display    = 'none';
+      searchInput.value         = '';
+      resultsBox.style.display  = 'none';
+    });
+    // Cerrar resultados al clickear fuera
+    modal.addEventListener('click', e => {
+      if (!e.target.closest('#tm-booking-section')) resultsBox.style.display = 'none';
+    });
+  }
+  // ─────────────────────────────────────────────────────────────────────────
+
   modal.querySelector('#tm-save').addEventListener('click', async () => {
     const base  = parseFloat(modal.querySelector('#tm-base').value);
     const desc  = modal.querySelector('#tm-desc').value.trim();
@@ -1931,7 +2094,9 @@ OperationsModule.prototype._openTenenciaModal = function(tipo, rates, item = nul
     const saveBtn = modal.querySelector('#tm-save');
     saveBtn.disabled = true;
 
-    const payload = { original_amount:base, interest_amount:interest, frasco_date, notes:notesFinal, credited:false };
+    const bookingIdVal = modal.querySelector('#tm-booking-id')?.value?.trim() || null;
+    const payload = { original_amount:base, interest_amount:interest, frasco_date, notes:notesFinal, credited:false,
+                      ...(bookingIdVal ? { booking_id: bookingIdVal } : { booking_id: null }) };
     let error;
     if (isEdit) {
       ({error} = await this.db.from('frasco_items').update(payload).eq('id',item.id));

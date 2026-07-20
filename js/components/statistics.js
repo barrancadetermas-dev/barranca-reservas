@@ -109,15 +109,19 @@ export class Statistics {
     const reloadActive = () => {
       savePeriod();
       // Auto-reload the active tab when period changes
-      if (this._tab === 'units')    this.loadUnits();
+      if (this._tab === 'units')         this.loadUnits();
       else if (this._tab === 'financ')   this._financePanel?.load?.();
+      else if (this._tab === 'heatmap')  this.loadHeatmap?.();
       else if (this._tab === 'charts')   this.loadCharts?.();
       else if (this._tab === 'pl')       this.loadPL?.();
       else if (this._tab === 'revenue')  this._revenuePanel?.load?.();
     };
     monthSel.addEventListener('change', reloadActive);
     yearSel.addEventListener('change',  reloadActive);
-    monthSel.value = now.getMonth();
+    // Restaurar el mes guardado (no resetear a "ahora" — eso borraba la selección)
+    const savedPeriod = JSON.parse(localStorage.getItem('mila_stats_period') ?? 'null');
+    if (savedPeriod?.month != null) monthSel.value = savedPeriod.month;
+    else monthSel.value = now.getMonth();
   }
 
   _bindTabs() {
