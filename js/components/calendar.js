@@ -1172,6 +1172,8 @@ export class Calendar {
     });
 
     bar.addEventListener('click', (e) => {
+      // Si hubo drag activo (moved O simplemente se soltó el mousedown),
+      // el onMouseUp del grid ya manejó la apertura — no abrir de nuevo.
       if (this._barDrag.moved) return;
       e.stopPropagation();
       this._openDetailById(booking.id);
@@ -1872,7 +1874,7 @@ export class Calendar {
       this._floatInfo.classList.add('hidden');
       this._clearDropHighlights(grid);
       _dragState = null;
-      this._barDrag = { active: false, moved: false };
+      this._barDrag = { active: false, moved: false, _wasActive: false };
     };
 
     const onMouseMove = (e) => {
@@ -1953,7 +1955,8 @@ export class Calendar {
       if (!state) return;
 
       if (!moved) {
-        if (state.booking) await this._openDetailById(state.booking.id);
+        // Marcar como "fue un click, el bar.click lo maneja — no doble apertura"
+        // No llamamos _openDetailById acá; el click event del bar lo hace.
         return;
       }
 
@@ -1985,12 +1988,14 @@ export class Calendar {
       });
       if (!confirmed) { this.load(); return; }
 
-      // Validación final en Supabase
+      // Validación final en Supabase — excluir cancelled Y blocked para que
+      // mover un bloqueo no choque consigo mismo ni con otros bloqueos
       const { data: conflicts } = await this.db
         .from('booking_units')
-        .select('unit_id, bookings!inner(id, check_in, check_out, status)')
+        .select('unit_id, bookings!inner(id, check_in, check_out, status, is_blocked)')
         .eq('unit_id', targetUnitId)
         .neq('bookings.status', 'cancelled')
+        .neq('bookings.status', 'blocked')
         .neq('bookings.id', booking.id)
         .lt('bookings.check_in', newCO)
         .gt('bookings.check_out', newCI);
