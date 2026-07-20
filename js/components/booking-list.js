@@ -693,7 +693,7 @@ export class BookingList {
       const motivo = b.block_reason?.trim() || 'Bloqueo';
       return `
         <div class="booking-row" data-booking-id="${b.id}" style="cursor:pointer;
-              background:#f8f9fa;border-left:none;position:relative">
+              background:#e9eaec;border-left:none;position:relative">
           <div class="booking-row-accent" style="background:repeating-linear-gradient(
                 45deg,#9ca3af44,#9ca3af44 4px,transparent 4px,transparent 10px);
                 min-width:5px;border-radius:3px 0 0 3px"></div>
@@ -1367,11 +1367,17 @@ export class BookingList {
   // ── Eliminar ──────────────────────────────────────
   async _deleteBlock(id) {
     if (!confirm('¿Eliminar este bloqueo del calendario?')) return;
-    const { error } = await this.db.from('bookings').delete().eq('id', id);
-    if (error) { showToast('Error al eliminar el bloqueo', 'error'); return; }
-    showToast('Bloqueo eliminado', 'success');
-    this._allBookings = null;
-    await this._loadAll();
+    const row = document.querySelector(`.booking-row[data-booking-id="${id}"]`);
+    if (row) { row.style.opacity = '.35'; row.style.pointerEvents = 'none'; }
+    try {
+      const { error } = await this.db.from('bookings').delete().eq('id', id);
+      if (error) throw error;
+      showToast('Bloqueo eliminado ✓', 'success');
+      await this.load();
+    } catch (err) {
+      if (row) { row.style.opacity = ''; row.style.pointerEvents = ''; }
+      showToast('Error al eliminar el bloqueo: ' + (err.message ?? err), 'error');
+    }
   }
 
   async _deleteBooking(id) {
