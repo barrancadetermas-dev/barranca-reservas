@@ -1172,14 +1172,13 @@ export class Dashboard {
   // Aditivo: crea su propio contenedor; si falla no afecta ningún otro bloque.
   _renderUnitMapWidget(activeBookings, arrivals, departures, today) {
     try {
-      // El card ya existe en el HTML como slot 4 del grid — solo actualizamos su contenido
       const card = document.getElementById('dash-unit-map-card');
       if (!card || !this.ctx.units?.length) return;
 
-      const units  = [...(this.ctx.units ?? [])].sort((a,b) => (a.sort_order??99)-(b.sort_order??99));
-      const nCols  = Math.min(units.length, 4);
+      const units = [...(this.ctx.units ?? [])].sort((a,b) => (a.sort_order??99)-(b.sort_order??99));
+      const nCols = Math.min(units.length, 4);
 
-      // Mapear bookings por unit_id
+      // Mapear bookings activos por unit_id (reservas que ocupan hoy)
       const byUnit = {};
       [...activeBookings, ...arrivals, ...departures].forEach(b => {
         (b.booking_units ?? []).forEach(bu => {
@@ -1188,59 +1187,84 @@ export class Dashboard {
         });
       });
 
-      const STATE = {
-        checkin_today:  { label: 'Entrada hoy',  bg:'#bbf7d0', txt:'#15803d', ring:'#16a34a' },
-        checkout_today: { label: 'Salida hoy',   bg:'#bfdbfe', txt:'#1d4ed8', ring:'#3b82f6' },
-        occupied:       { label: 'Ocupado',       bg:'#fca5a5', txt:'#991b1b', ring:'#ef4444' },
-        free:           { label: 'Libre',         bg:'#f1f5f9', txt:'#64748b', ring:'#cbd5e1' },
+      // ── Lógica de color por estado/canal ──────────────────────────────────
+      // Prioridad: canal externo (Booking/Airbnb/etc) > pagado > seña > sin depósito > libre
+      const PLATFORM_SOURCES = new Set(['booking','airbnb','expedia','despegar','walkin','company','referral','family']);
+      const SOURCE_COLORS = {
+        booking:  { color:'#1D4ED8', label:'Booking',   icon:'B' },
+        airbnb:   { color:'#EA580C', label:'Airbnb',    icon:'A' },
+        expedia:  { color:'#DC2626', label:'Expedia',   icon:'E' },
+        despegar: { color:'#059669', label:'Despegar',  icon:'D' },
+        walkin:   { color:'#0891B2', label:'Espontáneo',icon:'W' },
+        family:   { color:'#7C3AED', label:'Familia',   icon:'F' },
+        company:  { color:'#0F766E', label:'Empresa',   icon:'C' },
+        referral: { color:'#B45309', label:'Referido',  icon:'R' },
+      };
+
+      const getTileState = (bk) => {
+        if (!bk) return { color:'#94a3b8', bg:'#f1f5f9', txt:'#64748b', label:'Libre', empty:true };
+        const src = bk.source ?? 'direct';
+        const st  = bk.status ?? 'pending';
+
+        // Canal externo tiene prioridad de color
+        if (PLATFORM_SOURCES.has(src) && SOURCE_COLORS[src]) {
+          const sc = SOURCE_COLORS[src];
+          return { color:sc.color, bg:sc.color+'22', txt:sc.color, label:sc.label, icon:sc.icon, source:true };
+        }
+        // Por estado de pago
+        if (st === 'paid')    return { color:'#16a34a', bg:'#f0fdf4', txt:'#15803d', label:'Pagado', paid:true };
+        if (st === 'partial') return { color:'#dc2626', bg:'#fef2f2', txt:'#991b1b', label:'Con seña', partial:true };
+        // pending / confirmed sin pago = hablado sin depósito
+        return { color:'#d97706', bg:'#fffbeb', txt:'#92400e', label:'Sin depósito', nopay:true };
       };
 
       const tiles = units.map(u => {
-        const uid  = String(u.id);
-        const bk   = byUnit[uid];
-        const isCI = bk && bk.check_in === today;
-        const isCO = bk && bk.check_out === today;
-        let stKey  = 'free';
-        if (bk)  stKey = 'occupied';
-        if (isCO) stKey = 'checkout_today';
-        if (isCI) stKey = 'checkin_today';
-        const st   = STATE[stKey];
-        const color = u.color ?? '#6366f1';
+        const uid   = String(u.id);
+        const bk    = byUnit[uid];
+        const state = getTileState(bk);
         const guest = bk?.guests ? ((bk.guests.first_name??'')+' '+(bk.guests.last_name??'')).trim() : '';
         const pax   = bk?.pax ? '👥 '+bk.pax : '';
-        const nights= bk?.nights ?? (bk ? Math.round((new Date(bk.check_out+'T12:00:00')-new Date(bk.check_in+'T12:00:00'))/86400000) : 0);
-        return `<div data-unit-map-bid="${bk?.id ?? ''}"
-          title="${u.name}${guest ? ' · '+guest : ''}${bk ? ' · '+bk.check_in+'→'+bk.check_out : ''}"
-          style="border-radius:12px;padding:10px 8px;cursor:${bk?'pointer':'default'};
-                 background:${bk ? color+'22' : 'var(--color-surface-2)'};
-                 border:2px solid ${bk ? color : 'var(--color-border)'};
-                 transition:transform .12s,box-shadow .12s;position:relative;user-select:none"
-          onmouseover="if(this.dataset.unitMapBid)this.style.transform='scale(1.04)';this.style.boxShadow='0 4px 16px rgba(0,0,0,.1)'"
+        const nights = bk ? (bk.nights ?? Math.round((new Date(bk.check_out+'T12:00:00')-new Date(bk.check_in+'T12:00:00'))/86400000)) : 0;
+        const uLabel = (u.name??'').replace(/\d+AMB /,'').replace(' Baja','').replace(' Alta','');
+        const isCI  = bk && bk.check_in === today;
+        const isCO  = bk && bk.check_out === today;
+
+        return `<div
+          data-unit-map-bid="${bk?.id ?? ''}"
+          data-unit-map-uid="${uid}"
+          title="${u.name}${guest ? ' · '+guest : ''}${bk ? ' · '+bk.check_in+' → '+bk.check_out : ' · Click para nueva reserva'}"
+          style="border-radius:12px;padding:10px 8px 9px;cursor:pointer;position:relative;user-select:none;
+                 background:${state.bg};border:2px solid ${state.color};
+                 transition:transform .12s,box-shadow .12s"
+          onmouseover="this.style.transform='scale(1.04)';this.style.boxShadow='0 4px 16px rgba(0,0,0,.1)'"
           onmouseout="this.style.transform='';this.style.boxShadow=''">
+
           <div style="font-size:.6rem;font-weight:800;text-transform:uppercase;letter-spacing:.05em;
-                      color:${bk ? color : 'var(--color-text-3)'};margin-bottom:4px">
-            #${u.sort_order??''} ${(u.name??'').replace(/\d+AMB /,'').replace(' Baja','').replace(' Alta','')}
-          </div>
-          ${bk
-            ? `<div style="font-size:.68rem;font-weight:700;color:${color};line-height:1.3;
-                           white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
-                 ${guest || '—'}
-               </div>
-               <div style="font-size:.6rem;color:var(--color-text-3);margin-top:2px">
-                 ${nights}n${pax ? ' · '+pax : ''}
-               </div>
-               <span style="position:absolute;top:6px;right:6px;font-size:.55rem;font-weight:700;
-                            padding:1px 5px;border-radius:4px;background:${st.bg};color:${st.txt}">
-                 ${st.label}
-               </span>`
-            : `<div style="font-size:.72rem;color:var(--color-text-3);font-style:italic">Libre</div>`
-          }
+                      color:${state.color};margin-bottom:3px">#${u.sort_order??''} ${uLabel}</div>
+
+          ${bk ? `
+            <div style="font-size:.68rem;font-weight:700;color:${state.txt};line-height:1.3;
+                        white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
+              ${guest || '—'}
+            </div>
+            <div style="font-size:.58rem;color:${state.txt};opacity:.8;margin-top:2px">
+              ${nights}n${pax ? ' · '+pax : ''}
+            </div>
+            <span style="position:absolute;top:5px;right:5px;font-size:.52rem;font-weight:700;
+                         padding:1px 5px;border-radius:4px;background:${state.color};color:#fff;white-space:nowrap">
+              ${isCI ? '✈ Entra' : isCO ? '👋 Sale' : state.label}
+            </span>
+          ` : `
+            <div style="font-size:.68rem;color:#94a3b8;font-style:italic;margin-top:4px">Libre</div>
+            <span style="position:absolute;top:5px;right:5px;font-size:.52rem;
+                         color:#94a3b8;opacity:.6">+ Nueva</span>
+          `}
         </div>`;
       }).join('');
 
-      const total  = units.length;
-      const occ    = Object.keys(byUnit).length;
-      const pct    = total > 0 ? Math.round(occ/total*100) : 0;
+      const total = units.length;
+      const occ   = Object.keys(byUnit).length;
+      const pct   = total > 0 ? Math.round(occ/total*100) : 0;
 
       card.innerHTML =
         `<div class="card-header" style="margin-bottom:10px">
@@ -1251,17 +1275,26 @@ export class Dashboard {
         </div>
         <div style="display:grid;grid-template-columns:repeat(${nCols},1fr);gap:8px">${tiles}</div>`;
 
-      // Click → abrir reserva
+      // ── Click handlers ──────────────────────────────────────────────────────
       card.querySelectorAll('[data-unit-map-bid]').forEach(tile => {
-        const bid = tile.dataset.unitMapBid;
-        if (!bid) return;
         tile.addEventListener('click', () => {
-          if (window._bookingFormInstance?.openEdit) window._bookingFormInstance.openEdit(bid);
+          const bid = tile.dataset.unitMapBid;
+          const uid = tile.dataset.unitMapUid;
+          if (bid) {
+            // Tiene reserva → editar
+            if (window._bookingFormInstance?.openEdit) window._bookingFormInstance.openEdit(bid);
+          } else {
+            // Libre → nueva reserva con unidad + fecha de hoy pre-cargadas
+            if (window._bookingFormInstance?.open) {
+              window._bookingFormInstance.open({ unitId: uid, checkIn: today });
+            }
+          }
         });
       });
+
     } catch(err) { console.warn('[Dashboard] unit-map:', err); }
   }
-  // Aditivo: crea su contenedor si no existe. Persiste en Supabase en la
+
   // tabla daily_notes (una nota por hotel+fecha). Si la tabla no existe
   // todavía, el bloque muestra el aviso y no rompe nada más.
   async _renderDailyNote(today) {
