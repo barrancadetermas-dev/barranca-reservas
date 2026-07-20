@@ -447,12 +447,12 @@ export class BookingList {
 
     return `<div style="display:flex;gap:10px;overflow-x:auto;padding:12px 2px;align-items:flex-start;-webkit-overflow-scrolling:touch">
       ${colData.map(col => `
-        <div style="min-width:200px;max-width:230px;flex:1;background:var(--color-surface-2);border-radius:10px;padding:10px;border-top:3px solid ${col.color}">
+        <div style="min-width:200px;max-width:230px;flex:1;background:var(--color-surface-2);border-radius:10px;padding:10px;border-top:3px solid ${col.color};align-self:flex-start">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
             <span style="font-size:.7rem;font-weight:700;color:${col.color}">${col.label}</span>
             <span style="font-size:.64rem;font-weight:700;padding:1px 7px;border-radius:999px;background:var(--color-surface);color:var(--color-text-3)">${col.items.length}</span>
           </div>
-          <div style="max-height:60vh;overflow-y:auto">
+          <div style="max-height:260px;overflow-y:auto;scrollbar-width:thin">
             ${col.items.length ? col.items.map(card).join('') : '<div style="font-size:.7rem;color:var(--color-text-3);text-align:center;padding:14px 0;font-style:italic">Vacío</div>'}
           </div>
         </div>`).join('')}
