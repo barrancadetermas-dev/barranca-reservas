@@ -247,7 +247,8 @@ export class Dashboard {
       this._renderOccupancyRing(kpis.occupiedUnits ?? 0, this.ctx.units?.length ?? 7);
       this._renderArrivals(kpis.arrivals ?? []);
       this._renderDepartures(kpis.checkouts ?? []);
-      this._renderStayingNow(kpis.activeBookings ?? [], today);
+      // _renderStayingNow ya no inyecta en el grid — el widget de Estado
+      // de unidades (#dash-unit-map-card, slot 4) cubre esa información.
       this._renderUnitMapWidget(kpis.activeBookings ?? [], kpis.arrivals ?? [], kpis.checkouts ?? [], today);
       this._renderDailyNote(today);
       // Widget de Limpieza — estaba definido pero nunca se llamaba
@@ -1171,20 +1172,9 @@ export class Dashboard {
   // Aditivo: crea su propio contenedor; si falla no afecta ningún otro bloque.
   _renderUnitMapWidget(activeBookings, arrivals, departures, today) {
     try {
-      const grid = document.getElementById('dashboard-cards');
-      if (!grid || !this.ctx.units?.length) return;
-
-      let card = document.getElementById('dash-unit-map-card');
-      if (!card) {
-        card = document.createElement('div');
-        card.className = 'card';
-        card.id = 'dash-unit-map-card';
-        card.dataset.cardId = 'unit-map';
-        // Inserta antes del widget de notas para que quede antes del final
-        const noteCard = document.getElementById('dash-daily-note-card');
-        noteCard ? noteCard.insertAdjacentElement('beforebegin', card)
-                 : grid.appendChild(card);
-      }
+      // El card ya existe en el HTML como slot 4 del grid — solo actualizamos su contenido
+      const card = document.getElementById('dash-unit-map-card');
+      if (!card || !this.ctx.units?.length) return;
 
       const units  = [...(this.ctx.units ?? [])].sort((a,b) => (a.sort_order??99)-(b.sort_order??99));
       const nCols  = Math.min(units.length, 4);

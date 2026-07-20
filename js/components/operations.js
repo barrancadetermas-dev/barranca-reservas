@@ -1811,7 +1811,9 @@ OperationsModule.prototype._loadTenencias = async function(panel, header) {
   };
 
   // ── Botones agregar ────────────────────────────────────────────────────────
-  const addBtns = `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px">
+  const addBtns = `<div style="position:sticky;top:0;z-index:10;background:var(--color-surface);
+    border-bottom:1px solid var(--color-border);padding:10px 0 12px;margin:-16px -16px 14px;
+    padding-left:16px;padding-right:16px;display:flex;gap:6px;flex-wrap:wrap">
     ${Object.entries(TEN_CFG).map(([key, cfg]) =>
       `<button class="btn btn-outline btn-sm ten-add-btn" data-type="${key}"
                style="font-size:.72rem;border-color:${cfg.color};color:${cfg.color}">

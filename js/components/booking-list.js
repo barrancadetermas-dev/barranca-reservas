@@ -401,11 +401,11 @@ export class BookingList {
   // así los triggers de la base siguen siendo la única fuente de verdad.
   _renderKanban(bookings, today) {
     const COLS = [
-      { key: 'pending',   label: '🟡 Pendiente',  test: b => b.status === 'pending' },
-      { key: 'confirmed', label: '🔵 Confirmada', test: b => (b.status === 'confirmed' || b.status === 'partial' || b.status === 'paid') && b.check_in > today },
-      { key: 'active',    label: '🏠 En curso',   test: b => b.status !== 'cancelled' && b.check_in <= today && b.check_out > today && !b.checked_out_at },
-      { key: 'out_today', label: '👋 Sale hoy',   test: b => b.status !== 'cancelled' && b.check_out === today && !b.checked_out_at },
-      { key: 'done',      label: '✅ Completada', test: b => b.status !== 'cancelled' && (b.check_out < today || !!b.checked_out_at) },
+      { key: 'pending',   label: '🟡 Pendiente',  color:'#ca8a04', test: b => b.status === 'pending' },
+      { key: 'confirmed', label: '🔴 Confirmada', color:'#dc2626', test: b => (b.status === 'confirmed' || b.status === 'partial' || b.status === 'paid') && b.check_in > today },
+      { key: 'active',    label: '🟢 En curso',   color:'#16a34a', test: b => b.status !== 'cancelled' && b.check_in <= today && b.check_out > today && !b.checked_out_at },
+      { key: 'out_today', label: '🔵 Sale hoy',   color:'#2563eb', test: b => b.status !== 'cancelled' && b.check_out === today && !b.checked_out_at },
+      { key: 'done',      label: '⚪ Completada', color:'#64748b', test: b => b.status !== 'cancelled' && (b.check_out < today || !!b.checked_out_at) },
     ];
     const assigned = new Set();
     const colData = COLS.map(col => {
@@ -430,7 +430,8 @@ export class BookingList {
       const color = units[0]?.color ?? '#6366f1';
       const uNames = units.map(u => u?.name).filter(Boolean).join(' + ') || '—';
       const balance = Number(b.balance ?? 0);
-      return `<div class="booking-row" data-booking-id="${b.id}"
+      // data-action="edit" para que el delegation handler abra el formulario de edición
+      return `<div class="booking-row" data-booking-id="${b.id}" data-action="edit"
         style="background:var(--color-surface);border:1px solid var(--color-border);border-left:3px solid ${color};
         border-radius:8px;padding:8px 10px;margin-bottom:6px;cursor:pointer">
         <div style="font-size:.78rem;font-weight:600;color:var(--color-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${guest}</div>
@@ -446,9 +447,9 @@ export class BookingList {
 
     return `<div style="display:flex;gap:10px;overflow-x:auto;padding:12px 2px;align-items:flex-start;-webkit-overflow-scrolling:touch">
       ${colData.map(col => `
-        <div style="min-width:200px;max-width:230px;flex:1;background:var(--color-surface-2);border-radius:10px;padding:10px">
+        <div style="min-width:200px;max-width:230px;flex:1;background:var(--color-surface-2);border-radius:10px;padding:10px;border-top:3px solid ${col.color}">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-            <span style="font-size:.7rem;font-weight:700;color:var(--color-text-2)">${col.label}</span>
+            <span style="font-size:.7rem;font-weight:700;color:${col.color}">${col.label}</span>
             <span style="font-size:.64rem;font-weight:700;padding:1px 7px;border-radius:999px;background:var(--color-surface);color:var(--color-text-3)">${col.items.length}</span>
           </div>
           <div style="max-height:60vh;overflow-y:auto">

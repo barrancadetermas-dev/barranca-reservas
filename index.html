@@ -430,7 +430,7 @@
         <div style="display:flex;align-items:center;justify-content:flex-end;gap:8px;margin:6px 0 10px"></div>
 
         <!-- Panel de personalización -->
-        <div id="dashboard-cards" style="display:grid;grid-template-columns:repeat(5,1fr);gap:14px;margin-top:8px">
+        <div id="dashboard-cards" style="display:grid;grid-template-columns:repeat(5,1fr);gap:14px;margin-top:8px;align-items:stretch">
 
           <!-- FILA 1 — HOY -->
 
@@ -456,6 +456,13 @@
             <div id="occ-sub" style="text-align:center;font-size:.78rem;color:var(--color-text-3);margin-top:2px">—</div>
           </div>
 
+          <!-- SLOT 4: Estado de unidades (JS escribe acá) -->
+          <div id="dash-unit-map-card" class="card dash-card-uniform" data-card-id="unit-map">
+            <div class="card-header"><h3>🏘️ Estado de unidades</h3></div>
+            <div style="padding:8px 4px;font-size:.75rem;color:var(--color-text-3)">Cargando…</div>
+          </div>
+
+          <!-- SLOT 5: Recaudación hoy (movida desde slot 4) -->
           <div class="card dash-card-uniform" data-card-id="recaudacion-hoy">
             <div class="card-header"><h3>💵 Recaudación hoy</h3></div>
             <div style="font-size:1.5rem;font-weight:800;color:var(--color-success)" id="dash-rec-hoy-val">—</div>
@@ -466,14 +473,6 @@
             </div>
           </div>
 
-          <div class="card dash-card-uniform widget-upcoming" data-card-id="upcoming">
-            <div class="card-header">
-              <h3>📅 Próximas llegadas</h3>
-              <span style="font-size:.65rem;background:#f0f9ff;color:#0369a1;padding:2px 8px;border-radius:4px;font-weight:700">7d</span>
-            </div>
-            <div id="dashboard-upcoming" style="flex:1;overflow-y:auto;max-height:200px"></div>
-          </div>
-
           <!-- FILA 2 — EL MES -->
 
           <!-- IDs de RevPAR ocultos para el JS -->
@@ -481,7 +480,7 @@
             <span id="dash-revpar-val"></span><span id="dash-adr-val"></span>
             <span id="dash-occ-month-val"></span><span id="dash-nights-sold-val"></span>
           </div>
-          <!-- Dólar oficial en lugar de RevPAR -->
+
           <div class="card dash-card-uniform" data-card-id="dollar">
             <div class="card-header">
               <h3>💱 Dólar oficial</h3>
@@ -519,6 +518,16 @@
             <div id="dash-cobros-pct" style="font-size:.68rem;color:var(--color-text-3);margin-top:2px">—</div>
           </div>
 
+          <!-- SLOT 9: Próximas llegadas (movida desde slot 5) -->
+          <div class="card dash-card-uniform widget-upcoming" data-card-id="upcoming">
+            <div class="card-header">
+              <h3>📅 Próximas llegadas</h3>
+              <span style="font-size:.65rem;background:#f0f9ff;color:#0369a1;padding:2px 8px;border-radius:4px;font-weight:700">7d</span>
+            </div>
+            <div id="dashboard-upcoming" style="flex:1;overflow-y:auto;max-height:200px"></div>
+          </div>
+
+          <!-- SLOT 10: Reservas del mes (movida desde slot 9) -->
           <div class="card dash-card-uniform" data-card-id="rmes">
             <div class="card-header">
               <h3>📋 Reservas del mes</h3>
@@ -532,28 +541,10 @@
             <div id="dash-rmes-ticket-vs" style="font-size:.66rem;color:var(--color-text-3)"></div>
           </div>
 
-          <div class="card dash-card-uniform" data-card-id="dinero">
-            <div class="card-header"><h3>🔒 Dinero asegurado</h3></div>
-            <div style="font-size:1.5rem;font-weight:800;color:var(--color-text)" id="dash-dinero-val">—</div>
-            <div style="font-size:.72rem;color:var(--color-text-3);margin-bottom:4px" id="dash-dinero-count">—</div>
-            <div style="height:4px;background:var(--color-border);border-radius:2px;margin-bottom:6px;overflow:hidden">
-              <div id="dash-dinero-bar-fill" style="height:100%;width:0%;border-radius:2px;transition:width .5s ease"></div>
-            </div>
-            <div style="display:flex;justify-content:space-between;font-size:.78rem;margin-bottom:3px">
-              <span style="color:var(--color-text-3)">Cobrado</span>
-              <span style="font-weight:700" id="dash-dinero-cobrado">—</span>
-            </div>
-            <div style="display:flex;justify-content:space-between;font-size:.78rem">
-              <span style="color:var(--color-text-3)">Pendiente</span>
-              <span style="font-weight:700;color:var(--color-text)" id="dash-dinero-pendiente">—</span>
-            </div>
-            <div id="dash-dinero-pct" style="font-size:.68rem;color:var(--color-text-3);margin-top:4px">—</div>
-          </div>
-
           <!-- Limpieza (oculta por defecto) -->
           <div id="dashboard-cleaning-widget" class="card dash-card-uniform" data-card-id="cleaning" style="display:none"></div>
 
-        </div><!-- end app-shell -->
+        </div><!-- end dashboard-cards -->
 
       </section><!-- end section-dashboard -->
 
