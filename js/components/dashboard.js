@@ -1219,47 +1219,42 @@ export class Dashboard {
       };
 
       const tiles = units.map(u => {
-        const uid   = String(u.id);
-        const bk    = byUnit[uid];
-        const state = getTileState(bk);
-        const guest = bk?.guests ? ((bk.guests.first_name??'')+' '+(bk.guests.last_name??'')).trim() : '';
-        const pax   = bk?.pax ? '👥 '+bk.pax : '';
+        const uid    = String(u.id);
+        const bk     = byUnit[uid];
+        const state  = getTileState(bk);
+        const fName  = bk?.guests?.first_name ?? '';
         const nights = bk ? (bk.nights ?? Math.round((new Date(bk.check_out+'T12:00:00')-new Date(bk.check_in+'T12:00:00'))/86400000)) : 0;
-        const uLabel = (u.name??'').replace(/\d+AMB /,'').replace(' Baja','').replace(' Alta','');
-        const isCI  = bk && bk.check_in === today;
-        const isCO  = bk && bk.check_out === today;
+        const gShort = fName ? fName.split(' ')[0].slice(0,10) : '';
+        const isCI   = bk && bk.check_in === today;
+        const isCO   = bk && bk.check_out === today;
+        const badge  = isCI ? 'Entra' : isCO ? 'Sale' : state.label;
+        const uShort = '#'+(u.sort_order??'?')+' '+(u.name??'')
+          .replace(/\d+AMB\s*/,'').replace('Planta Baja','PB').replace('Planta Alta','PA')
+          .replace('Duplex','D').replace('duplex','D').slice(0,4);
 
-        return `<div
-          data-unit-map-bid="${bk?.id ?? ''}"
-          data-unit-map-uid="${uid}"
-          title="${u.name}${guest ? ' · '+guest : ''}${bk ? ' · '+bk.check_in+' → '+bk.check_out : ' · Click para nueva reserva'}"
-          style="border-radius:12px;padding:10px 8px 9px;cursor:pointer;position:relative;user-select:none;
-                 background:${state.bg};border:2px solid ${state.color};
-                 transition:transform .12s,box-shadow .12s"
-          onmouseover="this.style.transform='scale(1.04)';this.style.boxShadow='0 4px 16px rgba(0,0,0,.1)'"
-          onmouseout="this.style.transform='';this.style.boxShadow=''">
-
-          <div style="font-size:.6rem;font-weight:800;text-transform:uppercase;letter-spacing:.05em;
-                      color:${state.color};margin-bottom:3px">#${u.sort_order??''} ${uLabel}</div>
-
-          ${bk ? `
-            <div style="font-size:.68rem;font-weight:700;color:${state.txt};line-height:1.3;
-                        white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
-              ${guest || '—'}
-            </div>
-            <div style="font-size:.58rem;color:${state.txt};opacity:.8;margin-top:2px">
-              ${nights}n${pax ? ' · '+pax : ''}
-            </div>
-            <span style="position:absolute;top:5px;right:5px;font-size:.52rem;font-weight:700;
-                         padding:1px 5px;border-radius:4px;background:${state.color};color:#fff;white-space:nowrap">
-              ${isCI ? '✈ Entra' : isCO ? '👋 Sale' : state.label}
-            </span>
-          ` : `
-            <div style="font-size:.68rem;color:#94a3b8;font-style:italic;margin-top:4px">Libre</div>
-            <span style="position:absolute;top:5px;right:5px;font-size:.52rem;
-                         color:#94a3b8;opacity:.6">+ Nueva</span>
-          `}
-        </div>`;
+        return '<div'
+          +' data-unit-map-bid="'+(bk?.id ?? '')+'"'
+          +' data-unit-map-uid="'+uid+'"'
+          +' title="'+u.name+(gShort ? ' · '+gShort : '')+(bk ? ' · '+bk.check_in+' → '+bk.check_out : ' · click para nueva reserva')+'"'
+          +' style="border-radius:8px;padding:7px 6px 6px;cursor:pointer;user-select:none;'
+          +'overflow:hidden;min-width:0;box-sizing:border-box;'
+          +'background:'+state.bg+';border:1.5px solid '+state.color+';'
+          +'display:flex;flex-direction:column;gap:2px;'
+          +'transition:transform .12s,box-shadow .12s"'
+          +' onmouseover="this.style.transform=\'translateY(-2px)\';this.style.boxShadow=\'0 4px 12px rgba(0,0,0,.12)\'"'
+          +' onmouseout="this.style.transform=\'\';this.style.boxShadow=\'\'">'
+          +'<div style="display:flex;align-items:center;justify-content:space-between;gap:2px;min-width:0;overflow:hidden">'
+          +'<span style="font-size:.58rem;font-weight:800;color:'+state.color+';'
+          +'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;min-width:0">'+uShort+'</span>'
+          +'<span style="font-size:.48rem;font-weight:700;padding:1px 3px;border-radius:3px;'
+          +'background:'+state.color+';color:#fff;white-space:nowrap;flex-shrink:0;line-height:1.4">'+badge+'</span>'
+          +'</div>'
+          +(bk
+            ? '<div style="font-size:.62rem;font-weight:600;color:'+state.txt+';'
+              +'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.2">'+(gShort||'—')+'</div>'
+              +'<div style="font-size:.54rem;color:'+state.txt+';opacity:.7;white-space:nowrap">'+nights+'n'+(bk.pax ? ' ·👥'+bk.pax : '')+'</div>'
+            : '<div style="font-size:.58rem;color:#94a3b8;font-style:italic">Libre</div>')
+          +'</div>';
       }).join('');
 
       const total = units.length;
@@ -1273,7 +1268,7 @@ export class Dashboard {
             ${occ}/${total} ocupadas · ${pct}%
           </span>
         </div>
-        <div style="display:grid;grid-template-columns:repeat(${nCols},1fr);gap:8px">${tiles}</div>`;
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(72px,1fr));gap:6px">${tiles}</div>`;
 
       // ── Click handlers ──────────────────────────────────────────────────────
       card.querySelectorAll('[data-unit-map-bid]').forEach(tile => {
