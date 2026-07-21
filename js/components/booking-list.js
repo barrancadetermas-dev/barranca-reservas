@@ -698,7 +698,15 @@ export class BookingList {
       const motivo = b.block_reason?.trim() || 'Bloqueo';
       return `
         <div class="booking-row" data-booking-id="${b.id}" style="cursor:pointer;
-              background:#e9eaec;border-left:none;position:relative">
+              background:repeating-linear-gradient(
+                -45deg,
+                #d1d5db 0px, #d1d5db 1px,
+                #d4d7db 1px, #d4d7db 10px,
+                transparent 10px, transparent 18px,
+                rgba(220,38,38,.13) 18px, rgba(220,38,38,.13) 19px,
+                #d4d7db 19px, #d4d7db 28px
+              );
+              border-left:none;position:relative">
           <div class="booking-row-accent" style="background:repeating-linear-gradient(
                 45deg,#9ca3af44,#9ca3af44 4px,transparent 4px,transparent 10px);
                 min-width:5px;border-radius:3px 0 0 3px"></div>
@@ -847,7 +855,7 @@ export class BookingList {
 
     return `
       <div class="booking-row ${isBad ? 'booking-row-bad' : ''} ${b.status === 'cancelled' ? 'booking-row-cancelled' : ''}" data-booking-id="${b.id}"
-           style="cursor:pointer">
+           style="cursor:pointer;background:${unitColorsForAccent[0] ? unitColorsForAccent[0]+'09' : 'var(--color-surface)'}">
         <div class="booking-row-accent" style="background:${accentBg}" title="${units.map(bu => bu.units?.name).filter(Boolean).join(' · ') || barLabel}"></div>
         <div class="booking-row-body">
           <div class="bl-row-main">
