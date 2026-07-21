@@ -483,6 +483,7 @@ export class BookingList {
 
   // ── Render principal ──────────────────────────────
   _render(today) {
+    this._hideGuestTooltip(); // limpiar tooltip antes de reconstruir el DOM
     const container = document.getElementById('bookings-list');
     if (!container) return;
 
@@ -1524,11 +1525,29 @@ export class BookingList {
     list.addEventListener('mouseout', (e) => {
       const nameEl = e.target.closest('.bl-guest-name-hover');
       if (!nameEl) return;
-      // Solo ocultar si realmente salimos del elemento (no de un hijo, como el flag)
       if (nameEl.contains(e.relatedTarget)) return;
       nameEl._tooltipActive = false;
       this._hideGuestTooltip();
     });
+
+    // ── Safety nets para evitar tooltips tildados ─────────────────────────
+    // 1. El mouse sale de la lista (scroll rápido, clic en otro módulo, etc.)
+    list.addEventListener('mouseleave', () => this._hideGuestTooltip());
+
+    // 2. El mouse sale de la ventana completa
+    document.addEventListener('mouseleave', () => this._hideGuestTooltip());
+
+    // 3. Scroll — el tooltip queda flotando en posición incorrecta
+    document.addEventListener('scroll', () => this._hideGuestTooltip(), { passive: true, capture: true });
+
+    // 4. Cambio de pestaña / ventana pierde el foco
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) this._hideGuestTooltip();
+    });
+
+    // 5. Click en cualquier parte
+    document.addEventListener('click', () => this._hideGuestTooltip(), { capture: true });
+    // ─────────────────────────────────────────────────────────────────────
   }
 
   _showGuestTooltip(booking, e) {
