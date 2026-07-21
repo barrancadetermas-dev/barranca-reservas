@@ -1,3 +1,12 @@
+
+// Formatea porcentaje: entero si es exacto, hasta 4 decimales si no
+const fmtPct = (n) => {
+  const v = parseFloat(n) || 0;
+  if (v === 0) return '0';
+  const r4 = Math.round(v * 10000) / 10000;
+  return Number.isInteger(r4) ? String(r4) : r4.toFixed(4).replace(/\.?0+$/, '');
+};
+
 // ══════════════════════════════════════════════════
 // booking-form.js v5.0 — MILA Sistema Inteligente
 // • Navegación libre entre pestañas (sin validación forzada)
@@ -538,7 +547,7 @@ export class BookingForm {
             <span>Subtotal</span>
             <span>${formatARS(subtotal)}</span>
           </div>
-          ${discPct > 0 ? `<div class="detail-breakdown-row" style="color:var(--color-success)"><span>Descuento ${discPct}%</span><span>−${formatARS(discAmt)}</span></div>` : ''}
+          ${discPct > 0 ? `<div class="detail-breakdown-row" style="color:var(--color-success)"><span>Descuento ${fmtPct(discPct)}%</span><span>−${formatARS(discAmt)}</span></div>` : ''}
           ${surcharge > 0 ? `<div class="detail-breakdown-row" style="color:var(--color-warning)"><span>Recargo / extra</span><span>+${formatARS(surcharge)}</span></div>` : ''}
         ` : ''}
         <div class="detail-breakdown-row total-row">
@@ -1336,7 +1345,7 @@ export class BookingForm {
     set('pb-nights',       `${nights} noche${nights !== 1 ? 's' : ''}${lateCheckout ? ' + ½' : ''}`);
     set('pb-subtotal',     formatARS(subtotal));
     set('pb-free-nights',  freeN > 0 ? `−${formatARS(price * freeN)}` : '—');
-    set('pb-discount',     disc > 0 ? `−${formatARS(discAmt)} (${disc}%)` : '—');
+    set('pb-discount',     disc > 0 ? `−${formatARS(discAmt)} (${fmtPct(disc)}%)` : '—');
     set('pb-surcharge',    surch > 0 ? `+${formatARS(surch)}` : '—');
     set('pb-late-checkout', lateCheckoutPaid ? `+${formatARS(lateAmt)}` : lateCheckout ? 'Sin cargo' : '—');
     set('pb-total',        formatARS(total));
@@ -1941,7 +1950,7 @@ export class BookingForm {
         <div class="voucher-section-title">💰 Finanzas</div>
         <div class="voucher-fin-row"><span>Precio por noche</span><span>${fmt(price)}</span></div>
         <div class="voucher-fin-row"><span>Noches facturadas (${billable})</span><span>${fmt(subtotal)}</span></div>
-        ${discPct > 0   ? `<div class="voucher-fin-row voucher-disc"><span>Descuento ${discPct}%</span><span>−${fmt(discount)}</span></div>` : ''}
+        ${discPct > 0   ? `<div class="voucher-fin-row voucher-disc"><span>Descuento ${fmtPct(discPct)}%</span><span>−${fmt(discount)}</span></div>` : ''}
         ${surcharge > 0 ? `<div class="voucher-fin-row"><span>Recargo</span><span>+${fmt(surcharge)}</span></div>` : ''}
         ${freeNights > 0 ? `<div class="voucher-fin-row voucher-disc"><span>Noches sin cargo (${freeNights})</span><span>✓</span></div>` : ''}
         <div class="voucher-fin-row voucher-total"><span><strong>TOTAL</strong></span><span><strong>${fmt(total)}</strong></span></div>
@@ -2185,7 +2194,7 @@ export class BookingForm {
   <div class="finance-row subtotal">
     <span>Noches (${billable}${freeNights ? ` facturables de ${nightsN}` : ''})</span><span>${fmt(subtotal)}</span>
   </div>
-  ${discPct > 0    ? `<div class="finance-row disc"><span>Descuento ${discPct}%</span><span>− ${fmt(discount)}</span></div>` : ''}
+  ${discPct > 0    ? `<div class="finance-row disc"><span>Descuento ${fmtPct(discPct)}%</span><span>− ${fmt(discount)}</span></div>` : ''}
   ${surcharge > 0  ? `<div class="finance-row"><span>Recargo adicional</span><span>+ ${fmt(surcharge)}</span></div>` : ''}
   <div class="finance-row total">
     <span>TOTAL ESTADÍA</span><span>${fmt(total)}</span>
