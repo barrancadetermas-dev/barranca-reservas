@@ -68,7 +68,11 @@ export class BookingList {
       e.stopPropagation(); // evitar que el clic en botón abra el detalle
       const action = btn.dataset.action;
       if (action === 'view')      this._openDetail(id);
-      if (action === 'edit')      this.bookingForm.openEdit(id);
+      if (action === 'edit') {
+        const bk = this._allBookings?.find(b => b.id === id);
+        if (bk?.status === 'blocked' || bk?.is_blocked) this._openBlockEditModal(id, bk);
+        else this.bookingForm.openEdit(id);
+      }
       if (action === 'voucher')   this._openVoucher(id);
       if (action === 'whatsapp')  this._sendWhatsApp(id);
       if (action === 'delete')    this._deleteBooking(id);
@@ -1366,6 +1370,193 @@ export class BookingList {
   }
 
   // ── Eliminar ──────────────────────────────────────
+  // ── Modal de edición de bloqueo desde la lista de reservas ───────────────
+  // Permite cambiar fechas, motivo y unidades bloqueadas.
+  // Multi-unidad: checkboxes por depto. Al guardar sincroniza booking_units.
+  async _openBlockEditModal(bookingId, bookingData) {
+    const existing = document.getElementById('overlay-block-edit-list');
+    if (existing) existing.remove();
+
+    // Cargar datos frescos si faltan las unidades
+    let bk = bookingData;
+    if (!bk?.booking_units?.length) {
+      const { data } = await this.db.from('bookings')
+        .select('id, check_in, check_out, block_reason, booking_units(unit_id)')
+        .eq('id', bookingId).single();
+      if (data) bk = { ...bk, ...data };
+    }
+
+    const allUnits      = this.ctx.units ?? [];
+    const blockedUnitIds = new Set((bk.booking_units ?? []).map(bu => String(bu.unit_id)));
+
+    const unitCheckboxes = allUnits
+      .sort((a,b) => (a.sort_order??99)-(b.sort_order??99))
+      .map(u => {
+        const checked = blockedUnitIds.has(String(u.id));
+        const dot = `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;
+                          background:${u.color??'#6366f1'};margin-right:5px;flex-shrink:0"></span>`;
+        return `<label style="display:flex;align-items:center;gap:6px;padding:6px 10px;
+                              border-radius:8px;cursor:pointer;border:1px solid var(--color-border);
+                              background:${checked ? (u.color??'#6366f1')+'15' : 'var(--color-surface)'};
+                              transition:background .1s" class="block-unit-label">
+          <input type="checkbox" value="${u.id}" ${checked ? 'checked' : ''}
+                 style="accent-color:${u.color??'#6366f1'};width:15px;height:15px;cursor:pointer;flex-shrink:0">
+          ${dot}
+          <span style="font-size:.78rem;font-weight:500;color:var(--color-text)">#${u.sort_order} · ${u.name}</span>
+        </label>`;
+      }).join('');
+
+    const modal = document.createElement('div');
+    modal.className = 'modal-overlay';
+    modal.id = 'overlay-block-edit-list';
+    modal.innerHTML = `
+      <div class="modal modal-sm">
+        <div class="modal-header" style="background:#f8f9fa;border-bottom:1px solid var(--color-border)">
+          <h3 class="modal-title">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                 width="16" height="16" style="margin-right:6px;vertical-align:-2px">
+              <rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+            </svg>
+            Editar bloqueo
+          </h3>
+          <button class="modal-close" id="be-close">✕</button>
+        </div>
+        <div class="modal-body" style="display:flex;flex-direction:column;gap:16px">
+
+          <div class="form-group">
+            <label>Motivo</label>
+            <input type="text" id="be-reason"
+                   value="${(bk.block_reason ?? '').replace(/"/g,'&quot;')}"
+                   placeholder="Mantenimiento, uso propio, reparación…">
+          </div>
+
+          <div class="form-grid-2">
+            <div class="form-group">
+              <label>Fecha inicio</label>
+              <input type="date" id="be-checkin" value="${bk.check_in ?? ''}">
+            </div>
+            <div class="form-group">
+              <label>Fecha fin</label>
+              <input type="date" id="be-checkout" value="${bk.check_out ?? ''}">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label style="margin-bottom:8px;display:block">Unidades bloqueadas</label>
+            <div style="display:flex;flex-direction:column;gap:6px" id="be-units">
+              ${unitCheckboxes}
+            </div>
+            <div id="be-units-warn" style="font-size:.72rem;color:#dc2626;margin-top:6px;display:none">
+              Seleccioná al menos una unidad
+            </div>
+          </div>
+
+        </div>
+        <div class="modal-footer" style="gap:8px;flex-wrap:wrap">
+          <button class="btn btn-outline" id="be-delete"
+                  style="color:#dc2626;border-color:#fecaca;margin-right:auto">🗑 Eliminar</button>
+          <button class="btn btn-outline" id="be-cancel">Cancelar</button>
+          <button class="btn btn-primary" id="be-save">Guardar cambios</button>
+        </div>
+      </div>`;
+
+    document.body.appendChild(modal);
+
+    const close = () => {
+      modal.remove();
+      document.removeEventListener('keydown', escH);
+    };
+    const escH = (e) => { if (e.key === 'Escape') close(); };
+    document.addEventListener('keydown', escH);
+    modal.querySelector('#be-close').onclick   = close;
+    modal.querySelector('#be-cancel').onclick  = close;
+    modal.addEventListener('click', e => { if (e.target === modal) close(); });
+    setTimeout(() => modal.querySelector('#be-reason')?.focus(), 80);
+
+    // Colorear label al marcar/desmarcar
+    modal.querySelectorAll('.block-unit-label input[type=checkbox]').forEach(cb => {
+      cb.addEventListener('change', () => {
+        const unit = allUnits.find(u => String(u.id) === cb.value);
+        const lbl  = cb.closest('.block-unit-label');
+        lbl.style.background = cb.checked ? (unit?.color ?? '#6366f1') + '15' : 'var(--color-surface)';
+      });
+    });
+
+    // ── Guardar ──────────────────────────────────────────────────────────────
+    modal.querySelector('#be-save').addEventListener('click', async () => {
+      const newCI     = modal.querySelector('#be-checkin').value;
+      const newCO     = modal.querySelector('#be-checkout').value;
+      const newReason = modal.querySelector('#be-reason').value.trim() || 'Bloqueo';
+      const warn      = modal.querySelector('#be-units-warn');
+
+      const selectedUnitIds = [...modal.querySelectorAll('#be-units input[type=checkbox]:checked')]
+        .map(cb => cb.value);
+
+      if (!newCI || !newCO || newCI >= newCO) {
+        showToast('Las fechas son inválidas', 'warning'); return;
+      }
+      if (!selectedUnitIds.length) {
+        warn.style.display = 'block'; return;
+      }
+      warn.style.display = 'none';
+
+      const saveBtn = modal.querySelector('#be-save');
+      saveBtn.disabled = true; saveBtn.textContent = 'Guardando…';
+
+      try {
+        // 1. Actualizar datos del bloqueo
+        const { error: e1 } = await this.db.from('bookings')
+          .update({ check_in: newCI, check_out: newCO, block_reason: newReason })
+          .eq('id', bookingId);
+        if (e1) throw e1;
+
+        // 2. Sincronizar booking_units: borrar las viejas e insertar las nuevas
+        await this.db.from('booking_units').delete().eq('booking_id', bookingId);
+        const inserts = selectedUnitIds.map(uid => ({
+          booking_id: bookingId,
+          unit_id:    uid,
+          price_per_night: 0,
+        }));
+        const { error: e2 } = await this.db.from('booking_units').insert(inserts);
+        if (e2) throw e2;
+
+        // 3. Sincronizar maintenance_issue si existe
+        const { data: mi } = await this.db.from('maintenance_issues')
+          .select('id').eq('booking_id', bookingId).maybeSingle();
+        if (mi?.id) {
+          await this.db.from('maintenance_issues')
+            .update({ title: newReason, description: `Bloqueo: ${newCI} → ${newCO}` })
+            .eq('id', mi.id);
+        }
+
+        showToast('Bloqueo actualizado ✓', 'success');
+        close();
+        await this.load();
+      } catch (err) {
+        console.error('[BookingList] block edit error:', err);
+        showToast('Error al guardar: ' + (err?.message ?? String(err)), 'error');
+        saveBtn.disabled = false; saveBtn.textContent = 'Guardar cambios';
+      }
+    });
+
+    // ── Eliminar ─────────────────────────────────────────────────────────────
+    modal.querySelector('#be-delete').addEventListener('click', async () => {
+      if (!confirm('¿Eliminar este bloqueo del calendario?')) return;
+      const delBtn = modal.querySelector('#be-delete');
+      delBtn.disabled = true; delBtn.textContent = '⏳ Eliminando…';
+      try {
+        const { error } = await this.db.from('bookings').delete().eq('id', bookingId);
+        if (error) throw error;
+        showToast('Bloqueo eliminado ✓', 'success');
+        close();
+        await this.load();
+      } catch (err) {
+        delBtn.disabled = false; delBtn.textContent = '🗑 Eliminar';
+        showToast('Error al eliminar: ' + (err?.message ?? String(err)), 'error');
+      }
+    });
+  }
+
   async _deleteBlock(id) {
     if (!confirm('¿Eliminar este bloqueo del calendario?')) return;
     const row = document.querySelector(`.booking-row[data-booking-id="${id}"]`);
