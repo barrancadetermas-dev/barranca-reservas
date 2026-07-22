@@ -268,31 +268,21 @@ export function generateEncargadaWhatsApp(bookings, rangeLabel, includeAmounts) 
   if (!includeAmounts) {
     // ── Modo limpieza ──
     const groups = buildCleaningGroups(bookings);
-    const total = [...groups.values()].reduce((s, g) => s + g.length, 0);
-    lines.push(
-      `🏡 *Barranca de Termas*`,
-      `🧹 *Limpiezas programadas*${rangeLabel ? ' · ' + rangeLabel : ''}`,
-      `${now} · ${total} departamento${total !== 1 ? 's' : ''}`,
-    );
 
     groups.forEach((items, date) => {
       const dayLabel = fmtWithDay(date);
-      lines.push(
-        `━━━━━━━━━━━━━━━━━━━━━━`,
-        `📅 *_${dayLabel} · ${items.length} departamento${items.length !== 1 ? 's' : ''}_*`,
-      );
+      if (lines.length > 0) lines.push(`──────────────────────`);
+      if (items.length > 1) {
+        lines.push(`📅 *${dayLabel}* · ${items.length} departamentos`);
+      }
       items.forEach(({ b, bu, nights, recambio }) => {
         const { num, rest } = unitLabelWA(bu);
-        const recLabel = recambio ? ' *RECAMBIO*' : '';
-        const g = b?.guests;
-        const car = [g?.car_model, g?.car_plate].filter(Boolean).join(' · ') || null;
+        const recLabel = recambio ? ' ⚠️ *RECAMBIO*' : '';
+        if (items.length > 1) lines.push(``);
         lines.push(
-          ``,
-          `🧹 *Limpieza: ${dayLabel}*`,
-          `- _Apart. N°: *${num}*_ _${rest}_${recLabel}`,
+          `🧹 *Limpieza ${dayLabel}*`,
+          `- Apart. N°: *${num}* _${rest}_${recLabel}`,
           `- _Estuvieron ${nights} noche${nights !== 1 ? 's' : ''}_`,
-          g?.age ? `- _Edad: ${g.age}_` : null,
-          car    ? `- _Auto: ${car}_` : null,
           `- _NOTA:_`,
         );
       });
