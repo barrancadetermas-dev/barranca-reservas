@@ -1201,27 +1201,32 @@ export class Dashboard {
         referral: { color:'#B45309', label:'Referido',  icon:'R' },
       };
 
-      const getTileState = (bk) => {
-        if (!bk) return { color:'#94a3b8', bg:'#f1f5f9', txt:'#64748b', label:'Libre', empty:true };
+      const getTileState = (bk, unitColor) => {
+        if (!bk) {
+          // Libre: tinte casi imperceptible del color del propio depto
+          const uc = unitColor ?? '#94a3b8';
+          return { color: uc, bg: uc + '0a', border: uc + '20', txt: uc, label:'Libre', empty:true };
+        }
         const src = bk.source ?? 'direct';
         const st  = bk.status ?? 'pending';
 
-        // Canal externo tiene prioridad de color
+        // Canal externo — color del canal, fondo muy sutil
         if (PLATFORM_SOURCES.has(src) && SOURCE_COLORS[src]) {
           const sc = SOURCE_COLORS[src];
-          return { color:sc.color, bg:sc.color+'22', txt:sc.color, label:sc.label, icon:sc.icon, source:true };
+          return { color: sc.color, bg: sc.color + '0d', border: sc.color + '30', txt: sc.color, label: sc.label, icon: sc.icon, source: true };
         }
-        // Por estado de pago
-        if (st === 'paid')    return { color:'#16a34a', bg:'#f0fdf4', txt:'#15803d', label:'Pagado', paid:true };
-        if (st === 'partial') return { color:'#dc2626', bg:'#fef2f2', txt:'#991b1b', label:'Con seña', partial:true };
-        // pending / confirmed sin pago = hablado sin depósito
-        return { color:'#d97706', bg:'#fffbeb', txt:'#92400e', label:'Sin depósito', nopay:true };
+        // Pagado — verde muy sutil
+        if (st === 'paid')    return { color:'#16a34a', bg:'#f0fdf4', border:'#16a34a28', txt:'#15803d', label:'Pagado',      paid:true    };
+        // Con seña — rojo muy sutil
+        if (st === 'partial') return { color:'#dc2626', bg:'#fef2f2', border:'#dc262628', txt:'#991b1b', label:'Con seña',    partial:true };
+        // Sin depósito — ámbar muy sutil
+        return                       { color:'#d97706', bg:'#fffbeb', border:'#d9770628', txt:'#92400e', label:'Sin depósito', nopay:true   };
       };
 
       const tiles = units.map(u => {
         const uid    = String(u.id);
         const bk     = byUnit[uid];
-        const state  = getTileState(bk);
+        const state  = getTileState(bk, u.color ?? '#94a3b8');
         const fName  = bk?.guests?.first_name ?? '';
         const nights = bk ? (bk.nights ?? Math.round((new Date(bk.check_out+'T12:00:00')-new Date(bk.check_in+'T12:00:00'))/86400000)) : 0;
         const gShort = fName ? fName.split(' ')[0].slice(0,10) : '';
@@ -1238,7 +1243,7 @@ export class Dashboard {
           +' title="'+u.name+(gShort ? ' · '+gShort : '')+(bk ? ' · '+bk.check_in+' → '+bk.check_out : ' · click para nueva reserva')+'"'
           +' style="border-radius:8px;padding:7px 6px 6px;cursor:pointer;user-select:none;'
           +'overflow:hidden;min-width:0;box-sizing:border-box;'
-          +'background:'+state.bg+';border:1.5px solid '+state.color+';'
+          +'background:'+state.bg+';border:1.5px solid '+(state.border ?? state.color+'28')+';'
           +'display:flex;flex-direction:column;gap:2px;'
           +'transition:transform .12s,box-shadow .12s"'
           +' onmouseover="this.style.transform=\'translateY(-2px)\';this.style.boxShadow=\'0 4px 12px rgba(0,0,0,.12)\'"'
