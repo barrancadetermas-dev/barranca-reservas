@@ -485,7 +485,7 @@ export class BookingForm {
     const freeNights    = booking.free_nights ?? 0;
     const billable      = Math.max(0, nights - freeNights);
     const subtotal      = pricePerNight * billable;
-    const discAmt       = subtotal * (discPct / 100);
+    const discAmt       = Math.round(subtotal * (discPct / 100));
     const total         = booking.total_amount ?? Math.max(0, subtotal - discAmt + surcharge);
     const paymentRows   = (booking.payments ?? []).filter(p => Number(p.amount) !== 0);
     const totalPaid     = paymentRows.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
@@ -1337,9 +1337,9 @@ export class BookingForm {
     const nights       = Math.round((new Date(co) - new Date(ci)) / 86400000);
     const billable     = Math.max(0, nights - freeN);
     const subtotal     = price * billable;
-    const discAmt      = subtotal * (disc / 100);
+    const discAmt      = Math.round(subtotal * (disc / 100));
     const lateAmt      = lateCheckoutPaid ? lateAmtCustom : 0;
-    const total        = Math.max(0, subtotal - discAmt + surch + lateAmt);
+    const total        = Math.max(0, subtotal - discAmt + Math.round(surch) + lateAmt);
 
     const set = (id, text) => { const el = document.getElementById(id); if (el) el.textContent = text; };
     set('pb-nights',       `${nights} noche${nights !== 1 ? 's' : ''}${lateCheckout ? ' + ½' : ''}`);
@@ -1832,7 +1832,7 @@ export class BookingForm {
     const freeNights = parseInt(document.getElementById('f-free-nights')?.value ?? 0);
     const billable   = Math.max(0, nightsN - freeNights);
     const subtotal   = billable * price;
-    const discount   = subtotal * discPct / 100;
+    const discount   = Math.round(subtotal * discPct / 100);
     const total      = Math.round(subtotal - discount + surcharge);
     const paid       = Math.round(this._getTotalPaid());
     const balance    = total - paid;
@@ -2009,7 +2009,7 @@ export class BookingForm {
     const freeNights = parseInt(document.getElementById('f-free-nights')?.value ?? 0);
     const billable   = Math.max(0, nightsN - freeNights);
     const subtotal   = billable * price;
-    const discount   = subtotal * discPct / 100;
+    const discount   = Math.round(subtotal * discPct / 100);
     const total      = Math.round(subtotal - discount + surcharge);
     const paid       = Math.round(this._getTotalPaid());
     const balance    = Math.max(0, total - paid);
@@ -2249,7 +2249,7 @@ ${notes ? `
     const freeNights = parseInt(document.getElementById('f-free-nights')?.value ?? 0);
     const billable = Math.max(0, nightsN - freeNights);
     const subtotal = billable * price;
-    const discount = subtotal * discPct / 100;
+    const discount = Math.round(subtotal * discPct / 100);
     const total    = Math.round(subtotal - discount + surcharge);
     const paid     = Math.round(this._getTotalPaid());
     const balance  = Math.max(0, total - paid);
@@ -2323,14 +2323,11 @@ ${notes ? `
       const nights   = Math.round((new Date(co) - new Date(ci)) / 86400000);
       const billable = Math.max(0, nights - freeN);
       const subtotal = price * billable;
-      const discAmt  = subtotal * (disc / 100);
-      // Redondear total/paid a pesos enteros antes de comparar — sin esto,
-      // un descuento o recargo en % puede dejar un resto de centavos por
-      // error de coma flotante (ej: saldo = $0.00000003 en vez de $0
-      // exacto), y como eso NO es "≤ 0", la reserva nunca se marcaba sola
-      // como Pagada aunque se hubiera cargado el pago completo — quedaba
-      // en "Señada" hasta que alguien forzaba el estado a mano.
-      const total    = Math.round(Math.max(0, subtotal - discAmt + surch));
+      // Redondear el descuento PRIMERO para que el total quede en pesos exactos.
+      // Ej: $270.000 × 16,6668% = $45.000,36 → Math.round → $45.000
+      // → total = $270.000 − $45.000 = $225.000 exacto (no $224.999).
+      const discAmt  = Math.round(subtotal * (disc / 100));
+      const total    = Math.max(0, subtotal - discAmt + Math.round(surch));
       const paid     = Math.round(this._getTotalPaid());
       const balance  = Math.max(0, total - paid);
 
