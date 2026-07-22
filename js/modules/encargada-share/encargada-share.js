@@ -222,11 +222,17 @@ function _injectModal() {
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
             <div>
               <span style="font-size:.78rem;font-weight:700;color:var(--color-text)">Mensaje generado</span>
-              <span id="enc-editable-hint" style="font-size:.7rem;color:#0284c7;margin-left:8px;display:none">✏️ Editable — completá las líneas NOTA:</span>
+              <span style="font-size:.7rem;color:#0284c7;margin-left:8px">✏️ Podés editar antes de enviar</span>
             </div>
             <button id="enc-copy-btn" class="btn btn-outline btn-sm" style="font-size:.7rem;padding:3px 8px">📋 Copiar</button>
           </div>
-          <textarea id="enc-wa-text" rows="12" class="wa-textarea" style="font-size:.72rem;font-family:monospace;width:100%;resize:vertical"></textarea>
+          <textarea id="enc-wa-text" rows="14" class="wa-textarea"
+            style="font-size:.72rem;font-family:monospace;width:100%;resize:vertical;
+                   border:1.5px solid var(--color-border);border-radius:8px;padding:10px 12px;
+                   background:var(--color-surface);color:var(--color-text);line-height:1.7;
+                   transition:border-color .15s"
+            onfocus="this.style.borderColor='var(--color-primary)'"
+            onblur="this.style.borderColor='var(--color-border)'"></textarea>
         </div>
 
         <!-- 5. Aviso sobre PDF -->

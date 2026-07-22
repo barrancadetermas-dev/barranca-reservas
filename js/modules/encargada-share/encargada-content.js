@@ -300,35 +300,35 @@ export function generateEncargadaWhatsApp(bookings, rangeLabel, includeAmounts) 
   } else {
     // ── Modo reservas ──
     const blocks = buildReservaBlocks(bookings);
-    lines.push(
-      `🏡 *Barranca de Termas*`,
-      `📋 *Reservas para Encargada*${rangeLabel ? ' · ' + rangeLabel : ''}`,
-      `${now} · ${blocks.length} reserva${blocks.length !== 1 ? 's' : ''}`,
-      `━━━━━━━━━━━━━━━━━━━━━━`,
-    );
-    blocks.forEach(({ b, name, phone, age, car, units, nights, pax, balance, notes, status }, i) => {
-      const unitsText = units.map(bu => unitLabel(bu)).join(' / ') || '—';
+    blocks.forEach(({ b, name, phone, age, car, units, nights, pax, balance, notes }, i) => {
+      // Unidades: número en negrita, nombre en cursiva
+      const unitsText = units.map(bu => {
+        const { num, rest } = unitLabelWA(bu);
+        return `*${num}* _${rest}_`;
+      }).join(' / ') || '—';
+
+      // Badge _(cliente)_ si el huésped ya tenía reservas previas
+      const isReturning = (b.guests?.bookings_count ?? b._guestBookingsCount ?? 0) > 1
+        || b.guests?.is_returning === true;
+      const clienteTag = isReturning ? ' _(cliente)_' : '';
+
       if (i > 0) lines.push(`──────────────────────`);
       lines.push(
-        ``,
         `*Nueva Reserva* 🧾`,
         ``,
-        `- Apellido y Nombre: *${name}*`,
+        `- Apellido y Nombre: *${name}*${clienteTag}`,
         `- Contacto: ${phone}`,
         `- Apart. N°: ${unitsText}`,
         `- Fecha Ingreso: ${fmtShort(b.check_in)}`,
-        `- Fecha Salida: ${fmtShort(b.check_out)}`,
-        `- Noches: ${nights}`,
+        `- Fecha Salida: ${fmtShort(b.check_out)} _(${nights} ${nights !== 1 ? 'noches' : 'noche'})_`,
         `- Cant. de Personas: ${pax !== '' ? String(pax) : '—'}`,
         age ? `- Edad: ${age}` : null,
         car ? `- Auto: ${car}` : null,
+        balance > 0 ? `- Abonan al ingreso: *${fmtMoney(balance)}*` : null,
+        `- Nota: ${notes || '—'}`,
       );
-      if (balance > 0) lines.push(`- Abonan al ingreso: *${fmtMoney(balance)}*`);
-      lines.push(`- Estado: ${status}`);
-      lines.push(`- Nota: ${notes || '—'}`);
     });
   }
 
-  lines.push(``, `━━━━━━━━━━━━━━━━━━━━━━`, `_MILA · Barranca de Termas_`);
   return lines.filter(l => l !== null).join('\n');
 }
