@@ -149,6 +149,7 @@ export class BookingList {
         .select(`
           id, check_in, check_out, nights, status, source,
           total_amount, total_paid, balance, price_per_night,
+          discount_pct, surcharge_amount,
           notes, is_blocked, block_reason, created_at, adults, children, pax,
           checked_in_at, checked_out_at,
           guests!bookings_guest_id_fkey(
@@ -884,7 +885,33 @@ export class BookingList {
                     <div style="font-size:.78rem;font-weight:700;color:#7c3aed;margin-top:2px">🔄 NC ${formatARS(ncAmount)}</div>`;
                 }
                 return `
-                  <div class="bl-amount-total">${formatARS(b.total_amount)}</div>
+                  ${(() => {
+                    const disc  = parseFloat(b.discount_pct ?? 0);
+                    const surch = parseFloat(b.surcharge_amount ?? 0);
+                    const nights2 = b.nights ?? 0;
+                    const subtotal = (b.price_per_night ?? 0) * nights2;
+                    if (disc > 0) {
+                      const discAmt = Math.round(subtotal * disc / 100);
+                      const fmtPct2 = (n) => { const r=Math.round(n*10000)/10000; return Number.isInteger(r)?String(r):r.toFixed(4).replace(/\.?0+$/,''); };
+                      return `<div style="display:flex;align-items:baseline;gap:4px;justify-content:flex-end">
+                        <span style="font-size:.68rem;color:var(--color-text-3);text-decoration:line-through">${formatARS(subtotal)}</span>
+                        <div class="bl-amount-total">${formatARS(b.total_amount)}</div>
+                      </div>
+                      <div style="font-size:.68rem;font-weight:600;padding:1px 6px;border-radius:4px;background:#f0fdf4;color:#15803d;display:inline-flex;align-items:center;gap:3px;margin-top:2px;white-space:nowrap">
+                        ▼ −${formatARS(discAmt)} (${fmtPct2(disc)}%)
+                      </div>`;
+                    }
+                    if (surch > 0) {
+                      return `<div style="display:flex;align-items:baseline;gap:4px;justify-content:flex-end">
+                        <span style="font-size:.68rem;color:var(--color-text-3);text-decoration:line-through">${formatARS(subtotal)}</span>
+                        <div class="bl-amount-total">${formatARS(b.total_amount)}</div>
+                      </div>
+                      <div style="font-size:.68rem;font-weight:600;padding:1px 6px;border-radius:4px;background:#fff7ed;color:#c2410c;display:inline-flex;align-items:center;gap:3px;margin-top:2px;white-space:nowrap">
+                        ▲ +${formatARS(surch)} recargo
+                      </div>`;
+                    }
+                    return `<div class="bl-amount-total">${formatARS(b.total_amount)}</div>`;
+                  })()}
                   ${b.total_paid > 0 && b.balance > 0
                     ? `<div class="bl-amount-breakdown">
                         <span class="bl-paid">−${formatARS(b.total_paid)}</span>
