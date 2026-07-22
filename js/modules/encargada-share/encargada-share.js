@@ -310,7 +310,7 @@ function _bindEvents() {
     const textarea = _modalEl.querySelector('#enc-wa-text');
     textarea.value = text;
     // Modo limpieza → editable para agregar notas por depto
-    textarea.readOnly = includeAmounts;
+    textarea.readOnly = false;
     if (!includeAmounts) {
       textarea.style.border = '1.5px solid var(--color-primary)';
       textarea.title = 'Podés editar este texto — completá las líneas NOTA: antes de enviar';

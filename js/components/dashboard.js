@@ -1232,33 +1232,37 @@ export class Dashboard {
         const gShort = fName ? fName.split(' ')[0].slice(0,10) : '';
         const isCI   = bk && bk.check_in === today;
         const isCO   = bk && bk.check_out === today;
-        const badge  = isCI ? 'Entra' : isCO ? 'Sale' : state.label;
-        const uShort = '#'+(u.sort_order??'?')+' '+(u.name??'')
-          .replace(/\d+AMB\s*/,'').replace('Planta Baja','PB').replace('Planta Alta','PA')
-          .replace('Duplex','D').replace('duplex','D').slice(0,4);
+        // Solo número: "#1", "#2"…
+        const uNum   = '#' + (u.sort_order ?? '?');
+        // Tipo corto debajo del número
+        const uType  = (u.name ?? '')
+          .replace(/\d+AMB\s*/,'').replace('Planta Baja','P. Baja').replace('Planta Alta','P. Alta')
+          .replace(/Duplex/i,'Duplex');
 
         return '<div'
           +' data-unit-map-bid="'+(bk?.id ?? '')+'"'
           +' data-unit-map-uid="'+uid+'"'
           +' title="'+u.name+(gShort ? ' · '+gShort : '')+(bk ? ' · '+bk.check_in+' → '+bk.check_out : ' · click para nueva reserva')+'"'
-          +' style="border-radius:8px;padding:7px 6px 6px;cursor:pointer;user-select:none;'
+          +' style="border-radius:8px;padding:8px 7px 7px;cursor:pointer;user-select:none;'
           +'overflow:hidden;min-width:0;box-sizing:border-box;'
           +'background:'+state.bg+';border:1.5px solid '+(state.border ?? state.color+'28')+';'
-          +'display:flex;flex-direction:column;gap:2px;'
+          +'display:flex;flex-direction:column;gap:1px;'
           +'transition:transform .12s,box-shadow .12s"'
-          +' onmouseover="this.style.transform=\'translateY(-2px)\';this.style.boxShadow=\'0 4px 12px rgba(0,0,0,.12)\'"'
+          +' onmouseover="this.style.transform=\'translateY(-2px)\';this.style.boxShadow=\'0 4px 12px rgba(0,0,0,.1)\'"'
           +' onmouseout="this.style.transform=\'\';this.style.boxShadow=\'\'">'
-          +'<div style="display:flex;align-items:center;justify-content:space-between;gap:2px;min-width:0;overflow:hidden">'
-          +'<span style="font-size:.58rem;font-weight:800;color:'+state.color+';'
-          +'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;min-width:0">'+uShort+'</span>'
-          +'<span style="font-size:.48rem;font-weight:700;padding:1px 3px;border-radius:3px;'
-          +'background:'+state.color+';color:#fff;white-space:nowrap;flex-shrink:0;line-height:1.4">'+badge+'</span>'
+          // Fila 1: número + badge (solo si ocupado)
+          +'<div style="display:flex;align-items:center;justify-content:space-between;gap:2px;min-width:0">'
+          +'<span style="font-size:.7rem;font-weight:800;color:'+state.color+'">' + uNum + '</span>'
+          +(bk ? '<span style="font-size:.46rem;font-weight:700;padding:1px 4px;border-radius:3px;'
+            +'background:'+state.color+';color:#fff;white-space:nowrap;flex-shrink:0;line-height:1.5">'
+            +(isCI ? 'Entra' : isCO ? 'Sale' : state.label)+'</span>' : '')
           +'</div>'
+          // Fila 2: tipo de unidad (siempre) o nombre huésped (si ocupado)
           +(bk
             ? '<div style="font-size:.62rem;font-weight:600;color:'+state.txt+';'
-              +'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.2">'+(gShort||'—')+'</div>'
-              +'<div style="font-size:.54rem;color:'+state.txt+';opacity:.7;white-space:nowrap">'+nights+'n'+(bk.pax ? ' ·👥'+bk.pax : '')+'</div>'
-            : '<div style="font-size:.58rem;color:#94a3b8;font-style:italic">Libre</div>')
+              +'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px">'+(gShort||'—')+'</div>'
+              +'<div style="font-size:.54rem;color:'+state.txt+';opacity:.7;white-space:nowrap">'+nights+'n'+(bk.pax ? ' · 👥'+bk.pax : '')+'</div>'
+            : '<div style="font-size:.6rem;color:'+state.color+';opacity:.5;margin-top:2px">'+uType+'</div>')
           +'</div>';
       }).join('');
 
