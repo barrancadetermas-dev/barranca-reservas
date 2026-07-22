@@ -913,10 +913,11 @@ export class BookingList {
                     return `<div class="bl-amount-total">${formatARS(b.total_amount)}</div>`;
                   })()}
                   ${b.total_paid > 0 && b.balance > 0
-                    ? `<div class="bl-amount-breakdown">
-                        <span class="bl-paid">−${formatARS(b.total_paid)}</span>
-                        <span class="bl-sep">=</span>
-                        <span class="bl-balance">${formatARS(b.balance)}</span>
+                    ? `<div style="font-size:10px;color:var(--color-text-3);margin-top:3px">−${formatARS(b.total_paid)} cobrado</div>
+                       <div style="margin-top:4px;display:inline-flex;align-items:center;gap:4px;
+                            background:#fef2f2;border:0.5px solid #fecaca;border-radius:6px;padding:3px 8px">
+                         <svg viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="2.5" width="11" height="11"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                         <span style="font-size:12px;font-weight:700;color:#dc2626;white-space:nowrap">${formatARS(b.balance)} pendiente</span>
                        </div>`
                     : b.balance <= 0
                       ? `<div class="bl-amount-paid">✓ Pagado</div>`
