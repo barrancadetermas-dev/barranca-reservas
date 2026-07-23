@@ -913,11 +913,11 @@ export class BookingList {
                     return `<div class="bl-amount-total">${formatARS(b.total_amount)}</div>`;
                   })()}
                   ${b.total_paid > 0 && b.balance > 0
-                    ? `<div style="font-size:9.5px;color:var(--color-text-3);margin-top:3px">−${formatARS(b.total_paid)} cobrado</div>
-                       <div style="margin-top:3px;display:inline-flex;align-items:center;gap:3px;
-                            background:#fef2f2;border:0.5px solid #fecaca;border-radius:5px;padding:2px 7px">
-                         <svg viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="2.5" width="10" height="10"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                         <span style="font-size:11px;font-weight:700;color:#dc2626;white-space:nowrap">${formatARS(b.balance)} pendiente</span>
+                    ? `<div style="font-size:9px;color:var(--color-text-3);margin-top:2px">−${formatARS(b.total_paid)} cobrado</div>
+                       <div style="margin-top:2px;display:inline-flex;align-items:center;gap:2px;
+                            background:#fef2f2;border:0.5px solid #fecaca;border-radius:4px;padding:1px 5px">
+                         <svg viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="2.5" width="9" height="9"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                         <span style="font-size:10px;font-weight:700;color:#dc2626;white-space:nowrap">${formatARS(b.balance)} pendiente</span>
                        </div>`
                     : b.balance <= 0
                       ? `<div class="bl-amount-paid">✓ Pagado</div>`
