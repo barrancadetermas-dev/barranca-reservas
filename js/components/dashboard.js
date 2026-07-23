@@ -1053,12 +1053,14 @@ export class Dashboard {
       statusChip = done
         ? '<span style="font-size:.65rem;padding:1px 7px;border-radius:3px;background:var(--state-green-bg);color:var(--state-green-txt);font-weight:700">✓ Check-in</span>'
         : '<span style="font-size:.65rem;padding:1px 7px;border-radius:3px;background:var(--state-yellow-bg);color:var(--state-yellow-txt);font-weight:700">Pendiente</span>';
+      // Data attributes para evitar que apostrofos en el nombre rompan el JS
+      // (ej: "D'Ostin" con apostrofo dentro de un onclick='...' string literal)
       actionBtn = !done
         ? '<div style="display:flex;gap:5px;flex-shrink:0">' +
           '<button class="btn btn-primary btn-sm" style="font-size:.72rem;padding:5px 10px" ' +
-          'onclick="window._dashCheckIn(\'' + b.id + '\',\'arr-' + b.id + '\',\'' + guest.replace(/'/g,'&#39;') + '\')">✅ Check-in</button>' +
+          'data-action="checkin" data-bid="' + b.id + '" data-row="arr-' + b.id + '" data-guest="' + guest.replace(/"/g,'&quot;') + '">✅ Check-in</button>' +
           '<button class="btn btn-primary btn-sm" title="No vino / Cancelar" aria-label="No vino / Cancelar" style="font-size:.72rem;padding:5px 10px" ' +
-          'onclick="window._dashNoShow(\'' + b.id + '\',\'arr-' + b.id + '\',\'' + guest.replace(/'/g,'&#39;') + '\')">❌</button>' +
+          'data-action="noshow" data-bid="' + b.id + '" data-row="arr-' + b.id + '" data-guest="' + guest.replace(/"/g,'&quot;') + '">❌</button>' +
           '</div>'
         : '';
     } else if (mode === 'departure') {
@@ -1100,6 +1102,16 @@ export class Dashboard {
     if (!container) return;
     if (!arrivals.length) { container.innerHTML = '<p class="empty-state-sm">Sin llegadas hoy</p>'; return; }
     container.innerHTML = arrivals.map(b => this._bookingCard({ booking: b, mode: 'arrival' })).join('');
+
+    // Delegación: maneja checkin y noshow via data-action para evitar
+    // que apostrofos en nombres (D'Ostin) rompan el onclick JS.
+    container.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-action]');
+      if (!btn) return;
+      const { action, bid, row, guest } = btn.dataset;
+      if (action === 'checkin') window._dashCheckIn(bid, row, guest);
+      if (action === 'noshow')  window._dashNoShow(bid, row, guest);
+    });
   }
 
   _renderDepartures(departures) {
