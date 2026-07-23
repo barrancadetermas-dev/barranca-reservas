@@ -963,11 +963,18 @@ export class Calendar {
         futureColor = lighten(color, 0.30);      // normal → apenas más claro
       }
       if (span2 > 1) {
+        // Opción 3: overlay oscuro en pasado, corte nítido en hoy
+        // El corte nítido actúa como marcador de "dónde estamos ahora"
+        // Indicadores de precio ignorados mientras está en curso
+        const darkPast = darken(color, 0.42);
         if (passedDays === 0) {
-          barBg = 'linear-gradient(to right, ' + color + ' 0%, ' + color + ' ' + todayPct + '%, ' + futureColor + ' ' + todayPct + '%)';
+          barBg = color; // arrancó hoy — todo color pleno
         } else {
-          const midPct = Math.max(1, passedPct - 2);
-          barBg = 'linear-gradient(to right, ' + darkStart + ' 0%, ' + color + ' ' + midPct + '%, ' + color + ' ' + todayPct + '%, ' + futureColor + ' ' + todayPct + '%)';
+          barBg = 'linear-gradient(to right, '
+            + darkPast + ' 0%, '
+            + darkPast + ' ' + passedPct + '%, '
+            + color    + ' ' + passedPct + '%, '
+            + color    + ' 100%)';
         }
       }
     }
@@ -1031,6 +1038,25 @@ export class Calendar {
     bar.dataset.bookingId = booking.id;
     bar.draggable = false;
     bar.addEventListener('dragstart', e => e.preventDefault());
+
+    // ── Marcador de hoy: línea azul en el corte pasado/futuro ──────────────
+    if (isInProgress && !isPast) {
+      const msDay3 = 86400000;
+      const _vs3 = ci < winStart ? winStart : ci;
+      const _span3 = Math.max(1, Math.round(
+        (new Date((co > winEndExcl ? winEndExcl : co)+'T00:00:00') - new Date(_vs3+'T00:00:00')) / msDay3
+      ));
+      const _passed3 = Math.max(0, Math.round(
+        (new Date(todayISO+'T00:00:00') - new Date(_vs3+'T00:00:00')) / msDay3
+      ));
+      if (_passed3 > 0 && _span3 > 1) {
+        const cutPct = Math.round((_passed3 / _span3) * 100);
+        const marker = document.createElement('div');
+        marker.style.cssText = 'position:absolute;top:0;bottom:0;width:2px;background:rgba(255,255,255,.7);'
+          + 'left:' + cutPct + '%;z-index:4;pointer-events:none;border-radius:1px';
+        bar.appendChild(marker);
+      }
+    }
 
     const source  = booking.source ?? 'direct';
     const srcCfg  = SOURCE_CONFIG[source] ?? {}; // eslint-disable-line no-unused-vars
