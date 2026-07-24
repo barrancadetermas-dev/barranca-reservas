@@ -2565,34 +2565,50 @@ select {
 
 /* ── CALENDARIO: FIN DE SEMANA ──────────────────── */
 .cal-day-header.weekend {
-  background: rgba(99,102,241,.07);
-  color: var(--color-text);
+  background: var(--color-surface-2);
 }
 .cal-day-header.weekend .dh-num {
-  color: #6366f1;
-  font-weight: 700;
+  color: #7c3aed;
+  font-size: .85rem;
+  font-weight: 800;
 }
 .cal-day-header.weekend .day-name {
-  color: #6366f1;
-  opacity: .75;
+  display: inline-block;
+  font-size: .56rem;
+  font-weight: 600;
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: #f5f3ff;
+  color: #7c3aed;
+  letter-spacing: .04em;
 }
 .weekend-col {
-  background: rgba(99,102,241,.03);
+  background: rgba(124,58,237,.025);
 }
-.weekend-col:hover { background: rgba(99,102,241,.07) !important; }
+.weekend-col:hover { background: rgba(124,58,237,.06) !important; }
 
 /* ── CALENDARIO: FERIADOS ───────────────────────── */
 .cal-day-header.holiday {
-  background: rgba(239,68,68,.10);
+  background: #fef2f2;
   color: #dc2626;
 }
 .cal-day-header.holiday .dh-num {
   color: #dc2626;
-  font-weight: 700;
+  font-size: .85rem;
+  font-weight: 800;
 }
-.cal-day-header.holiday .day-name { color: rgba(239,68,68,.7); }
+.cal-day-header.holiday .day-name {
+  display: inline-block;
+  font-size: .56rem;
+  font-weight: 600;
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: #fecaca;
+  color: #dc2626;
+  letter-spacing: .04em;
+}
 .cal-day-header.holiday-bridge {
-  background: rgba(168,85,247,.10);
+  background: #faf5ff;
   color: #9333ea;
 }
 .holiday-col  { background: rgba(239,68,68,.05); }
