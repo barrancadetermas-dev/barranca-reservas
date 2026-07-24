@@ -2565,23 +2565,34 @@ select {
 
 /* ── CALENDARIO: FIN DE SEMANA ──────────────────── */
 .cal-day-header.weekend {
-  background: rgba(148,163,184,.10);
-  color: var(--color-text-2);
+  background: rgba(99,102,241,.07);
+  color: var(--color-text);
 }
-.cal-day-header.weekend .day-name { color: var(--color-text-3); }
+.cal-day-header.weekend .dh-num {
+  color: #6366f1;
+  font-weight: 700;
+}
+.cal-day-header.weekend .day-name {
+  color: #6366f1;
+  opacity: .75;
+}
 .weekend-col {
-  background: rgba(148,163,184,.055);
+  background: rgba(99,102,241,.03);
 }
 .weekend-col:hover { background: rgba(99,102,241,.07) !important; }
 
 /* ── CALENDARIO: FERIADOS ───────────────────────── */
 .cal-day-header.holiday {
-  background: rgba(239,68,68,.08);
+  background: rgba(239,68,68,.10);
   color: #dc2626;
 }
-.cal-day-header.holiday .day-name { color: rgba(239,68,68,.55); }
+.cal-day-header.holiday .dh-num {
+  color: #dc2626;
+  font-weight: 700;
+}
+.cal-day-header.holiday .day-name { color: rgba(239,68,68,.7); }
 .cal-day-header.holiday-bridge {
-  background: rgba(168,85,247,.08);
+  background: rgba(168,85,247,.10);
   color: #9333ea;
 }
 .holiday-col  { background: rgba(239,68,68,.05); }
