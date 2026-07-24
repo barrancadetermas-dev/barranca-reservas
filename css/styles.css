@@ -2565,7 +2565,7 @@ select {
 
 /* ── CALENDARIO: FIN DE SEMANA ──────────────────── */
 .cal-day-header.weekend {
-  background: var(--color-surface-2);
+  background: #f5f3ff;
 }
 .cal-day-header.weekend .dh-num {
   color: #7c3aed;
@@ -2578,14 +2578,14 @@ select {
   font-weight: 600;
   padding: 1px 4px;
   border-radius: 3px;
-  background: #f5f3ff;
-  color: #7c3aed;
+  background: #ddd6fe;
+  color: #6d28d9;
   letter-spacing: .04em;
 }
 .weekend-col {
-  background: rgba(124,58,237,.025);
+  background: rgba(124,58,237,.03);
 }
-.weekend-col:hover { background: rgba(124,58,237,.06) !important; }
+.weekend-col:hover { background: rgba(124,58,237,.07) !important; }
 
 /* ── CALENDARIO: FERIADOS ───────────────────────── */
 .cal-day-header.holiday {
