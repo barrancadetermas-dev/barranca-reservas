@@ -1731,10 +1731,23 @@ OperationsModule.prototype._loadTenencias = async function(panel, header) {
   const rendRow = item => {
     const cfg   = tenCfgFromNotes(item.notes);
     const base  = item.original_amount ?? 0;
-    const int   = item.interest_amount  ?? 0;
-    const total = base + int;
     const desc  = (item.notes ?? '').replace(/^\[(FCI|PF|GASTOS)\] /, '').split(' · ')[0] || '—';
-    const dias  = item.frasco_date
+
+    // FCI: recalcular intereses a hoy desde TEA guardada en notes
+    let int = item.interest_amount ?? 0;
+    let teaDisplay = '';
+    if (cfg === TEN_CFG.fci) {
+      const teaMatch = (item.notes ?? '').match(/TEA:([\d.]+)/);
+      const tea = teaMatch ? parseFloat(teaMatch[1]) : 0;
+      if (tea > 0 && item.frasco_date) {
+        const dias = Math.max(0, Math.round((new Date(today+'T00:00:00') - new Date(item.frasco_date+'T00:00:00')) / 86400000));
+        int = Math.round(base * (Math.pow(1 + tea/100, dias/365) - 1));
+        teaDisplay = `<span style="font-size:.64rem;color:#3b82f6;font-weight:600">TEA ${tea}% · ${dias}d</span>`;
+      }
+    }
+
+    const total = base + int;
+    const dias  = (cfg !== TEN_CFG.fci && item.frasco_date)
       ? Math.round((new Date(item.frasco_date+'T00:00:00') - new Date(today+'T00:00:00')) / 86400000)
       : null;
     const countdown = dias === null ? ''
@@ -1751,6 +1764,7 @@ OperationsModule.prototype._loadTenencias = async function(panel, header) {
                        background:${cfg.color}22;color:${cfg.color}">${cfg.icon} ${cfg.label}</span>
           <span style="font-size:.8rem;font-weight:600;color:var(--color-text)">${desc}</span>
           ${item.booking_id ? '<span style="font-size:.62rem;padding:1px 7px;border-radius:4px;background:#6366f111;color:#6366f1;font-weight:600">🔗 con reserva</span>' : ''}
+          ${teaDisplay}
         </div>
         <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
           <span style="font-size:.72rem;color:var(--color-text-3)">Base: <strong>${fmt(base)}</strong></span>
@@ -1828,15 +1842,17 @@ OperationsModule.prototype._loadTenencias = async function(panel, header) {
       <summary style="font-size:.72rem;color:var(--color-text-3);cursor:pointer;font-weight:600;padding:6px 0">
         ✅ Acreditados / cerrados (${credited.length})
       </summary>
-      <div style="margin-top:8px;opacity:.75">
+      <div style="margin-top:8px">
         ${credited.map(i => {
           const cfg   = tenCfgFromNotes(i.notes);
           const total = i.credited_amount ?? ((i.original_amount??0)+(i.interest_amount??0));
           const int   = total - (i.original_amount??0);
           const desc  = (i.notes??'').replace(/^\[(FCI|PF|USD|CTA|GASTOS)\] /,'').split(' · ')[0]||'—';
-          return `<div style="display:flex;justify-content:space-between;font-size:.76rem;padding:5px 0;border-top:1px solid var(--color-border)">
-            <span style="color:var(--color-text-2)">${cfg.icon} ${desc} · ${i.credited_at??''}</span>
+          return `<div style="display:flex;align-items:center;gap:8px;font-size:.76rem;padding:6px 0;border-top:1px solid var(--color-border)">
+            <span style="flex:1;color:var(--color-text-2);opacity:.8">${cfg.icon} ${desc} · ${i.credited_at??''}</span>
             <span style="color:#16a34a;font-weight:700">${fmt(total)}${int>0?` <span style="color:var(--color-text-3);font-size:.7rem">(+${fmt(int)})</span>`:''}</span>
+            <button class="btn btn-outline btn-xs ten-edit-btn" data-id="${i.id}" style="padding:2px 7px;font-size:.65rem;opacity:.7" title="Editar">✏️</button>
+            <button class="btn btn-ghost btn-xs ten-delete-btn" data-id="${i.id}" style="padding:2px 7px;color:#ef4444;font-size:.65rem;opacity:.7" title="Eliminar">🗑️</button>
           </div>`;
         }).join('')}
       </div>
@@ -2022,7 +2038,32 @@ OperationsModule.prototype._openTenenciaModal = function(tipo, rates, item = nul
           </div>
         </div>
 
-        ${!isEstat ? `
+        ${!isEstat ? (tipo === 'fci' ? `
+        <!-- FCI: TEA anual + fecha de inicio → intereses calculados automáticamente -->
+        <div class="form-grid-2">
+          <div class="form-group">
+            <label>TEA anual (%)</label>
+            <input type="number" id="tm-tea" min="0" step="0.01" class="form-input"
+                   placeholder="Ej: 38.5"
+                   value="${item?.interest_amount ? Math.round(((item.interest_amount/(item.original_amount||1)) / (item.frasco_date ? Math.max(1,Math.round((new Date(today2)-new Date(item.frasco_date+'T00:00:00'))/86400000)) : 365) * 365 * 100)*100)/100 : (rates.tna_cocos ?? 38)}">
+          </div>
+          <div class="form-group">
+            <label>Fecha de inicio <span class="req">*</span></label>
+            <input type="date" id="tm-fci-start" class="form-input"
+                   value="${item?.frasco_date ?? today2}">
+          </div>
+        </div>
+        <div id="tm-fci-preview" style="background:#eff6ff;border-radius:8px;padding:8px 14px;margin-bottom:12px">
+          <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+            <span style="font-size:.72rem;color:#1e40af">Días transcurridos</span>
+            <span id="tm-fci-dias" style="font-size:.72rem;font-weight:700;color:#1e40af">—</span>
+          </div>
+          <div style="display:flex;justify-content:space-between">
+            <span style="font-size:.78rem;color:#1e40af;font-weight:600">Intereses acumulados a hoy</span>
+            <span id="tm-fci-int" style="font-size:1rem;font-weight:800;color:#1e40af">$0</span>
+          </div>
+        </div>
+        ` : `
         <div class="form-grid-2">
           <div class="form-group">
             <label>Intereses (${tipo==='usd'?'USD':'ARS'})</label>
@@ -2043,7 +2084,7 @@ OperationsModule.prototype._openTenenciaModal = function(tipo, rates, item = nul
           <span id="tm-total" style="font-size:1rem;font-weight:800;color:#16a34a">$0</span>
         </div>
         <div id="tm-pct" style="text-align:right;font-size:.7rem;color:#16a34a;margin-top:-8px;margin-bottom:12px;min-height:14px"></div>
-        ` : ''}
+        `) : ''}
 
         <div class="form-group">
           <label>Notas <span style="font-size:.72rem;color:var(--color-text-3)">(opcional)</span></label>
@@ -2086,6 +2127,32 @@ OperationsModule.prototype._openTenenciaModal = function(tipo, rates, item = nul
     [baseI,intI,dateEl].forEach(el=>el?.addEventListener('input',updateT));
     updateT();
     setTimeout(()=>baseI?.focus(),80);
+
+    // ── FCI: calcular intereses en tiempo real desde TEA + días ──────────
+    if (tipo === 'fci') {
+      const teaI   = modal.querySelector('#tm-tea');
+      const startI = modal.querySelector('#tm-fci-start');
+      const diasEl = modal.querySelector('#tm-fci-dias');
+      const intEl  = modal.querySelector('#tm-fci-int');
+
+      const recalcFCI = () => {
+        const capital = parseFloat(modal.querySelector('#tm-base')?.value) || 0;
+        const tea     = parseFloat(teaI?.value) || 0;
+        const start   = startI?.value;
+        if (!start || !capital || !tea) { if(diasEl) diasEl.textContent='—'; if(intEl) intEl.textContent='$0'; return; }
+        const dias = Math.max(0, Math.round((new Date(today2+'T00:00:00') - new Date(start+'T00:00:00')) / 86400000));
+        // Interés compuesto diario: capital × ((1 + TEA/100)^(dias/365) − 1)
+        const interes = capital * (Math.pow(1 + tea/100, dias/365) - 1);
+        if (diasEl) diasEl.textContent = dias + ' día' + (dias !== 1 ? 's' : '');
+        if (intEl)  intEl.textContent  = '$' + Math.round(interes).toLocaleString('es-AR');
+      };
+
+      teaI?.addEventListener('input', recalcFCI);
+      startI?.addEventListener('input', recalcFCI);
+      modal.querySelector('#tm-base')?.addEventListener('input', recalcFCI);
+      recalcFCI();
+    }
+    // ─────────────────────────────────────────────────────────────────────
   }
 
   // ── Booking picker para Naranja X (frasco) ────────────────────────────────
@@ -2189,13 +2256,22 @@ OperationsModule.prototype._openTenenciaModal = function(tipo, rates, item = nul
     if (!desc)         { showToast('Ingresá una descripción','warning'); return; }
 
     let interest = 0, frasco_date = null;
+    let notesFinal = cfg.prefix + desc + (notes?' · '+notes:'');
     if (!isEstat) {
-      interest     = parseFloat(modal.querySelector('#tm-interest')?.value)||0;
-      frasco_date  = modal.querySelector('#tm-date')?.value || null;
-      if (!frasco_date){ showToast('Elegí la fecha de acreditación','warning'); return; }
+      if (tipo === 'fci') {
+        const tea   = parseFloat(modal.querySelector('#tm-tea')?.value) || 0;
+        const start = modal.querySelector('#tm-fci-start')?.value;
+        if (!start) { showToast('Elegí la fecha de inicio','warning'); return; }
+        frasco_date = start;
+        const dias  = Math.max(0, Math.round((new Date(today2+'T00:00:00') - new Date(start+'T00:00:00')) / 86400000));
+        interest    = Math.round(base * (Math.pow(1 + tea/100, dias/365) - 1));
+        notesFinal  = cfg.prefix + desc + (notes?' · '+notes:'') + ' · TEA:' + tea;
+      } else {
+        interest    = parseFloat(modal.querySelector('#tm-interest')?.value)||0;
+        frasco_date = modal.querySelector('#tm-date')?.value || null;
+        if (!frasco_date){ showToast('Elegí la fecha de acreditación','warning'); return; }
+      }
     }
-
-    const notesFinal = cfg.prefix + desc + (notes?' · '+notes:'');
     const saveBtn = modal.querySelector('#tm-save');
     saveBtn.disabled = true;
 
