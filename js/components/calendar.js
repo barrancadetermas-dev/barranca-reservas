@@ -2909,11 +2909,9 @@ export class Calendar {
   // ACCIONES SOBRE RESERVAS
   // ══════════════════════════════════════════════════
   async _openBarPopover(bookingId, anchorEl, evt) {
-    // Cierra cualquier popover abierto
     document.getElementById('cal-bar-popover')?.remove();
     if (!bookingId) return;
 
-    // Buscar datos en caché o DB
     let bk = this._lastRenderedBookings?.find(b => b.id === bookingId);
     if (!bk || !bk.guests) {
       const { data } = await this.db.from('bookings')
@@ -2925,133 +2923,150 @@ export class Calendar {
       if (data) bk = data;
     }
     if (!bk) return;
+    if (bk.status === 'blocked' || bk.is_blocked) { this._openDetailById(bookingId); return; }
 
-    // Bloqueos van al modal de bloqueo, no al popover
-    if (bk.status === 'blocked' || bk.is_blocked) {
-      this._openDetailById(bookingId); return;
-    }
-
-    const g      = bk.guests ?? {};
-    const guest  = ((g.first_name ?? '') + ' ' + (g.last_name ?? '')).trim() || '—';
-    const initials = ((g.first_name?.[0] ?? '') + (g.last_name?.[0] ?? '')).toUpperCase() || '?';
-    const units  = bk.booking_units ?? [];
-    const unit0  = units[0]?.units;
-    const color  = unit0?.color ?? '#6366f1';
-    const uLabel = units.map(u => '#' + u.units?.sort_order + ' · ' + u.units?.name).filter(Boolean).join(' / ') || '—';
-    const nights = bk.nights ?? Math.round((new Date(bk.check_out) - new Date(bk.check_in)) / 86400000);
-    const pax    = g.pax ?? bk.guests?.pax ?? '';
-    const phone  = g.phone ?? '';
-    const car    = [g.car_model, g.car_plate].filter(Boolean).join(' · ');
-    const age    = g.age ? g.age + ' años' : '';
-    const total  = bk.total_amount ?? 0;
-    const balance= Math.max(0, bk.balance ?? (total - (bk.total_paid ?? 0)));
-    const fmt    = n => n > 0 ? '$' + Math.round(n).toLocaleString('es-AR') : '—';
-    const fmtD   = s => s ? new Date(s+'T12:00:00').toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit'}) : '—';
+    const g       = bk.guests ?? {};
+    const guest   = ((g.first_name??'') + ' ' + (g.last_name??'')).trim() || '—';
+    const initials= ((g.first_name?.[0]??'') + (g.last_name?.[0]??'')).toUpperCase() || '?';
+    const units   = bk.booking_units ?? [];
+    const unit0   = units[0]?.units;
+    const color   = unit0?.color ?? '#6366f1';
+    const uLabel  = units.map(u => '#' + u.units?.sort_order + ' · ' + u.units?.name).filter(Boolean).join(' / ') || '—';
+    const nights  = bk.nights ?? Math.round((new Date(bk.check_out) - new Date(bk.check_in)) / 86400000);
+    const pax     = g.pax ?? '';
+    const phone   = g.phone ?? '';
+    const car     = [g.car_model, g.car_plate].filter(Boolean).join(' · ');
+    const age     = g.age ? g.age + ' años' : '';
+    const total   = bk.total_amount ?? 0;
+    const paid    = bk.total_paid   ?? 0;
+    const balance = Math.max(0, bk.balance ?? (total - paid));
+    const saldado = balance <= 0;
+    const fmt     = n => '$' + Math.round(n).toLocaleString('es-AR');
+    const fmtD    = s => s ? new Date(s+'T12:00:00').toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit'}) : '—';
 
     const STATUS_LABEL = {paid:'Saldado',partial:'Señada',pending:'Sin seña',confirmed:'Confirmada',cancelled:'Cancelada'};
     const STATUS_COLOR = {paid:'#16a34a',partial:'#dc2626',pending:'#d97706',confirmed:'#2563eb',cancelled:'#6b7280'};
+    const STATUS_BG    = {paid:'#f0fdf4',partial:'#fef2f2',pending:'#fffbeb',confirmed:'#eff6ff',cancelled:'#f8fafc'};
     const stLabel = STATUS_LABEL[bk.status] ?? bk.status;
     const stColor = STATUS_COLOR[bk.status] ?? '#6b7280';
+    const stBg    = STATUS_BG[bk.status]    ?? '#f1f5f9';
 
-    const SOURCE_ICON = {booking:'🔵',airbnb:'🔴',directo:'🟢',whatsapp:'💬',instagram:'📸'};
-    const srcIcon = SOURCE_ICON[(bk.source ?? '').toLowerCase()] ?? '';
+    // Bloque financiero
+    const finBlock = saldado
+      ? `<div style="grid-column:span 2">
+           <div style="font-size:8.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--color-text-3);margin-bottom:3px">Total pagado</div>
+           <div style="font-size:14px;font-weight:700;color:#16a34a">${fmt(total)}</div>
+           <div style="font-size:9px;color:var(--color-text-3);margin-top:2px">${paid > 0 ? fmt(paid > balance ? paid - balance : paid) + ' seña + resto saldo' : 'pago completo'}</div>
+         </div>
+         <div style="border-left:0.5px solid var(--color-border);padding-left:8px;display:flex;flex-direction:column;align-items:center;justify-content:center">
+           <div style="font-size:22px">✅</div>
+         </div>`
+      : `<div>
+           <div style="font-size:8.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--color-text-3);margin-bottom:3px">Total</div>
+           <div style="font-size:13px;font-weight:700;color:var(--color-text)">${fmt(total)}</div>
+           <div style="font-size:9px;color:var(--color-text-3)">${Math.round(bk.price_per_night ?? 0).toLocaleString('es-AR')}/noche</div>
+         </div>
+         <div style="border-left:0.5px solid var(--color-border);padding-left:8px">
+           <div style="font-size:8.5px;text-transform:uppercase;letter-spacing:.04em;color:#d97706;margin-bottom:3px">Seña cobrada</div>
+           <div style="font-size:13px;font-weight:700;color:#d97706">${paid > 0 ? fmt(paid) : '—'}</div>
+           <div style="font-size:9px;color:var(--color-text-3)">${paid > 0 ? '' : 'sin señar'}</div>
+         </div>
+         <div style="border-left:0.5px solid var(--color-border);padding-left:8px">
+           <div style="font-size:8.5px;text-transform:uppercase;letter-spacing:.04em;color:#dc2626;margin-bottom:3px">Pendiente</div>
+           <div style="font-size:13px;font-weight:700;color:#dc2626">${fmt(balance)}</div>
+           <div style="font-size:9px;color:var(--color-text-3)">al ingreso</div>
+         </div>`;
 
     const pop = document.createElement('div');
     pop.id = 'cal-bar-popover';
     pop.style.cssText = 'position:fixed;z-index:9999;background:var(--color-surface);'
-      + 'border:0.5px solid var(--color-border);border-radius:12px;'
-      + 'box-shadow:0 8px 32px rgba(0,0,0,.18);width:260px;overflow:hidden';
+      + 'border:0.5px solid var(--color-border);border-radius:14px;'
+      + 'box-shadow:0 8px 32px rgba(0,0,0,.2);width:284px;overflow:hidden';
 
     pop.innerHTML =
-      // Header
-      '<div style="padding:10px 12px 9px;border-bottom:0.5px solid var(--color-border);display:flex;align-items:center;gap:8px">'
-      + '<div style="width:32px;height:32px;border-radius:50%;background:'+color+'22;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:'+color+';flex-shrink:0">'+initials+'</div>'
+      // ── Header ──────────────────────────────────────────────────────────
+      '<div style="padding:12px 14px 10px;border-bottom:0.5px solid var(--color-border);display:flex;align-items:center;gap:10px">'
+      + '<div style="width:36px;height:36px;border-radius:50%;background:'+color+'22;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:'+color+';flex-shrink:0">'+initials+'</div>'
       + '<div style="flex:1;min-width:0">'
-      +   '<div style="font-size:12px;font-weight:600;color:var(--color-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+guest+(srcIcon?' '+srcIcon:'')+'</div>'
-      +   '<div style="display:flex;align-items:center;gap:5px;margin-top:2px">'
+      +   '<div style="font-size:13px;font-weight:600;color:var(--color-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+guest+'</div>'
+      +   '<div style="display:flex;align-items:center;gap:5px;margin-top:3px;flex-wrap:wrap">'
       +     '<span style="width:7px;height:7px;border-radius:2px;background:'+color+';flex-shrink:0"></span>'
-      +     '<span style="font-size:10px;color:var(--color-text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+uLabel+'</span>'
+      +     '<span style="font-size:10px;color:var(--color-text-2)">'+uLabel+'</span>'
+      +     '<span style="font-size:9px;font-weight:600;padding:2px 7px;border-radius:999px;background:'+stBg+';color:'+stColor+';margin-left:2px">'+(saldado?'✓ ':'')+stLabel+'</span>'
       +   '</div>'
       + '</div>'
-      + '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px;flex-shrink:0">'
-      +   '<span style="font-size:9px;font-weight:600;padding:2px 7px;border-radius:999px;background:'+stColor+'18;color:'+stColor+'">'+stLabel+'</span>'
-      +   '<button id="pop-close" style="background:none;border:none;cursor:pointer;font-size:14px;color:var(--color-text-3);padding:0;line-height:1">✕</button>'
+      + '<button id="pop-close" style="background:none;border:none;cursor:pointer;font-size:16px;color:var(--color-text-3);padding:0;line-height:1;flex-shrink:0">✕</button>'
       + '</div>'
+
+      // ── Body ────────────────────────────────────────────────────────────
+      + '<div style="padding:10px 14px;display:flex;flex-direction:column;gap:7px">'
+      + '<div style="display:flex;align-items:center;gap:8px;font-size:11px;color:var(--color-text)">'
+      +   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14" style="flex-shrink:0;color:var(--color-text-3)"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>'
+      +   '<span>'+fmtD(bk.check_in)+' → '+fmtD(bk.check_out)+' &nbsp;·&nbsp; <strong>'+nights+' noche'+(nights!==1?'s':'')+'</strong>'+(pax?' · 👥 '+pax:'')+'</span>'
       + '</div>'
-      // Body
-      + '<div style="padding:10px 12px;display:flex;flex-direction:column;gap:6px">'
-      + '<div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--color-text)">'
-      +   '<i class="ti ti-calendar" style="font-size:13px;color:var(--color-text-3)" aria-hidden="true"></i>'
-      +   '<span>'+fmtD(bk.check_in)+' → '+fmtD(bk.check_out)+' &nbsp;·&nbsp; <strong>'+nights+'n</strong>'+(pax?' · 👥'+pax:'')+'</span>'
+      + (phone ? '<div style="display:flex;align-items:center;gap:8px;font-size:11px;color:var(--color-text)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14" style="flex-shrink:0;color:var(--color-text-3)"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.77 1h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 8.91a16 16 0 0 0 6 6l.92-.92a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg><span>'+phone+(age?' · '+age:'')+'</span></div>' : '')
+      + (car   ? '<div style="display:flex;align-items:center;gap:8px;font-size:11px;color:var(--color-text)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14" style="flex-shrink:0;color:var(--color-text-3)"><path d="M5 17H3a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h1l3-3h8l3 3h1a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2h-2"/><circle cx="7.5" cy="17.5" r="1.5"/><circle cx="16.5" cy="17.5" r="1.5"/></svg><span>'+car+'</span></div>' : '')
+
+      // Bloque financiero 3 columnas
+      + '<div style="background:var(--color-surface-2);border-radius:10px;padding:10px 12px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:2px">'+finBlock+'</div>'
       + '</div>'
-      + (phone ? '<div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--color-text)"><i class="ti ti-phone" style="font-size:13px;color:var(--color-text-3)" aria-hidden="true"></i><span>'+phone+(age?' · '+age:'')+'</span></div>' : '')
-      + (car   ? '<div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--color-text)"><i class="ti ti-car" style="font-size:13px;color:var(--color-text-3)" aria-hidden="true"></i><span>'+car+'</span></div>' : '')
-      + '<div style="background:var(--color-surface-2);border-radius:8px;padding:8px 10px;display:flex;justify-content:space-between;align-items:center;margin-top:2px">'
-      +   '<div><div style="font-size:9px;color:var(--color-text-3);text-transform:uppercase;letter-spacing:.04em;margin-bottom:2px">Total</div><div style="font-size:13px;font-weight:700;color:var(--color-text)">'+fmt(total)+'</div></div>'
-      +   (balance > 0
-          ? '<div style="text-align:right"><div style="font-size:9px;color:#dc2626;text-transform:uppercase;letter-spacing:.04em;margin-bottom:2px">Pendiente</div><div style="font-size:13px;font-weight:700;color:#dc2626">'+fmt(balance)+'</div></div>'
-          : '<div style="font-size:11px;font-weight:600;color:#16a34a">✓ Saldado</div>')
+
+      // ── Footer 2 filas ──────────────────────────────────────────────────
+      + '<div style="padding:8px 14px 11px;border-top:0.5px solid var(--color-border)">'
+      // Fila 1: Editar + WA + Eliminar
+      + '<div style="display:flex;gap:6px;margin-bottom:6px">'
+      +   '<button data-pop-action="edit"   style="flex:1;font-size:10.5px;font-weight:600;padding:7px 0;border-radius:8px;cursor:pointer;border:none;background:var(--color-primary);color:#fff">✏️ Editar reserva</button>'
+      +   '<button data-pop-action="wa"     style="width:36px;font-size:14px;padding:7px 0;border-radius:8px;cursor:pointer;border:0.5px solid var(--color-border);background:var(--color-surface-2)">💬</button>'
+      +   '<button data-pop-action="delete" style="width:36px;font-size:14px;padding:7px 0;border-radius:8px;cursor:pointer;border:0.5px solid #fecaca;background:#fef2f2">🗑</button>'
       + '</div>'
+      // Fila 2: Cambiar fechas + Registrar cobro
+      + '<div style="display:flex;gap:6px">'
+      +   '<button data-pop-action="dates" style="flex:1;font-size:10.5px;font-weight:500;padding:7px 0;border-radius:8px;cursor:pointer;border:0.5px solid var(--color-border);background:var(--color-surface-2);color:var(--color-text-2)">📅 Cambiar fechas</button>'
+      +   '<button data-pop-action="pay"   style="flex:1;font-size:10.5px;font-weight:500;padding:7px 0;border-radius:8px;cursor:pointer;border:0.5px solid var(--color-border);background:var(--color-surface-2);color:var(--color-text-2)"'+(saldado?' disabled style="opacity:.45;cursor:default"':'')+'>💰 Registrar cobro</button>'
       + '</div>'
-      // Footer acciones
-      + '<div style="padding:8px 12px 10px;border-top:0.5px solid var(--color-border);display:flex;gap:5px;flex-wrap:wrap">'
-      + '<button data-pop-action="edit"   style="flex:1;font-size:10px;font-weight:500;padding:6px 0;border-radius:7px;cursor:pointer;border:none;background:var(--color-primary);color:#fff">✏️ Editar</button>'
-      + '<button data-pop-action="dates"  style="font-size:10px;font-weight:500;padding:6px 8px;border-radius:7px;cursor:pointer;border:0.5px solid var(--color-border);background:var(--color-surface-2);color:var(--color-text-2)">📅 Fechas</button>'
-      + '<button data-pop-action="pay"    style="font-size:10px;font-weight:500;padding:6px 8px;border-radius:7px;cursor:pointer;border:0.5px solid var(--color-border);background:var(--color-surface-2);color:var(--color-text-2)">💰 Cobrar</button>'
-      + '<button data-pop-action="wa"     style="font-size:10px;font-weight:500;padding:6px 8px;border-radius:7px;cursor:pointer;border:0.5px solid var(--color-border);background:var(--color-surface-2);color:var(--color-text-2)">💬</button>'
-      + '<button data-pop-action="delete" style="font-size:10px;font-weight:500;padding:6px 8px;border-radius:7px;cursor:pointer;border:0.5px solid #fecaca;background:#fef2f2;color:#dc2626">🗑</button>'
       + '</div>';
 
     document.body.appendChild(pop);
 
-    // Posicionar cerca de la barra sin salirse de la ventana
-    const r   = anchorEl.getBoundingClientRect();
-    const pw  = 260; const ph = pop.offsetHeight || 280;
+    const r = anchorEl.getBoundingClientRect();
+    const pw = 284; const ph = pop.offsetHeight || 300;
     let px = r.left + r.width / 2 - pw / 2;
     let py = r.bottom + 8;
     if (py + ph > window.innerHeight - 10) py = r.top - ph - 8;
-    if (px + pw > window.innerWidth - 10) px = window.innerWidth - pw - 10;
+    if (px + pw > window.innerWidth - 10)  px = window.innerWidth - pw - 10;
     if (px < 10) px = 10;
-    pop.style.left = px + 'px';
-    pop.style.top  = py + 'px';
+    pop.style.left = px + 'px'; pop.style.top = py + 'px';
 
-    const closePopover = () => {
+    const close = () => {
       pop.remove();
       document.removeEventListener('click',   outsideH, true);
       document.removeEventListener('keydown', escH);
     };
-    const outsideH = (e) => { if (!pop.contains(e.target)) closePopover(); };
-    const escH     = (e) => { if (e.key === 'Escape') closePopover(); };
+    const outsideH = (e) => { if (!pop.contains(e.target)) close(); };
+    const escH     = (e) => { if (e.key === 'Escape') close(); };
     setTimeout(() => {
       document.addEventListener('click',   outsideH, true);
       document.addEventListener('keydown', escH);
     }, 0);
 
-    pop.querySelector('#pop-close').addEventListener('click', closePopover);
-
-    // Acciones
+    pop.querySelector('#pop-close').addEventListener('click', close);
     pop.querySelectorAll('[data-pop-action]').forEach(btn => {
       btn.addEventListener('click', async () => {
-        closePopover();
+        close();
         const action = btn.dataset.popAction;
         if (action === 'edit')   { this.bookingForm?.openEdit?.(bookingId) ?? this._openDetailById(bookingId); }
         if (action === 'dates')  { this.bookingForm?.openEdit?.(bookingId, { focusStep: 2 }) ?? this._openDetailById(bookingId); }
         if (action === 'pay')    { this.bookingForm?.openPayments?.(bookingId) ?? this._openDetailById(bookingId); }
-        if (action === 'wa') {
-          const p = phone || g.phone || '';
-          if (p) window.open('https://wa.me/' + p.replace(/\D/g,''), '_blank');
-        }
+        if (action === 'wa')     { const p = (g.phone||'').replace(/\D/g,''); if (p) window.open('https://wa.me/'+p,'_blank'); }
         if (action === 'delete') {
-          if (!confirm('¿Eliminar la reserva de ' + guest + '?')) return;
+          if (!confirm('¿Eliminar la reserva de '+guest+'?')) return;
           const { error } = await this.db.from('bookings').delete().eq('id', bookingId);
-          if (error) { showToast('Error al eliminar', 'error'); return; }
-          showToast('Reserva eliminada ✓', 'success');
-          this.load();
+          if (error) { showToast('Error al eliminar','error'); return; }
+          showToast('Reserva eliminada ✓','success'); this.load();
         }
       });
     });
   }
-
   async _openDetailById(bookingId) {
     if (!bookingId) return;
     try {
