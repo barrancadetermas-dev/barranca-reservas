@@ -3579,7 +3579,7 @@ export class Calendar {
         : '<span class="cal-agenda-slot-days">' + daysLabel + '</span>';
 
       cards.push(
-        '<div class="cal-agenda-slot"' + (isToday2 ? ' style="border-color:var(--color-primary);border-width:1.5px"' : '') + '>' +
+        '<div class="cal-agenda-slot" data-booking-id="' + b.id + '" style="cursor:pointer' + (isToday2 ? ';border-color:var(--color-primary);border-width:1.5px' : '') + '">' +
           barTopInner +
           '<div class="cal-agenda-slot-body">' +
             '<div style="display:flex;align-items:center;justify-content:space-between;gap:3px;margin-bottom:4px">' +
@@ -3601,5 +3601,11 @@ export class Calendar {
     }
 
     el.innerHTML = cards.join('');
+
+    // Click en card de agenda → abre detalle de la reserva
+    el.addEventListener('click', (e) => {
+      const card = e.target.closest('[data-booking-id]');
+      if (card?.dataset.bookingId) this._openDetailById(card.dataset.bookingId);
+    }, { capture: false });
   }
 }
