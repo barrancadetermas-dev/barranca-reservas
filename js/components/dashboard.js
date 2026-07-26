@@ -1068,9 +1068,10 @@ export class Dashboard {
       statusChip = done
         ? '<span style="font-size:.65rem;padding:1px 7px;border-radius:3px;background:var(--info-blue-bg);color:var(--info-blue-txt);font-weight:700">✓ Check-out</span>'
         : '<span style="font-size:.65rem;padding:1px 7px;border-radius:3px;background:var(--state-yellow-bg);color:var(--state-yellow-txt);font-weight:700">Pendiente</span>';
+      // data-action evita el bug del apostrofo en nombres como D'Ostin
       actionBtn = !done
         ? '<button class="btn btn-outline btn-sm" style="flex-shrink:0;font-size:.72rem;padding:5px 10px" ' +
-          'onclick="window._dashCheckOut(\'' + b.id + '\',\'dep-' + b.id + '\',\'' + guest.replace(/'/g,'&#39;') + '\')">👋 Check-out</button>'
+          'data-action="checkout" data-bid="' + b.id + '" data-row="dep-' + b.id + '" data-guest="' + guest.replace(/"/g,'&quot;') + '">👋 Check-out</button>'
         : '';
     }
 
@@ -1119,6 +1120,13 @@ export class Dashboard {
     if (!container) return;
     if (!departures.length) { container.innerHTML = '<p class="empty-state-sm">Sin salidas hoy</p>'; return; }
     container.innerHTML = departures.map(b => this._bookingCard({ booking: b, mode: 'departure' })).join('');
+
+    container.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-action]');
+      if (!btn) return;
+      const { action, bid, row, guest } = btn.dataset;
+      if (action === 'checkout') window._dashCheckOut(bid, row, guest);
+    });
   }
 
   // ── NUEVO: "Alojados ahora" — card inyectada entre Llegadas y Salidas ──
