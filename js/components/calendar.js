@@ -1174,7 +1174,7 @@ export class Calendar {
       ? '<span style="' + avStyle + '">' + calInitials + '</span>'
       : '';
 
-    const nameStyle = 'color:' + textColor + ';font-size:.68rem;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0';
+    const nameStyle = 'color:' + textColor + ';font-size:.75rem;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0';
     const lateChip  = !isSolo && booking.late_checkout
       ? '<span title="🌅 Late check-out" style="flex-shrink:0;font-size:.65rem;margin-left:3px">🌅</span>'
       : '';
@@ -1293,7 +1293,7 @@ export class Calendar {
         padding-left:8px;padding-right:6px;box-sizing:border-box;overflow:hidden;
       `;
       ext.innerHTML = Calendar._guestAvatar(booking.guests, 16) +
-        '<span style="font-size:.68rem;font-weight:700;color:' + textColor + ';overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0">' +
+        '<span style="font-size:.75rem;font-weight:700;color:' + textColor + ';overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0">' +
         guestFull + '</span>';
       cell.appendChild(ext);
     }
