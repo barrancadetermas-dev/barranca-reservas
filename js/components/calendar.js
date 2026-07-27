@@ -151,7 +151,12 @@ export class Calendar {
     const isMob   = window.innerWidth <= 768;
     const cellW   = isMob ? CELL_W_MOB : CELL_W_DESK;
     const labelW  = this._measureLabelW(isMob);
-    return Math.max(14, Math.min(120, Math.floor((w - labelW) / cellW)));
+    const natural = Math.max(14, Math.min(120, Math.floor((w - labelW) / cellW)));
+    // Desktop: limitar a 35 días (3 atrás + hoy + 31 adelante) solo cuando
+    // la pantalla mostraría más — en pantallas chicas el natural ya es menor.
+    // Mobile: sin cambios, usa el natural.
+    const MAX_DESK = PAST_OFFSET + 32; // 3 + 32 = 35
+    return isMob ? natural : Math.min(natural, MAX_DESK);
   }
 
   // ── Actualizar título ────────────────────────────
