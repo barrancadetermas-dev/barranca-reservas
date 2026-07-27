@@ -664,7 +664,22 @@ export class Calendar {
           // nueva, como corresponde).
           if (ncPendingDays.has(`${unit.id}|${iso}`)) {
             const guestName = ncPendingDays.get(`${unit.id}|${iso}`);
-            this._renderNcPendingBar(cell, guestName);
+            // Solo renderizar en la celda START del rango NC — evita ícono por celda.
+            const prevIso = this._addDays(iso, -1);
+            const isNcStart = !ncPendingDays.has(`${unit.id}|${prevIso}`)
+              || ncPendingDays.get(`${unit.id}|${prevIso}`) !== guestName;
+            if (isNcStart) {
+              // Acumular todas las celdas del rango consecutivo
+              const ncCells = [cell];
+              let nxt = this._addDays(iso, 1);
+              while (ncPendingDays.has(`${unit.id}|${nxt}`)
+                     && ncPendingDays.get(`${unit.id}|${nxt}`) === guestName) {
+                const nxtCell = cellMap.get(`${unit.id}|${nxt}`);
+                if (nxtCell) ncCells.push(nxtCell);
+                nxt = this._addDays(nxt, 1);
+              }
+              this._renderNcRangeBar(ncCells, guestName, null);
+            }
             cell.title = `🗓️ Noche de reprogramación${guestName ? ` de ${guestName}` : ''} sin usar — todavía se puede reservar`;
           } else if (earlyDepartureDays.has(`${unit.id}|${iso}`)) {
             const guestName = earlyDepartureDays.get(`${unit.id}|${iso}`);
@@ -839,6 +854,42 @@ export class Calendar {
     `;
     bar.innerHTML = '<span style="opacity:.8">🗓️</span>';
     cell.appendChild(bar);
+  }
+
+  // Renderiza el rango completo de NC como una barra que abarca todas las
+  // celdas — en vez de un ícono por celda individual.
+  _renderNcRangeBar(cells, guestName, ncAmount) {
+    if (!cells || cells.length === 0) return;
+    const firstCell = cells[0];
+    if (!firstCell) return;
+
+    const totalCells = cells.length;
+    // La barra se posiciona absolutamente dentro de la primera celda
+    // y se extiende al ancho de todas las celdas del rango.
+    // Usamos el mismo trick que las barras de reserva: left:4px, right calculado.
+    const bar = document.createElement('div');
+    bar.className = 'nc-pending-bar nc-range-bar';
+    const cellW = firstCell.offsetWidth || 32;
+    const totalW = cellW * totalCells - 8;
+
+    bar.style.cssText = `
+      position:absolute;top:6px;bottom:6px;
+      left:4px;width:${totalW}px;
+      border-radius:6px;
+      background:repeating-linear-gradient(135deg,
+        rgba(148,163,184,.32), rgba(148,163,184,.32) 6px,
+        rgba(148,163,184,.14) 6px, rgba(148,163,184,.14) 12px);
+      border:1px dashed rgba(148,163,184,.5);
+      z-index:2;
+      display:flex;align-items:center;padding:0 8px;gap:5px;
+      overflow:hidden;white-space:nowrap;pointer-events:none;
+    `;
+    bar.innerHTML = '<span style="font-size:.8rem;opacity:.8;flex-shrink:0">🗓️</span>'
+      + '<span style="font-size:.65rem;font-weight:600;color:rgba(100,116,139,.85);overflow:hidden;text-overflow:ellipsis">'
+      + (guestName ? guestName : 'NC pendiente')
+      + (ncAmount ? ' · $' + Math.round(ncAmount).toLocaleString('es-AR') : '')
+      + '</span>';
+    firstCell.appendChild(bar);
   }
 
   // Misma idea y mismo gris que la barra de nota de crédito sin usar —
