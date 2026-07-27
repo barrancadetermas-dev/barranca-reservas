@@ -3058,22 +3058,27 @@ export class Calendar {
       + (phone ? '<div style="display:flex;align-items:center;gap:8px;font-size:11px;color:var(--color-text)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14" style="flex-shrink:0;color:var(--color-text-3)"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.77 1h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 8.91a16 16 0 0 0 6 6l.92-.92a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg><span>'+phone+(age?' · '+age:'')+'</span></div>' : '')
       + (car   ? '<div style="display:flex;align-items:center;gap:8px;font-size:11px;color:var(--color-text)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14" style="flex-shrink:0;color:var(--color-text-3)"><path d="M5 17H3a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h1l3-3h8l3 3h1a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2h-2"/><circle cx="7.5" cy="17.5" r="1.5"/><circle cx="16.5" cy="17.5" r="1.5"/></svg><span>'+car+'</span></div>' : '')
 
+      // Nota inline (estilo burbuja amarilla si existe)
+      + (bk.notes ? '<div style="background:#fffde7;border:1px solid #f9a825;border-radius:8px;padding:7px 10px;display:flex;align-items:flex-start;gap:6px;margin-top:2px">'
+          + '<span style="font-size:12px;flex-shrink:0">📝</span>'
+          + '<span style="font-size:10.5px;color:#5d4037;font-style:italic">' + (bk.notes.replace(/🔄NC:[^·\n]*/g,'').replace(/✅NCUSED/g,'').replace(/·\s*$/,'').trim() || '') + '</span>'
+          + '</div>' : '')
+
       // Bloque financiero 3 columnas
       + '<div style="background:var(--color-surface-2);border-radius:10px;padding:10px 12px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:2px">'+finBlock+'</div>'
       + '</div>'
 
       // ── Footer 2 filas ──────────────────────────────────────────────────
       + '<div style="padding:8px 14px 11px;border-top:0.5px solid var(--color-border)">'
-      // Fila 1: Editar + WA + Eliminar
       + '<div style="display:flex;gap:6px;margin-bottom:6px">'
       +   '<button data-pop-action="edit"   style="flex:1;font-size:10.5px;font-weight:600;padding:7px 0;border-radius:8px;cursor:pointer;border:none;background:var(--color-primary);color:#fff">✏️ Editar reserva</button>'
       +   '<button data-pop-action="wa"     style="width:36px;font-size:14px;padding:7px 0;border-radius:8px;cursor:pointer;border:0.5px solid var(--color-border);background:var(--color-surface-2)">💬</button>'
       +   '<button data-pop-action="delete" style="width:36px;font-size:14px;padding:7px 0;border-radius:8px;cursor:pointer;border:0.5px solid #fecaca;background:#fef2f2">🗑</button>'
       + '</div>'
-      // Fila 2: Cambiar fechas + Registrar cobro
-      + '<div style="display:flex;gap:6px">'
-      +   '<button data-pop-action="dates" style="flex:1;font-size:10.5px;font-weight:500;padding:7px 0;border-radius:8px;cursor:pointer;border:0.5px solid var(--color-border);background:var(--color-surface-2);color:var(--color-text-2)">📅 Cambiar fechas</button>'
-      +   '<button data-pop-action="pay"   style="flex:1;font-size:10.5px;font-weight:500;padding:7px 0;border-radius:8px;cursor:pointer;border:0.5px solid var(--color-border);background:var(--color-surface-2);color:var(--color-text-2)"'+(saldado?' disabled style="opacity:.45;cursor:default"':'')+'>💰 Registrar cobro</button>'
+      + '<div style="display:flex;gap:5px">'
+      +   '<button data-pop-action="dates" style="flex:1;font-size:10px;font-weight:500;padding:7px 0;border-radius:8px;cursor:pointer;border:0.5px solid var(--color-border);background:var(--color-surface-2);color:var(--color-text-2)">📅 Fechas</button>'
+      +   '<button data-pop-action="pay"   style="flex:1;font-size:10px;font-weight:500;padding:7px 0;border-radius:8px;cursor:pointer;border:0.5px solid var(--color-border);background:var(--color-surface-2);color:var(--color-text-2)"'+(saldado?' disabled style="opacity:.45;cursor:default"':'')+'>💰 Cobrar</button>'
+      +   '<button data-pop-action="note"  style="width:36px;font-size:14px;padding:7px 0;border-radius:8px;cursor:pointer;border:0.5px solid '+(bk.notes?'#f9a825':'var(--color-border)')+';background:'+(bk.notes?'#fffde7':'var(--color-surface-2)')+'" title="'+(bk.notes?'Ver/editar nota':'Agregar nota')+'">📝</button>'
       + '</div>'
       + '</div>';
 
@@ -3105,9 +3110,10 @@ export class Calendar {
       btn.addEventListener('click', async () => {
         close();
         const action = btn.dataset.popAction;
-        if (action === 'edit')   { this.bookingForm?.openEdit?.(bookingId) ?? this._openDetailById(bookingId); }
-        if (action === 'dates')  { this.bookingForm?.openEdit?.(bookingId, { focusStep: 2 }) ?? this._openDetailById(bookingId); }
+        if (action === 'edit')   { this.bookingForm?.openEdit?.(bookingId)     ?? this._openDetailById(bookingId); }
+        if (action === 'dates')  { this.bookingForm?.openEdit?.(bookingId).then?.(() => setTimeout(()=>this.bookingForm._goToStep(2),120)) ?? this._openDetailById(bookingId); }
         if (action === 'pay')    { this.bookingForm?.openPayments?.(bookingId) ?? this._openDetailById(bookingId); }
+        if (action === 'note')   { this.bookingForm?.openNote?.(bookingId)     ?? this._openDetailById(bookingId); }
         if (action === 'wa')     { const p = (g.phone||'').replace(/\D/g,''); if (p) window.open('https://wa.me/'+p,'_blank'); }
         if (action === 'delete') {
           if (!confirm('¿Eliminar la reserva de '+guest+'?')) return;
@@ -3810,10 +3816,12 @@ export class Calendar {
 
     el.innerHTML = cards.join('');
 
-    // Click en card de agenda → abre detalle de la reserva
+    // Click en card de agenda → abre popover igual que las barras del calendario
     el.addEventListener('click', (e) => {
       const card = e.target.closest('[data-booking-id]');
-      if (card?.dataset.bookingId) this._openDetailById(card.dataset.bookingId);
+      if (!card?.dataset.bookingId) return;
+      // Usar el card como ancla del popover
+      this._openBarPopover(card.dataset.bookingId, card, e);
     }, { capture: false });
   }
 }

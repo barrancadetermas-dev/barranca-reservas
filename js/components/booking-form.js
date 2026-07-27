@@ -337,6 +337,25 @@ export class BookingForm {
   }
 
   // ── Abrir para editar reserva existente ───────────
+  // Abre directamente en el paso de pagos (paso 4)
+  async openPayments(bookingId) {
+    await this.openEdit(bookingId);
+    // Esperar a que el form cargue y luego ir al paso 4
+    setTimeout(() => {
+      const steps = this.STEPS ?? [1,2,3,4,5];
+      const payStep = 4;
+      this._goToStep(payStep);
+    }, 120);
+  }
+
+  // Abre en el paso de notas (paso 5 / último antes de resumen)
+  async openNote(bookingId) {
+    await this.openEdit(bookingId);
+    setTimeout(() => {
+      this._goToStep(5);
+    }, 120);
+  }
+
   async openEdit(bookingId) {
     // Guard de carrera: si esta función se vuelve a llamar antes de que esta
     // ejecución termine (doble clic, reapertura rápida), la llamada vieja se
@@ -423,6 +442,11 @@ export class BookingForm {
         document.getElementById('disc-prefix') && (document.getElementById('disc-prefix').textContent = '%');
       }
       setVal('f-surcharge',   b.surcharge_amount ?? 0);
+      // Siempre restaurar en modo $ al editar (el valor guardado en DB es siempre $)
+      if (document.getElementById('f-surcharge-mode')) {
+        document.getElementById('f-surcharge-mode').value = 'amt';
+        document.getElementById('surch-prefix') && (document.getElementById('surch-prefix').textContent = '$');
+      }
       setVal('f-free-nights', b.free_nights     ?? 0);
       const lateCbEl = document.getElementById('f-late-checkout');
       if (lateCbEl) {
@@ -1334,7 +1358,9 @@ export class BookingForm {
     const disc  = _discMode0 === 'amt'
       ? (_subtotalForDisc > 0 ? Math.min(100, _discRaw0 / _subtotalForDisc * 100) : 0)
       : _discRaw0;
-    const surch = parseFloat(document.getElementById('f-surcharge').value) || 0;
+    const _sModeA = document.getElementById('f-surcharge-mode')?.value ?? 'amt';
+    const _sRawA  = parseFloat(document.getElementById('f-surcharge').value) || 0;
+    const surch   = _sModeA === 'pct' ? Math.round(subtotal * _sRawA / 100) : _sRawA;
     const freeN = parseInt(document.getElementById('f-free-nights').value) || 0;
     const lateCheckout     = document.getElementById('f-late-checkout')?.checked ?? false;
     const lateCheckoutPaid = lateCheckout && (document.getElementById('f-late-checkout-paid')?.checked ?? true);
@@ -1844,7 +1870,9 @@ export class BookingForm {
     const discPct    = _discMode1 === 'amt'
       ? (subtotal > 0 ? Math.min(100, _discRaw1 / subtotal * 100) : 0)
       : _discRaw1;
-    const surcharge  = parseFloat(document.getElementById('f-surcharge')?.value   ?? 0);
+    const _sModeB    = document.getElementById('f-surcharge-mode')?.value ?? 'amt';
+    const _sRawB     = parseFloat(document.getElementById('f-surcharge')?.value ?? 0);
+    const surcharge  = _sModeB === 'pct' ? Math.round(subtotal * _sRawB / 100) : _sRawB;
     const freeNights = parseInt(document.getElementById('f-free-nights')?.value ?? 0);
     const billable   = Math.max(0, nightsN - freeNights);
     const subtotal   = billable * price;
@@ -2025,7 +2053,9 @@ export class BookingForm {
     const discPct    = _discMode2 === 'amt'
       ? (subtotal > 0 ? Math.min(100, _discRaw2 / subtotal * 100) : 0)
       : _discRaw2;
-    const surcharge  = parseFloat(document.getElementById('f-surcharge')?.value ?? 0);
+    const _sModeC    = document.getElementById('f-surcharge-mode')?.value ?? 'amt';
+    const _sRawC     = parseFloat(document.getElementById('f-surcharge')?.value ?? 0);
+    const surcharge  = _sModeC === 'pct' ? Math.round(subtotal * _sRawC / 100) : _sRawC;
     const freeNights = parseInt(document.getElementById('f-free-nights')?.value ?? 0);
     const billable   = Math.max(0, nightsN - freeNights);
     const subtotal   = billable * price;
@@ -2269,7 +2299,9 @@ ${notes ? `
     const discPct  = _discMode3 === 'amt'
       ? (subtotal > 0 ? Math.min(100, _discRaw3 / subtotal * 100) : 0)
       : _discRaw3;
-    const surcharge= parseFloat(document.getElementById('f-surcharge')?.value ?? 0);
+    const _sModeD  = document.getElementById('f-surcharge-mode')?.value ?? 'amt';
+    const _sRawD   = parseFloat(document.getElementById('f-surcharge')?.value ?? 0);
+    const surcharge= _sModeD === 'pct' ? Math.round(subtotal * _sRawD / 100) : _sRawD;
     const freeNights = parseInt(document.getElementById('f-free-nights')?.value ?? 0);
     const billable = Math.max(0, nightsN - freeNights);
     const subtotal = billable * price;
@@ -2338,7 +2370,9 @@ ${notes ? `
       const disc  = _discMode4 === 'amt'
         ? (subtotal > 0 ? Math.min(100, _discRaw4 / subtotal * 100) : 0)
         : _discRaw4;
-      const surch = parseFloat(document.getElementById('f-surcharge').value) || 0;
+      const _sModeE = document.getElementById('f-surcharge-mode')?.value ?? 'amt';
+      const _sRawE  = parseFloat(document.getElementById('f-surcharge').value) || 0;
+      const surch   = _sModeE === 'pct' ? Math.round(subtotal * _sRawE / 100) : _sRawE;
       const freeN = parseInt(document.getElementById('f-free-nights').value) || 0;
       const dep   = parseFloat(document.getElementById('f-deposit').value) || 0;
       // 200 = mismo límite que el CHECK de la base (bookings_notes_check) —

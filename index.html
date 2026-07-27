@@ -921,7 +921,22 @@
             <input type="hidden" id="f-discount-mode" value="pct">
           </div>
         </div>
-        <div class="form-group"><label>Recargo fijo ($)</label><input type="number" id="f-surcharge" min="0" step="500" value="0"></div>
+        <div class="form-group">
+          <label style="display:flex;align-items:center;justify-content:space-between">
+            <span>Recargo</span>
+            <span style="display:flex;border:0.5px solid var(--color-border);border-radius:6px;overflow:hidden;font-size:.7rem">
+              <button type="button" id="surch-mode-pct" onclick="window._surchModePct()"
+                style="padding:1px 8px;background:var(--color-surface-2);color:var(--color-text-2);border:none;cursor:pointer;font-size:.7rem">%</button>
+              <button type="button" id="surch-mode-amt" onclick="window._surchModeAmt()"
+                style="padding:1px 8px;background:var(--color-primary);color:#fff;border:none;cursor:pointer;font-size:.7rem;font-weight:600">$</button>
+            </span>
+          </label>
+          <div style="position:relative">
+            <span id="surch-prefix" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);font-size:.8rem;color:var(--color-text-3);pointer-events:none">$</span>
+            <input type="number" id="f-surcharge" min="0" step="500" value="0" style="padding-left:28px">
+            <input type="hidden" id="f-surcharge-mode" value="amt">
+          </div>
+        </div>
       </div>
       <!-- Late Check-out: todo en una sola línea inline -->
       <div class="form-group" style="margin-top:4px">
@@ -1481,6 +1496,20 @@
       document.getElementById('disc-mode-amt').style.cssText = 'padding:1px 8px;background:var(--color-primary);color:#fff;border:none;cursor:pointer;font-size:.7rem;font-weight:600';
       document.getElementById('disc-mode-pct').style.cssText = 'padding:1px 8px;background:var(--color-surface-2);color:var(--color-text-2);border:none;cursor:pointer;font-size:.7rem';
       document.getElementById('f-discount').dispatchEvent(new Event('input'));
+    };
+    window._surchModePct = function() {
+      document.getElementById('f-surcharge-mode').value = 'pct';
+      document.getElementById('surch-prefix').textContent = '%';
+      document.getElementById('surch-mode-pct').style.cssText = 'padding:1px 8px;background:var(--color-primary);color:#fff;border:none;cursor:pointer;font-size:.7rem;font-weight:600';
+      document.getElementById('surch-mode-amt').style.cssText = 'padding:1px 8px;background:var(--color-surface-2);color:var(--color-text-2);border:none;cursor:pointer;font-size:.7rem';
+      document.getElementById('f-surcharge').dispatchEvent(new Event('input'));
+    };
+    window._surchModeAmt = function() {
+      document.getElementById('f-surcharge-mode').value = 'amt';
+      document.getElementById('surch-prefix').textContent = '$';
+      document.getElementById('surch-mode-amt').style.cssText = 'padding:1px 8px;background:var(--color-primary);color:#fff;border:none;cursor:pointer;font-size:.7rem;font-weight:600';
+      document.getElementById('surch-mode-pct').style.cssText = 'padding:1px 8px;background:var(--color-surface-2);color:var(--color-text-2);border:none;cursor:pointer;font-size:.7rem';
+      document.getElementById('f-surcharge').dispatchEvent(new Event('input'));
     };
   </script>
 </body>
