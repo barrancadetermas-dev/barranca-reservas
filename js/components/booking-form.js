@@ -2365,26 +2365,26 @@ ${notes ? `
       const ci    = document.getElementById('f-checkin').value;
       const co    = document.getElementById('f-checkout').value;
       const price = parseFloat(document.getElementById('f-price').value) || 0;
-      const _discMode4 = document.getElementById('f-discount-mode')?.value ?? 'pct';
-      const _discRaw4  = parseFloat(document.getElementById('f-discount').value) || 0;
-      const disc  = _discMode4 === 'amt'
-        ? (subtotal > 0 ? Math.min(100, _discRaw4 / subtotal * 100) : 0)
-        : _discRaw4;
-      const _sModeE = document.getElementById('f-surcharge-mode')?.value ?? 'amt';
-      const _sRawE  = parseFloat(document.getElementById('f-surcharge').value) || 0;
-      const surch   = _sModeE === 'pct' ? Math.round(subtotal * _sRawE / 100) : _sRawE;
       const freeN = parseInt(document.getElementById('f-free-nights').value) || 0;
       const dep   = parseFloat(document.getElementById('f-deposit').value) || 0;
-      // 200 = mismo límite que el CHECK de la base (bookings_notes_check) —
-      // recortar acá antes de mandarlo evita el rechazo silencioso de todo
-      // el guardado si alguien escribió (o se le fue acumulando de vueltas
-      // anteriores) una nota más larga que eso.
       const notes = document.getElementById('f-notes').value.trim().slice(0, 200);
       const source = document.querySelector('input[name="booking-source"]:checked')?.value ?? 'direct';
 
       const nights   = Math.round((new Date(co) - new Date(ci)) / 86400000);
       const billable = Math.max(0, nights - freeN);
       const subtotal = price * billable;
+
+      // Descuento — ahora subtotal ya está definido
+      const _discMode4 = document.getElementById('f-discount-mode')?.value ?? 'pct';
+      const _discRaw4  = parseFloat(document.getElementById('f-discount').value) || 0;
+      const disc  = _discMode4 === 'amt'
+        ? (subtotal > 0 ? Math.min(100, _discRaw4 / subtotal * 100) : 0)
+        : _discRaw4;
+
+      // Recargo — ídem
+      const _sModeE = document.getElementById('f-surcharge-mode')?.value ?? 'amt';
+      const _sRawE  = parseFloat(document.getElementById('f-surcharge').value) || 0;
+      const surch   = _sModeE === 'pct' ? Math.round(subtotal * _sRawE / 100) : _sRawE;
       // Redondear el descuento PRIMERO para que el total quede en pesos exactos.
       // Ej: $270.000 × 16,6668% = $45.000,36 → Math.round → $45.000
       // → total = $270.000 − $45.000 = $225.000 exacto (no $224.999).
