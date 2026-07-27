@@ -11,6 +11,7 @@
   --color-surface-2: #EEF2F8;
   --color-border:    #D0DCF0;
   --color-border-2:  #9FB3D4;
+  --color-cal-border:#b8c8e0;
   --color-text:      #0B1A35;
   --color-text-2:    #3A5278;
   --color-text-3:    #7B9ABE;
@@ -709,8 +710,8 @@ svg { flex-shrink: 0; }
 /* Calendar cells */
 .cal-cell {
   position: relative; height: 44px;
-  border-right: 1px solid #b8c8e0;
-  border-bottom: 1px solid #b8c8e0;
+  border-right: 1px solid var(--color-cal-border);
+  border-bottom: 1px solid var(--color-cal-border);
   cursor: pointer; overflow: visible;
   transition: background var(--t-fast);
 }
@@ -1406,7 +1407,8 @@ select { appearance: auto; cursor: pointer; }
   --color-surface:   #0D1F42;
   --color-surface-2: #091428;
   --color-border:    #1A3472;
-  --color-border-2:  #2A4A8A;
+  --color-border-2:  #3A5A9A;
+  --color-cal-border:#3A5A9A;
   --color-text:      #E8F0FF;
   --color-text-2:    #A0BDDC;
   --color-text-3:    #4A6FA0;
@@ -2190,7 +2192,8 @@ select { appearance: auto; cursor: pointer; }
   --color-surface:   #0D1F42;
   --color-surface-2: #0D1F42;
   --color-border:    #1A3472;
-  --color-border-2:  #2A4A8A;
+  --color-border-2:  #3A5A9A;
+  --color-cal-border:#3A5A9A;
   --color-text:      #E8F0FF;
   --color-text-2:    #A0BDDC;
   --color-text-3:    #4A6FA0;
