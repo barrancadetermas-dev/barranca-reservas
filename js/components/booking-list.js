@@ -728,7 +728,7 @@ export class BookingList {
               </div>
               <div class="bl-col-dates">
                 <span class="bl-dates">${formatDate(b.check_in)} → ${formatDate(b.check_out)}</span>
-                <span class="bl-nights">${nights} ${nights === 1 ? 'noche' : 'noches'}</span>
+                <span class="bl-nights">${nights} ${nights === 1 ? 'noche' : 'noches'}</span>${b.pax ? '<span style="font-size:.68rem;color:var(--color-text-3);margin-left:4px">👥 ' + b.pax + '</span>' : ''}
               </div>
               <div class="bl-col-amount" style="color:#9ca3af;font-size:.75rem">—</div>
               <div class="bl-col-status">
@@ -869,7 +869,7 @@ export class BookingList {
             </div>
             <div class="bl-col-dates">
               <span class="bl-dates">${formatDate(b.check_in)} → ${formatDate(b.check_out)}</span>
-              <span class="bl-nights">${nights} ${nights === 1 ? 'noche' : 'noches'}</span>
+              <span class="bl-nights">${nights} ${nights === 1 ? 'noche' : 'noches'}</span>${b.pax ? '<span style="font-size:.68rem;color:var(--color-text-3);margin-left:4px">👥 ' + b.pax + '</span>' : ''}
             </div>
             <div class="bl-col-amount">
               ${(() => {
