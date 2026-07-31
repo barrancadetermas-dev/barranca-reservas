@@ -136,14 +136,6 @@ export class Dashboard {
     };
 
     window._dashCheckOut = async (bookingId, rowId, guest) => {
-      // Modal de notas antes de confirmar check-out
-      const notas = prompt(
-        '👋 Check-out: ' + guest + '\n\n' +
-        'Estado de la unidad (opcional):\n' +
-        'Ej: "Dejar toallas extra", "Revisar canilla baño", "Todo OK"'
-      );
-      if (notas === null) return; // Canceló el prompt
-
       try {
         // 1. Registrar check-out
         const { error: bkErr } = await this.db.from('bookings')
@@ -167,9 +159,7 @@ export class Dashboard {
             .eq('scheduled_date', today)
             .limit(1);
 
-          const cleaningNote = notas.trim()
-            ? '🧹 Check-out ' + guest + ': ' + notas.trim()
-            : '🧹 Limpieza post check-out — ' + guest;
+          const cleaningNote = '🧹 Limpieza post check-out — ' + guest;
 
           if (existing?.length) {
             // Actualizar la tarea existente con las notas
