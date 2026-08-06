@@ -1877,7 +1877,13 @@ export class BookingForm {
     const billable   = Math.max(0, nightsN - freeNights);
     const subtotal   = billable * price;
     const discount   = Math.round(subtotal * discPct / 100);
-    const total      = Math.round(subtotal - discount + surcharge);
+
+    const _lateCheckedX = document.getElementById('f-late-checkout')?.checked ?? false;
+    const _latePaidX    = _lateCheckedX && (document.getElementById('f-late-checkout-paid')?.checked ?? true);
+    const _priceX       = parseFloat(document.getElementById('f-price')?.value) || 0;
+    const _lateRawX     = parseFloat(document.getElementById('f-late-checkout-amount')?.value) || (_priceX * 0.5);
+    const lateAmtDisp   = (_latePaidX) ? Math.round(_lateRawX) : 0;
+    const total      = Math.round(subtotal - discount + surcharge + lateAmtDisp);
     const paid       = Math.round(this._getTotalPaid());
     const balance    = total - paid;
     const fmt = n => '$' + Math.round(n).toLocaleString('es-AR');
@@ -2060,7 +2066,13 @@ export class BookingForm {
     const billable   = Math.max(0, nightsN - freeNights);
     const subtotal   = billable * price;
     const discount   = Math.round(subtotal * discPct / 100);
-    const total      = Math.round(subtotal - discount + surcharge);
+
+    const _lateCheckedX = document.getElementById('f-late-checkout')?.checked ?? false;
+    const _latePaidX    = _lateCheckedX && (document.getElementById('f-late-checkout-paid')?.checked ?? true);
+    const _priceX       = parseFloat(document.getElementById('f-price')?.value) || 0;
+    const _lateRawX     = parseFloat(document.getElementById('f-late-checkout-amount')?.value) || (_priceX * 0.5);
+    const lateAmtDisp   = (_latePaidX) ? Math.round(_lateRawX) : 0;
+    const total      = Math.round(subtotal - discount + surcharge + lateAmtDisp);
     const paid       = Math.round(this._getTotalPaid());
     const balance    = Math.max(0, total - paid);
 
@@ -2306,7 +2318,13 @@ ${notes ? `
     const billable = Math.max(0, nightsN - freeNights);
     const subtotal = billable * price;
     const discount = Math.round(subtotal * discPct / 100);
-    const total    = Math.round(subtotal - discount + surcharge);
+
+    const _lateCheckedX = document.getElementById('f-late-checkout')?.checked ?? false;
+    const _latePaidX    = _lateCheckedX && (document.getElementById('f-late-checkout-paid')?.checked ?? true);
+    const _priceX       = parseFloat(document.getElementById('f-price')?.value) || 0;
+    const _lateRawX     = parseFloat(document.getElementById('f-late-checkout-amount')?.value) || (_priceX * 0.5);
+    const lateAmtDisp   = (_latePaidX) ? Math.round(_lateRawX) : 0;
+    const total    = Math.round(subtotal - discount + surcharge + lateAmtDisp);
     const paid     = Math.round(this._getTotalPaid());
     const balance  = Math.max(0, total - paid);
 
@@ -2385,11 +2403,13 @@ ${notes ? `
       const _sModeE = document.getElementById('f-surcharge-mode')?.value ?? 'amt';
       const _sRawE  = parseFloat(document.getElementById('f-surcharge').value) || 0;
       const surch   = _sModeE === 'pct' ? Math.round(subtotal * _sRawE / 100) : _sRawE;
-      // Redondear el descuento PRIMERO para que el total quede en pesos exactos.
-      // Ej: $270.000 × 16,6668% = $45.000,36 → Math.round → $45.000
-      // → total = $270.000 − $45.000 = $225.000 exacto (no $224.999).
       const discAmt  = Math.round(subtotal * (disc / 100));
-      const total    = Math.max(0, subtotal - discAmt + Math.round(surch));
+      // Late checkout — debe sumarse al total guardado igual que en el preview
+      const _lateChecked  = document.getElementById('f-late-checkout')?.checked ?? false;
+      const _latePaid     = _lateChecked && (document.getElementById('f-late-checkout-paid')?.checked ?? true);
+      const _lateAmtRaw   = parseFloat(document.getElementById('f-late-checkout-amount')?.value) || (price * 0.5);
+      const lateAmtSave   = _latePaid ? Math.round(_lateAmtRaw) : 0;
+      const total    = Math.max(0, subtotal - discAmt + Math.round(surch) + lateAmtSave);
       const paid     = Math.round(this._getTotalPaid());
       const balance  = Math.max(0, total - paid);
 
