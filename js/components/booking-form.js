@@ -1865,6 +1865,10 @@ export class BookingForm {
 
     // Nights & financials
     const nightsN    = ci && co ? Math.round((new Date(co) - new Date(ci)) / 86400000) : 0;
+    const freeNights = parseInt(document.getElementById('f-free-nights')?.value ?? 0);
+    const billable   = Math.max(0, nightsN - freeNights);
+    const subtotal   = billable * price;
+
     const _discMode1 = document.getElementById('f-discount-mode')?.value ?? 'pct';
     const _discRaw1  = parseFloat(document.getElementById('f-discount')?.value ?? 0);
     const discPct    = _discMode1 === 'amt'
@@ -1873,9 +1877,6 @@ export class BookingForm {
     const _sModeB    = document.getElementById('f-surcharge-mode')?.value ?? 'amt';
     const _sRawB     = parseFloat(document.getElementById('f-surcharge')?.value ?? 0);
     const surcharge  = _sModeB === 'pct' ? Math.round(subtotal * _sRawB / 100) : _sRawB;
-    const freeNights = parseInt(document.getElementById('f-free-nights')?.value ?? 0);
-    const billable   = Math.max(0, nightsN - freeNights);
-    const subtotal   = billable * price;
     const discount   = Math.round(subtotal * discPct / 100);
 
     const _lateCheckedX = document.getElementById('f-late-checkout')?.checked ?? false;
@@ -2054,6 +2055,10 @@ export class BookingForm {
       .map(u => u.name).join(' / ');
 
     const nightsN    = ci && co ? Math.round((new Date(co) - new Date(ci)) / 86400000) : 0;
+    const freeNights = parseInt(document.getElementById('f-free-nights')?.value ?? 0);
+    const billable   = Math.max(0, nightsN - freeNights);
+    const subtotal   = billable * price;
+
     const _discMode2 = document.getElementById('f-discount-mode')?.value ?? 'pct';
     const _discRaw2  = parseFloat(document.getElementById('f-discount')?.value ?? 0);
     const discPct    = _discMode2 === 'amt'
@@ -2062,9 +2067,6 @@ export class BookingForm {
     const _sModeC    = document.getElementById('f-surcharge-mode')?.value ?? 'amt';
     const _sRawC     = parseFloat(document.getElementById('f-surcharge')?.value ?? 0);
     const surcharge  = _sModeC === 'pct' ? Math.round(subtotal * _sRawC / 100) : _sRawC;
-    const freeNights = parseInt(document.getElementById('f-free-nights')?.value ?? 0);
-    const billable   = Math.max(0, nightsN - freeNights);
-    const subtotal   = billable * price;
     const discount   = Math.round(subtotal * discPct / 100);
 
     const _lateCheckedX = document.getElementById('f-late-checkout')?.checked ?? false;
