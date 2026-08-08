@@ -71,14 +71,23 @@ export function getBookingBarColor(booking) {
   if (status === 'blocked' || booking?.is_blocked)
     return { color: '#374151', textColor: 'rgba(255,255,255,.7)', label: 'Bloqueo', priority: 1 };
 
+  // PAGADO: verde siempre, sin importar el canal — el pago está confirmado.
+  if (status === 'paid')
+    return { color: isPast ? '#14532D' : '#16A34A', textColor: 'white', label: 'Pagado', priority: 1 };
+
+  // SEÑADA: rojo, independientemente del canal
+  if (status === 'partial')
+    return { color: isPast ? '#7F1D1D' : '#DC2626', textColor: 'white', label: 'Con seña', priority: 2 };
+
+  // Sin seña — usar color del canal para identificar el origen
   if (source === 'family')
-    return { color: isPast ? '#4C1D95' : '#7C3AED', textColor: 'white', label: 'Familia', priority: 2 };
+    return { color: isPast ? '#4C1D95' : '#7C3AED', textColor: 'white', label: 'Familia', priority: 3 };
 
   if (source === 'walkin')
     return { color: isPast ? '#155E75' : '#0891B2', textColor: 'white', label: 'Espontáneo', priority: 3 };
 
   if (source === 'airbnb')
-    return { color: isPast ? '#7C2D12' : '#EA580C', textColor: 'white', label: 'Airbnb', priority: 3 };
+    return { color: isPast ? '#7C2D12' : '#EA580C', textColor: 'white', label: 'Airbnb', priority: 4 };
 
   if (source === 'booking')
     return { color: isPast ? '#1E3A8A' : '#1D4ED8', textColor: 'white', label: 'Booking', priority: 4 };
@@ -95,12 +104,7 @@ export function getBookingBarColor(booking) {
   if (source === 'referral')
     return { color: isPast ? '#78350F' : '#B45309', textColor: 'white', label: 'Referido', priority: 4 };
 
-  if (status === 'paid')
-    return { color: isPast ? '#14532D' : '#16A34A', textColor: 'white', label: 'Pagado', priority: 5 };
-
-  if (status === 'partial')
-    return { color: isPast ? '#7F1D1D' : '#DC2626', textColor: 'white', label: 'Con seña', priority: 6 };
-
+  // Sin seña, canal directo
   return {
     color:     isPast ? '#78350F' : '#EAB308',
     textColor: isPast ? 'white'   : '#1C1917',
