@@ -1272,13 +1272,13 @@ export class Calendar {
     // "continúa" la barra 67% hacia el día de salida. No captura clicks.
     if (booking.late_checkout && !truncRight) {
       const ext = document.createElement('div');
-      // Sin cargo → degradado color→amarillo; cobrado → color sólido
       const isFree  = booking.late_checkout_charged === false;
+      const isPaidB = booking.status === 'paid';
       const yellow  = '#EF9F27';
-      // Si hay degradado de promo, la extensión late CO arranca del color final
-      // de ese degradado (que puede ser amarillo si toda la última noche es gratis)
-      const extBaseColor = (freeN > 0) ? yellow : color;
-      const extBg   = isFree
+      // Si está pagada: la extensión es el mismo color verde (no amarillo)
+      // Solo aplica amarillo si es gratis Y no está pagada
+      const extBaseColor = (!isPaidB && freeN > 0) ? yellow : color;
+      const extBg   = (!isPaidB && isFree)
         ? `linear-gradient(to right, ${extBaseColor} 0%, ${extBaseColor} 20%, ${yellow} 100%)`
         : extBaseColor;
       ext.style.cssText = `
