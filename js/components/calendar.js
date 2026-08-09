@@ -951,27 +951,27 @@ export class Calendar {
       return `rgb(${r},${g},${b})`;
     };
 
-    // Los gradientes se aplican en orden de prioridad, pudiendo combinarse:
-    // El late checkout (extension overlay) es independiente — no interfiere con barBg.
-    // Para la barra principal: una sola condición activa a la vez.
+    // Degradés proporcionales — aplican para TODAS las reservas.
+    // El color base ya es semántico: verde=pagado, rojo=señado, ámbar=sin seña.
+    // La punta de color indica el tipo de precio especial.
     // Prioridad: noches sin cargo > descuento > recargo
     let barBg = color;
 
-    if (applyGradient && freeN > 0 && totalN > 0) {
+    if (freeN > 0 && totalN > 0) {
       const paidPct = Math.round(((totalN - freeN) / totalN) * 100);
       barBg = `linear-gradient(to right, ${color} 0%, ${color} ${paidPct}%, ${yellow} 100%)`;
 
-    } else if (applyGradient && discPct > 0 && surcharge > 0 && total > 0) {
+    } else if (discPct > 0 && surcharge > 0 && total > 0) {
       const surchargeRatio = Math.min(surcharge / total, 0.6);
       const solidPct   = Math.round(Math.max(55, 100 - surchargeRatio * 80));
       const darkFactor = Math.max(0.35, 0.75 - surchargeRatio * 0.8);
       barBg = `linear-gradient(to right, ${color} 0%, ${color} ${solidPct}%, ${darken(color, darkFactor)} 100%)`;
 
-    } else if (applyGradient && discPct > 0) {
+    } else if (discPct > 0) {
       const solidPct = Math.round(100 - discPct);
       barBg = `linear-gradient(to right, ${color} 0%, ${color} ${solidPct}%, ${orange} 100%)`;
 
-    } else if (applyGradient && surcharge > 0 && total > 0) {
+    } else if (surcharge > 0 && total > 0) {
       const surchargeRatio = Math.min(surcharge / total, 0.6);
       const solidPct   = Math.round(Math.max(55, 100 - surchargeRatio * 80));
       const darkFactor = Math.max(0.35, 0.75 - surchargeRatio * 0.8);
