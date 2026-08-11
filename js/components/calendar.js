@@ -1021,11 +1021,14 @@ export class Calendar {
       if (span2 > 1) {
         // Opción 3: overlay oscuro en pasado, corte nítido en hoy
         // El corte nítido actúa como marcador de "dónde estamos ahora"
-        // Indicadores de precio ignorados mientras está en curso
         const darkPast = darken(color, 0.42);
         if (passedDays === 0) {
-          barBg = color; // arrancó hoy — todo color pleno
+          // Arrancó hoy: sin porción pasada — mantener el gradiente de precio ya calculado.
+          // No sobreescribir barBg: si tiene descuento/noche gratis, se preserva.
         } else {
+          // Tiene días pasados: oscurecer pasado, luego el gradiente de precio en el futuro.
+          // Si barBg tenía gradiente (descuento→naranja), reemplazamos la porción pasada
+          // con darkPast y dejamos el color base en la sección actual+futura.
           barBg = 'linear-gradient(to right, '
             + darkPast + ' 0%, '
             + darkPast + ' ' + passedPct + '%, '
