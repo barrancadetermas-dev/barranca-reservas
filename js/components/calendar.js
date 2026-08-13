@@ -674,16 +674,17 @@ export class Calendar {
             const isNcStart = !ncPendingDays.has(`${unit.id}|${prevIso}`)
               || ncPendingDays.get(`${unit.id}|${prevIso}`) !== guestName;
             if (isNcStart) {
-              // Acumular todas las celdas del rango consecutivo
-              const ncCells = [cell];
+              // Contar días NC consecutivos (ncPendingDays es un Map — cellMap es un
+              // objeto plano, no tiene .get(); intentar llamarlo lanzaba un TypeError
+              // que cortaba el render al llegar al primer rango NC).
+              let ncSpan = 1;
               let nxt = this._addDays(iso, 1);
               while (ncPendingDays.has(`${unit.id}|${nxt}`)
                      && ncPendingDays.get(`${unit.id}|${nxt}`) === guestName) {
-                const nxtCell = cellMap.get(`${unit.id}|${nxt}`);
-                if (nxtCell) ncCells.push(nxtCell);
+                ncSpan++;
                 nxt = this._addDays(nxt, 1);
               }
-              this._renderNcRangeBar(ncCells, guestName, null);
+              this._renderNcRangeBar(cell, guestName, null, ncSpan);
             }
             cell.title = `🗓️ Noche de reprogramación${guestName ? ` de ${guestName}` : ''} sin usar — todavía se puede reservar`;
           } else if (earlyDepartureDays.has(`${unit.id}|${iso}`)) {
@@ -863,23 +864,17 @@ export class Calendar {
 
   // Renderiza el rango completo de NC como una barra que abarca todas las
   // celdas — en vez de un ícono por celda individual.
-  _renderNcRangeBar(cells, guestName, ncAmount) {
-    if (!cells || cells.length === 0) return;
-    const firstCell = cells[0];
+  // Recibe la primera celda DOM y el span (cantidad de días) del rango.
+  // Usa calc() igual que _renderBar — evita depender de offsetWidth (0 antes del paint).
+  _renderNcRangeBar(firstCell, guestName, ncAmount, span = 1) {
     if (!firstCell) return;
 
-    const totalCells = cells.length;
-    // La barra se posiciona absolutamente dentro de la primera celda
-    // y se extiende al ancho de todas las celdas del rango.
-    // Usamos el mismo trick que las barras de reserva: left:4px, right calculado.
     const bar = document.createElement('div');
     bar.className = 'nc-pending-bar nc-range-bar';
-    const cellW = firstCell.offsetWidth || 32;
-    const totalW = cellW * totalCells - 8;
 
     bar.style.cssText = `
       position:absolute;top:6px;bottom:6px;
-      left:4px;width:${totalW}px;
+      left:4px;width:calc(${span} * 100% - 8px);
       border-radius:6px;
       background:repeating-linear-gradient(135deg,
         rgba(148,163,184,.32), rgba(148,163,184,.32) 6px,
