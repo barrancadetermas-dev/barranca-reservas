@@ -116,8 +116,8 @@ export class Calendar {
       const earlyDepartureDays = this._buildEarlyDepartureDays(bookings, earlyDepartures);
       this._render(cellMap, reminderMap, ncPendingDays, earlyDepartureDays);
 
-    // ── 5. Barra de resumen superior ──
-    this._renderSummaryBar(bookings);
+      // ── 5. Barra de resumen superior ──
+      this._renderSummaryBar(bookings);
 
       // ── 6. Heatmap por fila (muy sutil) ──
       this._applyHeatmap(bookings);
