@@ -854,9 +854,16 @@ export class BookingList {
     const statusLbl = STATUS_LABELS[b.status]  ?? b.status;
     const nights   = b.nights ?? Math.round((new Date(b.check_out) - new Date(b.check_in)) / 86400000);
 
+    const discPctVal  = parseFloat(b.discount_pct ?? 0);
+    const hasDiscount = discPctVal > 0;
+    const unitBg      = unitColorsForAccent[0] ? unitColorsForAccent[0]+'09' : 'var(--color-surface)';
+    const rowBg       = hasDiscount
+      ? `repeating-linear-gradient(-55deg, rgba(249,115,22,.02) 0px, rgba(249,115,22,.02) 3px, transparent 3px, transparent 12px), ${unitBg}`
+      : unitBg;
+
     return `
       <div class="booking-row ${isBad ? 'booking-row-bad' : ''} ${b.status === 'cancelled' ? 'booking-row-cancelled' : ''}" data-booking-id="${b.id}"
-           style="cursor:pointer;background:${unitColorsForAccent[0] ? unitColorsForAccent[0]+'09' : 'var(--color-surface)'}">
+           style="cursor:pointer;background:${rowBg}">
         <div class="booking-row-accent" style="background:${accentBg}" title="${units.map(bu => bu.units?.name).filter(Boolean).join(' · ') || barLabel}"></div>
         <div class="booking-row-body">
           <div class="bl-row-main">
