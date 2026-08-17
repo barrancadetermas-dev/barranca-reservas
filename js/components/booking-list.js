@@ -85,6 +85,10 @@ export class BookingList {
       if (action === 'reprogram') this._reprogramBooking(id);
       if (action === 'void-credit-note') this._voidCreditNote(btn.dataset.id);
       if (action === 'delete-block') this._deleteBlock(id);
+      if (action === 'delete-block-group') {
+        const ids = (btn.dataset.ids ?? id).split(',').map(s => s.trim()).filter(Boolean);
+        this._deleteBlockGroup(ids);
+      }
     }, true); // ← capture phase: recibe el evento ANTES de que los hijos llamen stopPropagation
 
     document.addEventListener('booking:changed', () => {
@@ -502,7 +506,7 @@ export class BookingList {
 
     const filtered = this._applyFilters(this._allBookings, today);
     const sorted   = this._sortBookings(filtered);
-    const showing  = sorted.slice(0, this._page * this._pageSize);
+    const showing  = this._mergeBlocks(sorted.slice(0, this._page * this._pageSize));
     const hasMore  = sorted.length > showing.length;
 
     if (!filtered.length) {
@@ -696,7 +700,15 @@ export class BookingList {
         return getUnitChipHTML({ ...full, id: bu.unit_id }, 'sm');
       }).join(' ');
       const nights = b.nights ?? Math.round((new Date(b.check_out) - new Date(b.check_in)) / 86400000);
-      const motivo = b.block_reason?.trim() || 'Bloqueo';
+      const motivo   = b.block_reason?.trim() || 'Bloqueo';
+      const blockIds  = b._ids ?? [b.id];          // IDs agrupados (puede ser 1 o N)
+      const isGroup   = blockIds.length > 1;
+      const groupBadge = isGroup
+        ? `<span style="font-size:.65rem;font-weight:700;background:#e5e7eb;color:#4b5563;
+                       border-radius:4px;padding:1px 5px;margin-left:4px">
+             🔒 ${blockIds.length} depts
+           </span>`
+        : '';
       return `
         <div class="booking-row" data-booking-id="${b.id}" style="cursor:pointer;
               background:repeating-linear-gradient(
@@ -722,13 +734,13 @@ export class BookingList {
                   </svg>
                 </div>
                 <div class="bl-guest-info">
-                  <div style="font-size:.82rem;font-weight:600;color:#374151">${motivo}</div>
+                  <div style="font-size:.82rem;font-weight:600;color:#374151">${motivo}${groupBadge}</div>
                   <div class="bl-guest-meta" style="margin-top:2px">${uChips}</div>
                 </div>
               </div>
               <div class="bl-col-dates">
                 <span class="bl-dates">${formatDate(b.check_in)} → ${formatDate(b.check_out)}</span>
-                <span class="bl-nights">${nights} ${nights === 1 ? 'noche' : 'noches'}</span>${b.pax ? '<span style="font-size:.68rem;color:var(--color-text-3);margin-left:4px">👥 ' + b.pax + '</span>' : ''}
+                <span class="bl-nights">${nights} ${nights === 1 ? 'noche' : 'noches'}</span>
               </div>
               <div class="bl-col-amount" style="color:#9ca3af;font-size:.75rem">—</div>
               <div class="bl-col-status">
@@ -742,18 +754,20 @@ export class BookingList {
                 </span>
               </div>
               <div class="booking-actions-cell" onclick="event.stopPropagation()">
-                <button data-action="edit" class="bl-action-btn"
+                ${!isGroup ? `<button data-action="edit" class="bl-action-btn"
                         title="Editar motivo y fechas"
                         style="color:#6b7280">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
                     <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
                     <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
                   </svg>
-                </button>
-                <button data-action="delete-block" class="bl-action-btn"
-                        title="Eliminar bloqueo"
+                </button>` : ''}
+                <button data-action="delete-block-group"
+                        class="bl-action-btn"
+                        title="${isGroup ? 'Eliminar bloqueo en los ' + blockIds.length + ' departamentos' : 'Eliminar bloqueo'}"
                         style="color:#ef4444"
-                        data-booking-id="${b.id}">
+                        data-booking-id="${b.id}"
+                        data-ids="${blockIds.join(',')}">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
                     <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/>
                     <path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/>
@@ -1598,6 +1612,60 @@ export class BookingList {
         showToast('Error al eliminar: ' + (err?.message ?? String(err)), 'error');
       }
     });
+  }
+
+  // ── Agrupa bloqueos con mismas fechas + mismo motivo en una sola fila ──────
+  // Preserva el orden de primera aparición. Los bloqueos agrupados acumulan
+  // sus booking_units y sus IDs en b._ids para el delete masivo.
+  _mergeBlocks(bookings) {
+    const seen   = new Map();   // key -> índice en result
+    const result = [];
+    for (const b of bookings) {
+      if (b.status !== 'blocked' && !b.is_blocked) {
+        result.push(b);
+        continue;
+      }
+      const reason = (b.block_reason ?? '').trim();
+      const key    = `${b.check_in}|${b.check_out}|${reason}`;
+      if (!seen.has(key)) {
+        const merged = {
+          ...b,
+          _ids: [b.id],
+          booking_units: [...(b.booking_units ?? [])],
+        };
+        seen.set(key, result.length);
+        result.push(merged);
+      } else {
+        const m = result[seen.get(key)];
+        m._ids.push(b.id);
+        m.booking_units.push(...(b.booking_units ?? []));
+      }
+    }
+    return result;
+  }
+
+  // ── Elimina todos los bloqueos de un grupo (mismas fechas/motivo) ──────────
+  async _deleteBlockGroup(ids) {
+    if (!ids?.length) return;
+    const plural = ids.length > 1;
+    const msg    = plural
+      ? `¿Eliminar el bloqueo en los ${ids.length} departamentos?`
+      : '¿Eliminar este bloqueo del calendario?';
+    if (!confirm(msg)) return;
+
+    // Dim the row visually while deleting
+    const firstRow = document.querySelector(`.booking-row[data-booking-id="${ids[0]}"]`);
+    if (firstRow) { firstRow.style.opacity = '.35'; firstRow.style.pointerEvents = 'none'; }
+
+    try {
+      const { error } = await this.db.from('bookings').delete().in('id', ids);
+      if (error) throw error;
+      showToast(plural ? `${ids.length} bloqueos eliminados ✓` : 'Bloqueo eliminado ✓', 'success');
+      await this.load();
+    } catch (err) {
+      if (firstRow) { firstRow.style.opacity = ''; firstRow.style.pointerEvents = ''; }
+      showToast('Error al eliminar: ' + (err.message ?? err), 'error');
+    }
   }
 
   async _deleteBlock(id) {

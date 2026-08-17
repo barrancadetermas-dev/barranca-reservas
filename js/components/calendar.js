@@ -3725,6 +3725,17 @@ export class Calendar {
     const winStart = this._windowStart > today ? this._windowStart : today;
     const winEnd   = this._addDays(this._windowStart, this._visibleDays ?? 35);
 
+    // DEBUG temporal — quitar cuando esté confirmado
+    console.group('[MiniAgenda] debug');
+    console.log('_windowStart:', this._windowStart, '| today:', today, '| _visibleDays:', this._visibleDays);
+    console.log('winStart:', winStart, '| winEnd:', winEnd);
+    console.log('bookings recibidos:', bookings.length);
+    const allNonCancelled = bookings.filter(b => !b.is_blocked && b.status !== 'blocked' && b.status !== 'cancelled');
+    console.log('no bloqueados/cancelados:', allNonCancelled.length, allNonCancelled.map(b => `${b.check_in} [${b.status}]`));
+    const inRange = allNonCancelled.filter(b => b.check_in >= winStart && b.check_in <= winEnd);
+    console.log('en rango fecha:', inRange.length, inRange.map(b => b.check_in));
+    console.groupEnd();
+
     const upcoming = bookings
       .filter(b => !b.is_blocked && b.status !== 'blocked' && b.status !== 'cancelled'
                 && b.check_in >= winStart && b.check_in <= winEnd)
