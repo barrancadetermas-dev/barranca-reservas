@@ -70,7 +70,10 @@ export class BookingList {
       if (action === 'view')      this._openDetail(id);
       if (action === 'edit') {
         const bk = this._allBookings?.find(b => b.id === id);
-        if (bk?.status === 'blocked' || bk?.is_blocked) this._openBlockEditModal(id, bk);
+        if (bk?.status === 'blocked' || bk?.is_blocked) {
+          // Si el card es un grupo mergeado, pasamos todos los IDs y el mapa unit→booking
+          this._openBlockEditModal(id, bk, bk._ids ?? null);
+        }
         else this.bookingForm.openEdit(id);
       }
       if (action === 'voucher')   this._openVoucher(id);
@@ -703,6 +706,26 @@ export class BookingList {
       const motivo   = b.block_reason?.trim() || 'Bloqueo';
       const blockIds  = b._ids ?? [b.id];          // IDs agrupados (puede ser 1 o N)
       const isGroup   = blockIds.length > 1;
+
+      // ── Barra lateral de colores: igual que en reservas normales ─────────
+      // Ordena unidades por sort_order para que queden siempre en orden visual.
+      const sortedBlockUnits = [...units].sort(
+        (a, b) => (a.units?.sort_order ?? 99) - (b.units?.sort_order ?? 99)
+      );
+      const blockColors = sortedBlockUnits
+        .map(bu => bu.units?.color ?? AppContext.units?.find(u => String(u.id) === String(bu.unit_id))?.color)
+        .filter(Boolean);
+      const blockAccentBg = blockColors.length <= 1
+        ? (blockColors[0] ?? '#9ca3af')
+        : (() => {
+            const n = blockColors.length;
+            const stops = blockColors.flatMap((c, i) => [
+              `${c} ${(i / n * 100).toFixed(2)}%`,
+              `${c} ${((i + 1) / n * 100).toFixed(2)}%`,
+            ]);
+            return `linear-gradient(to bottom, ${stops.join(', ')})`;
+          })();
+
       const groupBadge = isGroup
         ? `<span style="font-size:.65rem;font-weight:700;background:#e5e7eb;color:#4b5563;
                        border-radius:4px;padding:1px 5px;margin-left:4px">
@@ -720,9 +743,9 @@ export class BookingList {
                 #d4d7db 19px, #d4d7db 28px
               );
               border-left:none;position:relative">
-          <div class="booking-row-accent" style="background:repeating-linear-gradient(
-                45deg,#9ca3af44,#9ca3af44 4px,transparent 4px,transparent 10px);
-                min-width:5px;border-radius:3px 0 0 3px"></div>
+          <div class="booking-row-accent"
+               title="${sortedBlockUnits.map(bu => bu.units?.name).filter(Boolean).join(' · ')}"
+               style="background:${blockAccentBg};min-width:5px;border-radius:3px 0 0 3px"></div>
           <div class="booking-row-body" style="padding:10px 14px">
             <div class="bl-row-main">
               <div class="bl-col-guest">
@@ -754,14 +777,14 @@ export class BookingList {
                 </span>
               </div>
               <div class="booking-actions-cell" onclick="event.stopPropagation()">
-                ${!isGroup ? `<button data-action="edit" class="bl-action-btn"
-                        title="Editar motivo y fechas"
+                <button data-action="edit" class="bl-action-btn"
+                        title="${isGroup ? 'Editar bloqueo de ' + blockIds.length + ' departamentos' : 'Editar motivo y fechas'}"
                         style="color:#6b7280">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
                     <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
                     <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
                   </svg>
-                </button>` : ''}
+                </button>
                 <button data-action="delete-block-group"
                         class="bl-action-btn"
                         title="${isGroup ? 'Eliminar bloqueo en los ' + blockIds.length + ' departamentos' : 'Eliminar bloqueo'}"
@@ -1430,7 +1453,7 @@ export class BookingList {
   // ── Modal de edición de bloqueo desde la lista de reservas ───────────────
   // Permite cambiar fechas, motivo y unidades bloqueadas.
   // Multi-unidad: checkboxes por depto. Al guardar sincroniza booking_units.
-  async _openBlockEditModal(bookingId, bookingData) {
+  async _openBlockEditModal(bookingId, bookingData, groupIds = null) {
     const existing = document.getElementById('overlay-block-edit-list');
     if (existing) existing.remove();
 
@@ -1561,29 +1584,78 @@ export class BookingList {
       saveBtn.disabled = true; saveBtn.textContent = 'Guardando…';
 
       try {
-        // 1. Actualizar datos del bloqueo
-        const { error: e1 } = await this.db.from('bookings')
-          .update({ check_in: newCI, check_out: newCO, block_reason: newReason })
-          .eq('id', bookingId);
-        if (e1) throw e1;
+        const isGroupEdit = groupIds && groupIds.length > 1;
+        const nights = Math.max(1, Math.round((new Date(newCO) - new Date(newCI)) / 86400000));
 
-        // 2. Sincronizar booking_units: borrar las viejas e insertar las nuevas
-        await this.db.from('booking_units').delete().eq('booking_id', bookingId);
-        const inserts = selectedUnitIds.map(uid => ({
-          booking_id: bookingId,
-          unit_id:    uid,
-          price_per_night: 0,
-        }));
-        const { error: e2 } = await this.db.from('booking_units').insert(inserts);
-        if (e2) throw e2;
+        if (isGroupEdit) {
+          // ── Modo grupo: N bookings (1 por unidad) ──────────────────────────
+          // Mapa unit_id (str) → booking_id existente
+          const unitBookingMap = bookingData?._unitBookingMap ?? {};
+          const selectedSet    = new Set(selectedUnitIds.map(String));
+          const originalUnitIds = new Set(Object.keys(unitBookingMap));
 
-        // 3. Sincronizar maintenance_issue si existe
-        const { data: mi } = await this.db.from('maintenance_issues')
-          .select('id').eq('booking_id', bookingId).maybeSingle();
-        if (mi?.id) {
-          await this.db.from('maintenance_issues')
-            .update({ title: newReason, description: `Bloqueo: ${newCI} → ${newCO}` })
-            .eq('id', mi.id);
+          // 1. Actualizar bookings que siguen seleccionados
+          const keptBookingIds = [...selectedSet]
+            .filter(uid => originalUnitIds.has(uid))
+            .map(uid => unitBookingMap[uid])
+            .filter(Boolean);
+          if (keptBookingIds.length) {
+            const { error: eu } = await this.db.from('bookings')
+              .update({ check_in: newCI, check_out: newCO, block_reason: newReason, nights })
+              .in('id', keptBookingIds);
+            if (eu) throw eu;
+          }
+
+          // 2. Eliminar bookings de unidades deseleccionadas
+          const removedBookingIds = [...originalUnitIds]
+            .filter(uid => !selectedSet.has(uid))
+            .map(uid => unitBookingMap[uid])
+            .filter(Boolean);
+          if (removedBookingIds.length) {
+            const { error: ed } = await this.db.from('bookings').delete().in('id', removedBookingIds);
+            if (ed) throw ed;
+          }
+
+          // 3. Crear nuevos bookings para unidades recién seleccionadas
+          const newUnitIds = [...selectedSet].filter(uid => !originalUnitIds.has(uid));
+          for (const uid of newUnitIds) {
+            const { data: nb, error: en } = await this.db.from('bookings').insert({
+              hotel_id:     this.ctx.hotelId,
+              check_in:     newCI, check_out: newCO,
+              block_reason: newReason, is_blocked: true, status: 'blocked',
+              nights, total_amount: 0, total_paid: 0, balance: 0,
+            }).select('id').single();
+            if (en) throw en;
+            if (nb?.id) {
+              await this.db.from('booking_units')
+                .insert({ booking_id: nb.id, unit_id: uid, price_per_night: 0 });
+            }
+          }
+
+        } else {
+          // ── Modo individual: 1 booking, N booking_units ────────────────────
+          // 1. Actualizar datos del bloqueo
+          const { error: e1 } = await this.db.from('bookings')
+            .update({ check_in: newCI, check_out: newCO, block_reason: newReason, nights })
+            .eq('id', bookingId);
+          if (e1) throw e1;
+
+          // 2. Sincronizar booking_units: borrar las viejas e insertar las nuevas
+          await this.db.from('booking_units').delete().eq('booking_id', bookingId);
+          const inserts = selectedUnitIds.map(uid => ({
+            booking_id: bookingId, unit_id: uid, price_per_night: 0,
+          }));
+          const { error: e2 } = await this.db.from('booking_units').insert(inserts);
+          if (e2) throw e2;
+
+          // 3. Sincronizar maintenance_issue si existe
+          const { data: mi } = await this.db.from('maintenance_issues')
+            .select('id').eq('booking_id', bookingId).maybeSingle();
+          if (mi?.id) {
+            await this.db.from('maintenance_issues')
+              .update({ title: newReason, description: `Bloqueo: ${newCI} → ${newCO}` })
+              .eq('id', mi.id);
+          }
         }
 
         showToast('Bloqueo actualizado ✓', 'success');
@@ -1632,13 +1704,20 @@ export class BookingList {
           ...b,
           _ids: [b.id],
           booking_units: [...(b.booking_units ?? [])],
+          _unitBookingMap: {},   // unit_id (str) → booking_id — para el guardado
         };
+        (b.booking_units ?? []).forEach(bu => {
+          merged._unitBookingMap[String(bu.unit_id)] = b.id;
+        });
         seen.set(key, result.length);
         result.push(merged);
       } else {
         const m = result[seen.get(key)];
         m._ids.push(b.id);
         m.booking_units.push(...(b.booking_units ?? []));
+        (b.booking_units ?? []).forEach(bu => {
+          m._unitBookingMap[String(bu.unit_id)] = b.id;
+        });
       }
     }
     return result;
