@@ -3712,16 +3712,22 @@ export class Calendar {
     if (!el) return;
 
     const today = localToday();
-    const in30  = this._addDays(today, 30);
     const DAYS  = ['dom','lun','mar','mié','jue','vie','sáb'];
     const MONTHS= ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
 
     // Mobile: máx 6 cards; Desktop: máx 7
     const SLOTS = window.innerWidth <= 768 ? 6 : 7;
 
+    // Ventana de búsqueda: desde el inicio visible del calendario
+    // (o hoy si ya pasó) hasta el fin de la vista actual.
+    // Antes era fijo "hoy + 30 días", lo que ocultaba reservas cuando el
+    // usuario navegaba a un período futuro más lejano.
+    const winStart = this._windowStart > today ? this._windowStart : today;
+    const winEnd   = this._addDays(this._windowStart, this._visibleDays ?? 35);
+
     const upcoming = bookings
       .filter(b => !b.is_blocked && b.status !== 'blocked' && b.status !== 'cancelled'
-                && b.check_in >= today && b.check_in <= in30)
+                && b.check_in >= winStart && b.check_in <= winEnd)
       .sort((a, b) => a.check_in.localeCompare(b.check_in))
       .slice(0, SLOTS);
     const cards = [];
