@@ -6,16 +6,11 @@ import { NotificationService } from './services/notification-service.js';
 import { initWaitlistService } from './services/waitlist-service.js';
 import { initAccessibility } from './services/accessibility.js';
 import { initNotificationCenterUI } from './components/notification-center-ui.js';
-import { checkUpcomingHolidays } from './services/holiday-notifications.js';
 import { checkTodayWeather } from './services/weather-notifications.js';
-import { initSportsNotifications } from './services/sports-notifications.js';
-import { initF1Notifications } from './services/f1-notifications.js';
 import { initSystemNotifications } from './services/system-notifications.js';
 import { checkTomorrowArrivalsWithoutDeposit } from './services/reservas-notifications.js';
-import { initRiverNotifications } from './services/river-notifications.js';
 import { checkHighSeasonOccupancy } from './services/high-season-notifications.js';
 import { checkDollarVariants } from './services/dollar-variants-notifications.js';
-import { initNewsNotifications } from './services/news-notifications.js';
 import { initMilaEventNotifications } from './services/mila-event-notifications.js';
 import { initEventEngine } from './services/event-engine.js';
 import { initOfflineSync } from './services/offline-sync.js';
@@ -293,21 +288,13 @@ async function initApp(user) {
       }
     });
     initSystemNotifications();
-    checkUpcomingHolidays(); // sin red, es cálculo local — puede ir ya mismo
-
-    // El resto sí pega a internet (clima, deportes, F1, río, etc.) — se
-    // escalonan con una demora chica cada uno, para no mandar 6-7
-    // pedidos a la vez justo cuando la app recién está cargando tus
-    // propias reservas del día. No cambia el resultado, solo el momento.
+    // El resto sí pega a internet (clima, dólar) — se escalonan con
+    // una demora chica para no bloquear la carga inicial de reservas.
     setTimeout(() => checkTodayWeather(), 300);
-    setTimeout(() => initSportsNotifications(), 800);
-    setTimeout(() => initF1Notifications(), 1300);
-    setTimeout(() => initRiverNotifications(), 1800);
-    setTimeout(() => initSMNNotifications(), 2100);
-    setTimeout(() => checkTomorrowArrivalsWithoutDeposit(supabase, AppContext.hotelId), 2300);
-    setTimeout(() => checkHighSeasonOccupancy(supabase, AppContext.hotelId, AppContext.units?.length), 2800);
-    setTimeout(() => checkDollarVariants(), 3300);
-    setTimeout(() => initNewsNotifications(), 3800);
+    setTimeout(() => initSMNNotifications(), 600);
+    setTimeout(() => checkTomorrowArrivalsWithoutDeposit(supabase, AppContext.hotelId), 900);
+    setTimeout(() => checkHighSeasonOccupancy(supabase, AppContext.hotelId, AppContext.units?.length), 1200);
+    setTimeout(() => checkDollarVariants(), 1500);
     initEventEngine(supabase, AppContext.hotelId);
 
     // ── Cargar rol del usuario ──

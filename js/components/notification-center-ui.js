@@ -109,7 +109,7 @@ function _renderList() {
 
 // Orden explícito — lo esencial de MILA arriba, después lo técnico,
 // después las fuentes externas agrupadas por tema.
-const CATEGORY_ORDER = ['reservas', 'sistema', 'clima', 'rio', 'economia', 'feriados', 'noticias', 'deportes', 'f1'];
+const CATEGORY_ORDER = ['reservas', 'sistema', 'clima', 'economia'];
 
 function _renderCategoryToggles() {
   const wrap = document.getElementById('notifcenter-categories');
