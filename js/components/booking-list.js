@@ -71,8 +71,10 @@ export class BookingList {
       if (action === 'edit') {
         const bk = this._allBookings?.find(b => b.id === id);
         if (bk?.status === 'blocked' || bk?.is_blocked) {
-          // Si el card es un grupo mergeado, pasamos todos los IDs y el mapa unit→booking
-          this._openBlockEditModal(id, bk, bk._ids ?? null);
+          // Leer IDs del grupo desde data-ids del botón (disponible en HTML,
+          // no depende de _allBookings que no tiene _ids/_unitBookingMap)
+          const rawIds = (btn.dataset.ids ?? id).split(',').map(s => s.trim()).filter(Boolean);
+          this._openBlockEditModal(id, bk, rawIds.length > 1 ? rawIds : null);
         }
         else this.bookingForm.openEdit(id);
       }
@@ -777,8 +779,10 @@ export class BookingList {
                 </span>
               </div>
               <div class="booking-actions-cell" onclick="event.stopPropagation()">
-                <button data-action="edit" class="bl-action-btn"
+                <button data-action="edit"
+                        class="bl-action-btn"
                         title="${isGroup ? 'Editar bloqueo de ' + blockIds.length + ' departamentos' : 'Editar motivo y fechas'}"
+                        data-ids="${blockIds.join(',')}"
                         style="color:#6b7280">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
                     <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
@@ -1589,9 +1593,17 @@ export class BookingList {
 
         if (isGroupEdit) {
           // ── Modo grupo: N bookings (1 por unidad) ──────────────────────────
-          // Mapa unit_id (str) → booking_id existente
-          const unitBookingMap = bookingData?._unitBookingMap ?? {};
-          const selectedSet    = new Set(selectedUnitIds.map(String));
+          // Construir mapa unit_id → booking_id desde _allBookings (fuente de
+          // verdad que sí tiene booking_units cargados, a diferencia del objeto
+          // mergeado del display que no persiste en _allBookings)
+          const unitBookingMap = {};
+          for (const gid of groupIds) {
+            const gb = this._allBookings?.find(b => String(b.id) === String(gid));
+            (gb?.booking_units ?? []).forEach(bu => {
+              unitBookingMap[String(bu.unit_id)] = gid;
+            });
+          }
+          const selectedSet = new Set(selectedUnitIds.map(String));
           const originalUnitIds = new Set(Object.keys(unitBookingMap));
 
           // 1. Actualizar bookings que siguen seleccionados
@@ -1601,7 +1613,7 @@ export class BookingList {
             .filter(Boolean);
           if (keptBookingIds.length) {
             const { error: eu } = await this.db.from('bookings')
-              .update({ check_in: newCI, check_out: newCO, block_reason: newReason, nights })
+              .update({ check_in: newCI, check_out: newCO, block_reason: newReason })
               .in('id', keptBookingIds);
             if (eu) throw eu;
           }
@@ -1623,7 +1635,7 @@ export class BookingList {
               hotel_id:     this.ctx.hotelId,
               check_in:     newCI, check_out: newCO,
               block_reason: newReason, is_blocked: true, status: 'blocked',
-              nights, total_amount: 0, total_paid: 0, balance: 0,
+              total_amount: 0, total_paid: 0, balance: 0,
             }).select('id').single();
             if (en) throw en;
             if (nb?.id) {
@@ -1636,7 +1648,7 @@ export class BookingList {
           // ── Modo individual: 1 booking, N booking_units ────────────────────
           // 1. Actualizar datos del bloqueo
           const { error: e1 } = await this.db.from('bookings')
-            .update({ check_in: newCI, check_out: newCO, block_reason: newReason, nights })
+            .update({ check_in: newCI, check_out: newCO, block_reason: newReason })
             .eq('id', bookingId);
           if (e1) throw e1;
 
