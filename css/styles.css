@@ -6853,3 +6853,8 @@ input[type="number"]:focus, select:focus {
   background: rgba(24,63,150,.25) !important;
 }
 
+
+/* ── Booking-list: colapso de grupos de mes ──────────────────────────────── */
+.bl-month-body.bl-hidden {
+  display: none;
+}

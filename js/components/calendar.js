@@ -952,26 +952,30 @@ export class Calendar {
     // Prioridad: noches sin cargo > descuento > recargo
     let barBg = color;
 
+    // Todos los gradientes usan HARD STOPS (mismo % repetido para el corte):
+    // así cada sección ocupa celdas enteras exactas y el ojo percibe
+    // correctamente el ancho de cada noche, sin zona de transición borrosa.
     if (freeN > 0 && totalN > 0) {
       const paidPct = Math.round(((totalN - freeN) / totalN) * 100);
-      barBg = `linear-gradient(to right, ${color} 0%, ${color} ${paidPct}%, ${yellow} 100%)`;
+      barBg = `linear-gradient(to right, ${color} 0%, ${color} ${paidPct}%, ${yellow} ${paidPct}%, ${yellow} 100%)`;
 
     } else if (discPct > 0 && surcharge > 0 && total > 0) {
       const surchargeRatio = Math.min(surcharge / total, 0.6);
       const solidPct   = Math.round(Math.max(55, 100 - surchargeRatio * 80));
       const darkFactor = Math.max(0.35, 0.75 - surchargeRatio * 0.8);
-      barBg = `linear-gradient(to right, ${color} 0%, ${color} ${solidPct}%, ${darken(color, darkFactor)} 100%)`;
+      const dk = darken(color, darkFactor);
+      barBg = `linear-gradient(to right, ${color} 0%, ${color} ${solidPct}%, ${dk} ${solidPct}%, ${dk} 100%)`;
 
     } else if (discPct > 0) {
       const solidPct = Math.round(100 - discPct);
-      barBg = `linear-gradient(to right, ${color} 0%, ${color} ${solidPct}%, ${orange} 100%)`;
+      barBg = `linear-gradient(to right, ${color} 0%, ${color} ${solidPct}%, ${orange} ${solidPct}%, ${orange} 100%)`;
 
     } else if (surcharge > 0 && total > 0) {
       const surchargeRatio = Math.min(surcharge / total, 0.6);
       const solidPct   = Math.round(Math.max(55, 100 - surchargeRatio * 80));
       const darkFactor = Math.max(0.35, 0.75 - surchargeRatio * 0.8);
       const darkColor  = darken(color, darkFactor);
-      barBg = `linear-gradient(to right, ${color} 0%, ${color} ${solidPct}%, ${darkColor} 100%)`;
+      barBg = `linear-gradient(to right, ${color} 0%, ${color} ${solidPct}%, ${darkColor} ${solidPct}%, ${darkColor} 100%)`;
     }
 
     // Bloqueos: rayitas diagonales sutiles (igual al card en la tab Reservas)
