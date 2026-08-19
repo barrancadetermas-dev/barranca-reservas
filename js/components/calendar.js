@@ -952,30 +952,30 @@ export class Calendar {
     // Prioridad: noches sin cargo > descuento > recargo
     let barBg = color;
 
-    // Todos los gradientes usan HARD STOPS (mismo % repetido para el corte):
-    // así cada sección ocupa celdas enteras exactas y el ojo percibe
-    // correctamente el ancho de cada noche, sin zona de transición borrosa.
+    // Gradiente con transición muy leve (4 pp): cada sección ocupa casi
+    // una celda entera pero con un suave paso de color en el límite.
+    const T = 4; // puntos de transición
     if (freeN > 0 && totalN > 0) {
-      const paidPct = Math.round(((totalN - freeN) / totalN) * 100);
-      barBg = `linear-gradient(to right, ${color} 0%, ${color} ${paidPct}%, ${yellow} ${paidPct}%, ${yellow} 100%)`;
+      const p = Math.round(((totalN - freeN) / totalN) * 100);
+      barBg = `linear-gradient(to right, ${color} 0%, ${color} ${p-T}%, ${yellow} ${p+T}%, ${yellow} 100%)`;
 
     } else if (discPct > 0 && surcharge > 0 && total > 0) {
       const surchargeRatio = Math.min(surcharge / total, 0.6);
-      const solidPct   = Math.round(Math.max(55, 100 - surchargeRatio * 80));
+      const p          = Math.round(Math.max(55, 100 - surchargeRatio * 80));
       const darkFactor = Math.max(0.35, 0.75 - surchargeRatio * 0.8);
       const dk = darken(color, darkFactor);
-      barBg = `linear-gradient(to right, ${color} 0%, ${color} ${solidPct}%, ${dk} ${solidPct}%, ${dk} 100%)`;
+      barBg = `linear-gradient(to right, ${color} 0%, ${color} ${p-T}%, ${dk} ${p+T}%, ${dk} 100%)`;
 
     } else if (discPct > 0) {
-      const solidPct = Math.round(100 - discPct);
-      barBg = `linear-gradient(to right, ${color} 0%, ${color} ${solidPct}%, ${orange} ${solidPct}%, ${orange} 100%)`;
+      const p = Math.round(100 - discPct);
+      barBg = `linear-gradient(to right, ${color} 0%, ${color} ${p-T}%, ${orange} ${p+T}%, ${orange} 100%)`;
 
     } else if (surcharge > 0 && total > 0) {
       const surchargeRatio = Math.min(surcharge / total, 0.6);
-      const solidPct   = Math.round(Math.max(55, 100 - surchargeRatio * 80));
+      const p          = Math.round(Math.max(55, 100 - surchargeRatio * 80));
       const darkFactor = Math.max(0.35, 0.75 - surchargeRatio * 0.8);
       const darkColor  = darken(color, darkFactor);
-      barBg = `linear-gradient(to right, ${color} 0%, ${color} ${solidPct}%, ${darkColor} ${solidPct}%, ${darkColor} 100%)`;
+      barBg = `linear-gradient(to right, ${color} 0%, ${color} ${p-T}%, ${darkColor} ${p+T}%, ${darkColor} 100%)`;
     }
 
     // Bloqueos: rayitas diagonales sutiles (igual al card en la tab Reservas)

@@ -6858,3 +6858,17 @@ input[type="number"]:focus, select:focus {
 .bl-month-body.bl-hidden {
   display: none;
 }
+
+/* ── Bloqueos: hover con rayado gris+rojo (no pisar el background inline) ── */
+.booking-row.blocked-row:hover {
+  background: repeating-linear-gradient(
+    -45deg,
+    #c0c0c4 0px, #c0c0c4 1px,
+    #cacace 1px, #cacace 10px,
+    transparent 10px, transparent 18px,
+    rgba(220,38,38,.28) 18px, rgba(220,38,38,.28) 19px,
+    #cacace 19px, #cacace 28px
+  ) !important;
+  transform: translateY(-1px);
+  box-shadow: var(--sh-md);
+}

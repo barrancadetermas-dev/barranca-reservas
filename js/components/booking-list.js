@@ -736,7 +736,7 @@ export class BookingList {
            </span>`
         : '';
       return `
-        <div class="booking-row" data-booking-id="${b.id}" style="cursor:pointer;
+        <div class="booking-row blocked-row" data-booking-id="${b.id}" style="cursor:pointer;
               background:repeating-linear-gradient(
                 -45deg,
                 #d1d5db 0px, #d1d5db 1px,
