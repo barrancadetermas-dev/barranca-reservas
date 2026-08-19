@@ -973,6 +973,15 @@ export class Calendar {
       const darkColor  = darken(color, darkFactor);
       barBg = `linear-gradient(to right, ${color} 0%, ${color} ${solidPct}%, ${darkColor} 100%)`;
     }
+
+    // Bloqueos: rayitas diagonales sutiles (igual al card en la tab Reservas)
+    if (booking.status === 'blocked' || booking.is_blocked) {
+      barBg = `repeating-linear-gradient(135deg,
+        transparent 0px, transparent 5px,
+        rgba(255,255,255,.18) 5px, rgba(255,255,255,.18) 6px
+      ), ${color}`;
+    }
+
     const ci        = booking.check_in;
     const co        = booking.check_out;
     const winStart  = this._windowStart;

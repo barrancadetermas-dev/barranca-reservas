@@ -8,6 +8,7 @@ import { can, isDemo } from "../auth/permissions.js";
 
 import { formatARS, formatDate, showToast, getUnitChipHTML, getSourceBadgeHTML, getBookingBarColor, getUnitLabel, getUnitColor, SOURCE_CONFIG, localToday, localDateISO, AppContext, getNationalityFlag, appendNote } from '../supabase-config.js';
 import { logAction } from '../services/audit-service.js';
+import { cache } from '../services/supabase-cache.js';
 import { Bus, EVENTS } from '../services/event-bus.js';
 
 const STATUS_LABELS = {
@@ -1672,6 +1673,7 @@ export class BookingList {
 
         showToast('Bloqueo actualizado ✓', 'success');
         close();
+        this._refreshCalendar();
         await this.load();
       } catch (err) {
         console.error('[BookingList] block edit error:', err);
@@ -1735,6 +1737,14 @@ export class BookingList {
     return result;
   }
 
+
+  // Invalida el cache de bookings y recarga el calendario si está visible,
+  // para que los cambios hechos en Reservas se reflejen inmediatamente.
+  _refreshCalendar() {
+    cache.invalidate('bookings', 'payments_for_bookings');
+    const cal = window._calInstance;
+    if (cal && typeof cal.load === 'function') cal.load();
+  }
   // ── Elimina todos los bloqueos de un grupo (mismas fechas/motivo) ──────────
   async _deleteBlockGroup(ids) {
     if (!ids?.length) return;
@@ -1752,6 +1762,7 @@ export class BookingList {
       const { error } = await this.db.from('bookings').delete().in('id', ids);
       if (error) throw error;
       showToast(plural ? `${ids.length} bloqueos eliminados ✓` : 'Bloqueo eliminado ✓', 'success');
+      this._refreshCalendar();
       await this.load();
     } catch (err) {
       if (firstRow) { firstRow.style.opacity = ''; firstRow.style.pointerEvents = ''; }
@@ -1767,6 +1778,7 @@ export class BookingList {
       const { error } = await this.db.from('bookings').delete().eq('id', id);
       if (error) throw error;
       showToast('Bloqueo eliminado ✓', 'success');
+      this._refreshCalendar();
       await this.load();
     } catch (err) {
       if (row) { row.style.opacity = ''; row.style.pointerEvents = ''; }

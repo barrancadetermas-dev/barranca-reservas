@@ -344,6 +344,7 @@ async function initApp(user) {
     configPanel = tryInit('ConfigPanel',() => new ConfigPanel(supabase, AppContext));
     auditPanel  = tryInit('AuditPanel', () => new AuditPanel(supabase, AppContext));
     operations  = tryInit('Operations', () => new OperationsModule(supabase, AppContext));
+    window._calInstance   = calendar;
     window._guestsCRM    = guestsCRM;
     window._bookingList  = bookingList;
     window._statsInstance = statistics;
