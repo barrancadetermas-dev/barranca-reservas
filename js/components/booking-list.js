@@ -512,8 +512,11 @@ export class BookingList {
 
     const filtered = this._applyFilters(this._allBookings, today);
     const sorted   = this._sortBookings(filtered);
-    const showing  = this._mergeBlocks(sorted.slice(0, this._page * this._pageSize));
-    const hasMore  = sorted.length > showing.length;
+    // Mergear ANTES de slicear: si mergeamos después, los 7 bloques individuales
+    // reducidos a 1 card hacen que hasMore compare longitudes incompatibles.
+    const merged   = this._mergeBlocks(sorted);
+    const showing  = merged.slice(0, this._page * this._pageSize);
+    const hasMore  = merged.length > showing.length;
 
     if (!filtered.length) {
       container.innerHTML = `
@@ -643,7 +646,7 @@ export class BookingList {
     if (hasMore) {
       html += `<div style="text-align:center;padding:16px">
         <button class="btn btn-outline" id="btn-load-more">
-          Ver más (${filtered.length - showing.length} restantes)
+          Ver más reservas (${merged.length - showing.length} más)
         </button></div>`;
     }
 

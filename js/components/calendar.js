@@ -61,6 +61,7 @@ export class Calendar {
 
     // ── AbortControllers para event listeners ────
     this._selectionAbort = null;
+    this._rangeAnnotations = JSON.parse(localStorage.getItem('cal_range_annot') ?? '[]');
     this._barDragAbort   = null;
 
     window._calInstance = this;
@@ -116,7 +117,11 @@ export class Calendar {
       const earlyDepartureDays = this._buildEarlyDepartureDays(bookings, earlyDepartures);
       this._render(cellMap, reminderMap, ncPendingDays, earlyDepartureDays);
 
-      // ── 5. Barra de resumen superior ──
+      // ── 5. Períodos etiquetados (se renderizan sobre los headers) ──
+      this._renderPeriods();
+
+      // ── 6. Barra de resumen superior ──
+      this._renderRangeAnnotations();
       this._renderSummaryBar(bookings);
 
       // ── 6. Heatmap por fila (muy sutil) ──
@@ -129,10 +134,15 @@ export class Calendar {
       if (window.innerWidth > 768) this._renderTariffTable();
 
       // Bindear eventos de drag/resize una vez por sesión de grid
+      if (!this._periodModeReady) {
+          this._periodModeReady = true;
+          this._setupPeriodMode();
+        }
       if (!this._barDragAbort) {
         const grid = document.getElementById('calendar-grid');
         if (grid) {
           this._setupDragSelection(grid);
+          this._setupRangeSelector(grid);
           this._setupBarDragAndResize(grid);
         }
       }
@@ -505,10 +515,13 @@ export class Calendar {
 
       const dh = document.createElement('div');
       let cls = 'cal-day-header';
-      if (isToday)              cls += ' today';
-      if (isWknd)               cls += ' weekend';
-      if (isPast && !isToday)   cls += ' past-header';
-      if (isHoliday)            cls += ` holiday holiday-${holiday.type}`;
+      if (isToday)                       cls += ' today';
+      if (isWknd)                        cls += ' weekend';
+      if (dow === 6)                       cls += ' weekend-sat';
+      if (dow === 0)                       cls += ' weekend-sun';
+      if (isPast && !isToday)            cls += ' past-header';
+      if (isHoliday)                     cls += ` holiday holiday-${holiday.type}`;
+      if (dayOfMon === 1 && colIdx > 0)  cls += ' month-boundary';
       dh.className = cls;
       dh.dataset.date = iso;
       dh.title = holiday?.label ?? '';
@@ -649,7 +662,10 @@ export class Calendar {
         let cellCls = 'cal-cell';
         if (isToday)  cellCls += ' today-col';
         if (isWknd)   cellCls += ' weekend-col';
+        if (date.getDay() === 6) cellCls += ' weekend-sat';
+        if (date.getDay() === 0) cellCls += ' weekend-sun';
         if (isPast)   cellCls += ' past-col';
+        if (dayOfMon === 1 && colIdx > 0) cellCls += ' month-boundary';
         if (cellHol?.type === 'fixed' || cellHol?.type === 'movable') cellCls += ' holiday-col';
         if (cellHol?.type === 'vacation') cellCls += ' vacation-col';
         if (cellHol?.type === 'bridge')   cellCls += ' bridge-col';
@@ -1763,6 +1779,239 @@ export class Calendar {
   // ══════════════════════════════════════════════════
   // DRAG SELECTION (crear reserva / bloqueo)
   // ══════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════════
+  // RANGE SELECTOR — selección de rango de fechas para anotar períodos
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  _saveRangeAnnotations() {
+    localStorage.setItem('cal_range_annot', JSON.stringify(this._rangeAnnotations));
+  }
+
+  _renderRangeAnnotations() {
+    const grid = document.getElementById('calendar-grid');
+    if (!grid) return;
+
+    // Limpiar overlays previos
+    grid.querySelectorAll('.range-annot-overlay').forEach(el => el.remove());
+
+    for (const ann of this._rangeAnnotations) {
+      this._dateRange.forEach(iso => {
+        if (iso < ann.start || iso > ann.end) return;
+        // Buscar todas las celdas de este día (todas las unidades)
+        grid.querySelectorAll(`.cal-cell[data-date="${iso}"]`).forEach(cell => {
+          const el = document.createElement('div');
+          el.className = 'range-annot-overlay';
+          el.dataset.annId = ann.id;
+          const isFirst = iso === ann.start || iso === this._dateRange[0];
+          const isLast  = iso === ann.end;
+          el.style.cssText = `
+            position:absolute;top:0;left:0;right:0;height:4px;
+            background:${ann.color};opacity:.75;
+            border-radius:${isFirst ? '3px' : '0'} ${isLast ? '3px' : '0'} ${isLast ? '3px' : '0'} ${isFirst ? '3px' : '0'};
+            pointer-events:none;z-index:5;
+          `;
+          if (isFirst) {
+            const lbl = document.createElement('div');
+            lbl.className = 'range-annot-label';
+            lbl.style.cssText = `
+              position:absolute;top:4px;left:2px;font-size:.58rem;font-weight:700;
+              color:${ann.color};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+              max-width:calc(100% - 4px);z-index:6;pointer-events:none;
+              text-shadow:0 0 4px white,0 0 4px white;
+              line-height:1.1;
+            `;
+            lbl.textContent = ann.label + (ann.minNights ? ` (min ${ann.minNights}n)` : '');
+            cell.appendChild(lbl);
+          }
+          cell.appendChild(el);
+        });
+      });
+    }
+  }
+
+  _setupRangeSelector(grid) {
+    if (this._rangeAbort) this._rangeAbort.abort();
+    this._rangeAbort = new AbortController();
+    const sig = this._rangeAbort.signal;
+
+    let selecting = false;
+    let startDate = null;
+    let endDate   = null;
+
+    // ── Activar selección solo con Shift ──────────────────────────────────
+    const highlight = (from, to) => {
+      const [a, b] = from <= to ? [from, to] : [to, from];
+      grid.querySelectorAll('.cal-cell[data-date]').forEach(c => {
+        const d = c.dataset.date;
+        c.classList.toggle('range-selecting', d >= a && d <= b);
+      });
+    };
+
+    const clear = () => {
+      grid.querySelectorAll('.range-selecting').forEach(c => c.classList.remove('range-selecting'));
+    };
+
+    grid.addEventListener('mousedown', e => {
+      if (!e.shiftKey) return;
+      const cell = e.target.closest('.cal-cell[data-date]');
+      if (!cell) return;
+      e.preventDefault();
+      selecting = true;
+      startDate = cell.dataset.date;
+      endDate   = startDate;
+      highlight(startDate, endDate);
+    }, { signal: sig });
+
+    grid.addEventListener('mousemove', e => {
+      if (!selecting) return;
+      const cell = document.elementFromPoint(e.clientX, e.clientY)?.closest?.('.cal-cell[data-date]');
+      if (!cell) return;
+      endDate = cell.dataset.date;
+      highlight(startDate, endDate);
+    }, { signal: sig });
+
+    document.addEventListener('mouseup', e => {
+      if (!selecting) return;
+      selecting = false;
+      clear();
+      if (!startDate || !endDate) return;
+      const [from, to] = startDate <= endDate ? [startDate, endDate] : [endDate, startDate];
+      this._openRangeAnnotModal(from, to);
+      startDate = endDate = null;
+    }, { signal: sig });
+  }
+
+  _openRangeAnnotModal(from, to) {
+    document.getElementById('range-annot-modal')?.remove();
+
+    const COLORS = ['#f59e0b','#3b82f6','#10b981','#ef4444','#8b5cf6','#ec4899','#06b6d4','#f97316'];
+    let chosenColor = COLORS[0];
+
+    const fmt = iso => {
+      const [y,m,d] = iso.split('-');
+      return `${d}/${m}/${y}`;
+    };
+    const nights = Math.round((new Date(to) - new Date(from)) / 86400000) + 1;
+
+    const modal = document.createElement('div');
+    modal.id = 'range-annot-modal';
+    modal.style.cssText = `
+      position:fixed;inset:0;z-index:9999;
+      display:flex;align-items:center;justify-content:center;
+      background:rgba(0,0,0,.45);backdrop-filter:blur(3px);
+    `;
+
+    modal.innerHTML = `
+      <div style="background:var(--color-surface);border-radius:16px;padding:24px;
+                  width:min(420px,92vw);box-shadow:0 20px 60px rgba(0,0,0,.25);
+                  border:1px solid var(--color-border)">
+        <div style="font-size:1rem;font-weight:700;color:var(--color-text);margin-bottom:4px">
+          📌 Etiquetar período
+        </div>
+        <div style="font-size:.78rem;color:var(--color-text-3);margin-bottom:16px">
+          ${fmt(from)} → ${fmt(to)} · ${nights} ${nights === 1 ? 'día' : 'días'}
+        </div>
+
+        <label style="font-size:.75rem;font-weight:600;color:var(--color-text-2);display:block;margin-bottom:4px">
+          Nombre del período
+        </label>
+        <input id="ram-label" type="text" placeholder="Ej: Finde largo, Temporada alta…"
+          style="width:100%;padding:8px 10px;border:1.5px solid var(--color-border);border-radius:8px;
+                 font-size:.85rem;background:var(--color-surface-2);color:var(--color-text);
+                 outline:none;box-sizing:border-box;margin-bottom:12px">
+
+        <label style="font-size:.75rem;font-weight:600;color:var(--color-text-2);display:block;margin-bottom:6px">
+          Color
+        </label>
+        <div style="display:flex;gap:7px;flex-wrap:wrap;margin-bottom:14px" id="ram-colors">
+          ${COLORS.map((c,i) => `
+            <div data-color="${c}" style="width:24px;height:24px;border-radius:50%;background:${c};
+                 cursor:pointer;border:${i===0?'3px solid #1e293b':'2px solid transparent'};
+                 box-sizing:border-box;transition:border .15s"></div>
+          `).join('')}
+        </div>
+
+        <label style="font-size:.75rem;font-weight:600;color:var(--color-text-2);display:block;margin-bottom:4px">
+          Mínimo de noches <span style="font-weight:400;opacity:.6">(opcional)</span>
+        </label>
+        <input id="ram-minnights" type="number" min="1" max="30" placeholder="Ej: 3"
+          style="width:100%;padding:8px 10px;border:1.5px solid var(--color-border);border-radius:8px;
+                 font-size:.85rem;background:var(--color-surface-2);color:var(--color-text);
+                 outline:none;box-sizing:border-box;margin-bottom:20px">
+
+        <div style="display:flex;gap:10px;justify-content:flex-end">
+          <button id="ram-cancel" style="padding:8px 18px;border-radius:8px;border:1.5px solid var(--color-border);
+            background:transparent;color:var(--color-text-2);font-size:.82rem;cursor:pointer">
+            Cancelar
+          </button>
+          <button id="ram-save" style="padding:8px 20px;border-radius:8px;border:none;
+            background:#3b82f6;color:#fff;font-size:.82rem;font-weight:600;cursor:pointer">
+            Guardar
+          </button>
+        </div>
+
+        ${this._rangeAnnotations.length > 0 ? `
+          <div style="margin-top:18px;border-top:1px solid var(--color-border);padding-top:14px">
+            <div style="font-size:.72rem;font-weight:600;color:var(--color-text-3);margin-bottom:8px">
+              PERÍODOS GUARDADOS
+            </div>
+            <div id="ram-list" style="display:flex;flex-direction:column;gap:5px">
+              ${this._rangeAnnotations.map(a => `
+                <div style="display:flex;align-items:center;gap:8px;font-size:.75rem;color:var(--color-text-2)">
+                  <div style="width:10px;height:10px;border-radius:50%;background:${a.color};flex-shrink:0"></div>
+                  <span style="flex:1">${a.label} · ${fmt(a.start)} → ${fmt(a.end)}${a.minNights ? ' · min ' + a.minNights + 'n' : ''}</span>
+                  <button data-del-id="${a.id}" style="border:none;background:none;color:#ef4444;cursor:pointer;font-size:.75rem;padding:0 2px">✕</button>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        ` : ''}
+      </div>`;
+
+    document.body.appendChild(modal);
+    document.getElementById('ram-label').focus();
+
+    // Color picker
+    modal.querySelectorAll('[data-color]').forEach(dot => {
+      dot.addEventListener('click', () => {
+        chosenColor = dot.dataset.color;
+        modal.querySelectorAll('[data-color]').forEach(d =>
+          d.style.border = d.dataset.color === chosenColor ? '3px solid #1e293b' : '2px solid transparent');
+      });
+    });
+
+    // Delete existing
+    modal.querySelectorAll('[data-del-id]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        this._rangeAnnotations = this._rangeAnnotations.filter(a => a.id !== btn.dataset.delId);
+        this._saveRangeAnnotations();
+        this._renderRangeAnnotations();
+        modal.remove();
+      });
+    });
+
+    document.getElementById('ram-cancel').addEventListener('click', () => modal.remove());
+    modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+
+    document.getElementById('ram-save').addEventListener('click', () => {
+      const label = document.getElementById('ram-label').value.trim();
+      if (!label) { document.getElementById('ram-label').focus(); return; }
+      const minN = parseInt(document.getElementById('ram-minnights').value) || 0;
+      this._rangeAnnotations.push({
+        id:         Date.now().toString(36),
+        start:      from,
+        end:        to,
+        label,
+        color:      chosenColor,
+        minNights:  minN || null,
+      });
+      this._saveRangeAnnotations();
+      this._renderRangeAnnotations();
+      modal.remove();
+      showToast('Período guardado ✓', 'success');
+    });
+  }
+
   _setupDragSelection(grid) {
     if (this._selectionAbort) this._selectionAbort.abort();
     this._selectionAbort = new AbortController();
@@ -3502,6 +3751,272 @@ export class Calendar {
   // ══════════════════════════════════════════════════
   // 5. BARRA DE RESUMEN SUPERIOR
   // ══════════════════════════════════════════════════
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // PERÍODOS ETIQUETADOS — selección de rango, almacenamiento y rendering
+  // ══════════════════════════════════════════════════════════════════════════
+
+  _periodsKey() {
+    return `mila_cal_periods_${this.ctx.hotelId ?? 'default'}`;
+  }
+
+  _loadPeriods() {
+    try { return JSON.parse(localStorage.getItem(this._periodsKey()) ?? '[]'); }
+    catch { return []; }
+  }
+
+  _savePeriods(periods) {
+    localStorage.setItem(this._periodsKey(), JSON.stringify(periods));
+  }
+
+  // Renderiza bandas de color sobre los headers de día para cada período guardado
+  _renderPeriods() {
+    const grid = document.getElementById('calendar-grid');
+    if (!grid) return;
+
+    // Limpiar bandas previas
+    grid.querySelectorAll('.cal-period-band').forEach(el => el.remove());
+
+    const periods = this._loadPeriods();
+    if (!periods.length) return;
+
+    // Buscar todos los headers de día para posicionar las bandas
+    const headers = [...grid.querySelectorAll('.cal-day-header[data-date]')];
+    if (!headers.length) return;
+
+    // La banda se dibuja como un elemento absoluto dentro del primer header del rango
+    periods.forEach(p => {
+      const startHdr = headers.find(h => h.dataset.date === p.check_in);
+      const endHdr   = headers.find(h => h.dataset.date === p.check_out);
+      if (!startHdr) return;
+
+      // Calcular ancho en cantidad de columnas
+      const startIdx = headers.indexOf(startHdr);
+      const endIdx   = endHdr ? headers.indexOf(endHdr) : startIdx;
+      const span     = Math.max(1, endIdx - startIdx + 1);
+
+      // Posición left del header start relativa al grid
+      const gridRect  = grid.getBoundingClientRect();
+      const startRect = startHdr.getBoundingClientRect();
+      const endRect   = (endHdr ?? startHdr).getBoundingClientRect();
+      const left      = startRect.left - gridRect.left;
+      const width     = endRect.right - startRect.left - 4;
+
+      const band = document.createElement('div');
+      band.className = 'cal-period-band';
+      band.title  = `${p.label}${p.min_nights ? ' · mín. ' + p.min_nights + ' noches' : ''}\n${p.check_in} → ${p.check_out}\nDoble clic para editar/eliminar`;
+      band.dataset.periodId = p.id;
+      band.style.cssText = `
+        position:fixed;
+        top:${startRect.top + 2}px;
+        left:${startRect.left + 2}px;
+        width:${Math.max(20, endRect.right - startRect.left - 4)}px;
+        bottom:${gridRect.bottom - startRect.bottom + 2}px;
+        height:${startRect.height - 4}px;
+        background:${p.color}22;
+        border:1.5px solid ${p.color}88;
+        color:${p.color};
+        pointer-events:auto;
+        z-index:5;
+      `;
+      band.innerHTML = `<span style="text-shadow:0 0 4px #fff8">${p.min_nights ? '🌙' + p.min_nights + ' ' : ''}${p.label}</span>`;
+
+      // Doble clic → editar
+      band.addEventListener('dblclick', (e) => {
+        e.stopPropagation();
+        this._openPeriodModal(p.check_in, p.check_out, p);
+      });
+
+      document.body.appendChild(band);
+    });
+
+    // Las bandas fixed se reposicionan en scroll/resize
+    if (!this._periodScrollListener) {
+      this._periodScrollListener = () => this._renderPeriods();
+      grid.closest('.cal-scroll-wrapper, .cal-wrapper, [class*="cal"]')
+        ?.addEventListener('scroll', this._periodScrollListener, { passive: true });
+    }
+  }
+
+  // Modal para crear/editar período
+  _openPeriodModal(dateFrom, dateTo, existing = null) {
+    const id = existing?.id ?? ('p_' + Date.now());
+    document.getElementById('cal-period-overlay')?.remove();
+
+    const COLORS = [
+      { label: 'Índigo',    value: '#6366f1' },
+      { label: 'Rosado',    value: '#ec4899' },
+      { label: 'Naranja',   value: '#f97316' },
+      { label: 'Verde',     value: '#22c55e' },
+      { label: 'Celeste',   value: '#0ea5e9' },
+      { label: 'Amarillo',  value: '#eab308' },
+      { label: 'Rojo',      value: '#ef4444' },
+      { label: 'Violeta',   value: '#a855f7' },
+    ];
+
+    const defColor = existing?.color ?? COLORS[0].value;
+
+    const ov = document.createElement('div');
+    ov.id = 'cal-period-overlay';
+    ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:2000;display:flex;align-items:center;justify-content:center';
+    ov.innerHTML = `
+      <div style="background:var(--color-surface);border-radius:16px;padding:24px;width:340px;max-width:95vw;box-shadow:0 20px 60px rgba(0,0,0,.3)">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+          <h3 style="margin:0;font-size:1rem;font-weight:700">${existing ? 'Editar' : 'Nuevo'} período</h3>
+          <button id="pm-close" style="background:none;border:none;cursor:pointer;font-size:1.2rem;color:var(--color-text-3)">✕</button>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:12px">
+          <label style="font-size:.8rem;font-weight:600;color:var(--color-text-2)">Etiqueta
+            <input id="pm-label" type="text" placeholder="Ej: Finde largo, Semana Santa…"
+              value="${existing?.label ?? ''}"
+              style="margin-top:4px;width:100%;padding:8px 10px;border:1px solid var(--color-border);border-radius:8px;font-size:.85rem;background:var(--color-surface-2);box-sizing:border-box">
+          </label>
+
+          <div style="display:flex;gap:8px">
+            <label style="font-size:.8rem;font-weight:600;color:var(--color-text-2);flex:1">Desde
+              <input id="pm-from" type="date" value="${dateFrom}"
+                style="margin-top:4px;width:100%;padding:7px 8px;border:1px solid var(--color-border);border-radius:8px;font-size:.8rem;background:var(--color-surface-2)">
+            </label>
+            <label style="font-size:.8rem;font-weight:600;color:var(--color-text-2);flex:1">Hasta
+              <input id="pm-to" type="date" value="${dateTo}"
+                style="margin-top:4px;width:100%;padding:7px 8px;border:1px solid var(--color-border);border-radius:8px;font-size:.8rem;background:var(--color-surface-2)">
+            </label>
+          </div>
+
+          <label style="font-size:.8rem;font-weight:600;color:var(--color-text-2)">Mínimo de noches <span style="font-weight:400;color:var(--color-text-3)">(opcional)</span>
+            <input id="pm-minnights" type="number" min="1" max="30" placeholder="Ej: 2"
+              value="${existing?.min_nights ?? ''}"
+              style="margin-top:4px;width:100%;padding:7px 8px;border:1px solid var(--color-border);border-radius:8px;font-size:.8rem;background:var(--color-surface-2)">
+          </label>
+
+          <div style="font-size:.8rem;font-weight:600;color:var(--color-text-2)">Color
+            <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:6px" id="pm-colors">
+              ${COLORS.map(c => `
+                <button data-color="${c.value}" title="${c.label}"
+                  style="width:28px;height:28px;border-radius:50%;background:${c.value};border:${c.value===defColor?'3px solid #fff':'2px solid transparent'};box-shadow:${c.value===defColor?'0 0 0 2px '+c.value:'none'};cursor:pointer;transition:all .15s">
+                </button>`).join('')}
+            </div>
+          </div>
+
+          <label style="font-size:.8rem;font-weight:600;color:var(--color-text-2)">Nota <span style="font-weight:400;color:var(--color-text-3)">(opcional)</span>
+            <input id="pm-note" type="text" placeholder="Ej: Tarifa especial finde largo"
+              value="${existing?.note ?? ''}"
+              style="margin-top:4px;width:100%;padding:8px 10px;border:1px solid var(--color-border);border-radius:8px;font-size:.85rem;background:var(--color-surface-2);box-sizing:border-box">
+          </label>
+        </div>
+
+        <div style="display:flex;gap:8px;margin-top:20px;${existing ? 'justify-content:space-between' : ''}">
+          ${existing ? `<button id="pm-delete" style="padding:8px 14px;border-radius:8px;border:1px solid #ef4444;background:none;color:#ef4444;font-size:.82rem;cursor:pointer">Eliminar</button>` : ''}
+          <div style="display:flex;gap:8px;margin-left:auto">
+            <button id="pm-cancel" style="padding:8px 16px;border-radius:8px;border:1px solid var(--color-border);background:none;font-size:.85rem;cursor:pointer">Cancelar</button>
+            <button id="pm-save" style="padding:8px 20px;border-radius:8px;border:none;background:var(--color-primary);color:#fff;font-weight:600;font-size:.85rem;cursor:pointer">Guardar</button>
+          </div>
+        </div>
+      </div>`;
+
+    document.body.appendChild(ov);
+
+    let selectedColor = defColor;
+    ov.querySelectorAll('#pm-colors button').forEach(btn => {
+      btn.addEventListener('click', () => {
+        selectedColor = btn.dataset.color;
+        ov.querySelectorAll('#pm-colors button').forEach(b => {
+          b.style.border = b.dataset.color === selectedColor ? '3px solid #fff' : '2px solid transparent';
+          b.style.boxShadow = b.dataset.color === selectedColor ? '0 0 0 2px ' + b.dataset.color : 'none';
+        });
+      });
+    });
+
+    const close = () => ov.remove();
+    ov.querySelector('#pm-close').addEventListener('click', close);
+    ov.querySelector('#pm-cancel').addEventListener('click', close);
+    ov.addEventListener('click', e => { if (e.target === ov) close(); });
+
+    ov.querySelector('#pm-save').addEventListener('click', () => {
+      const label = ov.querySelector('#pm-label').value.trim();
+      if (!label) { ov.querySelector('#pm-label').focus(); return; }
+      const from  = ov.querySelector('#pm-from').value;
+      const to    = ov.querySelector('#pm-to').value;
+      if (!from || !to || from > to) { alert('Las fechas son inválidas'); return; }
+      const mn = parseInt(ov.querySelector('#pm-minnights').value) || null;
+      const note = ov.querySelector('#pm-note').value.trim();
+
+      const periods = this._loadPeriods().filter(p => p.id !== id);
+      periods.push({ id, label, color: selectedColor, check_in: from, check_out: to, min_nights: mn, note });
+      periods.sort((a, b) => a.check_in.localeCompare(b.check_in));
+      this._savePeriods(periods);
+      close();
+      this._renderPeriods();
+    });
+
+    existing && ov.querySelector('#pm-delete')?.addEventListener('click', () => {
+      if (!confirm('¿Eliminar este período?')) return;
+      this._savePeriods(this._loadPeriods().filter(p => p.id !== id));
+      close();
+      this._renderPeriods();
+    });
+
+    setTimeout(() => ov.querySelector('#pm-label')?.focus(), 50);
+  }
+
+  // Configura el modo de selección de período (arrastre sobre las celdas)
+  _setupPeriodMode() {
+    const btn  = document.getElementById('cal-period-btn');
+    const grid = document.getElementById('calendar-grid');
+    if (!btn || !grid) return;
+
+    let periodDrag = null;
+
+    btn.addEventListener('click', () => {
+      const active = grid.classList.toggle('period-mode');
+      btn.classList.toggle('active', active);
+      btn.title = active ? 'Clic para salir del modo etiqueta' : 'Etiquetar período / mínimo de noches';
+    });
+
+    // Drag en las celdas del header (o en las celdas normales)
+    grid.addEventListener('mousedown', e => {
+      if (!grid.classList.contains('period-mode')) return;
+      const cell = e.target.closest('.cal-day-header[data-date], .cal-cell[data-date]');
+      if (!cell) return;
+      e.preventDefault();
+      periodDrag = { start: cell.dataset.date, end: cell.dataset.date };
+      this._highlightPeriodDrag(grid, periodDrag.start, periodDrag.end);
+    });
+
+    grid.addEventListener('mousemove', e => {
+      if (!periodDrag) return;
+      const cell = e.target.closest('.cal-day-header[data-date], .cal-cell[data-date]');
+      if (!cell) return;
+      periodDrag.end = cell.dataset.date;
+      this._highlightPeriodDrag(grid, periodDrag.start, periodDrag.end);
+    });
+
+    const finishDrag = () => {
+      if (!periodDrag) return;
+      const from = periodDrag.start < periodDrag.end ? periodDrag.start : periodDrag.end;
+      const to   = periodDrag.start < periodDrag.end ? periodDrag.end   : periodDrag.start;
+      grid.querySelectorAll('.period-selecting').forEach(c => c.classList.remove('period-selecting'));
+      periodDrag = null;
+      // Salir del modo y abrir modal
+      grid.classList.remove('period-mode');
+      document.getElementById('cal-period-btn')?.classList.remove('active');
+      this._openPeriodModal(from, to);
+    };
+    grid.addEventListener('mouseup', finishDrag);
+    document.addEventListener('mouseup', () => {
+      if (periodDrag) finishDrag();
+    });
+  }
+
+  _highlightPeriodDrag(grid, from, to) {
+    const mn = from < to ? from : to;
+    const mx = from < to ? to   : from;
+    grid.querySelectorAll('[data-date]').forEach(c => {
+      c.classList.toggle('period-selecting', c.dataset.date >= mn && c.dataset.date <= mx);
+    });
+  }
+
   _renderSummaryBar(bookings) {
     // Crear solo una vez; en navegaciones subsiguientes solo actualizar el contenido
     let bar = document.getElementById('cal-summary-bar');

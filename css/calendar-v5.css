@@ -451,24 +451,41 @@
 
 /* ── 2. FINES DE SEMANA: columna sutil ──────────── */
 .cal-day-header.weekend {
-  background: rgba(148,163,184,.05) !important;
+  background: rgba(148,163,184,.17) !important;
 }
 .cal-day-header.weekend .dh-num {
-  color: #64748b;
+  color: #334155;
+  font-weight: 800;
 }
 .cal-day-header.weekend .day-name {
-  color: #64748b;
+  color: #475569;
+  font-weight: 700;
   font-style: italic;
 }
 .cal-cell.weekend-col {
-  background: rgba(148,163,184,.04) !important;
+  background: rgba(148,163,184,.11) !important;
 }
-/* Diferencia sábado (azul grisáceo) y domingo (levísimo tono) */
-.cal-day-header.weekend:nth-child(7n+7) { background: rgba(100,116,139,.07) !important; }
-.cal-cell.weekend-col:nth-child(7n+1)   { background: rgba(100,116,139,.055) !important; }
+/* SAB levemente más cálido, DOM ligeramente más azulado */
+.cal-day-header.weekend.weekend-sat { background: rgba(124,139,163,.20) !important; }
+.cal-day-header.weekend.weekend-sun { background: rgba(100,116,139,.22) !important; }
+.cal-cell.weekend-sat { background: rgba(124,139,163,.13) !important; }
+.cal-cell.weekend-sun { background: rgba(100,116,139,.15) !important; }
 
+/* Borde de cambio de mes — más ancho y opaco */
+.cal-day-header.month-boundary,
+.cal-cell.month-boundary {
+  border-left: 3px solid rgba(71,85,105,.55) !important;
+}
+[data-theme="dark"] .cal-day-header.month-boundary,
+[data-theme="dark"] .cal-cell.month-boundary {
+  border-left: 3px solid rgba(148,163,184,.45) !important;
+}
+
+[data-theme="dark"] .cal-day-header.weekend {
+  background: rgba(148,163,184,.12) !important;
+}
 [data-theme="dark"] .cal-cell.weekend-col {
-  background: rgba(148,163,184,.06) !important;
+  background: rgba(148,163,184,.08) !important;
 }
 
 /* ── 3. D&D MODERNO: animaciones fluidas ─────────── */
@@ -1115,3 +1132,48 @@
 .cal-wrapper {
   isolation: isolate;  /* crea stacking context propio — z-index interno no compite con el resto de la página */
 }
+
+/* ── Períodos etiquetados ────────────────────────────────────────────────── */
+.cal-period-band {
+  position: absolute;
+  top: 2px; bottom: 2px;
+  border-radius: 4px;
+  display: flex; align-items: center;
+  padding: 0 6px;
+  font-size: .6rem; font-weight: 700; letter-spacing: .02em;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  pointer-events: none; z-index: 4;
+  box-shadow: 0 1px 3px rgba(0,0,0,.15);
+  cursor: default;
+}
+.cal-period-band-wrapper {
+  position: relative; grid-column: span 1;
+  overflow: visible; height: 100%; pointer-events: none;
+}
+/* Modo etiqueta activo */
+.cal-grid.period-mode .cal-cell {
+  cursor: crosshair !important;
+}
+.cal-grid.period-mode .cal-day-header {
+  cursor: crosshair !important;
+}
+.cal-cell.period-selecting {
+  background: rgba(99,102,241,.18) !important;
+  outline: 1px solid rgba(99,102,241,.4);
+  outline-offset: -1px;
+}
+#cal-period-btn.active {
+  background: var(--color-primary) !important;
+  color: #fff !important;
+  border-color: var(--color-primary) !important;
+}
+
+/* ── Range Selector: celda seleccionándose ─────────────────────────────── */
+.cal-cell.range-selecting {
+  background: rgba(59,130,246,.18) !important;
+  outline: 1px solid rgba(59,130,246,.4);
+  outline-offset: -1px;
+}
+/* Overlay de anotación guardada */
+.cal-cell { position: relative; }
+.range-annot-overlay { pointer-events: none; }
