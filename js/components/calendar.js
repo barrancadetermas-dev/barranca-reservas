@@ -648,10 +648,11 @@ export class Calendar {
       grid.appendChild(label);
 
       // Celdas
-      this._dateRange.forEach((iso) => {
+      this._dateRange.forEach((iso, colIdx) => {
         const isToday  = iso === today;
         const isPast   = iso < today;
         const date     = new Date(iso + 'T12:00:00');
+        const dayOfMon = date.getDate();
         const isWknd   = date.getDay() === 0 || date.getDay() === 6;
         const holMap   = nextYHols && date.getFullYear() === lastDate.getFullYear() ? nextYHols : holidays;
         const cellHol  = holMap?.get ? holMap.get(iso) : null;
