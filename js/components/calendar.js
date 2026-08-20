@@ -3784,9 +3784,18 @@ export class Calendar {
     const grid = document.getElementById('calendar-grid');
     if (!grid) return;
 
-    // Limpiar overlays previos de períodos
+    // Limpiar estilos de período previos en todas las celdas
+    grid.querySelectorAll('.cal-period-label').forEach(el => el.remove());
     grid.querySelectorAll('.cal-period-overlay').forEach(el => el.remove());
     grid.querySelectorAll('.cal-period-band').forEach(el => el.remove());
+    grid.querySelectorAll('[data-period-id]').forEach(cell => {
+      delete cell.dataset.periodId;
+      cell.style.backgroundImage = '';
+      cell.style.borderTop    = '';
+      cell.style.borderBottom = '';
+      cell.style.borderLeft   = '';
+      cell.style.borderRight  = '';
+    });
 
     const periods = this._loadPeriods();
     if (!periods.length) return;
@@ -3800,9 +3809,15 @@ export class Calendar {
       // Los bloqueos reales (type='block') los renderiza la barra de Supabase; no duplicar
       if (p.type === 'block') return;
 
-      const start = p.check_in;
-      const end   = p.check_out;
+      const start  = p.check_in;
+      const end    = p.check_out;
       const isSoft = p.type === 'soft';
+      const isMob  = window.innerWidth <= 768;
+      // Opacidad hex: desktop ~9%, mobile ~28% — más visible en pantallas chicas
+      const bgAlpha   = isMob ? '48' : '18';
+      const brdAlpha  = isMob ? 'cc' : '80';
+      const brdAlphaE = isMob ? 'ff' : 'bb';
+      const brdW      = isMob ? '3px' : '2px';
 
       const inRange = iso => iso >= start && iso <= end;
       const visibleDates = this._dateRange.filter(inRange);
@@ -3811,6 +3826,8 @@ export class Calendar {
       const visFirst = visibleDates[0];
       const visLast  = visibleDates[visibleDates.length - 1];
 
+      // Aplicar estilos DIRECTAMENTE en la celda (no via div hijo).
+      // Esto garantiza visibilidad en mobile independientemente de stacking/z-index.
       grid.querySelectorAll('[data-date]').forEach(cell => {
         const iso = cell.dataset.date;
         if (!inRange(iso)) return;
@@ -3819,52 +3836,31 @@ export class Calendar {
         const isLast   = iso === visLast;
         const isHeader = cell.classList.contains('cal-day-header');
 
-        const rL = isFirst ? '3px' : '0';
-        const rR = isLast  ? '3px' : '0';
+        // Marcar la celda como perteneciente al período
+        cell.dataset.periodId = p.id;
 
-        // ── Capa base de color (visual y soft) ──
-        const ov = document.createElement('div');
-        ov.className = 'cal-period-overlay';
-        ov.dataset.periodId = p.id;
-        const isMobile = window.innerWidth <= 768;
-        ov.style.cssText = [
-          'position:absolute',
-          'inset:0',
-          // Mobile: fondo más opaco (40%) y borde más grueso para que se vea en pantallas chicas
-          `background:${p.color}${isMobile ? '40' : '18'}`,
-          `border-top:${isMobile ? '3px' : '2px'} solid ${p.color}${isMobile ? 'cc' : '80'}`,
-          `border-bottom:${isMobile ? '3px' : '2px'} solid ${p.color}${isMobile ? 'cc' : '80'}`,
-          isFirst ? `border-left:${isMobile ? '3px' : '2px'} solid ${p.color}${isMobile ? 'ee' : 'bb'}` : 'border-left:none',
-          isLast  ? `border-right:${isMobile ? '3px' : '2px'} solid ${p.color}${isMobile ? 'ee' : 'bb'}` : 'border-right:none',
-          `border-radius:${rL} ${rR} ${rR} ${rL}`,
-          'pointer-events:none',
-          'z-index:1',
-          'box-sizing:border-box',
-        ].join(';');
+        // Background: linear-gradient sobre el background existente
+        const prevBg = cell.style.backgroundImage;
+        const periodBg = `linear-gradient(${p.color}${bgAlpha},${p.color}${bgAlpha})`;
+        const hatchBg  = isSoft
+          ? `repeating-linear-gradient(-45deg,transparent 0,transparent 4px,${p.color}38 4px,${p.color}38 5px)`
+          : null;
+        const bgLayers = [hatchBg, periodBg, prevBg && prevBg !== 'none' ? prevBg : null]
+          .filter(Boolean).join(',');
+        cell.style.backgroundImage = bgLayers;
 
-        // ── Capa rayada extra para tipo 'soft' ──
-        if (isSoft) {
-          const hatch = document.createElement('div');
-          hatch.className = 'cal-period-overlay';
-          hatch.dataset.periodId = p.id;
-          hatch.style.cssText = [
-            'position:absolute',
-            'inset:0',
-            `background:repeating-linear-gradient(-45deg,transparent 0px,transparent 4px,${p.color}28 4px,${p.color}28 5px)`,
-            'pointer-events:none',
-            'z-index:2',
-          ].join(';');
-          cell.insertBefore(hatch, cell.firstChild);
-        }
+        // Bordes inline (no !important para no romper other styles)
+        cell.style.borderTop    = `${brdW} solid ${p.color}${brdAlpha}`;
+        cell.style.borderBottom = `${brdW} solid ${p.color}${brdAlpha}`;
+        if (isFirst) cell.style.borderLeft  = `${brdW} solid ${p.color}${brdAlphaE}`;
+        if (isLast)  cell.style.borderRight = `${brdW} solid ${p.color}${brdAlphaE}`;
 
-        // Etiqueta + interactividad en el header del primer día visible
+        // Etiqueta + handler de click solo en el header del primer día visible
         if (isHeader && isFirst) {
-          ov.style.pointerEvents = 'auto';
-          ov.style.cursor = 'pointer';
-          const typeIcon = isSoft ? '⚠️' : '📌';
-          ov.title = `${typeIcon} ${p.label}${p.min_nights ? ' · mín. ' + p.min_nights + ' noches' : ''}${p.note ? '\n' + p.note : ''}\nClic para editar`;
-
+          const typeIcon = isSoft ? '⚠️' : '🎨';
           const lbl = document.createElement('span');
+          lbl.className = 'cal-period-label';
+          lbl.dataset.periodId = p.id;
           lbl.style.cssText = [
             'position:absolute',
             'bottom:2px',
@@ -3877,19 +3873,19 @@ export class Calendar {
             'text-overflow:ellipsis',
             'max-width:calc(100% - 6px)',
             'line-height:1',
-            'text-shadow:0 0 3px var(--color-surface),0 0 3px var(--color-surface)',
-            'pointer-events:none',
+            'z-index:3',
+            'text-shadow:0 0 4px var(--color-surface),0 0 4px var(--color-surface)',
+            'pointer-events:auto',
+            'cursor:pointer',
           ].join(';');
-          lbl.textContent = (isSoft ? '⚠️ ' : '') + (p.min_nights ? '🌙' + p.min_nights + ' ' : '') + p.label;
-          ov.appendChild(lbl);
-
-          ov.addEventListener('click', (e) => {
+          lbl.textContent = (isSoft ? '⚠️ ' : '') + (p.min_nights ? '\uD83C\uDF19' + p.min_nights + ' ' : '') + p.label;
+          lbl.title = `${typeIcon} ${p.label}${p.min_nights ? ' · mín. ' + p.min_nights + ' noches' : ''}${p.note ? '\n' + p.note : ''}\nClic para editar`;
+          lbl.addEventListener('click', (e) => {
             e.stopPropagation();
             this._openPeriodModal(p.check_in, p.check_out, p);
           });
+          cell.appendChild(lbl);
         }
-
-        cell.insertBefore(ov, cell.firstChild);
       });
     });
   }
