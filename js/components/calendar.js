@@ -1374,7 +1374,7 @@ export class Calendar {
     // Hint visual: "+" al hover
     cell.classList.add('cal-cell-empty');
 
-    cell.addEventListener('click', (e) => {
+    cell.addEventListener('click', async (e) => {
       // Ignorar si venía de un drag (barra o selección)
       if (this._drag?.moved || this._barDrag?.moved) return;
       if (e.target.closest('.bar,.bar-resize-handle,.ctx-menu')) return;
