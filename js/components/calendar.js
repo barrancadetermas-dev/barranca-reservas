@@ -2109,6 +2109,12 @@ export class Calendar {
             }
           }
         } else {
+          // Chequear si hay períodos con condición (soft) en el rango seleccionado
+          const softWarning = this._getSoftPeriodWarning(d1, d2);
+          if (softWarning) {
+            const ok = confirm(softWarning);
+            if (!ok) { startUnit = null; startDate = null; endDate = null; isBlocking = false; return; }
+          }
           this.bookingForm.open({ unitId: startUnit, checkIn: d1, checkOut: toISODate(last) });
         }
       }
@@ -3788,12 +3794,16 @@ export class Calendar {
     // de reserva (z-index 2+). pointer-events:none excepto en el header del
     // primer día visible, donde permite click para abrir el modal de edición.
     periods.forEach(p => {
+      // Los bloqueos reales (type='block') los renderiza la barra de Supabase; no duplicar
+      if (p.type === 'block') return;
+
       const start = p.check_in;
       const end   = p.check_out;
+      const isSoft = p.type === 'soft';
 
       const inRange = iso => iso >= start && iso <= end;
       const visibleDates = this._dateRange.filter(inRange);
-      if (!visibleDates.length) return; // período fuera de la ventana visible
+      if (!visibleDates.length) return;
 
       const visFirst = visibleDates[0];
       const visLast  = visibleDates[visibleDates.length - 1];
@@ -3806,13 +3816,13 @@ export class Calendar {
         const isLast   = iso === visLast;
         const isHeader = cell.classList.contains('cal-day-header');
 
-        const ov = document.createElement('div');
-        ov.className = 'cal-period-overlay';
-        ov.dataset.periodId = p.id;
-
         const rL = isFirst ? '3px' : '0';
         const rR = isLast  ? '3px' : '0';
 
+        // ── Capa base de color (visual y soft) ──
+        const ov = document.createElement('div');
+        ov.className = 'cal-period-overlay';
+        ov.dataset.periodId = p.id;
         ov.style.cssText = [
           'position:absolute',
           'inset:0',
@@ -3827,11 +3837,27 @@ export class Calendar {
           'box-sizing:border-box',
         ].join(';');
 
-        // Etiqueta + interactividad solo en el header del primer día visible
+        // ── Capa rayada extra para tipo 'soft' ──
+        if (isSoft) {
+          const hatch = document.createElement('div');
+          hatch.className = 'cal-period-overlay';
+          hatch.dataset.periodId = p.id;
+          hatch.style.cssText = [
+            'position:absolute',
+            'inset:0',
+            `background:repeating-linear-gradient(-45deg,transparent 0px,transparent 4px,${p.color}28 4px,${p.color}28 5px)`,
+            'pointer-events:none',
+            'z-index:2',
+          ].join(';');
+          cell.insertBefore(hatch, cell.firstChild);
+        }
+
+        // Etiqueta + interactividad en el header del primer día visible
         if (isHeader && isFirst) {
           ov.style.pointerEvents = 'auto';
           ov.style.cursor = 'pointer';
-          ov.title = `📌 ${p.label}${p.min_nights ? ' · mín. ' + p.min_nights + ' noches' : ''}${p.note ? '\n' + p.note : ''}\nClic para editar`;
+          const typeIcon = isSoft ? '⚠️' : '📌';
+          ov.title = `${typeIcon} ${p.label}${p.min_nights ? ' · mín. ' + p.min_nights + ' noches' : ''}${p.note ? '\n' + p.note : ''}\nClic para editar`;
 
           const lbl = document.createElement('span');
           lbl.style.cssText = [
@@ -3849,7 +3875,7 @@ export class Calendar {
             'text-shadow:0 0 3px var(--color-surface),0 0 3px var(--color-surface)',
             'pointer-events:none',
           ].join(';');
-          lbl.textContent = (p.min_nights ? '🌙' + p.min_nights + ' ' : '') + p.label;
+          lbl.textContent = (isSoft ? '⚠️ ' : '') + (p.min_nights ? '🌙' + p.min_nights + ' ' : '') + p.label;
           ov.appendChild(lbl);
 
           ov.addEventListener('click', (e) => {
@@ -3858,17 +3884,42 @@ export class Calendar {
           });
         }
 
-        // Insertar como primer hijo → detrás de barras de reserva
         cell.insertBefore(ov, cell.firstChild);
       });
     });
   }
 
   // Modal para crear/editar período
+  // Devuelve un mensaje de advertencia si algún período 'soft' se superpone con el rango dado.
+  // Retorna null si no hay ninguno.
+  _getSoftPeriodWarning(fromISO, toISO) {
+    const soft = this._loadPeriods().filter(p =>
+      p.type === 'soft' &&
+      p.check_in <= toISO &&
+      p.check_out >= fromISO
+    );
+    if (!soft.length) return null;
+    const lines = soft.map(p => {
+      const parts = [p.label];
+      if (p.min_nights) parts.push('mín. ' + p.min_nights + ' noches');
+      if (p.note) parts.push(p.note);
+      return '· ' + parts.join(' — ');
+    });
+    return 'Este período tiene una condición especial:
+
+' + lines.join('
+') + '
+
+¿Continuar con la reserva?';
+  }
+
   _openPeriodModal(dateFrom, dateTo, existing = null) {
     const id = existing?.id ?? ('p_' + Date.now());
     document.getElementById('cal-period-overlay')?.remove();
 
+    // Tipo: 'visual' | 'soft' | 'block'
+    // 'block' delega en _blockRange (Supabase), los otros son solo localStorage.
+    // Si el período existente es tipo 'block' ya tiene booking_id guardado.
     const COLORS = [
       { label: 'Índigo',    value: '#6366f1' },
       { label: 'Rosado',    value: '#ec4899' },
@@ -3880,59 +3931,106 @@ export class Calendar {
       { label: 'Violeta',   value: '#a855f7' },
     ];
 
-    const defColor = existing?.color ?? COLORS[0].value;
+    let selType  = existing?.type ?? 'visual';
+    let selColor = existing?.color ?? COLORS[0].value;
+
+    // Estilos reutilizables
+    const inputSt = 'margin-top:4px;width:100%;padding:8px 10px;border:1px solid var(--color-border);border-radius:8px;font-size:.85rem;background:var(--color-surface-2);box-sizing:border-box;color:var(--color-text)';
+    const inputSmSt = 'margin-top:4px;width:100%;padding:7px 8px;border:1px solid var(--color-border);border-radius:8px;font-size:.8rem;background:var(--color-surface-2);color:var(--color-text)';
+
+    const TYPE_DEF = {
+      visual: { emoji: '🏷️', label: 'Solo visual', desc: 'Capa de color informativa. No afecta disponibilidad.', border: '#6366f1' },
+      soft:   { emoji: '⚠️', label: 'Condición',   desc: 'Pide confirmación al crear una reserva en estas fechas.', border: '#f97316' },
+      block:  { emoji: '🔒', label: 'Bloqueo',     desc: 'Bloqueo real. La unidad no aparece disponible.', border: '#ef4444' },
+    };
 
     const ov = document.createElement('div');
     ov.id = 'cal-period-overlay';
     ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:2000;display:flex;align-items:center;justify-content:center';
-    ov.innerHTML = `
-      <div style="background:var(--color-surface);border-radius:16px;padding:24px;width:340px;max-width:95vw;box-shadow:0 20px 60px rgba(0,0,0,.3)">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+
+    const renderTypeChip = (type) => {
+      const t = TYPE_DEF[type];
+      const active = selType === type;
+      const brd = active ? `2px solid ${t.border}` : '1px solid var(--color-border)';
+      const bg  = active ? `${t.border}14` : 'transparent';
+      const col = active ? t.border : 'var(--color-text-3)';
+      return `<button data-type="${type}" style="flex:1;border:${brd};border-radius:10px;padding:8px 6px;background:${bg};cursor:pointer;text-align:center;transition:all .15s">
+        <div style="font-size:1.1rem;margin-bottom:2px">${t.emoji}</div>
+        <div style="font-size:.72rem;font-weight:700;color:${col};line-height:1.2">${t.label}</div>
+      </button>`;
+    };
+
+    const buildInner = () => {
+      const t = TYPE_DEF[selType];
+      const isBlock = selType === 'block';
+      // Para bloqueo: selector de unidad (cuando es nuevo) o info de unidad (cuando edita)
+      const unitOptions = (this.ctx.units ?? []).map(u =>
+        `<option value="${u.id}">${u.name}</option>`).join('');
+      const unitField = isBlock && !existing ? `
+        <label style="font-size:.8rem;font-weight:600;color:var(--color-text-2)">Unidad a bloquear
+          <select id="pm-unit" style="${inputSt}">${unitOptions}</select>
+        </label>` : '';
+      // Para bloqueo existente: mostrar qué unidad está bloqueada (solo lectura, edit vía _openBlockModal)
+      const blockEditNotice = isBlock && existing ? `
+        <div style="border-radius:8px;border:1px solid #fecaca;background:#fef2f220;padding:9px 12px;font-size:.78rem;color:#dc2626;display:flex;gap:7px;align-items:flex-start">
+          <span>🔒</span>
+          <span>Este bloqueo existe en Supabase. Editá fechas y motivo directamente desde su barra en el calendario.</span>
+        </div>` : '';
+      // Selector de color — solo para visual y soft; bloqueo usa el rojo fijo
+      const colorField = !isBlock ? `
+        <div style="font-size:.8rem;font-weight:600;color:var(--color-text-2)">Color
+          <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:6px" id="pm-colors">
+            ${COLORS.map(c => `<button data-color="${c.value}" title="${c.label}"
+              style="width:28px;height:28px;border-radius:50%;background:${c.value};border:${c.value===selColor?'3px solid #fff':'2px solid transparent'};box-shadow:${c.value===selColor?'0 0 0 2px '+c.value:'none'};cursor:pointer;transition:all .15s"></button>`).join('')}
+          </div>
+        </div>` : '';
+      // Min nights: no aplica para bloqueo
+      const minNField = !isBlock ? `
+        <label style="font-size:.8rem;font-weight:600;color:var(--color-text-2)">Mínimo de noches <span style="font-weight:400;color:var(--color-text-3)">(opcional)</span>
+          <input id="pm-minnights" type="number" min="1" max="30" placeholder="Ej: 2"
+            value="${existing?.min_nights ?? ''}" style="${inputSmSt}">
+        </label>` : '';
+
+      return `
+      <div style="background:var(--color-surface);border-radius:16px;padding:24px;width:360px;max-width:95vw;box-shadow:0 20px 60px rgba(0,0,0,.3)">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
           <h3 style="margin:0;font-size:1rem;font-weight:700">${existing ? 'Editar' : 'Nuevo'} período</h3>
           <button id="pm-close" style="background:none;border:none;cursor:pointer;font-size:1.2rem;color:var(--color-text-3)">✕</button>
         </div>
 
-        <div style="display:flex;flex-direction:column;gap:12px">
-          <label style="font-size:.8rem;font-weight:600;color:var(--color-text-2)">Etiqueta
-            <input id="pm-label" type="text" placeholder="Ej: Finde largo, Semana Santa…"
-              value="${existing?.label ?? ''}"
-              style="margin-top:4px;width:100%;padding:8px 10px;border:1px solid var(--color-border);border-radius:8px;font-size:.85rem;background:var(--color-surface-2);box-sizing:border-box">
+        <div style="display:flex;gap:7px;margin-bottom:14px" id="pm-type-row">
+          ${Object.keys(TYPE_DEF).map(renderTypeChip).join('')}
+        </div>
+        <div style="font-size:.72rem;color:var(--color-text-3);margin:-8px 0 14px;text-align:center">${t.desc}</div>
+
+        <div style="display:flex;flex-direction:column;gap:11px">
+          <label style="font-size:.8rem;font-weight:600;color:var(--color-text-2)">${isBlock ? 'Motivo' : 'Nombre'}
+            <input id="pm-label" type="text" placeholder="${isBlock ? 'Mantenimiento, uso propio…' : 'Ej: Finde largo, Semana Santa…'}"
+              value="${existing?.label ?? ''}" style="${inputSt}">
           </label>
 
           <div style="display:flex;gap:8px">
             <label style="font-size:.8rem;font-weight:600;color:var(--color-text-2);flex:1">Desde
-              <input id="pm-from" type="date" value="${dateFrom}"
-                style="margin-top:4px;width:100%;padding:7px 8px;border:1px solid var(--color-border);border-radius:8px;font-size:.8rem;background:var(--color-surface-2)">
+              <input id="pm-from" type="date" value="${dateFrom}" style="${inputSmSt}">
             </label>
             <label style="font-size:.8rem;font-weight:600;color:var(--color-text-2);flex:1">Hasta
-              <input id="pm-to" type="date" value="${dateTo}"
-                style="margin-top:4px;width:100%;padding:7px 8px;border:1px solid var(--color-border);border-radius:8px;font-size:.8rem;background:var(--color-surface-2)">
+              <input id="pm-to" type="date" value="${dateTo}" style="${inputSmSt}">
             </label>
           </div>
 
-          <label style="font-size:.8rem;font-weight:600;color:var(--color-text-2)">Mínimo de noches <span style="font-weight:400;color:var(--color-text-3)">(opcional)</span>
-            <input id="pm-minnights" type="number" min="1" max="30" placeholder="Ej: 2"
-              value="${existing?.min_nights ?? ''}"
-              style="margin-top:4px;width:100%;padding:7px 8px;border:1px solid var(--color-border);border-radius:8px;font-size:.8rem;background:var(--color-surface-2)">
+          ${unitField}
+          ${blockEditNotice}
+          ${minNField}
+
+          <label style="font-size:.8rem;font-weight:600;color:var(--color-text-2)">${isBlock ? 'Nota interna' : 'Condición / nota'} <span style="font-weight:400;color:var(--color-text-3)">(opcional)</span>
+            <input id="pm-note" type="text" placeholder="${isBlock ? 'Observación interna del bloqueo…' : 'Ej: Mínimo 3 noches, tarifa especial…'}"
+              value="${existing?.note ?? ''}" style="${inputSt}">
           </label>
 
-          <div style="font-size:.8rem;font-weight:600;color:var(--color-text-2)">Color
-            <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:6px" id="pm-colors">
-              ${COLORS.map(c => `
-                <button data-color="${c.value}" title="${c.label}"
-                  style="width:28px;height:28px;border-radius:50%;background:${c.value};border:${c.value===defColor?'3px solid #fff':'2px solid transparent'};box-shadow:${c.value===defColor?'0 0 0 2px '+c.value:'none'};cursor:pointer;transition:all .15s">
-                </button>`).join('')}
-            </div>
-          </div>
-
-          <label style="font-size:.8rem;font-weight:600;color:var(--color-text-2)">Nota <span style="font-weight:400;color:var(--color-text-3)">(opcional)</span>
-            <input id="pm-note" type="text" placeholder="Ej: Tarifa especial finde largo"
-              value="${existing?.note ?? ''}"
-              style="margin-top:4px;width:100%;padding:8px 10px;border:1px solid var(--color-border);border-radius:8px;font-size:.85rem;background:var(--color-surface-2);box-sizing:border-box">
-          </label>
+          ${colorField}
         </div>
 
-        <div style="display:flex;gap:8px;margin-top:20px;${existing ? 'justify-content:space-between' : ''}">
+        <div style="display:flex;gap:8px;margin-top:18px;${existing ? 'justify-content:space-between' : ''}">
           ${existing ? `<button id="pm-delete" style="padding:8px 14px;border-radius:8px;border:1px solid #ef4444;background:none;color:#ef4444;font-size:.82rem;cursor:pointer">Eliminar</button>` : ''}
           <div style="display:flex;gap:8px;margin-left:auto">
             <button id="pm-cancel" style="padding:8px 16px;border-radius:8px;border:1px solid var(--color-border);background:none;font-size:.85rem;cursor:pointer">Cancelar</button>
@@ -3940,50 +4038,115 @@ export class Calendar {
           </div>
         </div>
       </div>`;
+    };
 
+    ov.innerHTML = buildInner();
     document.body.appendChild(ov);
 
-    let selectedColor = defColor;
-    ov.querySelectorAll('#pm-colors button').forEach(btn => {
-      btn.addEventListener('click', () => {
-        selectedColor = btn.dataset.color;
-        ov.querySelectorAll('#pm-colors button').forEach(b => {
-          b.style.border = b.dataset.color === selectedColor ? '3px solid #fff' : '2px solid transparent';
-          b.style.boxShadow = b.dataset.color === selectedColor ? '0 0 0 2px ' + b.dataset.color : 'none';
+    // Rebind internals after (re)render
+    const rebind = () => {
+      // Type chips
+      ov.querySelectorAll('[data-type]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          selType = btn.dataset.type;
+          // Preserve values across re-render
+          const lbl  = ov.querySelector('#pm-label')?.value ?? '';
+          const frm  = ov.querySelector('#pm-from')?.value ?? dateFrom;
+          const too  = ov.querySelector('#pm-to')?.value ?? dateTo;
+          const note = ov.querySelector('#pm-note')?.value ?? '';
+          const mn   = ov.querySelector('#pm-minnights')?.value ?? '';
+          const inner = document.createElement('div');
+          inner.innerHTML = buildInner();
+          const newInner = inner.firstElementChild;
+          ov.replaceChild(newInner, ov.firstElementChild);
+          ov.querySelector('#pm-label').value = lbl;
+          ov.querySelector('#pm-from').value  = frm;
+          ov.querySelector('#pm-to').value    = too;
+          ov.querySelector('#pm-note').value  = note;
+          if (ov.querySelector('#pm-minnights')) ov.querySelector('#pm-minnights').value = mn;
+          rebind();
         });
       });
-    });
+      // Color picker
+      ov.querySelectorAll('#pm-colors button').forEach(btn => {
+        btn.addEventListener('click', () => {
+          selColor = btn.dataset.color;
+          ov.querySelectorAll('#pm-colors button').forEach(b => {
+            b.style.border     = b.dataset.color === selColor ? '3px solid #fff' : '2px solid transparent';
+            b.style.boxShadow  = b.dataset.color === selColor ? '0 0 0 2px ' + b.dataset.color : 'none';
+          });
+        });
+      });
+      // Close / cancel
+      ov.querySelector('#pm-close')?.addEventListener('click', close);
+      ov.querySelector('#pm-cancel')?.addEventListener('click', close);
+      // Save
+      ov.querySelector('#pm-save')?.addEventListener('click', () => doSave());
+      // Delete
+      ov.querySelector('#pm-delete')?.addEventListener('click', () => doDelete());
+    };
 
     const close = () => ov.remove();
-    ov.querySelector('#pm-close').addEventListener('click', close);
-    ov.querySelector('#pm-cancel').addEventListener('click', close);
     ov.addEventListener('click', e => { if (e.target === ov) close(); });
+    rebind();
+    setTimeout(() => ov.querySelector('#pm-label')?.focus(), 50);
 
-    ov.querySelector('#pm-save').addEventListener('click', () => {
+    const doSave = async () => {
       const label = ov.querySelector('#pm-label').value.trim();
       if (!label) { ov.querySelector('#pm-label').focus(); return; }
-      const from  = ov.querySelector('#pm-from').value;
-      const to    = ov.querySelector('#pm-to').value;
-      if (!from || !to || from > to) { alert('Las fechas son inválidas'); return; }
-      const mn = parseInt(ov.querySelector('#pm-minnights').value) || null;
+      const from = ov.querySelector('#pm-from').value;
+      const to   = ov.querySelector('#pm-to').value;
+      if (!from || !to || from > to) { showToast('Las fechas son inválidas', 'warning'); return; }
       const note = ov.querySelector('#pm-note').value.trim();
+      const mn   = parseInt(ov.querySelector('#pm-minnights')?.value) || null;
 
+      if (selType === 'block') {
+        // ── Bloqueo real: crear en Supabase ──
+        if (existing?.booking_id) {
+          // Ya existe: editar el bloqueo directamente abriendo _openBlockModal
+          // (el usuario debería usar la barra del bloqueo; aquí solo cerramos)
+          showToast('Editá el bloqueo desde su barra en el calendario', 'info');
+          close(); return;
+        }
+        const unitId = ov.querySelector('#pm-unit')?.value;
+        if (!unitId) { showToast('Seleccioná una unidad', 'warning'); return; }
+        const saveBtn = ov.querySelector('#pm-save');
+        saveBtn.disabled = true; saveBtn.textContent = 'Bloqueando…';
+        // Guardar en localStorage referencia del período (sin booking_id aún;
+        // _blockRange lo crea y al hacer load() la barra aparece sola)
+        const periods = this._loadPeriods().filter(p => p.id !== id);
+        periods.push({ id, label, color: '#ef4444', check_in: from, check_out: to, type: 'block', note, unit_id: unitId });
+        periods.sort((a, b) => a.check_in.localeCompare(b.check_in));
+        this._savePeriods(periods);
+        close();
+        // El bloqueo real se crea vía _blockRange (toast + reload incluidos)
+        await this._blockRange(unitId, from, to, label);
+        // Limpiar el período del localStorage — la barra del bloqueo ya lo representa
+        this._savePeriods(this._loadPeriods().filter(p => p.id !== id));
+        this._renderPeriods();
+        return;
+      }
+
+      // ── Visual o Soft: solo localStorage ──
       const periods = this._loadPeriods().filter(p => p.id !== id);
-      periods.push({ id, label, color: selectedColor, check_in: from, check_out: to, min_nights: mn, note });
+      periods.push({ id, label, color: selColor, check_in: from, check_out: to, type: selType, min_nights: mn, note });
       periods.sort((a, b) => a.check_in.localeCompare(b.check_in));
       this._savePeriods(periods);
       close();
       this._renderPeriods();
-    });
+      showToast('Período guardado ✓', 'success');
+    };
 
-    existing && ov.querySelector('#pm-delete')?.addEventListener('click', () => {
+    const doDelete = () => {
+      if (existing?.type === 'block' && existing?.booking_id) {
+        showToast('Para eliminar este bloqueo, hacé clic en su barra en el calendario', 'info');
+        return;
+      }
       if (!confirm('¿Eliminar este período?')) return;
       this._savePeriods(this._loadPeriods().filter(p => p.id !== id));
       close();
       this._renderPeriods();
-    });
-
-    setTimeout(() => ov.querySelector('#pm-label')?.focus(), 50);
+    };
   }
 
   // Configura el modo de selección de período (arrastre sobre las celdas)
