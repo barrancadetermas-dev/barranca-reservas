@@ -3908,7 +3908,7 @@ export class Calendar {
     return 'Este período tiene una condición especial:\n\n' + lines.join('\n') + '\n\n¿Continuar con la reserva?';
   }
 
-  _openPeriodModal(dateFrom, dateTo, existing = null) {
+  _openPeriodModal(dateFrom, dateTo, existing = null, dragUnitId = null) {
     const id = existing?.id ?? ('p_' + Date.now());
     document.getElementById('cal-period-overlay')?.remove();
 
@@ -3959,12 +3959,19 @@ export class Calendar {
       const t = TYPE_DEF[selType];
       const isBlock = selType === 'block';
       // Para bloqueo: selector de unidad (cuando es nuevo) o info de unidad (cuando edita)
-      const unitOptions = (this.ctx.units ?? []).map(u =>
-        `<option value="${u.id}">${u.name}</option>`).join('');
+      // Checkboxes de unidades — la que inició el drag viene pre-marcada; todas si es header
+      const allUnits = this.ctx.units ?? [];
+      const unitCheckboxes = allUnits.map(u => {
+        const checked = !dragUnitId || u.id === dragUnitId ? 'checked' : '';
+        return `<label style="display:flex;align-items:center;gap:6px;font-size:.82rem;cursor:pointer;padding:3px 0">
+          <input type="checkbox" data-uid="${u.id}" ${checked} style="width:14px;height:14px;cursor:pointer"> ${u.name}
+        </label>`;
+      }).join('');
       const unitField = isBlock && !existing ? `
-        <label style="font-size:.8rem;font-weight:600;color:var(--color-text-2)">Unidad a bloquear
-          <select id="pm-unit" style="${inputSt}">${unitOptions}</select>
-        </label>` : '';
+        <div style="font-size:.8rem;font-weight:600;color:var(--color-text-2);margin-bottom:2px">Unidades a bloquear</div>
+        <div id="pm-units" style="border:1px solid var(--color-border);border-radius:8px;padding:8px 10px;display:flex;flex-direction:column;gap:2px;background:var(--color-surface-2)">
+          ${unitCheckboxes}
+        </div>` : '';
       // Para bloqueo existente: mostrar qué unidad está bloqueada (solo lectura, edit vía _openBlockModal)
       const blockEditNotice = isBlock && existing ? `
         <div style="border-radius:8px;border:1px solid #fecaca;background:#fef2f220;padding:9px 12px;font-size:.78rem;color:#dc2626;display:flex;gap:7px;align-items:flex-start">
@@ -4103,22 +4110,17 @@ export class Calendar {
           showToast('Editá el bloqueo desde su barra en el calendario', 'info');
           close(); return;
         }
-        const unitId = ov.querySelector('#pm-unit')?.value;
-        if (!unitId) { showToast('Seleccioná una unidad', 'warning'); return; }
+        // Leer unidades seleccionadas en los checkboxes
+        const checkedBoxes = [...(ov.querySelectorAll('#pm-units input[type=checkbox]:checked'))];
+        const targetUnitIds = checkedBoxes.map(cb => cb.dataset.uid).filter(Boolean);
+        if (!targetUnitIds.length) { showToast('Seleccioná al menos una unidad', 'warning'); return; }
         const saveBtn = ov.querySelector('#pm-save');
         saveBtn.disabled = true; saveBtn.textContent = 'Bloqueando…';
-        // Guardar en localStorage referencia del período (sin booking_id aún;
-        // _blockRange lo crea y al hacer load() la barra aparece sola)
-        const periods = this._loadPeriods().filter(p => p.id !== id);
-        periods.push({ id, label, color: '#ef4444', check_in: from, check_out: to, type: 'block', note, unit_id: unitId });
-        periods.sort((a, b) => a.check_in.localeCompare(b.check_in));
-        this._savePeriods(periods);
         close();
-        // El bloqueo real se crea vía _blockRange (toast + reload incluidos)
-        await this._blockRange(unitId, from, to, label);
-        // Limpiar el período del localStorage — la barra del bloqueo ya lo representa
-        this._savePeriods(this._loadPeriods().filter(p => p.id !== id));
-        this._renderPeriods();
+        // Crear un bloqueo real en Supabase por cada unidad seleccionada
+        for (const uid of targetUnitIds) {
+          await this._blockRange(uid, from, to, label);
+        }
         return;
       }
 
@@ -4164,7 +4166,8 @@ export class Calendar {
       const cell = e.target.closest('.cal-day-header[data-date], .cal-cell[data-date]');
       if (!cell) return;
       e.preventDefault();
-      periodDrag = { start: cell.dataset.date, end: cell.dataset.date };
+      const row = cell.closest('[data-unit-id]');
+      periodDrag = { start: cell.dataset.date, end: cell.dataset.date, unitId: row?.dataset?.unitId ?? null };
       this._highlightPeriodDrag(grid, periodDrag.start, periodDrag.end);
     });
 
@@ -4180,12 +4183,13 @@ export class Calendar {
       if (!periodDrag) return;
       const from = periodDrag.start < periodDrag.end ? periodDrag.start : periodDrag.end;
       const to   = periodDrag.start < periodDrag.end ? periodDrag.end   : periodDrag.start;
+      const periodUnitId = periodDrag.unitId;
       grid.querySelectorAll('.period-selecting').forEach(c => c.classList.remove('period-selecting'));
       periodDrag = null;
       // Salir del modo y abrir modal
       grid.classList.remove('period-mode');
       document.getElementById('cal-period-btn')?.classList.remove('active');
-      this._openPeriodModal(from, to);
+      this._openPeriodModal(from, to, null, periodUnitId);
     };
     grid.addEventListener('mouseup', finishDrag);
     document.addEventListener('mouseup', () => {
