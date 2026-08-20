@@ -3905,12 +3905,7 @@ export class Calendar {
       if (p.note) parts.push(p.note);
       return '· ' + parts.join(' — ');
     });
-    return 'Este período tiene una condición especial:
-
-' + lines.join('
-') + '
-
-¿Continuar con la reserva?';
+    return 'Este período tiene una condición especial:\n\n' + lines.join('\n') + '\n\n¿Continuar con la reserva?';
   }
 
   _openPeriodModal(dateFrom, dateTo, existing = null) {
