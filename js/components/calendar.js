@@ -1385,8 +1385,8 @@ export class Calendar {
       const checkOut = this._addDays(dateISO, 1);
 
       // Chequear períodos con condición (soft) en la fecha clickeada
-      const softWarn = this._getSoftPeriodWarning(dateISO, dateISO);
-      if (softWarn && !confirm(softWarn)) return;
+      const softPeriods = this._getSoftPeriods(dateISO, dateISO);
+      if (softPeriods.length && !(await this._confirmSoftPeriods(softPeriods))) return;
 
       // Navegar a sección calendario si no estamos ahí (mobile)
       if (window.milaNav) window.milaNav('calendar');
@@ -2114,10 +2114,9 @@ export class Calendar {
           }
         } else {
           // Chequear si hay períodos con condición (soft) en el rango seleccionado
-          const softWarning = this._getSoftPeriodWarning(d1, d2);
-          if (softWarning) {
-            const ok = confirm(softWarning);
-            if (!ok) { startUnit = null; startDate = null; endDate = null; isBlocking = false; return; }
+          const softPeriods2 = this._getSoftPeriods(d1, d2);
+          if (softPeriods2.length && !(await this._confirmSoftPeriods(softPeriods2))) {
+            startUnit = null; startDate = null; endDate = null; isBlocking = false; return;
           }
           this.bookingForm.open({ unitId: startUnit, checkIn: d1, checkOut: toISODate(last) });
         }
@@ -3831,11 +3830,12 @@ export class Calendar {
         ov.style.cssText = [
           'position:absolute',
           'inset:0',
-          `background:${p.color}${isMobile ? '2a' : '1a'}`,
-          `border-top:${isMobile ? '3px' : '2px'} solid ${p.color}${isMobile ? 'bb' : '80'}`,
-          `border-bottom:${isMobile ? '3px' : '2px'} solid ${p.color}${isMobile ? 'bb' : '80'}`,
-          isFirst ? `border-left:${isMobile ? '3px' : '2px'} solid ${p.color}${isMobile ? 'dd' : 'bb'}` : 'border-left:none',
-          isLast  ? `border-right:${isMobile ? '3px' : '2px'} solid ${p.color}${isMobile ? 'dd' : 'bb'}` : 'border-right:none',
+          // Mobile: fondo más opaco (40%) y borde más grueso para que se vea en pantallas chicas
+          `background:${p.color}${isMobile ? '40' : '18'}`,
+          `border-top:${isMobile ? '3px' : '2px'} solid ${p.color}${isMobile ? 'cc' : '80'}`,
+          `border-bottom:${isMobile ? '3px' : '2px'} solid ${p.color}${isMobile ? 'cc' : '80'}`,
+          isFirst ? `border-left:${isMobile ? '3px' : '2px'} solid ${p.color}${isMobile ? 'ee' : 'bb'}` : 'border-left:none',
+          isLast  ? `border-right:${isMobile ? '3px' : '2px'} solid ${p.color}${isMobile ? 'ee' : 'bb'}` : 'border-right:none',
           `border-radius:${rL} ${rR} ${rR} ${rL}`,
           'pointer-events:none',
           'z-index:1',
@@ -3897,20 +3897,58 @@ export class Calendar {
   // Modal para crear/editar período
   // Devuelve un mensaje de advertencia si algún período 'soft' se superpone con el rango dado.
   // Retorna null si no hay ninguno.
-  _getSoftPeriodWarning(fromISO, toISO) {
-    const soft = this._loadPeriods().filter(p =>
+  _getSoftPeriods(fromISO, toISO) {
+    return this._loadPeriods().filter(p =>
       p.type === 'soft' &&
       p.check_in <= toISO &&
       p.check_out >= fromISO
     );
-    if (!soft.length) return null;
-    const lines = soft.map(p => {
-      const parts = [p.label];
-      if (p.min_nights) parts.push('mín. ' + p.min_nights + ' noches');
-      if (p.note) parts.push(p.note);
-      return '· ' + parts.join(' — ');
+  }
+
+  // Muestra un modal de advertencia para períodos con condición.
+  // Devuelve una Promise<boolean> — true si el usuario confirma continuar.
+  _confirmSoftPeriods(periods) {
+    return new Promise(resolve => {
+      const existing = document.getElementById('soft-warn-overlay');
+      if (existing) existing.remove();
+
+      const lines = periods.map(p => {
+        const parts = [];
+        if (p.min_nights) parts.push(`<span style="font-weight:700">Mínimo ${p.min_nights} noches</span>`);
+        if (p.note) parts.push(p.note);
+        return `<div style="padding:8px 10px;border-left:3px solid ${p.color};margin-bottom:6px;border-radius:0 6px 6px 0;background:${p.color}14">
+          <div style="font-weight:700;font-size:.85rem;color:var(--color-text)">${p.label}</div>
+          ${parts.length ? '<div style="font-size:.78rem;color:var(--color-text-2);margin-top:2px">' + parts.join(' · ') + '</div>' : ''}
+        </div>`;
+      }).join('');
+
+      const ov = document.createElement('div');
+      ov.id = 'soft-warn-overlay';
+      ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:3000;display:flex;align-items:center;justify-content:center;padding:16px';
+      ov.innerHTML = `
+        <div style="background:var(--color-surface);border-radius:14px;padding:22px;width:340px;max-width:95vw;box-shadow:0 20px 60px rgba(0,0,0,.35)">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+            <span style="font-size:1.4rem">⚠️</span>
+            <div>
+              <div style="font-weight:700;font-size:.95rem">Período con condición</div>
+              <div style="font-size:.75rem;color:var(--color-text-3)">Estas fechas tienen restricciones activas</div>
+            </div>
+          </div>
+          ${lines}
+          <div style="font-size:.8rem;color:var(--color-text-2);margin:12px 0 16px;padding:8px 10px;border-radius:8px;background:var(--color-surface-2)">
+            ¿Querés continuar de todas formas y crear la reserva?
+          </div>
+          <div style="display:flex;gap:8px;justify-content:flex-end">
+            <button id="sw-cancel" style="padding:8px 18px;border-radius:8px;border:1px solid var(--color-border);background:none;font-size:.85rem;cursor:pointer;font-weight:500">Cancelar</button>
+            <button id="sw-confirm" style="padding:8px 18px;border-radius:8px;border:none;background:#f97316;color:#fff;font-size:.85rem;cursor:pointer;font-weight:700">Continuar igual</button>
+          </div>
+        </div>`;
+      document.body.appendChild(ov);
+      const cleanup = (result) => { ov.remove(); resolve(result); };
+      ov.querySelector('#sw-cancel').addEventListener('click', () => cleanup(false));
+      ov.querySelector('#sw-confirm').addEventListener('click', () => cleanup(true));
+      ov.addEventListener('click', e => { if (e.target === ov) cleanup(false); });
     });
-    return 'Este período tiene una condición especial:\n\n' + lines.join('\n') + '\n\n¿Continuar con la reserva?';
   }
 
   _openPeriodModal(dateFrom, dateTo, existing = null, dragUnitId = null) {
@@ -3921,14 +3959,17 @@ export class Calendar {
     // 'block' delega en _blockRange (Supabase), los otros son solo localStorage.
     // Si el período existente es tipo 'block' ya tiene booking_id guardado.
     const COLORS = [
-      { label: 'Índigo',    value: '#6366f1' },
-      { label: 'Rosado',    value: '#ec4899' },
-      { label: 'Naranja',   value: '#f97316' },
-      { label: 'Verde',     value: '#22c55e' },
-      { label: 'Celeste',   value: '#0ea5e9' },
-      { label: 'Amarillo',  value: '#eab308' },
-      { label: 'Rojo',      value: '#ef4444' },
-      { label: 'Violeta',   value: '#a855f7' },
+      { label: 'Índigo',     value: '#6366f1' },
+      { label: 'Violeta',    value: '#a855f7' },
+      { label: 'Rosado',     value: '#ec4899' },
+      { label: 'Rojo',       value: '#ef4444' },
+      { label: 'Naranja',    value: '#f97316' },
+      { label: 'Amarillo',   value: '#eab308' },
+      { label: 'Lima',       value: '#84cc16' },
+      { label: 'Verde',      value: '#22c55e' },
+      { label: 'Esmeralda',  value: '#10b981' },
+      { label: 'Celeste',    value: '#0ea5e9' },
+      { label: 'Azul',       value: '#3b82f6' },
     ];
 
     let selType  = existing?.type ?? 'visual';
@@ -3977,18 +4018,14 @@ export class Calendar {
         <div id="pm-units" style="border:1px solid var(--color-border);border-radius:8px;padding:8px 10px;display:flex;flex-direction:column;gap:2px;background:var(--color-surface-2)">
           ${unitCheckboxes}
         </div>` : '';
-      // Para bloqueo existente: mostrar qué unidad está bloqueada (solo lectura, edit vía _openBlockModal)
-      const blockEditNotice = isBlock && existing ? `
-        <div style="border-radius:8px;border:1px solid #fecaca;background:#fef2f220;padding:9px 12px;font-size:.78rem;color:#dc2626;display:flex;gap:7px;align-items:flex-start">
-          <span>🔒</span>
-          <span>Este bloqueo existe en Supabase. Editá fechas y motivo directamente desde su barra en el calendario.</span>
-        </div>` : '';
+      // Para bloqueo existente: no hay nada que editar aquí, el modal de bloqueo de Supabase lo maneja
+      const blockEditNotice = '';
       // Selector de color — solo para visual y soft; bloqueo usa el rojo fijo
       const colorField = !isBlock ? `
         <div style="font-size:.8rem;font-weight:600;color:var(--color-text-2)">Color
-          <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:6px" id="pm-colors">
+          <div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:6px" id="pm-colors">
             ${COLORS.map(c => `<button data-color="${c.value}" title="${c.label}"
-              style="width:28px;height:28px;border-radius:50%;background:${c.value};border:${c.value===selColor?'3px solid #fff':'2px solid transparent'};box-shadow:${c.value===selColor?'0 0 0 2px '+c.value:'none'};cursor:pointer;transition:all .15s"></button>`).join('')}
+              style="width:20px;height:20px;border-radius:50%;background:${c.value};border:${c.value===selColor?'2.5px solid #fff':'1.5px solid transparent'};box-shadow:${c.value===selColor?'0 0 0 2px '+c.value:'none'};cursor:pointer;transition:all .15s;flex-shrink:0"></button>`).join('')}
           </div>
         </div>` : '';
       // Min nights: no aplica para bloqueo
@@ -4115,8 +4152,10 @@ export class Calendar {
       if (selType === 'block') {
         // ── Bloqueo real: crear en Supabase ──
         if (existing?.booking_id) {
-          showToast('Editá el bloqueo desde su barra en el calendario', 'info');
-          close(); return;
+          // Bloqueo ya en Supabase: abrir su modal nativo directamente
+          close();
+          await this.bookingForm?.openEdit(existing.booking_id);
+          return;
         }
         // Leer unidades seleccionadas en los checkboxes
         const checkedBoxes = [...(ov.querySelectorAll('#pm-units input[type=checkbox]:checked'))];
