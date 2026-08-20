@@ -1177,3 +1177,15 @@
 /* Overlay de anotación guardada */
 .cal-cell { position: relative; }
 .range-annot-overlay { pointer-events: none; }
+
+/* ── Períodos especiales: overlay por celda ──────────────────────────────── */
+/* El overlay se inserta como primer hijo de cada celda del rango, por detrás
+   de las barras de reserva. position:relative ya está definido en .cal-cell
+   y .cal-day-header mediante la regla anterior. */
+.cal-day-header { position: relative; }
+.cal-period-overlay {
+  /* posicionamiento controlado por JS vía style.cssText inline */
+  /* Esta regla solo asegura que no interfiera con el layout */
+  pointer-events: none;
+}
+/* Las reservas (barras) tienen z-index 2+ → siempre encima del overlay (z-index:1) */

@@ -3775,68 +3775,93 @@ export class Calendar {
     const grid = document.getElementById('calendar-grid');
     if (!grid) return;
 
-    // Limpiar bandas previas
+    // Limpiar overlays previos de períodos
+    grid.querySelectorAll('.cal-period-overlay').forEach(el => el.remove());
     grid.querySelectorAll('.cal-period-band').forEach(el => el.remove());
 
     const periods = this._loadPeriods();
     if (!periods.length) return;
 
-    // Buscar todos los headers de día para posicionar las bandas
-    const headers = [...grid.querySelectorAll('.cal-day-header[data-date]')];
-    if (!headers.length) return;
-
-    // La banda se dibuja como un elemento absoluto dentro del primer header del rango
+    // Para cada período, insertar un overlay dentro de CADA celda que caiga
+    // dentro del rango (headers de día + celdas de unidad).
+    // El overlay se inserta como primer hijo → queda por detrás de las barras
+    // de reserva (z-index 2+). pointer-events:none excepto en el header del
+    // primer día visible, donde permite click para abrir el modal de edición.
     periods.forEach(p => {
-      const startHdr = headers.find(h => h.dataset.date === p.check_in);
-      const endHdr   = headers.find(h => h.dataset.date === p.check_out);
-      if (!startHdr) return;
+      const start = p.check_in;
+      const end   = p.check_out;
 
-      // Calcular ancho en cantidad de columnas
-      const startIdx = headers.indexOf(startHdr);
-      const endIdx   = endHdr ? headers.indexOf(endHdr) : startIdx;
-      const span     = Math.max(1, endIdx - startIdx + 1);
+      const inRange = iso => iso >= start && iso <= end;
+      const visibleDates = this._dateRange.filter(inRange);
+      if (!visibleDates.length) return; // período fuera de la ventana visible
 
-      // Posición left del header start relativa al grid
-      const gridRect  = grid.getBoundingClientRect();
-      const startRect = startHdr.getBoundingClientRect();
-      const endRect   = (endHdr ?? startHdr).getBoundingClientRect();
-      const left      = startRect.left - gridRect.left;
-      const width     = endRect.right - startRect.left - 4;
+      const visFirst = visibleDates[0];
+      const visLast  = visibleDates[visibleDates.length - 1];
 
-      const band = document.createElement('div');
-      band.className = 'cal-period-band';
-      band.title  = `${p.label}${p.min_nights ? ' · mín. ' + p.min_nights + ' noches' : ''}\n${p.check_in} → ${p.check_out}\nDoble clic para editar/eliminar`;
-      band.dataset.periodId = p.id;
-      band.style.cssText = `
-        position:fixed;
-        top:${startRect.top + 2}px;
-        left:${startRect.left + 2}px;
-        width:${Math.max(20, endRect.right - startRect.left - 4)}px;
-        bottom:${gridRect.bottom - startRect.bottom + 2}px;
-        height:${startRect.height - 4}px;
-        background:${p.color}22;
-        border:1.5px solid ${p.color}88;
-        color:${p.color};
-        pointer-events:auto;
-        z-index:5;
-      `;
-      band.innerHTML = `<span style="text-shadow:0 0 4px #fff8">${p.min_nights ? '🌙' + p.min_nights + ' ' : ''}${p.label}</span>`;
+      grid.querySelectorAll('[data-date]').forEach(cell => {
+        const iso = cell.dataset.date;
+        if (!inRange(iso)) return;
 
-      // Doble clic → editar
-      band.addEventListener('dblclick', (e) => {
-        e.stopPropagation();
-        this._openPeriodModal(p.check_in, p.check_out, p);
+        const isFirst  = iso === visFirst;
+        const isLast   = iso === visLast;
+        const isHeader = cell.classList.contains('cal-day-header');
+
+        const ov = document.createElement('div');
+        ov.className = 'cal-period-overlay';
+        ov.dataset.periodId = p.id;
+
+        const rL = isFirst ? '3px' : '0';
+        const rR = isLast  ? '3px' : '0';
+
+        ov.style.cssText = [
+          'position:absolute',
+          'inset:0',
+          `background:${p.color}1a`,
+          `border-top:2px solid ${p.color}80`,
+          `border-bottom:2px solid ${p.color}80`,
+          isFirst ? `border-left:2px solid ${p.color}bb` : 'border-left:none',
+          isLast  ? `border-right:2px solid ${p.color}bb` : 'border-right:none',
+          `border-radius:${rL} ${rR} ${rR} ${rL}`,
+          'pointer-events:none',
+          'z-index:1',
+          'box-sizing:border-box',
+        ].join(';');
+
+        // Etiqueta + interactividad solo en el header del primer día visible
+        if (isHeader && isFirst) {
+          ov.style.pointerEvents = 'auto';
+          ov.style.cursor = 'pointer';
+          ov.title = `📌 ${p.label}${p.min_nights ? ' · mín. ' + p.min_nights + ' noches' : ''}${p.note ? '\n' + p.note : ''}\nClic para editar`;
+
+          const lbl = document.createElement('span');
+          lbl.style.cssText = [
+            'position:absolute',
+            'bottom:2px',
+            'left:3px',
+            'font-size:.53rem',
+            'font-weight:700',
+            `color:${p.color}`,
+            'white-space:nowrap',
+            'overflow:hidden',
+            'text-overflow:ellipsis',
+            'max-width:calc(100% - 6px)',
+            'line-height:1',
+            'text-shadow:0 0 3px var(--color-surface),0 0 3px var(--color-surface)',
+            'pointer-events:none',
+          ].join(';');
+          lbl.textContent = (p.min_nights ? '🌙' + p.min_nights + ' ' : '') + p.label;
+          ov.appendChild(lbl);
+
+          ov.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this._openPeriodModal(p.check_in, p.check_out, p);
+          });
+        }
+
+        // Insertar como primer hijo → detrás de barras de reserva
+        cell.insertBefore(ov, cell.firstChild);
       });
-
-      document.body.appendChild(band);
     });
-
-    // Las bandas fixed se reposicionan en scroll/resize
-    if (!this._periodScrollListener) {
-      this._periodScrollListener = () => this._renderPeriods();
-      grid.closest('.cal-scroll-wrapper, .cal-wrapper, [class*="cal"]')
-        ?.addEventListener('scroll', this._periodScrollListener, { passive: true });
-    }
   }
 
   // Modal para crear/editar período
