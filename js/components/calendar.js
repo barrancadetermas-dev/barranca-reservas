@@ -1384,6 +1384,10 @@ export class Calendar {
       // Pre-llenar: check-in en la fecha, check-out al día siguiente
       const checkOut = this._addDays(dateISO, 1);
 
+      // Chequear períodos con condición (soft) en la fecha clickeada
+      const softWarn = this._getSoftPeriodWarning(dateISO, dateISO);
+      if (softWarn && !confirm(softWarn)) return;
+
       // Navegar a sección calendario si no estamos ahí (mobile)
       if (window.milaNav) window.milaNav('calendar');
 
@@ -3823,14 +3827,15 @@ export class Calendar {
         const ov = document.createElement('div');
         ov.className = 'cal-period-overlay';
         ov.dataset.periodId = p.id;
+        const isMobile = window.innerWidth <= 768;
         ov.style.cssText = [
           'position:absolute',
           'inset:0',
-          `background:${p.color}1a`,
-          `border-top:2px solid ${p.color}80`,
-          `border-bottom:2px solid ${p.color}80`,
-          isFirst ? `border-left:2px solid ${p.color}bb` : 'border-left:none',
-          isLast  ? `border-right:2px solid ${p.color}bb` : 'border-right:none',
+          `background:${p.color}${isMobile ? '2a' : '1a'}`,
+          `border-top:${isMobile ? '3px' : '2px'} solid ${p.color}${isMobile ? 'bb' : '80'}`,
+          `border-bottom:${isMobile ? '3px' : '2px'} solid ${p.color}${isMobile ? 'bb' : '80'}`,
+          isFirst ? `border-left:${isMobile ? '3px' : '2px'} solid ${p.color}${isMobile ? 'dd' : 'bb'}` : 'border-left:none',
+          isLast  ? `border-right:${isMobile ? '3px' : '2px'} solid ${p.color}${isMobile ? 'dd' : 'bb'}` : 'border-right:none',
           `border-radius:${rL} ${rR} ${rR} ${rL}`,
           'pointer-events:none',
           'z-index:1',
@@ -4102,11 +4107,14 @@ export class Calendar {
       const note = ov.querySelector('#pm-note').value.trim();
       const mn   = parseInt(ov.querySelector('#pm-minnights')?.value) || null;
 
+      // check_out para bloqueo = to + 1 día (el sistema guarda el día de salida, no la última noche)
+      const toDate = new Date(to + 'T12:00:00');
+      toDate.setDate(toDate.getDate() + 1);
+      const checkOut = toDate.toISOString().slice(0, 10);
+
       if (selType === 'block') {
         // ── Bloqueo real: crear en Supabase ──
         if (existing?.booking_id) {
-          // Ya existe: editar el bloqueo directamente abriendo _openBlockModal
-          // (el usuario debería usar la barra del bloqueo; aquí solo cerramos)
           showToast('Editá el bloqueo desde su barra en el calendario', 'info');
           close(); return;
         }
@@ -4117,14 +4125,13 @@ export class Calendar {
         const saveBtn = ov.querySelector('#pm-save');
         saveBtn.disabled = true; saveBtn.textContent = 'Bloqueando…';
         close();
-        // Crear un bloqueo real en Supabase por cada unidad seleccionada
         for (const uid of targetUnitIds) {
-          await this._blockRange(uid, from, to, label);
+          await this._blockRange(uid, from, checkOut, label);
         }
         return;
       }
 
-      // ── Visual o Soft: solo localStorage ──
+      // ── Visual o Soft: solo localStorage (guardan check_out = último día inclusive) ──
       const periods = this._loadPeriods().filter(p => p.id !== id);
       periods.push({ id, label, color: selColor, check_in: from, check_out: to, type: selType, min_nights: mn, note });
       periods.sort((a, b) => a.check_in.localeCompare(b.check_in));
