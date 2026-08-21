@@ -3788,8 +3788,9 @@ export class Calendar {
     grid.querySelectorAll('.cal-period-bg,.cal-period-label,.cal-period-dot,.cal-period-overlay,.cal-period-band').forEach(el => el.remove());
     grid.querySelectorAll('[data-period-id]').forEach(cell => {
       delete cell.dataset.periodId;
-      // Limpiar background directo del fallback mobile
-      if (cell.style.backgroundColor) cell.style.backgroundColor = '';
+      cell.style.removeProperty('--period-bg');
+      cell.style.removeProperty('--period-brd');
+      cell.classList.remove('has-period','period-start','period-end','period-soft');
     });
 
     const periods = this._loadPeriods();
@@ -3805,17 +3806,25 @@ export class Calendar {
       if (p.type === 'block') return;
 
       const pStart = p.check_in;
-      const pEnd   = p.check_out; // EXCLUSIVO: mismo criterio que las reservas
+      const pEnd   = p.check_out; // EXCLUSIVO
       const isSoft = p.type === 'soft';
       const isMob  = window.innerWidth <= 768;
-      const color  = p.color;
+      const hex    = p.color; // ej '#6366f1'
 
-      // Opacidades muy tenues para no competir con las reservas
-      const bgOpacity  = isMob ? '55' : '0f';
-      const brdOpacity = isMob ? 'aa' : '44';
-      const brdW       = isMob ? '2px' : '1px';
+      // Convertir #RRGGBB a rgba() — Safari mobile no soporta #RRGGBBAA
+      const r = parseInt(hex.slice(1,3),16);
+      const g = parseInt(hex.slice(3,5),16);
+      const b = parseInt(hex.slice(5,7),16);
+      const bgRgba  = isMob
+        ? `rgba(${r},${g},${b},.22)`   // mobile: 22% opacidad
+        : `rgba(${r},${g},${b},.06)`;  // desktop: 6% opacidad
+      const brdRgba = isMob
+        ? `rgba(${r},${g},${b},.55)`
+        : `rgba(${r},${g},${b},.28)`;
+      const brdRgbaE = `rgba(${r},${g},${b},.75)`;
+      const hatchRgba = `rgba(${r},${g},${b},.12)`;
+      const brdW    = isMob ? '2px' : '1px';
 
-      // check_out EXCLUSIVO: check_in=12 check_out=13 → solo pinta el 12
       const inRange  = iso => iso >= pStart && iso < pEnd;
       const allDates = this._dateRange.filter(inRange);
       if (!allDates.length) return;
@@ -3824,7 +3833,7 @@ export class Calendar {
       const visLast  = allDates[allDates.length - 1];
       const span     = allDates.length;
 
-      // ── 1. Fondo tenue en CADA celda del rango ──────────────────────────
+      // ── 1. Fondo en CADA celda ───────────────────────────────────────────
       grid.querySelectorAll('[data-date]').forEach(cell => {
         const iso = cell.dataset.date;
         if (!inRange(iso)) return;
@@ -3833,22 +3842,23 @@ export class Calendar {
         const isLast  = iso === visLast;
         cell.dataset.periodId = p.id;
 
+        // Método 1: div hijo (funciona en todos los browsers modernos)
         const bg = document.createElement('div');
         bg.className = 'cal-period-bg';
         bg.dataset.periodId = p.id;
         const parts = [
           'position:absolute',
           'inset:0',
-          `background:${color}${bgOpacity}`,
+          `background:${bgRgba}`,
         ];
         if (isSoft) parts.push(
-          `background-image:repeating-linear-gradient(-45deg,transparent 0,transparent 5px,${color}14 5px,${color}14 6px)`
+          `background-image:repeating-linear-gradient(-45deg,transparent 0,transparent 5px,${hatchRgba} 5px,${hatchRgba} 6px)`
         );
         parts.push(
-          `border-top:${brdW} solid ${color}${brdOpacity}`,
-          `border-bottom:${brdW} solid ${color}${brdOpacity}`,
-          isFirst ? `border-left:2px solid ${color}88` : 'border-left:none',
-          isLast  ? `border-right:2px solid ${color}88` : 'border-right:none',
+          `border-top:${brdW} solid ${brdRgba}`,
+          `border-bottom:${brdW} solid ${brdRgba}`,
+          isFirst ? `border-left:2px solid ${brdRgbaE}` : 'border-left:none',
+          isLast  ? `border-right:2px solid ${brdRgbaE}` : 'border-right:none',
           'pointer-events:none',
           'z-index:1',
           'box-sizing:border-box'
@@ -3856,18 +3866,17 @@ export class Calendar {
         bg.style.cssText = parts.join(';');
         cell.insertBefore(bg, cell.firstChild);
 
-        // Fallback mobile: setear también background directo en la celda
-        // por si el div hijo no se pinta (contexto de stacking mobile)
-        if (isMob) {
-          const prev = cell.style.backgroundColor;
-          if (!prev || prev === '' || prev === 'transparent') {
-            cell.style.backgroundColor = color + bgOpacity;
-          }
-        }
+        // Método 2: CSS custom property en la celda — el CSS la consume
+        // con un ::before. Esto funciona incluso si el div hijo no se pinta.
+        cell.style.setProperty('--period-bg', bgRgba);
+        cell.style.setProperty('--period-brd', brdRgba);
+        cell.classList.add('has-period');
+        if (isFirst) cell.classList.add('period-start');
+        if (isLast)  cell.classList.add('period-end');
+        if (isSoft)  cell.classList.add('period-soft');
       });
 
-      // ── 2. Punto de color en header del primer y último día ──────────────
-      // Indica visualmente el inicio y fin del período sin romper el layout.
+      // ── 2. Puntos en header del primer y último día ──────────────────────
       [visFirst, visLast].forEach((iso, idx) => {
         const hdr = grid.querySelector(`.cal-day-header[data-date="${iso}"]`);
         if (!hdr) return;
@@ -3881,16 +3890,14 @@ export class Calendar {
           'width:5px',
           'height:5px',
           'border-radius:50%',
-          `background:${color}`,
-          'opacity:.75',
+          `background:rgba(${r},${g},${b},.8)`,
           'pointer-events:none',
           'z-index:2',
         ].join(';');
         hdr.appendChild(dot);
       });
 
-      // ── 3. Etiqueta solo en filas sin reserva en el rango ───────────────
-      // Si algún día del período tiene una reserva en esa unidad → omitir etiqueta.
+      // ── 3. Etiqueta por fila, solo si no hay reserva en el rango ─────────
       const cellMap = this._buildCellMap(this._lastRenderedBookings ?? []);
 
       (this.ctx.units ?? []).forEach(unit => {
@@ -3903,6 +3910,7 @@ export class Calendar {
           `.cal-cell[data-unit-id="${unit.id}"][data-date="${visFirst}"]`
         );
         if (!firstCell) return;
+
 
         const prefix   = isSoft ? '[!] ' : '';
         const minN     = p.min_nights ? ('🌙' + p.min_nights + ' ') : '';
@@ -3917,7 +3925,6 @@ export class Calendar {
         lbl.dataset.periodId = p.id;
         lbl.textContent = labelTxt;
         lbl.title = tipTxt;
-
         lbl.style.cssText = [
           'position:absolute',
           'bottom:3px',
@@ -3929,19 +3936,17 @@ export class Calendar {
           'text-overflow:ellipsis',
           'font-size:.52rem',
           'font-weight:600',
-          `color:${color}88`,
+          `color:${bgRgba.replace(/[\d.]+\)$/, '.6)')}`,
           'pointer-events:auto',
           'cursor:pointer',
           'z-index:2',
           'line-height:12px',
           'padding:0 3px',
         ].join(';');
-
         lbl.addEventListener('click', e => {
           e.stopPropagation();
           this._openPeriodModal(p.check_in, p.check_out, p);
         });
-
         firstCell.appendChild(lbl);
       });
     });

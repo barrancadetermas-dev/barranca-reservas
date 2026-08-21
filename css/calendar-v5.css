@@ -1199,3 +1199,36 @@
 .cal-period-label {
   pointer-events: auto;
 }
+
+/* ── Período especial: fallback CSS puro (garantiza visibilidad en mobile) ── */
+/* Se activa cuando JS agrega la clase .has-period y setea --period-bg/--period-brd */
+.cal-cell.has-period::before,
+.cal-day-header.has-period::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--period-bg, transparent);
+  border-top: 1px solid var(--period-brd, transparent);
+  border-bottom: 1px solid var(--period-brd, transparent);
+  pointer-events: none;
+  z-index: 1;
+  box-sizing: border-box;
+}
+.cal-cell.period-start::before,
+.cal-day-header.period-start::before {
+  border-left: 2px solid var(--period-brd, transparent);
+  border-radius: 2px 0 0 2px;
+}
+.cal-cell.period-end::before,
+.cal-day-header.period-end::before {
+  border-right: 2px solid var(--period-brd, transparent);
+  border-radius: 0 2px 2px 0;
+}
+.cal-cell.period-soft::before,
+.cal-day-header.period-soft::before {
+  background-image: repeating-linear-gradient(
+    -45deg,
+    transparent 0, transparent 5px,
+    var(--period-brd, transparent) 5px, var(--period-brd, transparent) 6px
+  );
+}
