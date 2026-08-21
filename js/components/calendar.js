@@ -3785,7 +3785,7 @@ export class Calendar {
     if (!grid) return;
 
     // Limpiar elementos de período previos
-    grid.querySelectorAll('.cal-period-bg,.cal-period-label,.cal-period-overlay,.cal-period-band').forEach(el => el.remove());
+    grid.querySelectorAll('.cal-period-bg,.cal-period-label,.cal-period-dot,.cal-period-overlay,.cal-period-band').forEach(el => el.remove());
     grid.querySelectorAll('[data-period-id]').forEach(cell => delete cell.dataset.periodId);
 
     const periods = this._loadPeriods();
@@ -3801,102 +3801,128 @@ export class Calendar {
       if (p.type === 'block') return;
 
       const pStart = p.check_in;
-      const pEnd   = p.check_out; // EXCLUSIVO: igual criterio que las reservas
+      const pEnd   = p.check_out; // EXCLUSIVO: mismo criterio que las reservas
       const isSoft = p.type === 'soft';
       const isMob  = window.innerWidth <= 768;
+      const color  = p.color;
 
-      // check_out es exclusivo: check_in=12 check_out=13 → solo pinta día 12
-      const inRange   = iso => iso >= pStart && iso < pEnd;
-      const allDates  = this._dateRange.filter(inRange);
+      // Opacidades muy tenues para no competir con las reservas
+      const bgOpacity  = isMob ? '28' : '0f'; // 0f ≈ 6%, 28 ≈ 16%
+      const brdOpacity = isMob ? '55' : '33';
+      const brdW       = '1px';
+
+      // check_out EXCLUSIVO: check_in=12 check_out=13 → solo pinta el 12
+      const inRange  = iso => iso >= pStart && iso < pEnd;
+      const allDates = this._dateRange.filter(inRange);
       if (!allDates.length) return;
 
-      const visFirst  = allDates[0];
-      const visLast   = allDates[allDates.length - 1];
-      const span      = allDates.length;
+      const visFirst = allDates[0];
+      const visLast  = allDates[allDates.length - 1];
+      const span     = allDates.length;
 
-      // Color base y variantes
-      const color     = p.color;
-      const bgHex     = isMob ? color + '40' : color + '22'; // más opaco en mobile
-      const brdColor  = color + '99';
-      const brdColorE = color + 'dd';
-      const brdW      = isMob ? '3px' : '2px';
-
-      // ── PASO 1: insertar div de fondo en CADA celda del rango ───────────
-      // Usamos un div hijo con position:absolute;inset:0;z-index:0
-      // así NO tocamos el background CSS de la celda (no choca con hover/transition)
-      // y funciona igual en desktop y mobile.
+      // ── 1. Fondo tenue en CADA celda del rango ──────────────────────────
       grid.querySelectorAll('[data-date]').forEach(cell => {
         const iso = cell.dataset.date;
         if (!inRange(iso)) return;
 
         const isFirst = iso === visFirst;
         const isLast  = iso === visLast;
-
-        // Marcar celda para cleanup posterior
         cell.dataset.periodId = p.id;
 
-        // Div de fondo
         const bg = document.createElement('div');
         bg.className = 'cal-period-bg';
         bg.dataset.periodId = p.id;
-        bg.style.cssText = [
+        const parts = [
           'position:absolute',
           'inset:0',
-          `background:${bgHex}`,
-          isSoft
-            ? `background-image:repeating-linear-gradient(-45deg,transparent 0,transparent 4px,${color}28 4px,${color}28 5px)`
-            : '',
-          `border-top:${brdW} solid ${brdColor}`,
-          `border-bottom:${brdW} solid ${brdColor}`,
-          isFirst ? `border-left:${brdW} solid ${brdColorE}` : 'border-left:none',
-          isLast  ? `border-right:${brdW} solid ${brdColorE}` : 'border-right:none',
+          `background:${color}${bgOpacity}`,
+        ];
+        if (isSoft) parts.push(
+          `background-image:repeating-linear-gradient(-45deg,transparent 0,transparent 5px,${color}14 5px,${color}14 6px)`
+        );
+        parts.push(
+          `border-top:${brdW} solid ${color}${brdOpacity}`,
+          `border-bottom:${brdW} solid ${color}${brdOpacity}`,
+          isFirst ? `border-left:2px solid ${color}88` : 'border-left:none',
+          isLast  ? `border-right:2px solid ${color}88` : 'border-right:none',
           'pointer-events:none',
           'z-index:0',
-          'box-sizing:border-box',
-        ].filter(Boolean).join(';');
-
-        // Insertar como primer hijo para que quede debajo de las barras (z-index 2+)
+          'box-sizing:border-box'
+        );
+        bg.style.cssText = parts.join(';');
         cell.insertBefore(bg, cell.firstChild);
       });
 
-      // ── PASO 2: barra de etiqueta sobre las celdas de UNIDAD ────────────
-      // Una barra por fila de unidad, igual que las barras de reserva.
-      // Anclada en la primera celda del rango, width=calc(span*100%).
-      // Ocupa la franja inferior de la celda para no tapar las reservas.
-      // z-index:1 → debajo de las barras de reserva (z-index:2+).
+      // ── 2. Punto de color en header del primer y último día ──────────────
+      // Indica visualmente el inicio y fin del período sin romper el layout.
+      [visFirst, visLast].forEach((iso, idx) => {
+        const hdr = grid.querySelector(`.cal-day-header[data-date="${iso}"]`);
+        if (!hdr) return;
+        const dot = document.createElement('span');
+        dot.className = 'cal-period-dot';
+        dot.dataset.periodId = p.id;
+        dot.style.cssText = [
+          'position:absolute',
+          'bottom:2px',
+          idx === 0 ? 'left:3px' : 'right:3px',
+          'width:5px',
+          'height:5px',
+          'border-radius:50%',
+          `background:${color}`,
+          'opacity:.75',
+          'pointer-events:none',
+          'z-index:2',
+        ].join(';');
+        hdr.appendChild(dot);
+      });
+
+      // ── 3. Etiqueta solo en filas sin reserva en el rango ───────────────
+      // Si algún día del período tiene una reserva en esa unidad → omitir etiqueta.
+      const cellMap = this._buildCellMap(this._lastRenderedBookings ?? []);
+
       (this.ctx.units ?? []).forEach(unit => {
+        const hasBooking = allDates.some(iso =>
+          (cellMap[unit.id]?.[iso]?.length ?? 0) > 0
+        );
+        if (hasBooking) return;
+
         const firstCell = grid.querySelector(
           `.cal-cell[data-unit-id="${unit.id}"][data-date="${visFirst}"]`
         );
         if (!firstCell) return;
 
         const prefix   = isSoft ? '[!] ' : '';
-        const minN     = p.min_nights ? ('\u{1F319}' + p.min_nights + '\u00A0') : '';
-        const labelTxt = prefix + minN + p.label + (p.note ? '  \u00B7  ' + p.note : '');
+        const minN     = p.min_nights ? ('🌙' + p.min_nights + ' ') : '';
+        const labelTxt = prefix + minN + p.label + (p.note ? '  ·  ' + p.note : '');
+        const tipTxt   = p.label
+          + (p.min_nights ? ' · mín. ' + p.min_nights + ' noches' : '')
+          + (p.note ? '
+' + p.note : '')
+          + '
+Clic para editar';
 
         const lbl = document.createElement('div');
-        lbl.className    = 'cal-period-label';
+        lbl.className = 'cal-period-label';
         lbl.dataset.periodId = p.id;
-        lbl.textContent  = labelTxt;
-        lbl.title        = `${p.label}${p.min_nights ? ' \u00B7 m\u00EDn. ' + p.min_nights + ' noches' : ''}${p.note ? '\n' + p.note : ''}\nClic para editar`;
+        lbl.textContent = labelTxt;
+        lbl.title = tipTxt;
 
         lbl.style.cssText = [
           'position:absolute',
           'bottom:3px',
-          'left:1px',
-          `width:calc(${span} * 100% - 2px)`,
-          'height:13px',
+          'left:2px',
+          `width:calc(${span} * 100% - 4px)`,
+          'height:12px',
           'overflow:hidden',
           'white-space:nowrap',
           'text-overflow:ellipsis',
-          'font-size:.58rem',
-          'font-weight:700',
-          `color:${color}`,
-          'text-shadow:0 0 3px var(--color-surface),0 0 3px var(--color-surface)',
+          'font-size:.52rem',
+          'font-weight:600',
+          `color:${color}88`,
           'pointer-events:auto',
           'cursor:pointer',
           'z-index:1',
-          'line-height:13px',
+          'line-height:12px',
           'padding:0 3px',
         ].join(';');
 
@@ -3979,6 +4005,7 @@ export class Calendar {
       { label: 'Índigo',     value: '#6366f1' },
       { label: 'Violeta',    value: '#a855f7' },
       { label: 'Rosado',     value: '#ec4899' },
+      { label: 'Magenta',    value: '#d946ef' },
       { label: 'Rojo',       value: '#ef4444' },
       { label: 'Naranja',    value: '#f97316' },
       { label: 'Amarillo',   value: '#eab308' },
