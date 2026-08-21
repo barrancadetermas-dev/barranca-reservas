@@ -3788,9 +3788,9 @@ export class Calendar {
     grid.querySelectorAll('.cal-period-bg,.cal-period-label,.cal-period-dot,.cal-period-overlay,.cal-period-band').forEach(el => el.remove());
     grid.querySelectorAll('[data-period-id]').forEach(cell => {
       delete cell.dataset.periodId;
-      cell.style.removeProperty('--period-bg');
-      cell.style.removeProperty('--period-brd');
-      cell.classList.remove('has-period','period-start','period-end','period-soft');
+      cell.style.boxShadow = '';
+      cell.style.outline = '';
+      cell.style.outlineOffset = '';
     });
 
     const periods = this._loadPeriods();
@@ -3866,14 +3866,17 @@ export class Calendar {
         bg.style.cssText = parts.join(';');
         cell.insertBefore(bg, cell.firstChild);
 
-        // Método 2: CSS custom property en la celda — el CSS la consume
-        // con un ::before. Esto funciona incluso si el div hijo no se pinta.
-        cell.style.setProperty('--period-bg', bgRgba);
-        cell.style.setProperty('--period-brd', brdRgba);
-        cell.classList.add('has-period');
-        if (isFirst) cell.classList.add('period-start');
-        if (isLast)  cell.classList.add('period-end');
-        if (isSoft)  cell.classList.add('period-soft');
+        // Método 2: box-shadow inset — funciona en TODOS los browsers/mobile
+        // sin depender de position, overflow, z-index ni pseudo-elementos.
+        // Pinta el fondo de la celda desde adentro.
+        const shadow = `inset 0 0 0 9999px ${bgRgba}`;
+        const prevShadow = cell.style.boxShadow;
+        cell.style.boxShadow = prevShadow && prevShadow !== 'none'
+          ? prevShadow + ', ' + shadow
+          : shadow;
+        // Bordes via outline (no afecta layout, visible en mobile)
+        cell.style.outline = `1px solid ${brdRgba}`;
+        cell.style.outlineOffset = '-1px';
       });
 
       // ── 2. Puntos en header del primer y último día ──────────────────────
