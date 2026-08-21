@@ -3786,7 +3786,11 @@ export class Calendar {
 
     // Limpiar elementos de período previos
     grid.querySelectorAll('.cal-period-bg,.cal-period-label,.cal-period-dot,.cal-period-overlay,.cal-period-band').forEach(el => el.remove());
-    grid.querySelectorAll('[data-period-id]').forEach(cell => delete cell.dataset.periodId);
+    grid.querySelectorAll('[data-period-id]').forEach(cell => {
+      delete cell.dataset.periodId;
+      // Limpiar background directo del fallback mobile
+      if (cell.style.backgroundColor) cell.style.backgroundColor = '';
+    });
 
     const periods = this._loadPeriods();
     if (!periods.length) return;
@@ -3807,9 +3811,9 @@ export class Calendar {
       const color  = p.color;
 
       // Opacidades muy tenues para no competir con las reservas
-      const bgOpacity  = isMob ? '28' : '0f'; // 0f ≈ 6%, 28 ≈ 16%
-      const brdOpacity = isMob ? '55' : '33';
-      const brdW       = '1px';
+      const bgOpacity  = isMob ? '55' : '0f';
+      const brdOpacity = isMob ? 'aa' : '44';
+      const brdW       = isMob ? '2px' : '1px';
 
       // check_out EXCLUSIVO: check_in=12 check_out=13 → solo pinta el 12
       const inRange  = iso => iso >= pStart && iso < pEnd;
@@ -3846,11 +3850,20 @@ export class Calendar {
           isFirst ? `border-left:2px solid ${color}88` : 'border-left:none',
           isLast  ? `border-right:2px solid ${color}88` : 'border-right:none',
           'pointer-events:none',
-          'z-index:0',
+          'z-index:1',
           'box-sizing:border-box'
         );
         bg.style.cssText = parts.join(';');
         cell.insertBefore(bg, cell.firstChild);
+
+        // Fallback mobile: setear también background directo en la celda
+        // por si el div hijo no se pinta (contexto de stacking mobile)
+        if (isMob) {
+          const prev = cell.style.backgroundColor;
+          if (!prev || prev === '' || prev === 'transparent') {
+            cell.style.backgroundColor = color + bgOpacity;
+          }
+        }
       });
 
       // ── 2. Punto de color en header del primer y último día ──────────────
@@ -3919,7 +3932,7 @@ export class Calendar {
           `color:${color}88`,
           'pointer-events:auto',
           'cursor:pointer',
-          'z-index:1',
+          'z-index:2',
           'line-height:12px',
           'padding:0 3px',
         ].join(';');
