@@ -1189,3 +1189,13 @@
   pointer-events: none;
 }
 /* Las reservas (barras) tienen z-index 2+ → siempre encima del overlay (z-index:1) */
+
+/* ── Período especial: fondo por celda ───────────────────────────────────── */
+/* Div hijo insertado como firstChild — queda bajo las barras de reserva (z-index 2+) */
+.cal-period-bg {
+  pointer-events: none; /* controlado inline */
+}
+/* Etiqueta de período en cada fila de unidad */
+.cal-period-label {
+  pointer-events: auto;
+}

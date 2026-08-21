@@ -3784,18 +3784,9 @@ export class Calendar {
     const grid = document.getElementById('calendar-grid');
     if (!grid) return;
 
-    // Limpiar estilos de período previos en todas las celdas
-    grid.querySelectorAll('.cal-period-label').forEach(el => el.remove());
-    grid.querySelectorAll('.cal-period-overlay').forEach(el => el.remove());
-    grid.querySelectorAll('.cal-period-band').forEach(el => el.remove());
-    grid.querySelectorAll('[data-period-id]').forEach(cell => {
-      delete cell.dataset.periodId;
-      cell.style.backgroundImage = '';
-      cell.style.borderTop    = '';
-      cell.style.borderBottom = '';
-      cell.style.borderLeft   = '';
-      cell.style.borderRight  = '';
-    });
+    // Limpiar elementos de período previos
+    grid.querySelectorAll('.cal-period-bg,.cal-period-label,.cal-period-overlay,.cal-period-band').forEach(el => el.remove());
+    grid.querySelectorAll('[data-period-id]').forEach(cell => delete cell.dataset.periodId);
 
     const periods = this._loadPeriods();
     if (!periods.length) return;
@@ -3809,23 +3800,31 @@ export class Calendar {
       // Los bloqueos reales (type='block') los renderiza la barra de Supabase; no duplicar
       if (p.type === 'block') return;
 
-      const start  = p.check_in;
-      const end    = p.check_out; // exclusivo, igual criterio que las reservas
+      const pStart = p.check_in;
+      const pEnd   = p.check_out; // EXCLUSIVO: igual criterio que las reservas
       const isSoft = p.type === 'soft';
       const isMob  = window.innerWidth <= 768;
-      const bgAlpha = isMob ? '48' : '20';
-      const brdW    = isMob ? '3px' : '2px';
 
-      // check_out EXCLUSIVO: check_in=12, check_out=13 → solo pinta el día 12
-      const inRange = iso => iso >= start && iso < end;
-      const visibleDates = this._dateRange.filter(inRange);
-      if (!visibleDates.length) return;
+      // check_out es exclusivo: check_in=12 check_out=13 → solo pinta día 12
+      const inRange   = iso => iso >= pStart && iso < pEnd;
+      const allDates  = this._dateRange.filter(inRange);
+      if (!allDates.length) return;
 
-      const visFirst = visibleDates[0];
-      const visLast  = visibleDates[visibleDates.length - 1];
-      const span     = visibleDates.length; // columnas que ocupa en la ventana visible
+      const visFirst  = allDates[0];
+      const visLast   = allDates[allDates.length - 1];
+      const span      = allDates.length;
 
-      // ── 1. Colorear fondo de TODAS las celdas del rango ──────────────────
+      // Color base y variantes
+      const color     = p.color;
+      const bgHex     = isMob ? color + '40' : color + '22'; // más opaco en mobile
+      const brdColor  = color + '99';
+      const brdColorE = color + 'dd';
+      const brdW      = isMob ? '3px' : '2px';
+
+      // ── PASO 1: insertar div de fondo en CADA celda del rango ───────────
+      // Usamos un div hijo con position:absolute;inset:0;z-index:0
+      // así NO tocamos el background CSS de la celda (no choca con hover/transition)
+      // y funciona igual en desktop y mobile.
       grid.querySelectorAll('[data-date]').forEach(cell => {
         const iso = cell.dataset.date;
         if (!inRange(iso)) return;
@@ -3833,67 +3832,81 @@ export class Calendar {
         const isFirst = iso === visFirst;
         const isLast  = iso === visLast;
 
+        // Marcar celda para cleanup posterior
         cell.dataset.periodId = p.id;
 
-        const prevBg  = cell.style.backgroundImage;
-        const solidBg = `linear-gradient(${p.color}${bgAlpha},${p.color}${bgAlpha})`;
-        const hatchBg = isSoft
-          ? `repeating-linear-gradient(-45deg,transparent 0,transparent 4px,${p.color}38 4px,${p.color}38 5px)`
-          : null;
-        cell.style.backgroundImage = [hatchBg, solidBg, prevBg && prevBg !== 'none' ? prevBg : null]
-          .filter(Boolean).join(',');
+        // Div de fondo
+        const bg = document.createElement('div');
+        bg.className = 'cal-period-bg';
+        bg.dataset.periodId = p.id;
+        bg.style.cssText = [
+          'position:absolute',
+          'inset:0',
+          `background:${bgHex}`,
+          isSoft
+            ? `background-image:repeating-linear-gradient(-45deg,transparent 0,transparent 4px,${color}28 4px,${color}28 5px)`
+            : '',
+          `border-top:${brdW} solid ${brdColor}`,
+          `border-bottom:${brdW} solid ${brdColor}`,
+          isFirst ? `border-left:${brdW} solid ${brdColorE}` : 'border-left:none',
+          isLast  ? `border-right:${brdW} solid ${brdColorE}` : 'border-right:none',
+          'pointer-events:none',
+          'z-index:0',
+          'box-sizing:border-box',
+        ].filter(Boolean).join(';');
 
-        cell.style.borderTop    = `${brdW} solid ${p.color}88`;
-        cell.style.borderBottom = `${brdW} solid ${p.color}88`;
-        if (isFirst) cell.style.borderLeft  = `${brdW} solid ${p.color}cc`;
-        if (isLast)  cell.style.borderRight = `${brdW} solid ${p.color}cc`;
+        // Insertar como primer hijo para que quede debajo de las barras (z-index 2+)
+        cell.insertBefore(bg, cell.firstChild);
       });
 
-      // ── 2. Barra de etiqueta en el header — igual que las barras de reserva ──
-      // Anclada en el primer header del rango visible, width = span columnas.
-      // Usa el mismo calc() que _renderBar para no depender del viewport.
-      const firstHdr = grid.querySelector(`.cal-day-header[data-date="${visFirst}"]`);
-      if (firstHdr) {
-        const prefix = isSoft ? '[!] ' : '';
-        const minN   = p.min_nights ? ('\u{1F319}' + p.min_nights + ' ') : '';
-        const labelText = prefix + minN + p.label + (p.note ? '  \u00B7  ' + p.note : '');
+      // ── PASO 2: barra de etiqueta sobre las celdas de UNIDAD ────────────
+      // Una barra por fila de unidad, igual que las barras de reserva.
+      // Anclada en la primera celda del rango, width=calc(span*100%).
+      // Ocupa la franja inferior de la celda para no tapar las reservas.
+      // z-index:1 → debajo de las barras de reserva (z-index:2+).
+      (this.ctx.units ?? []).forEach(unit => {
+        const firstCell = grid.querySelector(
+          `.cal-cell[data-unit-id="${unit.id}"][data-date="${visFirst}"]`
+        );
+        if (!firstCell) return;
 
-        const bar = document.createElement('div');
-        bar.className = 'cal-period-label';
-        bar.dataset.periodId = p.id;
-        bar.style.cssText = [
+        const prefix   = isSoft ? '[!] ' : '';
+        const minN     = p.min_nights ? ('\u{1F319}' + p.min_nights + '\u00A0') : '';
+        const labelTxt = prefix + minN + p.label + (p.note ? '  \u00B7  ' + p.note : '');
+
+        const lbl = document.createElement('div');
+        lbl.className    = 'cal-period-label';
+        lbl.dataset.periodId = p.id;
+        lbl.textContent  = labelTxt;
+        lbl.title        = `${p.label}${p.min_nights ? ' \u00B7 m\u00EDn. ' + p.min_nights + ' noches' : ''}${p.note ? '\n' + p.note : ''}\nClic para editar`;
+
+        lbl.style.cssText = [
           'position:absolute',
-          'top:3px',
           'bottom:3px',
-          'left:0',
-          // span columnas × 100% de la celda — mismo sistema que las barras de reserva
-          `width:calc(${span} * 100%)`,
+          'left:1px',
+          `width:calc(${span} * 100% - 2px)`,
+          'height:13px',
           'overflow:hidden',
           'white-space:nowrap',
           'text-overflow:ellipsis',
-          'display:flex',
-          'align-items:center',
-          'padding:0 6px',
-          'font-size:.6rem',
+          'font-size:.58rem',
           'font-weight:700',
-          `color:${p.color}`,
-          'text-shadow:0 0 4px var(--color-surface),0 0 4px var(--color-surface)',
+          `color:${color}`,
+          'text-shadow:0 0 3px var(--color-surface),0 0 3px var(--color-surface)',
           'pointer-events:auto',
           'cursor:pointer',
-          'z-index:3',
-          'box-sizing:border-box',
-          `border-radius:4px`,
-          `background:${p.color}18`,
-          `border:1px solid ${p.color}55`,
+          'z-index:1',
+          'line-height:13px',
+          'padding:0 3px',
         ].join(';');
-        bar.textContent = labelText;
-        bar.title = `${p.label}${p.min_nights ? ' \u00B7 m\u00EDn. ' + p.min_nights + ' noches' : ''}${p.note ? '\n' + p.note : ''}\nClic para editar`;
-        bar.addEventListener('click', (e) => {
+
+        lbl.addEventListener('click', e => {
           e.stopPropagation();
           this._openPeriodModal(p.check_in, p.check_out, p);
         });
-        firstHdr.appendChild(bar);
-      }
+
+        firstCell.appendChild(lbl);
+      });
     });
 
   }
