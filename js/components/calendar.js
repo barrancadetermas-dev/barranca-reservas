@@ -3896,10 +3896,8 @@ export class Calendar {
         const labelTxt = prefix + minN + p.label + (p.note ? '  ·  ' + p.note : '');
         const tipTxt   = p.label
           + (p.min_nights ? ' · mín. ' + p.min_nights + ' noches' : '')
-          + (p.note ? '
-' + p.note : '')
-          + '
-Clic para editar';
+          + (p.note ? '\n' + p.note : '')
+          + '\nClic para editar';
 
         const lbl = document.createElement('div');
         lbl.className = 'cal-period-label';
