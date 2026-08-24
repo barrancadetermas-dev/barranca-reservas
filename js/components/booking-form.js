@@ -2289,6 +2289,9 @@ ${notes ? `
 <div class="footer">
   <p>Este documento es un comprobante interno de reserva generado por <strong>MILA PMS</strong>.<br>
   Barranca de Termas — Departamentos Turísticos · <em>Documento emitido el ${now}</em></p>
+  <p style="margin-top:10px;font-size:10px;color:#94a3b8;border:1px solid #e2e8f0;display:inline-block;padding:4px 12px;border-radius:4px;letter-spacing:.04em">
+    ☒ Documento no válido como factura
+  </p>
 </div>
 
 </body></html>`);
