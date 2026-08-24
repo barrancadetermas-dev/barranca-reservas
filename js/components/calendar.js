@@ -464,6 +464,14 @@ export class Calendar {
     grid.classList.remove('week-grid');
     grid.innerHTML = '';
 
+    // ── Color fin de semana desde config ────────────
+    const _wkColor   = AppContext.config?.cal_weekend_color   ?? '#7c8ba3';
+    const _wkOpacity = parseFloat(AppContext.config?.cal_weekend_opacity ?? 4) / 100;
+    // Convertir hex a rgba para máxima compatibilidad
+    const _wkHex = _wkColor.replace('#','');
+    const _wkR = parseInt(_wkHex.slice(0,2),16), _wkG = parseInt(_wkHex.slice(2,4),16), _wkB = parseInt(_wkHex.slice(4,6),16);
+    document.documentElement.style.setProperty('--cal-weekend-bg', `rgba(${_wkR},${_wkG},${_wkB},${_wkOpacity})`);
+
     // ── Wrapper scroll ────────────────────────────
     const parent = grid.parentElement;
     if (parent) {
@@ -604,7 +612,7 @@ export class Calendar {
       label.style.setProperty('position',   'sticky',  'important');
       label.style.setProperty('left',       '0',       'important');
       label.style.setProperty('z-index',    '200',     'important');
-      label.style.setProperty('background', unitColor + '18', 'important');
+      label.style.setProperty('background', unitColor + '22', 'important');
       // Ancho controlado por grid template — nunca mayor al labelW calculado
       label.style.setProperty('width',      '100%',    'important');
       label.style.setProperty('min-width',  '0',       'important');

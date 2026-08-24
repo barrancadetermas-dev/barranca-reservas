@@ -854,7 +854,7 @@
 .cal-unit-label {
   background: var(--color-surface-2) !important;
   border-right: 1px solid var(--cal-border) !important;
-  border-bottom: 2px solid var(--color-surface) !important;
+  border-bottom: 1px solid var(--cal-border) !important;
   border-left: 3px solid var(--unit-color, var(--cal-blue)) !important;
   padding: 8px 12px !important;
   display: flex !important;
@@ -988,7 +988,7 @@
 .cal-cell.past-col {
   background: repeating-linear-gradient(
     -45deg, transparent, transparent 6px,
-    rgba(148,163,184,.13) 6px, rgba(148,163,184,.13) 7px
+    rgba(148,163,184,.22) 6px, rgba(148,163,184,.22) 7px
   ) !important;
   cursor: default !important;
 }
@@ -1006,8 +1006,12 @@
   z-index: 2 !important;
   pointer-events: none !important;
 }
-/* Fin de semana futuro */
-.cal-cell.weekend-col { background: rgba(100,116,139,.025) !important; }
+/* Fin de semana — color configurable vía --cal-weekend-bg */
+.cal-cell.weekend-col { background: var(--cal-weekend-bg, rgba(100,116,139,.035)) !important; }
+
+[data-theme="dark"] .cal-cell.past-col    { background: rgba(148,163,184,.14) !important; }
+[data-theme="dark"] .cal-cell.today-col   { background: rgba(59,130,246,.09)  !important; }
+[data-theme="dark"] .cal-cell.weekend-col { background: var(--cal-weekend-bg, rgba(100,116,139,.06)) !important; }
 
 /* Hover estado futuro vacío */
 .cal-cell:not(.past-col):hover { background: rgba(30,77,183,.05) !important; }
@@ -1024,10 +1028,6 @@
 }
 .cal-cell.past-col:hover { background: inherit !important; }
 .cal-cell.past-col.cal-cell-empty:hover::after { display: none !important; }
-
-[data-theme="dark"] .cal-cell.past-col    { background: rgba(148,163,184,.07) !important; }
-[data-theme="dark"] .cal-cell.today-col   { background: rgba(59,130,246,.09)  !important; }
-[data-theme="dark"] .cal-cell.weekend-col { background: rgba(100,116,139,.06) !important; }
 
 /* Heatmap por celda */
 .cal-cell[data-heat="low"]    { background: rgba(34,197,94,.03)  !important; }

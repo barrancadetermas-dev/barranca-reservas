@@ -59,6 +59,14 @@ const CONFIG_SCHEMA = [
       { key: 'usd_margin_pct', label: 'Margen aplicado a pagos en USD', default: 0, type: 'number', min: -20, max: 20, step: 0.5, unit: '%' },
     ],
   },
+  {
+    group: 'Colores del calendario',
+    icon: '🎨',
+    fields: [
+      { key: 'cal_weekend_color', label: 'Color de fondo — Sábado y Domingo', default: '#7c8ba3', type: 'color' },
+      { key: 'cal_weekend_opacity', label: 'Intensidad del color de fin de semana (%)', default: 4, type: 'number', min: 1, max: 40, step: 1, unit: '%' },
+    ],
+  },
 ];
 
 export class ConfigPanel {
