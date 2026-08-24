@@ -2097,6 +2097,11 @@ export class BookingForm {
       }
     });
 
+    const locality = document.getElementById('f-locality')?.value?.trim() ?? '';
+    const age      = document.getElementById('f-age')?.value?.trim()      ?? '';
+    const car      = document.getElementById('f-car')?.value?.trim()      ?? '';
+    const plate    = document.getElementById('f-plate')?.value?.trim()    ?? '';
+
     const paxStr = `${adults} adulto${adults !== 1 ? 's' : ''}${children ? ` + ${children} menor${children !== 1 ? 'es' : ''}` : ''}`;
     const sourceChip = document.querySelector('#f-source-selector .src-chip.selected');
     const sourceLabel = sourceChip?.querySelector('span')?.textContent?.trim() ?? 'Directo';
