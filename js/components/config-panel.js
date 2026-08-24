@@ -184,15 +184,25 @@ export class ConfigPanel {
                 const val = this._getValue(f.key, f.default);
                 const inputAttrs = f.type === 'number'
                   ? `type="number" min="${f.min}" max="${f.max}" step="${f.step}" value="${val}"`
+                  : f.type === 'color'
+                  ? `type="color" value="${val}"`
                   : `type="${f.type}" value="${val}"`;
-                return `
-                  <div class="config-field">
-                    <label for="cfg-${f.key}">${f.label}</label>
-                    <div style="display:flex;align-items:center;gap:4px">
+                const inputHtml = f.type === 'color'
+                  ? `<div style="display:flex;align-items:center;gap:10px">
+                      <input id="cfg-${f.key}" class="config-input" ${inputAttrs}
+                             data-key="${f.key}" data-default="${f.default}"
+                             style="width:44px;height:36px;padding:2px 3px;border:1px solid var(--color-border);border-radius:8px;cursor:pointer;background:var(--color-surface)">
+                      <span id="cfg-${f.key}-hex" style="font-size:.8rem;font-family:monospace;color:var(--color-text-2)">${val}</span>
+                    </div>`
+                  : `<div style="display:flex;align-items:center;gap:4px">
                       <input id="cfg-${f.key}" class="config-input" ${inputAttrs}
                              data-key="${f.key}" data-default="${f.default}">
                       ${f.unit ? `<span class="cfg-unit">${f.unit}</span>` : (f.type === 'number' && f.max === 100 ? '<span class="cfg-unit">%</span>' : '')}
-                    </div>
+                    </div>`;
+                return `
+                  <div class="config-field">
+                    <label for="cfg-${f.key}">${f.label}</label>
+                    ${inputHtml}
                   </div>`;
               }).join('')}
             </div>
@@ -799,6 +809,12 @@ export class ConfigPanel {
           showToast('Color actualizado ✓', 'success');
         } catch { showToast('Error al guardar color', 'error'); }
       });
+    });
+
+    // Color picker de config: actualizar hex en tiempo real
+    container.querySelectorAll('.config-input[type="color"]').forEach(input => {
+      const hexSpan = container.querySelector(`#${input.id}-hex`);
+      input.addEventListener('input', () => { if (hexSpan) hexSpan.textContent = input.value; });
     });
 
     // Grupo tarifario: guardar al perder foco (debounce simple con blur, no input)
