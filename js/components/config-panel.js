@@ -977,6 +977,13 @@ export class ConfigPanel {
         this._values[key] = value;
       });
 
+      // Aplicar color de fin de semana al instante sin esperar re-render del calendario
+      const _wkColor   = AppContext.config.cal_weekend_color   ?? '#7c8ba3';
+      const _wkOpacity = parseFloat(AppContext.config.cal_weekend_opacity ?? 4) / 100;
+      const _wkHex = _wkColor.replace('#','');
+      const _r = parseInt(_wkHex.slice(0,2),16), _g = parseInt(_wkHex.slice(2,4),16), _b = parseInt(_wkHex.slice(4,6),16);
+      document.documentElement.style.setProperty('--cal-weekend-bg', `rgba(${_r},${_g},${_b},${_wkOpacity})`);
+
       const { error } = await this.db
         .from('hotel_config')
         .upsert(upserts, { onConflict: 'hotel_id,key' });
