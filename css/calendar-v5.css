@@ -854,7 +854,7 @@
 .cal-unit-label {
   background: var(--color-surface-2) !important;
   border-right: 1px solid var(--cal-border) !important;
-  border-bottom: 1px solid var(--cal-border) !important;
+  border-bottom: 2px solid var(--color-surface) !important;
   border-left: 3px solid var(--unit-color, var(--cal-blue)) !important;
   padding: 8px 12px !important;
   display: flex !important;
@@ -988,7 +988,7 @@
 .cal-cell.past-col {
   background: repeating-linear-gradient(
     -45deg, transparent, transparent 6px,
-    rgba(148,163,184,.06) 6px, rgba(148,163,184,.06) 7px
+    rgba(148,163,184,.13) 6px, rgba(148,163,184,.13) 7px
   ) !important;
   cursor: default !important;
 }
