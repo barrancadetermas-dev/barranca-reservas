@@ -604,7 +604,7 @@ export class Calendar {
       label.style.setProperty('position',   'sticky',  'important');
       label.style.setProperty('left',       '0',       'important');
       label.style.setProperty('z-index',    '200',     'important');
-      label.style.setProperty('background', 'var(--color-surface-2)', 'important');
+      label.style.setProperty('background', unitColor + '0d', 'important');
       // Ancho controlado por grid template — nunca mayor al labelW calculado
       label.style.setProperty('width',      '100%',    'important');
       label.style.setProperty('min-width',  '0',       'important');
