@@ -613,8 +613,8 @@ export class Calendar {
       label.style.setProperty('left',       '0',       'important');
       label.style.setProperty('z-index',    '200',     'important');
       label.style.setProperty('background',
-        `linear-gradient(${unitColor}22, ${unitColor}22) 0 0 / 100% calc(100% - 2px) no-repeat,
-         var(--color-surface) bottom / 100% 2px no-repeat`,
+        `linear-gradient(${unitColor}22, ${unitColor}22) 0 0 / 100% calc(100% - 3px) no-repeat,
+         var(--color-surface) bottom / 100% 3px no-repeat`,
         'important');
       // Ancho controlado por grid template — nunca mayor al labelW calculado
       label.style.setProperty('width',      '100%',    'important');

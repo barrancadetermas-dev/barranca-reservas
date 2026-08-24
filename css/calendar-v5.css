@@ -462,14 +462,7 @@
   font-weight: 700;
   font-style: italic;
 }
-.cal-cell.weekend-col {
-  background: rgba(148,163,184,.11) !important;
-}
-/* SAB levemente más cálido, DOM ligeramente más azulado */
-.cal-day-header.weekend.weekend-sat { background: rgba(124,139,163,.20) !important; }
-.cal-day-header.weekend.weekend-sun { background: rgba(100,116,139,.22) !important; }
-.cal-cell.weekend-sat { background: rgba(124,139,163,.13) !important; }
-.cal-cell.weekend-sun { background: rgba(100,116,139,.15) !important; }
+/* colores de weekend controlados por --cal-weekend-bg (ver abajo) */
 
 /* Borde de cambio de mes — más ancho y opaco */
 .cal-day-header.month-boundary,
@@ -484,9 +477,7 @@
 [data-theme="dark"] .cal-day-header.weekend {
   background: rgba(148,163,184,.12) !important;
 }
-[data-theme="dark"] .cal-cell.weekend-col {
-  background: rgba(148,163,184,.08) !important;
-}
+
 
 /* ── 3. D&D MODERNO: animaciones fluidas ─────────── */
 /* Ghost profesional ya implementado en v5 */
@@ -854,7 +845,7 @@
 .cal-unit-label {
   background: var(--color-surface-2) !important;
   border-right: 1px solid var(--cal-border) !important;
-  border-bottom: 1px solid var(--cal-border) !important;
+  border-bottom: 1px solid transparent !important;
   border-left: 3px solid var(--unit-color, var(--cal-blue)) !important;
   padding: 8px 12px !important;
   display: flex !important;
@@ -1007,7 +998,16 @@
   pointer-events: none !important;
 }
 /* Fin de semana — color configurable vía --cal-weekend-bg */
-.cal-cell.weekend-col { background: var(--cal-weekend-bg, rgba(100,116,139,.035)) !important; }
+.cal-cell.weekend-col,
+.cal-cell.weekend-sat,
+.cal-cell.weekend-sun { background: var(--cal-weekend-bg, rgba(100,116,139,.10)) !important; }
+
+.cal-day-header.weekend.weekend-sat,
+.cal-day-header.weekend.weekend-sun { background: var(--cal-weekend-bg, rgba(100,116,139,.18)) !important; }
+
+[data-theme="dark"] .cal-cell.weekend-col,
+[data-theme="dark"] .cal-cell.weekend-sat,
+[data-theme="dark"] .cal-cell.weekend-sun { background: var(--cal-weekend-bg, rgba(100,116,139,.12)) !important; }
 
 [data-theme="dark"] .cal-cell.past-col    { background: rgba(148,163,184,.14) !important; }
 [data-theme="dark"] .cal-cell.today-col   { background: rgba(59,130,246,.09)  !important; }
