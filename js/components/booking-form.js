@@ -2311,7 +2311,15 @@ export class BookingForm {
   </div>
 
   <div class="footer">
-    <div class="footer-brand">Generado por <strong>MILA PMS</strong> · Barranca de Termas</div>
+    <div>
+      <div class="footer-brand">Generado por <strong>MILA PMS</strong> · Barranca de Termas</div>
+      <div style="margin-top:5px;font-size:10px;color:#94a3b8;display:flex;flex-wrap:wrap;gap:10px">
+        <span>📞 +54 9 223 684 8043</span>
+        <span>✉ barrancadetermas@gmail.com</span>
+        <span>📷 @barrancadetermas</span>
+        <span>👥 BarrancadetermasER</span>
+      </div>
+    </div>
     <div class="no-factura">☒ No válido como factura</div>
   </div>
 </div>
