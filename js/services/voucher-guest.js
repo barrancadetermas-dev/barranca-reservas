@@ -28,176 +28,213 @@ function fmtDateLong(iso) {
  */
 export function openGuestVoucher(booking, hotel = {}) {
   const g         = booking.guests ?? {};
-  const guestName = `${g.first_name ?? ''} ${g.last_name ?? ''}`.trim() || 'Huésped';
-  const units     = (booking.booking_units ?? []).map(bu => bu.units?.name ?? '—').join(', ');
+  const guestName = [g.last_name, g.first_name].filter(Boolean).join(', ') || 'Huésped';
+  const units     = (booking.booking_units ?? []).map(bu => bu.units?.name ?? '—').join(' / ');
   const nights    = booking.nights ?? 0;
   const pax       = booking.pax   ?? 1;
-  const checkIn   = fmtDateLong(booking.check_in);
-  const checkOut  = fmtDateLong(booking.check_out);
+  const ciShort   = booking.check_in  ? booking.check_in.split('-').reverse().join('/')  : '—';
+  const coShort   = booking.check_out ? booking.check_out.split('-').reverse().join('/') : '—';
+  const ciDay     = fmtDateLong(booking.check_in).split(' ').slice(0,1).join('');
+  const coDay     = fmtDateLong(booking.check_out).split(' ').slice(0,1).join('');
   const total     = booking.total_amount ?? 0;
   const paid      = booking.total_paid   ?? 0;
   const balance   = Math.max(0, total - paid);
   const payments  = booking.payments ?? [];
+  const now       = fmtDate(new Date().toISOString().slice(0,10));
 
   const CHANNEL_LABELS = {
-    direct: 'Reserva directa', booking: 'Booking.com',
+    direct: 'Directo', booking: 'Booking.com',
     airbnb: 'Airbnb', family: 'Familiar', walkin: 'Espontáneo',
   };
-  const channel = CHANNEL_LABELS[booking.source] ?? booking.source ?? 'Directa';
+  const channel = CHANNEL_LABELS[booking.source] ?? booking.source ?? 'Directo';
 
-  const statusLabel = balance <= 0
-    ? '<span style="color:#16a34a;font-weight:700">✅ Abonada en su totalidad</span>'
-    : paid > 0
-    ? `<span style="color:#d97706;font-weight:700">⏳ Seña abonada — saldo pendiente ${formatARS(balance)}</span>`
-    : `<span style="color:#dc2626;font-weight:700">⚠️ Pendiente de pago ${formatARS(total)}</span>`;
+  const statusText  = paid <= 0 ? 'SIN SEÑA' : balance <= 0 ? 'PAGADO TOTAL' : 'CON SEÑA';
+  const pillBg      = paid <= 0 ? '#fef3c7' : balance <= 0 ? '#dcfce7' : '#ede9fe';
+  const pillColor   = paid <= 0 ? '#92400e' : balance <= 0 ? '#14532d' : '#4c1d95';
+  const pillBorder  = paid <= 0 ? '#fbbf24' : balance <= 0 ? '#86efac' : '#c4b5fd';
+  const balanceBg   = balance > 0 ? '#fef3c7' : '#f0fdf4';
+  const balanceBdr  = balance > 0 ? '#fde68a' : '#bbf7d0';
+  const balanceClr  = balance > 0 ? '#92400e' : '#14532d';
 
-  const paymentsHTML = payments.length ? `
-    <table style="width:100%;border-collapse:collapse;margin-top:6px;font-size:12px">
-      <thead>
-        <tr style="background:#f1f5f9">
-          <th style="text-align:left;padding:5px 8px;border:1px solid #e2e8f0">Fecha</th>
-          <th style="text-align:left;padding:5px 8px;border:1px solid #e2e8f0">Método</th>
-          <th style="text-align:right;padding:5px 8px;border:1px solid #e2e8f0">Monto</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${payments.map(p => `
-          <tr>
-            <td style="padding:5px 8px;border:1px solid #e2e8f0">${fmtDate(p.payment_date ?? booking.check_in)}</td>
-            <td style="padding:5px 8px;border:1px solid #e2e8f0;text-transform:capitalize">${p.method?.replace('_',' ') ?? '—'}</td>
-            <td style="padding:5px 8px;border:1px solid #e2e8f0;text-align:right;font-weight:600">${formatARS(p.amount ?? p.amount_ars ?? 0)}</td>
-          </tr>
-        `).join('')}
-      </tbody>
-    </table>` : '<p style="font-size:12px;color:#64748b;margin:4px 0">Sin pagos registrados.</p>';
+  const payRows = payments.map(p => {
+    const METHOD = { cash:'Efectivo', transfer:'Transferencia', mercadopago:'MercadoPago',
+      naranjax:'Naranja X', uala:'Ualá', debit_card:'Tarjeta Débito',
+      credit_card:'Tarjeta Crédito', credit_note:'Nota de Crédito' };
+    const label = METHOD[p.method] ?? p.method ?? '—';
+    const date  = p.payment_date ? p.payment_date.split('-').reverse().join('/') : '';
+    const amt   = formatARS(p.amount ?? p.amount_ars ?? 0);
+    return `<tr class="pay-item"><td>↳ ${label}${date ? ' · ' + date : ''}</td><td>${amt}</td></tr>`;
+  }).join('');
 
   const html = `<!DOCTYPE html>
-<html lang="es">
-<head>
-  <meta charset="UTF-8">
-  <title>Comprobante de Reserva — ${guestName}</title>
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0 }
-    body { font-family: -apple-system, Arial, sans-serif; color: #1e293b; background: #fff; padding: 32px; max-width: 680px; margin: 0 auto }
-    .header { display: flex; align-items: center; justify-content: space-between; padding-bottom: 20px; border-bottom: 2px solid #1e40af; margin-bottom: 24px }
-    .hotel-name { font-size: 22px; font-weight: 800; color: #1e40af }
-    .hotel-sub  { font-size: 12px; color: #64748b; margin-top: 3px }
-    .voucher-title { font-size: 13px; font-weight: 700; color: #1e40af; text-transform: uppercase; letter-spacing: .08em; text-align: right }
-    .voucher-num   { font-size: 11px; color: #94a3b8; margin-top: 2px; text-align: right }
-    .section { margin-bottom: 20px }
-    .section-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: #64748b; margin-bottom: 8px; padding-bottom: 4px; border-bottom: 1px solid #e2e8f0 }
-    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px }
-    .field-label { font-size: 11px; color: #64748b; margin-bottom: 2px }
-    .field-value { font-size: 14px; font-weight: 600; color: #1e293b }
-    .dates-box { background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 14px 18px; display: grid; grid-template-columns: 1fr auto 1fr; gap: 12px; align-items: center; margin-bottom: 16px }
-    .date-label { font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: #3b82f6; font-weight: 700; margin-bottom: 3px }
-    .date-val   { font-size: 14px; font-weight: 700; color: #1e293b }
-    .arrow { font-size: 20px; color: #93c5fd; text-align: center }
-    .nights-badge { background: #1e40af; color: #fff; border-radius: 20px; padding: 5px 14px; font-size: 13px; font-weight: 700; text-align: center; white-space: nowrap }
-    .total-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-top: 1px solid #e2e8f0 }
-    .total-label { font-size: 12px; color: #64748b }
-    .total-value { font-size: 14px; font-weight: 700; color: #1e293b }
-    .total-value.big { font-size: 18px; color: #1e40af }
-    .footer { margin-top: 32px; padding-top: 16px; border-top: 1px solid #e2e8f0; font-size: 11px; color: #94a3b8; text-align: center; line-height: 1.6 }
-    @media print {
-      body { padding: 16px }
-      @page { margin: 12mm }
-    }
-  </style>
-</head>
-<body>
-  <div class="header">
+<html lang="es"><head>
+<meta charset="UTF-8">
+<title>Voucher · ${guestName} · ${ciShort}</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,400;0,500;0,600;1,400&display=swap');
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:'Inter',sans-serif;background:#f1f5f9;color:#1e293b;font-size:12px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .page{max-width:640px;margin:24px auto;background:#fff;border-radius:12px;overflow:hidden;border:1px solid #e2e8f0}
+  .top-stripe{height:5px;background:linear-gradient(90deg,#4f46e5,#7c3aed,#0ea5e9)}
+  .head{padding:18px 24px 15px;display:flex;justify-content:space-between;align-items:flex-start;border-bottom:1px solid #f1f5f9}
+  .hotel-name{font-size:15px;font-weight:600;color:#1e293b;letter-spacing:-.01em}
+  .hotel-sub{font-size:10px;color:#64748b;margin-top:2px}
+  .hotel-contact{font-size:10px;color:#94a3b8;margin-top:3px}
+  .head-right{text-align:right}
+  .res-num{font-size:10px;color:#94a3b8;margin-bottom:5px}
+  .status-pill{display:inline-block;background:${pillBg};color:${pillColor};border:1px solid ${pillBorder};font-size:10px;font-weight:500;padding:3px 11px;border-radius:20px}
+  .dates-bar{background:#4f46e5;padding:14px 24px;display:flex;align-items:center;justify-content:space-between}
+  .date-block{text-align:center;color:white}
+  .date-lbl{font-size:9px;font-weight:500;opacity:.65;letter-spacing:.1em;text-transform:uppercase;margin-bottom:3px}
+  .date-val{font-size:18px;font-weight:600;letter-spacing:-.01em}
+  .date-day{font-size:10px;opacity:.65;margin-top:2px;text-transform:capitalize}
+  .nights-badge{text-align:center;color:white;background:rgba(255,255,255,.15);border-radius:20px;padding:6px 16px}
+  .nights-n{font-size:20px;font-weight:600;display:block;line-height:1.1}
+  .nights-lbl{font-size:9px;opacity:.65;letter-spacing:.06em}
+  .times-row{background:#f8fafc;padding:8px 24px;display:flex;gap:28px;border-bottom:1px solid #e2e8f0}
+  .time-item{font-size:10px;color:#64748b}
+  .time-item strong{color:#1e293b;font-weight:500}
+  .body{padding:18px 24px}
+  .section{margin-bottom:16px}
+  .sec-title{font-size:9px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:#4f46e5;margin-bottom:9px;padding-bottom:5px;border-bottom:1px solid #e8eaf6}
+  .fields-grid{display:grid;grid-template-columns:1fr 1fr;gap:5px 20px}
+  .field{padding:4px 0;border-bottom:1px solid #f8fafc}
+  .field.full{grid-column:1/-1}
+  .field-lbl{font-size:9px;color:#94a3b8;text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px}
+  .field-val{font-size:12px;color:#1e293b}
+  .field-val.big{font-size:14px;font-weight:500}
+  .divider{height:1px;background:#f1f5f9;margin:4px 0 14px}
+  .fin-table{width:100%;border-collapse:collapse}
+  .fin-table td{padding:5px 0;vertical-align:middle}
+  .fin-table td:last-child{text-align:right;white-space:nowrap}
+  .fin-table tr.sub td{color:#64748b;font-size:11px}
+  .fin-table tr.total-row td{font-size:13px;font-weight:600;color:#1e293b;border-top:1px solid #e2e8f0;padding-top:9px;padding-bottom:4px}
+  .fin-table tr.pay-item td{color:#6366f1;font-size:10px;padding:2px 0 2px 14px}
+  .fin-table tr.paid-total td{color:#16a34a;font-weight:500;font-size:11px}
+  .balance-box{margin-top:10px;border-radius:8px;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;background:${balanceBg};border:1px solid ${balanceBdr}}
+  .balance-lbl{font-size:11px;color:${balanceClr}}
+  .balance-amt{font-size:15px;font-weight:600;color:${balanceClr}}
+  .notes-box{background:#f8fafc;border:1px dashed #cbd5e1;border-radius:8px;padding:10px 14px;margin-top:14px}
+  .notes-text{font-size:11px;color:#64748b;font-style:italic;line-height:1.6;margin-top:4px}
+  .footer{border-top:1px solid #e2e8f0;padding:11px 24px;display:flex;justify-content:space-between;align-items:center;background:#f8fafc}
+  .footer-brand{font-size:10px;color:#94a3b8}
+  .footer-brand strong{color:#4f46e5}
+  .footer-contact{font-size:10px;color:#94a3b8;margin-top:4px;display:flex;flex-wrap:wrap;gap:8px}
+  .no-factura{font-size:9px;color:#94a3b8;border:1px solid #e2e8f0;padding:3px 10px;border-radius:4px;letter-spacing:.04em;background:#fff;white-space:nowrap}
+  @media print{
+    body{background:white;margin:0}
+    .page{margin:0;border-radius:0;border:none;max-width:100%}
+    .dates-bar,.balance-box,.top-stripe,.status-pill{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  }
+</style></head><body>
+<div class="page">
+  <div class="top-stripe"></div>
+
+  <div class="head">
     <div>
       <div class="hotel-name">${hotel.name ?? 'Barranca de Termas'}</div>
-      <div class="hotel-sub">${hotel.address ?? ''}${hotel.phone ? ' · ' + hotel.phone : ''}</div>
+      <div class="hotel-sub">Complejo de Apartamentos Turísticos · ${hotel.address ?? 'San José, Entre Ríos'}</div>
+      <div class="hotel-contact">+54 9 223 684 8043 · barrancadetermas@gmail.com · @barrancadetermas</div>
     </div>
-    <div>
-      <div class="voucher-title">Comprobante de Reserva</div>
-      <div class="voucher-num">Emitido ${fmtDate(new Date().toISOString().slice(0,10))}</div>
-    </div>
-  </div>
-
-  <!-- Huésped -->
-  <div class="section">
-    <div class="section-title">Datos del huésped</div>
-    <div class="grid-2">
-      <div>
-        <div class="field-label">Nombre completo</div>
-        <div class="field-value">${guestName}</div>
-      </div>
-      <div>
-        <div class="field-label">Canal de reserva</div>
-        <div class="field-value">${channel}</div>
-      </div>
-      ${g.dni ? `<div><div class="field-label">DNI</div><div class="field-value">${g.dni}</div></div>` : ''}
-      ${g.phone ? `<div><div class="field-label">Teléfono</div><div class="field-value">${g.phone}</div></div>` : ''}
+    <div class="head-right">
+      <div class="res-num">Voucher de reserva · ${now}</div>
+      <div class="status-pill">${statusText}</div>
     </div>
   </div>
 
-  <!-- Estadía -->
-  <div class="section">
-    <div class="section-title">Estadía</div>
-    <div class="dates-box">
-      <div>
-        <div class="date-label">Check-in</div>
-        <div class="date-val">${checkIn}</div>
-        <div style="font-size:11px;color:#64748b;margin-top:2px">A partir de las 14:00 hs</div>
-      </div>
-      <div style="text-align:center">
-        <div class="nights-badge">${nights} noche${nights !== 1 ? 's' : ''}</div>
-      </div>
-      <div style="text-align:right">
-        <div class="date-label" style="text-align:right">Check-out</div>
-        <div class="date-val">${checkOut}</div>
-        <div style="font-size:11px;color:#64748b;margin-top:2px">Hasta las 10:00 hs</div>
-      </div>
+  <div class="dates-bar">
+    <div class="date-block">
+      <div class="date-lbl">Check-in</div>
+      <div class="date-val">${ciShort}</div>
+      <div class="date-day">${fmtDateLong(booking.check_in).split(',')[0] ?? ''}</div>
     </div>
-    <div class="grid-2">
-      <div>
-        <div class="field-label">Alojamiento</div>
-        <div class="field-value">${units}</div>
-      </div>
-      <div>
-        <div class="field-label">Huéspedes</div>
-        <div class="field-value">${pax} persona${pax !== 1 ? 's' : ''}</div>
-      </div>
+    <div class="nights-badge">
+      <span class="nights-n">${nights}</span>
+      <span class="nights-lbl">noche${nights !== 1 ? 's' : ''}</span>
     </div>
-    ${booking.notes ? `<div style="margin-top:10px"><div class="field-label">Notas</div><div style="font-size:13px;color:#475569;margin-top:2px">${booking.notes}</div></div>` : ''}
+    <div class="date-block" style="text-align:right">
+      <div class="date-lbl">Check-out</div>
+      <div class="date-val">${coShort}</div>
+      <div class="date-day">${fmtDateLong(booking.check_out).split(',')[0] ?? ''}</div>
+    </div>
   </div>
 
-  <!-- Financiero -->
-  <div class="section">
-    <div class="section-title">Resumen de pagos</div>
-    ${paymentsHTML}
-    <div style="margin-top:12px">
-      <div class="total-row">
-        <span class="total-label">Total de la reserva</span>
-        <span class="total-value big">${formatARS(total)}</span>
+  <div class="times-row">
+    <div class="time-item">Check-in desde las <strong>14:00</strong></div>
+    <div class="time-item">Check-out hasta las <strong>10:00</strong></div>
+  </div>
+
+  <div class="body">
+    <div class="section">
+      <div class="sec-title">Huésped</div>
+      <div class="fields-grid">
+        <div class="field full">
+          <div class="field-lbl">Nombre completo</div>
+          <div class="field-val big">${guestName}</div>
+        </div>
+        ${g.dni   ? `<div class="field"><div class="field-lbl">DNI</div><div class="field-val">${g.dni}</div></div>` : ''}
+        ${g.phone ? `<div class="field"><div class="field-lbl">Teléfono</div><div class="field-val">${g.phone}</div></div>` : ''}
+        ${g.email ? `<div class="field"><div class="field-lbl">Email</div><div class="field-val">${g.email}</div></div>` : ''}
       </div>
-      <div class="total-row">
-        <span class="total-label">Cobrado</span>
-        <span class="total-value" style="color:#16a34a">${formatARS(paid)}</span>
+    </div>
+
+    <div class="section">
+      <div class="sec-title">Alojamiento</div>
+      <div class="fields-grid">
+        <div class="field">
+          <div class="field-lbl">Departamento</div>
+          <div class="field-val big">${units}</div>
+        </div>
+        <div class="field">
+          <div class="field-lbl">Huéspedes</div>
+          <div class="field-val">${pax} persona${pax !== 1 ? 's' : ''}</div>
+        </div>
+        <div class="field">
+          <div class="field-lbl">Canal de reserva</div>
+          <div class="field-val">${channel}</div>
+        </div>
       </div>
-      ${balance > 0 ? `<div class="total-row"><span class="total-label">Saldo pendiente</span><span class="total-value" style="color:#dc2626">${formatARS(balance)}</span></div>` : ''}
     </div>
-    <div style="margin-top:12px;padding:10px 14px;background:${balance <= 0 ? '#f0fdf4' : '#fffbeb'};border-radius:6px;border:1px solid ${balance <= 0 ? '#bbf7d0' : '#fde68a'}">
-      ${statusLabel}
+
+    <div class="divider"></div>
+
+    <div class="section">
+      <div class="sec-title">Liquidación</div>
+      <table class="fin-table">
+        <tr class="sub"><td>Total de la reserva</td><td>${formatARS(total)}</td></tr>
+        ${payRows}
+        ${paid > 0 ? `<tr class="paid-total"><td>Total abonado</td><td>${formatARS(paid)}</td></tr>` : ''}
+        <tr class="total-row"><td>Total estadía</td><td>${formatARS(total)}</td></tr>
+      </table>
+      <div class="balance-box">
+        <div class="balance-lbl">${balance > 0 ? '⚠ Saldo pendiente al check-in' : '✓ Sin saldo pendiente'}</div>
+        <div class="balance-amt">${balance > 0 ? formatARS(balance) : '—'}</div>
+      </div>
     </div>
+
+    ${booking.notes ? `
+    <div class="notes-box">
+      <div class="sec-title" style="margin-bottom:4px">Observaciones</div>
+      <div class="notes-text">${booking.notes}</div>
+    </div>` : ''}
   </div>
 
   <div class="footer">
-    ${hotel.name ?? 'Barranca de Termas'} · Gracias por elegirnos.<br>
-    Para consultas: ${hotel.phone ?? ''} ${hotel.email ? '· ' + hotel.email : ''}<br>
-    Este comprobante fue emitido el ${fmtDate(new Date().toISOString().slice(0,10))} a través del sistema MILA PMS.
+    <div>
+      <div class="footer-brand">Generado por <strong>MILA PMS</strong> · Barranca de Termas</div>
+      <div class="footer-contact">
+        <span>📞 +54 9 223 684 8043</span>
+        <span>✉ barrancadetermas@gmail.com</span>
+        <span>📷 @barrancadetermas</span>
+        <span>👥 BarrancadetermasER</span>
+      </div>
+    </div>
+    <div class="no-factura">☒ No válido como factura</div>
   </div>
-
-  <script>window.onload = () => window.print();<\/script>
-</body>
-</html>`;
+</div>
+<script>window.onload = () => window.print();<\/script>
+</body></html>`;
 
   const win = window.open('', '_blank', 'width=750,height=900');
-  if (win) {
-    win.document.write(html);
-    win.document.close();
-  }
+  if (win) { win.document.write(html); win.document.close(); }
 }
