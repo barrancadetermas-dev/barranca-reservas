@@ -63,8 +63,17 @@ const CONFIG_SCHEMA = [
     group: 'Colores del calendario',
     icon: '🎨',
     fields: [
-      { key: 'cal_weekend_color', label: 'Color de fondo — Sábado y Domingo', default: '#7c8ba3', type: 'color' },
-      { key: 'cal_weekend_opacity', label: 'Intensidad del color de fin de semana (%)', default: 4, type: 'number', min: 1, max: 40, step: 1, unit: '%' },
+      { key: 'cal_weekend_color',      label: 'Sábado y domingo — color de fondo',    default: '#7c8ba3', type: 'color' },
+      { key: 'cal_weekend_opacity',    label: 'Sábado y domingo — intensidad (%)',     default: 8,  type: 'number', min: 1, max: 40, step: 1, unit: '%' },
+      { key: 'cal_weekend_num_color',  label: 'Sábado y domingo — color del número',  default: '#64748b', type: 'color' },
+      { key: 'cal_weekend_text_color', label: 'Sábado y domingo — color del texto',   default: '#94a3b8', type: 'color' },
+      { key: 'cal_weekday_color',      label: 'Días de semana — color de fondo',      default: '#f8fafc', type: 'color' },
+      { key: 'cal_weekday_opacity',    label: 'Días de semana — intensidad (%)',      default: 0,  type: 'number', min: 0, max: 30, step: 1, unit: '%' },
+      { key: 'cal_weekday_num_color',  label: 'Días de semana — color del número',   default: '#1e293b', type: 'color' },
+      { key: 'cal_weekday_text_color', label: 'Días de semana — color del texto',    default: '#64748b', type: 'color' },
+      { key: 'cal_holiday_color',      label: 'Feriados — color de fondo',            default: '#ef4444', type: 'color' },
+      { key: 'cal_holiday_opacity',    label: 'Feriados — intensidad (%)',            default: 5,  type: 'number', min: 1, max: 40, step: 1, unit: '%' },
+      { key: 'cal_holiday_num_color',  label: 'Feriados — color del número',          default: '#dc2626', type: 'color' },
     ],
   },
 ];
@@ -977,12 +986,8 @@ export class ConfigPanel {
         this._values[key] = value;
       });
 
-      // Aplicar color de fin de semana al instante sin esperar re-render del calendario
-      const _wkColor   = AppContext.config.cal_weekend_color   ?? '#7c8ba3';
-      const _wkOpacity = parseFloat(AppContext.config.cal_weekend_opacity ?? 4) / 100;
-      const _wkHex = _wkColor.replace('#','');
-      const _r = parseInt(_wkHex.slice(0,2),16), _g = parseInt(_wkHex.slice(2,4),16), _b = parseInt(_wkHex.slice(4,6),16);
-      document.documentElement.style.setProperty('--cal-weekend-bg', `rgba(${_r},${_g},${_b},${_wkOpacity})`);
+      // Aplicar variables CSS del calendario al instante
+      ConfigPanel.applyCalendarCSSVars();
 
       const { error } = await this.db
         .from('hotel_config')
@@ -1008,6 +1013,39 @@ export class ConfigPanel {
 
   static getString(key, defaultVal = '') {
     return AppContext.config?.[key] ?? defaultVal;
+  }
+
+  // Convierte hex + opacidad % a rgba
+  static _hexToRgba(hex, opacityPct) {
+    const h = (hex ?? '#888888').replace('#', '');
+    const r = parseInt(h.slice(0,2),16), g = parseInt(h.slice(2,4),16), b = parseInt(h.slice(4,6),16);
+    return `rgba(${r},${g},${b},${parseFloat(opacityPct ?? 0)/100})`;
+  }
+
+  // Aplica todas las variables CSS del calendario desde AppContext.config
+  static applyCalendarCSSVars() {
+    const cfg = AppContext.config ?? {};
+    const r   = ConfigPanel._hexToRgba;
+    const set = (k, v) => document.documentElement.style.setProperty(k, v);
+
+    // Fin de semana
+    set('--cal-weekend-bg',         r(cfg.cal_weekend_color  ?? '#7c8ba3', cfg.cal_weekend_opacity  ?? 8));
+    set('--cal-weekend-num-color',  cfg.cal_weekend_num_color  ?? '#64748b');
+    set('--cal-weekend-text-color', cfg.cal_weekend_text_color ?? '#94a3b8');
+
+    // Días de semana
+    const wdOpacity = parseFloat(cfg.cal_weekday_opacity ?? 0);
+    if (wdOpacity > 0) {
+      set('--cal-weekday-bg',       r(cfg.cal_weekday_color  ?? '#f8fafc', wdOpacity));
+    } else {
+      document.documentElement.style.removeProperty('--cal-weekday-bg');
+    }
+    set('--cal-weekday-num-color',  cfg.cal_weekday_num_color  ?? '#1e293b');
+    set('--cal-weekday-text-color', cfg.cal_weekday_text_color ?? '#64748b');
+
+    // Feriados
+    set('--cal-holiday-bg',         r(cfg.cal_holiday_color  ?? '#ef4444', cfg.cal_holiday_opacity  ?? 5));
+    set('--cal-holiday-num-color',  cfg.cal_holiday_num_color  ?? '#dc2626');
   }
 
   // ══════════════════════════════════════════════════

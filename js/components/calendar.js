@@ -464,13 +464,24 @@ export class Calendar {
     grid.classList.remove('week-grid');
     grid.innerHTML = '';
 
-    // ── Color fin de semana desde config ────────────
-    const _wkColor   = AppContext.config?.cal_weekend_color   ?? '#7c8ba3';
-    const _wkOpacity = parseFloat(AppContext.config?.cal_weekend_opacity ?? 4) / 100;
-    // Convertir hex a rgba para máxima compatibilidad
-    const _wkHex = _wkColor.replace('#','');
-    const _wkR = parseInt(_wkHex.slice(0,2),16), _wkG = parseInt(_wkHex.slice(2,4),16), _wkB = parseInt(_wkHex.slice(4,6),16);
-    document.documentElement.style.setProperty('--cal-weekend-bg', `rgba(${_wkR},${_wkG},${_wkB},${_wkOpacity})`);
+    // ── Variables CSS del calendario desde config ─────
+    const _hexRgba = (hex, pct) => {
+      const h = (hex ?? '#888').replace('#','');
+      const r = parseInt(h.slice(0,2),16), g = parseInt(h.slice(2,4),16), b = parseInt(h.slice(4,6),16);
+      return `rgba(${r},${g},${b},${parseFloat(pct??0)/100})`;
+    };
+    const cfg = AppContext.config ?? {};
+    const _set = (k,v) => document.documentElement.style.setProperty(k,v);
+    _set('--cal-weekend-bg',         _hexRgba(cfg.cal_weekend_color  ?? '#7c8ba3', cfg.cal_weekend_opacity  ?? 8));
+    _set('--cal-weekend-num-color',  cfg.cal_weekend_num_color  ?? '#64748b');
+    _set('--cal-weekend-text-color', cfg.cal_weekend_text_color ?? '#94a3b8');
+    _set('--cal-holiday-bg',         _hexRgba(cfg.cal_holiday_color  ?? '#ef4444', cfg.cal_holiday_opacity  ?? 5));
+    _set('--cal-holiday-num-color',  cfg.cal_holiday_num_color  ?? '#dc2626');
+    const _wdOp = parseFloat(cfg.cal_weekday_opacity ?? 0);
+    if (_wdOp > 0) _set('--cal-weekday-bg', _hexRgba(cfg.cal_weekday_color ?? '#f8fafc', _wdOp));
+    else document.documentElement.style.removeProperty('--cal-weekday-bg');
+    _set('--cal-weekday-num-color',  cfg.cal_weekday_num_color  ?? '#1e293b');
+    _set('--cal-weekday-text-color', cfg.cal_weekday_text_color ?? '#64748b');
 
     // ── Wrapper scroll ────────────────────────────
     const parent = grid.parentElement;

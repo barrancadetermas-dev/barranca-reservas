@@ -889,7 +889,7 @@
   font-size: .78rem !important;
   font-weight: 700 !important;
   line-height: 1.15 !important;
-  color: var(--color-text) !important;
+  color: var(--cal-weekday-num-color, var(--color-text)) !important;
 }
 .cal-day-header .day-name {
   display: block !important;
@@ -897,9 +897,12 @@
   font-weight: 500 !important;
   text-transform: uppercase !important;
   letter-spacing: .07em !important;
-  color: var(--color-text-3) !important;
+  color: var(--cal-weekday-text-color, var(--color-text-3)) !important;
   margin-top: 1px !important;
-  font-style: normal !important;   /* sin cursiva en ningún caso */
+  font-style: normal !important;
+}
+.cal-day-header {
+  background: var(--cal-weekday-bg, var(--color-surface-2)) !important;
 }
 
 /* PASADO */
@@ -945,22 +948,22 @@
 
 /* FIN DE SEMANA — muy sutil, sin cursiva */
 .cal-day-header.weekend {
-  background: rgba(100,116,139,.04) !important;
+  background: var(--cal-weekend-bg, rgba(100,116,139,.08)) !important;
 }
-.cal-day-header.weekend .dh-num { color: #64748b !important; }
+.cal-day-header.weekend .dh-num { color: var(--cal-weekend-num-color, #64748b) !important; }
 .cal-day-header.weekend .day-name {
-  color: #94a3b8 !important;
-  font-style: normal !important;    /* sin cursiva */
+  color: var(--cal-weekend-text-color, #94a3b8) !important;
+  font-style: normal !important;
   font-weight: 500 !important;
 }
 
 /* FERIADO */
-.cal-day-header.holiday { background: rgba(239,68,68,.06) !important; }
-.cal-day-header.holiday .dh-num { color: rgba(220,38,38,.75) !important; }
+.cal-day-header.holiday { background: var(--cal-holiday-bg, rgba(239,68,68,.06)) !important; }
+.cal-day-header.holiday .dh-num { color: var(--cal-holiday-num-color, rgba(220,38,38,.75)) !important; }
 
 [data-theme="dark"] .cal-day-header           { background: #1a2438 !important; }
 [data-theme="dark"] .cal-day-header.today     { background: rgba(59,130,246,.2) !important; }
-[data-theme="dark"] .cal-day-header.weekend   { background: rgba(100,116,139,.1) !important; }
+[data-theme="dark"] .cal-day-header.weekend   { background: var(--cal-weekend-bg, rgba(100,116,139,.1)) !important; }
 [data-theme="dark"] .cal-day-header.past-header { background: rgba(148,163,184,.07) !important; }
 
 /* ─────────────────────────────────────────────────────────────

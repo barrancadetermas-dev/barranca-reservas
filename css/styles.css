@@ -2614,12 +2614,12 @@ select {
   background: #faf5ff;
   color: #9333ea;
 }
-.holiday-col  { background: rgba(239,68,68,.05); }
-.holiday-col:hover { background: rgba(239,68,68,.09) !important; }
-.vacation-col { background: rgba(20,184,166,.06); }
-.vacation-col:hover { background: rgba(20,184,166,.1) !important; }
-.bridge-col   { background: rgba(168,85,247,.05); }
-.bridge-col:hover { background: rgba(168,85,247,.09) !important; }
+.holiday-col  { background: var(--cal-holiday-bg, rgba(239,68,68,.05)); }
+.holiday-col:hover { background: var(--cal-holiday-bg, rgba(239,68,68,.09)) !important; filter: brightness(.92); }
+.vacation-col { background: var(--cal-vacation-bg, rgba(20,184,166,.06)); }
+.vacation-col:hover { background: var(--cal-vacation-bg, rgba(20,184,166,.1)) !important; filter: brightness(.92); }
+.bridge-col   { background: var(--cal-bridge-bg, rgba(168,85,247,.05)); }
+.bridge-col:hover { background: var(--cal-bridge-bg, rgba(168,85,247,.09)) !important; filter: brightness(.92); }
 
 /* Dot indicador de feriado en el header */
 .dh-num { display: block; font-size: .8rem; font-weight: 600; }
@@ -2649,12 +2649,12 @@ select {
 }
 
 /* ── DARK MODE: feriados/weekends ─────────────────── */
-[data-theme="dark"] .cal-day-header.weekend { background: rgba(148,163,184,.09); }
-[data-theme="dark"] .weekend-col { background: rgba(148,163,184,.055) !important; }
-[data-theme="dark"] .cal-day-header.holiday { background: rgba(239,68,68,.12); }
-[data-theme="dark"] .holiday-col  { background: rgba(239,68,68,.07); }
-[data-theme="dark"] .vacation-col { background: rgba(20,184,166,.08); }
-[data-theme="dark"] .bridge-col   { background: rgba(168,85,247,.07); }
+[data-theme="dark"] .cal-day-header.weekend { background: var(--cal-weekend-bg, rgba(148,163,184,.09)); }
+[data-theme="dark"] .weekend-col { background: var(--cal-weekend-bg, rgba(148,163,184,.055)) !important; }
+[data-theme="dark"] .cal-day-header.holiday { background: var(--cal-holiday-bg, rgba(239,68,68,.12)); }
+[data-theme="dark"] .holiday-col  { background: var(--cal-holiday-bg, rgba(239,68,68,.07)); }
+[data-theme="dark"] .vacation-col { background: var(--cal-vacation-bg, rgba(20,184,166,.08)); }
+[data-theme="dark"] .bridge-col   { background: var(--cal-bridge-bg, rgba(168,85,247,.07)); }
 
 /* ── MODAL WHATSAPP TEMPLATE ─────────────────────── */
 .wa-textarea {
@@ -3596,9 +3596,9 @@ input[type="color"].unit-color-input::-webkit-color-swatch { border: none; borde
 .cal-day-header.holiday-bridge { background: rgba(245,158,11,.13) !important; }
 .cal-day-header.holiday-vacation{background: rgba(34,197,94,.08) !important; }
 .holiday-col {
-  background: rgba(239,68,68,.04) !important;
+  background: var(--cal-holiday-bg, rgba(239,68,68,.04)) !important;
 }
-.holiday-col:hover { background: rgba(239,68,68,.09) !important; }
+.holiday-col:hover { background: var(--cal-holiday-bg, rgba(239,68,68,.09)) !important; filter: brightness(.9); }
 /* Dot de feriado en header */
 .cal-day-header .holiday-dot {
   width: 4px; height: 4px; border-radius: 50%;
@@ -3624,15 +3624,15 @@ input[type="color"].unit-color-input::-webkit-color-swatch { border: none; borde
   box-shadow: inset 0 2px 0 rgba(99,102,241,.4);
 }
 .week-cell.past-col { background: rgba(0,0,0,.045) !important; }
-.week-cell.weekend-col { background: rgba(148,163,184,.055) !important; }
+.week-cell.weekend-col { background: var(--cal-weekend-bg, rgba(148,163,184,.055)) !important; }
 
 /* ── DARK MODE: calendario ────────────────────────── */
 [data-theme="dark"] .cal-day-header.today    { background: rgba(99,102,241,.2) !important; }
 [data-theme="dark"] .cal-cell:not(.week-cell).today-col { background: rgba(99,102,241,.1) !important; }
-[data-theme="dark"] .cal-day-header.weekend   { background: rgba(148,163,184,.09) !important; }
-[data-theme="dark"] .weekend-col              { background: rgba(148,163,184,.055) !important; }
-[data-theme="dark"] .holiday-col              { background: rgba(239,68,68,.08) !important; }
-[data-theme="dark"] .cal-day-header.holiday   { background: rgba(239,68,68,.1) !important; }
+[data-theme="dark"] .cal-day-header.weekend   { background: var(--cal-weekend-bg, rgba(148,163,184,.09)) !important; }
+[data-theme="dark"] .weekend-col              { background: var(--cal-weekend-bg, rgba(148,163,184,.055)) !important; }
+[data-theme="dark"] .holiday-col              { background: var(--cal-holiday-bg, rgba(239,68,68,.08)) !important; }
+[data-theme="dark"] .cal-day-header.holiday   { background: var(--cal-holiday-bg, rgba(239,68,68,.1)) !important; }
 
 /* ── CANALES: chips de filtro en listado ─────────── */
 .source-filter-btn {
