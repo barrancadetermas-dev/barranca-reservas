@@ -2108,192 +2108,213 @@ export class BookingForm {
     const statusText = paid <= 0 ? 'SIN SEÑA' : balance <= 0 ? 'PAGADO TOTAL' : 'CON SEÑA';
     const statusColor = paid <= 0 ? '#f59e0b' : balance <= 0 ? '#16a34a' : '#6366f1';
 
+    const statusPillBg    = paid <= 0 ? '#fef3c7' : balance <= 0 ? '#dcfce7' : '#ede9fe';
+    const statusPillColor = paid <= 0 ? '#92400e' : balance <= 0 ? '#14532d' : '#4c1d95';
+    const statusPillBorder= paid <= 0 ? '#fbbf24' : balance <= 0 ? '#86efac' : '#c4b5fd';
+    const ciTime  = AppContext.config?.checkin_time  ?? '14:00';
+    const coTime  = AppContext.config?.checkout_time ?? '10:00';
+    const hotelEmail = AppContext.config?.hotel_email ?? '';
+    const hotelPhone = AppContext.config?.hotel_phone ?? '';
+    const hotelAddr  = AppContext.config?.hotel_address ?? 'San José, Entre Ríos';
+
     const win = window.open('', '_blank');
     win.document.write(`<!DOCTYPE html><html lang="es"><head>
 <meta charset="utf-8">
-<title>Voucher — ${ln} ${fn}</title>
+<title>Voucher · ${ln} ${fn} · ${fmtDShort(ci)}</title>
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-  * { margin:0; padding:0; box-sizing:border-box; }
-  body { font-family:'Inter',sans-serif; background:#f8fafc; color:#1e293b; padding:32px 24px; font-size:13px; }
+  @import url('https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,400;0,500;0,600;1,400&display=swap');
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:'Inter',sans-serif;background:#f1f5f9;color:#1e293b;font-size:12px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .page{max-width:640px;margin:24px auto;background:#fff;border-radius:12px;overflow:hidden;border:1px solid #e2e8f0}
 
-  /* Header */
-  .header { display:flex; align-items:center; justify-content:space-between; margin-bottom:28px; }
-  .hotel-brand { display:flex; align-items:center; gap:12px; }
-  .hotel-logo { width:44px; height:44px; border-radius:10px; background:linear-gradient(135deg,#6366f1,#8b5cf6); display:flex; align-items:center; justify-content:center; color:white; font-size:22px; }
-  .hotel-name { font-size:16px; font-weight:700; color:#1e293b; }
-  .hotel-sub  { font-size:11px; color:#64748b; margin-top:1px; }
-  .voucher-label-badge { background:#6366f1; color:white; font-size:10px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; padding:5px 14px; border-radius:20px; }
-  .divider { height:1px; background:linear-gradient(to right,#6366f1,transparent); margin:0 0 24px; }
+  /* Stripe + Header */
+  .top-stripe{height:5px;background:linear-gradient(90deg,#4f46e5,#7c3aed,#0ea5e9)}
+  .head{padding:18px 24px 15px;display:flex;justify-content:space-between;align-items:flex-start;border-bottom:1px solid #f1f5f9}
+  .hotel-name{font-size:15px;font-weight:600;color:#1e293b;letter-spacing:-.01em}
+  .hotel-sub{font-size:10px;color:#64748b;margin-top:2px}
+  .hotel-contact{font-size:10px;color:#94a3b8;margin-top:3px}
+  .head-right{text-align:right}
+  .res-num{font-size:10px;color:#94a3b8;margin-bottom:5px}
+  .status-pill{display:inline-block;background:${statusPillBg};color:${statusPillColor};border:1px solid ${statusPillBorder};font-size:10px;font-weight:500;padding:3px 11px;border-radius:20px}
 
-  /* Status bar */
-  .status-bar { background:#f1f5f9; border-radius:10px; padding:12px 18px; display:flex; justify-content:space-between; align-items:center; margin-bottom:24px; border-left:4px solid ${statusColor}; }
-  .status-label { font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.08em; color:#64748b; }
-  .status-value { font-size:13px; font-weight:700; color:${statusColor}; letter-spacing:.06em; }
-  .status-date  { font-size:11px; color:#94a3b8; }
+  /* Dates bar */
+  .dates-bar{background:#4f46e5;padding:14px 24px;display:flex;align-items:center;justify-content:space-between}
+  .date-block{text-align:center;color:white}
+  .date-lbl{font-size:9px;font-weight:500;opacity:.65;letter-spacing:.1em;text-transform:uppercase;margin-bottom:3px}
+  .date-val{font-size:18px;font-weight:600;letter-spacing:-.01em}
+  .date-day{font-size:10px;opacity:.65;margin-top:2px;text-transform:capitalize}
+  .nights-badge{text-align:center;color:white;background:rgba(255,255,255,.15);border-radius:20px;padding:6px 16px}
+  .nights-n{font-size:20px;font-weight:600;display:block;line-height:1.1}
+  .nights-lbl{font-size:9px;opacity:.65;letter-spacing:.06em}
 
-  /* Sections */
-  .grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:20px; }
-  .card { background:white; border:1px solid #e2e8f0; border-radius:10px; padding:16px 18px; }
-  .card-title { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.1em; color:#6366f1; margin-bottom:12px; display:flex; align-items:center; gap:6px; }
-  .field { margin-bottom:8px; }
-  .field:last-child { margin-bottom:0; }
-  .field-label { font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:.07em; color:#94a3b8; margin-bottom:2px; }
-  .field-value { font-size:13px; font-weight:500; color:#1e293b; }
-  .field-value.large { font-size:15px; font-weight:700; }
+  /* Horarios */
+  .times-row{background:#f8fafc;padding:8px 24px;display:flex;gap:28px;border-bottom:1px solid #e2e8f0}
+  .time-item{font-size:10px;color:#64748b}
+  .time-item strong{color:#1e293b;font-weight:500}
 
-  /* Dates banner */
-  .dates-banner { background:linear-gradient(135deg,#6366f1,#8b5cf6); color:white; border-radius:10px; padding:18px 20px; margin-bottom:20px; display:flex; justify-content:space-between; align-items:center; }
-  .dates-block { text-align:center; flex:1; }
-  .dates-block-lbl { font-size:10px; font-weight:600; letter-spacing:.1em; opacity:.7; margin-bottom:4px; }
-  .dates-block-val { font-size:14px; font-weight:700; }
-  .dates-block-sub { font-size:11px; opacity:.75; margin-top:2px; }
-  .dates-arrow { font-size:22px; opacity:.6; }
-  .nights-pill { background:rgba(255,255,255,.2); border-radius:20px; padding:4px 14px; font-size:12px; font-weight:600; }
+  /* Body */
+  .body{padding:18px 24px}
+  .section{margin-bottom:16px}
+  .sec-title{font-size:9px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:#4f46e5;margin-bottom:9px;padding-bottom:5px;border-bottom:1px solid #e8eaf6}
+  .fields-grid{display:grid;grid-template-columns:1fr 1fr;gap:5px 20px}
+  .field{padding:4px 0;border-bottom:1px solid #f8fafc}
+  .field.full{grid-column:1/-1}
+  .field-lbl{font-size:9px;color:#94a3b8;text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px}
+  .field-val{font-size:12px;color:#1e293b}
+  .field-val.big{font-size:14px;font-weight:500}
 
-  /* Finance table */
-  .finance-card { background:white; border:1px solid #e2e8f0; border-radius:10px; overflow:hidden; margin-bottom:20px; }
-  .finance-row { display:flex; justify-content:space-between; align-items:center; padding:9px 18px; border-bottom:1px solid #f1f5f9; font-size:12px; }
-  .finance-row:last-child { border-bottom:none; }
-  .finance-row.subtotal { font-weight:500; }
-  .finance-row.disc { color:#16a34a; }
-  .finance-row.total { background:#f8fafc; font-size:14px; font-weight:700; color:#1e293b; padding:12px 18px; }
-  .finance-row.payment-row-item { color:#64748b; font-size:11px; padding:6px 18px 6px 30px; background:#fafafa; }
-  .finance-row.paid-row { color:#16a34a; font-weight:600; }
-  .finance-row.balance-row { background:${balance > 0 ? '#fef3c7' : '#f0fdf4'}; color:${balance > 0 ? '#92400e' : '#14532d'}; font-weight:700; font-size:13px; padding:12px 18px; }
+  /* Finance */
+  .divider{height:1px;background:#f1f5f9;margin:4px 0 14px}
+  .fin-table{width:100%;border-collapse:collapse}
+  .fin-table td{padding:5px 0;vertical-align:middle}
+  .fin-table td:last-child{text-align:right;white-space:nowrap}
+  .fin-table tr.sub td{color:#64748b;font-size:11px}
+  .fin-table tr.disc td{color:#16a34a;font-size:11px}
+  .fin-table tr.surcharge td{color:#f59e0b;font-size:11px}
+  .fin-table tr.total-row td{font-size:13px;font-weight:600;color:#1e293b;border-top:1px solid #e2e8f0;padding-top:9px;padding-bottom:4px}
+  .fin-table tr.pay-item td{color:#6366f1;font-size:10px;padding:2px 0 2px 14px}
+  .fin-table tr.paid-total td{color:#16a34a;font-weight:500;font-size:11px}
+
+  .balance-box{margin-top:10px;border-radius:8px;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;background:${balance > 0 ? '#fef3c7' : '#f0fdf4'};border:1px solid ${balance > 0 ? '#fde68a' : '#bbf7d0'}}
+  .balance-lbl{font-size:11px;color:${balance > 0 ? '#92400e' : '#14532d'};display:flex;align-items:center;gap:6px}
+  .balance-amt{font-size:15px;font-weight:600;color:${balance > 0 ? '#92400e' : '#14532d'}}
 
   /* Notes */
-  .notes-card { background:#fafafa; border:1px dashed #cbd5e1; border-radius:10px; padding:14px 18px; margin-bottom:20px; }
-  .notes-text  { font-size:12px; color:#475569; font-style:italic; line-height:1.5; }
+  .notes-box{background:#f8fafc;border:1px dashed #cbd5e1;border-radius:8px;padding:10px 14px;margin-top:14px}
+  .notes-text{font-size:11px;color:#64748b;font-style:italic;line-height:1.6;margin-top:4px}
 
   /* Footer */
-  .footer { text-align:center; margin-top:24px; padding-top:16px; border-top:1px solid #e2e8f0; }
-  .footer p { font-size:10px; color:#94a3b8; line-height:1.6; }
-  .footer strong { color:#6366f1; }
+  .footer{border-top:1px solid #e2e8f0;padding:11px 24px;display:flex;justify-content:space-between;align-items:center;background:#f8fafc}
+  .footer-brand{font-size:10px;color:#94a3b8}
+  .footer-brand strong{color:#4f46e5}
+  .no-factura{font-size:9px;color:#94a3b8;border:1px solid #e2e8f0;padding:3px 10px;border-radius:4px;letter-spacing:.04em;background:#fff}
 
-  @media print {
-    body { background:white; padding:16px; }
-    .dates-banner { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
-    .finance-row.balance-row, .finance-row.total { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  @media print{
+    body{background:white;margin:0}
+    .page{margin:0;border-radius:0;border:none;max-width:100%}
+    .dates-bar{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    .balance-box,.top-stripe,.status-pill{-webkit-print-color-adjust:exact;print-color-adjust:exact}
   }
 </style></head><body>
+<div class="page">
+  <div class="top-stripe"></div>
 
-<div class="header">
-  <div class="hotel-brand">
-    <div class="hotel-logo">🏨</div>
+  <div class="head">
     <div>
       <div class="hotel-name">Barranca de Termas</div>
-      <div class="hotel-sub">Complejo de Apartamentos Turísticos</div>
+      <div class="hotel-sub">Complejo de Apartamentos Turísticos · ${hotelAddr}</div>
+      ${(hotelEmail || hotelPhone) ? `<div class="hotel-contact">${[hotelEmail, hotelPhone].filter(Boolean).join(' · ')}</div>` : ''}
+    </div>
+    <div class="head-right">
+      <div class="res-num">Voucher de reserva · ${now}</div>
+      <div class="status-pill">${statusText}</div>
     </div>
   </div>
-  <div class="voucher-label-badge">Voucher de Reserva</div>
-</div>
-<div class="divider"></div>
 
-<div class="status-bar">
-  <div>
-    <div class="status-label">Estado de pago</div>
-    <div class="status-value">${statusText}</div>
-  </div>
-  <div style="text-align:right">
-    <div class="status-label">Canal</div>
-    <div style="font-size:12px;font-weight:600;color:#475569">${sourceLabel}</div>
-  </div>
-  <div style="text-align:right">
-    <div class="status-label">Emitido</div>
-    <div class="status-date">${now}</div>
-  </div>
-</div>
-<div style="display:flex;gap:16px;font-size:11px;color:#64748b;margin-bottom:16px">
-  <span>🕒 Check-in desde las <strong>${AppContext.config?.checkin_time ?? '14:00'}</strong></span>
-  <span>🕒 Check-out hasta las <strong>${AppContext.config?.checkout_time ?? '10:00'}</strong></span>
-</div>
-
-<!-- Datos del Huésped + Unidad -->
-<div class="grid-2">
-  <div class="card">
-    <div class="card-title">👤 Datos del Huésped</div>
-    <div class="field">
-      <div class="field-label">Nombre completo</div>
-      <div class="field-value large">${(ln + ', ' + fn).trim().replace(/^, /,'') || '—'}</div>
+  <div class="dates-bar">
+    <div class="date-block">
+      <div class="date-lbl">Check-in</div>
+      <div class="date-val">${fmtDShort(ci)}</div>
+      <div class="date-day">${fmtD(ci).split(',')[0] ?? ''}</div>
     </div>
-    ${dni   ? `<div class="field"><div class="field-label">DNI / Documento</div><div class="field-value">${dni}</div></div>` : ''}
-    ${phone ? `<div class="field"><div class="field-label">Teléfono</div><div class="field-value">${phone}</div></div>` : ''}
-    ${email ? `<div class="field"><div class="field-label">Email</div><div class="field-value">${email}</div></div>` : ''}
-    ${locality ? `<div class="field"><div class="field-label">Localidad</div><div class="field-value">${locality}</div></div>` : ''}
-    ${age      ? `<div class="field"><div class="field-label">Edad</div><div class="field-value">${age}</div></div>` : ''}
-    ${(car || plate) ? `<div class="field"><div class="field-label">Vehículo</div><div class="field-value">${[car, plate].filter(Boolean).join(' · ')}</div></div>` : ''}
-  </div>
-  <div class="card">
-    <div class="card-title">🏠 Alojamiento</div>
-    <div class="field">
-      <div class="field-label">Unidad / Departamento</div>
-      <div class="field-value large">${unitNames || '—'}</div>
+    <div class="nights-badge">
+      <span class="nights-n">${nightsN}</span>
+      <span class="nights-lbl">noche${nightsN !== 1 ? 's' : ''}</span>
     </div>
-    <div class="field">
-      <div class="field-label">Huéspedes</div>
-      <div class="field-value">${paxStr}</div>
+    <div class="date-block" style="text-align:right">
+      <div class="date-lbl">Check-out</div>
+      <div class="date-val">${fmtDShort(co)}</div>
+      <div class="date-day">${fmtD(co).split(',')[0] ?? ''}</div>
     </div>
   </div>
+
+  <div class="times-row">
+    <div class="time-item">Check-in desde las <strong>${ciTime}</strong></div>
+    <div class="time-item">Check-out hasta las <strong>${coTime}</strong></div>
+  </div>
+
+  <div class="body">
+
+    <div class="section">
+      <div class="sec-title">Huésped</div>
+      <div class="fields-grid">
+        <div class="field full">
+          <div class="field-lbl">Nombre completo</div>
+          <div class="field-val big">${(ln + ', ' + fn).trim().replace(/^, /,'') || '—'}</div>
+        </div>
+        ${dni      ? `<div class="field"><div class="field-lbl">DNI / Documento</div><div class="field-val">${dni}</div></div>` : ''}
+        ${phone    ? `<div class="field"><div class="field-lbl">Teléfono</div><div class="field-val">${phone}</div></div>` : ''}
+        ${email    ? `<div class="field"><div class="field-lbl">Email</div><div class="field-val">${email}</div></div>` : ''}
+        ${locality ? `<div class="field"><div class="field-lbl">Localidad</div><div class="field-val">${locality}</div></div>` : ''}
+        ${age      ? `<div class="field"><div class="field-lbl">Edad</div><div class="field-val">${age} años</div></div>` : ''}
+        ${(car || plate) ? `<div class="field full"><div class="field-lbl">Vehículo</div><div class="field-val">${[car, plate].filter(Boolean).join(' · ')}</div></div>` : ''}
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="sec-title">Alojamiento</div>
+      <div class="fields-grid">
+        <div class="field">
+          <div class="field-lbl">Departamento</div>
+          <div class="field-val big">${unitNames || '—'}</div>
+        </div>
+        <div class="field">
+          <div class="field-lbl">Huéspedes</div>
+          <div class="field-val">${paxStr}</div>
+        </div>
+        <div class="field">
+          <div class="field-lbl">Canal de reserva</div>
+          <div class="field-val">${sourceLabel}</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="section">
+      <div class="sec-title">Liquidación</div>
+      <table class="fin-table">
+        <tr class="sub">
+          <td>Precio por noche</td>
+          <td>${fmt(price)}</td>
+        </tr>
+        <tr class="sub">
+          <td>Noches (${billable}${freeNights ? ` facturables de ${nightsN} — ${freeNights} sin cargo` : ''})</td>
+          <td>${fmt(subtotal)}</td>
+        </tr>
+        ${discPct > 0   ? `<tr class="disc"><td>Descuento ${fmtPct(discPct)}%</td><td>− ${fmt(discount)}</td></tr>` : ''}
+        ${surcharge > 0 ? `<tr class="surcharge"><td>Recargo adicional</td><td>+ ${fmt(surcharge)}</td></tr>` : ''}
+        ${lateAmtDisp > 0 ? `<tr class="surcharge"><td>Late check-out</td><td>+ ${fmt(lateAmtDisp)}</td></tr>` : ''}
+        <tr class="total-row">
+          <td>Total estadía</td>
+          <td>${fmt(total)}</td>
+        </tr>
+        ${payRows.map(p => `<tr class="pay-item">
+          <td>↳ ${p.label}${p.date ? ' · ' + p.date : ''}${p.note ? ' · ' + p.note : ''}</td>
+          <td>${fmt(p.amount)}</td>
+        </tr>`).join('')}
+        ${paid > 0 ? `<tr class="paid-total"><td>Total abonado</td><td>${fmt(paid)}</td></tr>` : ''}
+      </table>
+
+      <div class="balance-box">
+        <div class="balance-lbl">${balance > 0 ? '⚠ Saldo pendiente al check-in' : '✓ Sin saldo pendiente'}</div>
+        <div class="balance-amt">${balance > 0 ? fmt(balance) : '—'}</div>
+      </div>
+    </div>
+
+    ${notes ? `
+    <div class="notes-box">
+      <div class="sec-title" style="margin-bottom:4px">Observaciones</div>
+      <div class="notes-text">${notes}</div>
+    </div>` : ''}
+
+  </div>
+
+  <div class="footer">
+    <div class="footer-brand">Generado por <strong>MILA PMS</strong> · Barranca de Termas</div>
+    <div class="no-factura">☒ No válido como factura</div>
+  </div>
 </div>
-
-<!-- Fechas -->
-<div class="dates-banner">
-  <div class="dates-block">
-    <div class="dates-block-lbl">CHECK-IN</div>
-    <div class="dates-block-val">${fmtDShort(ci)}</div>
-    <div class="dates-block-sub">${fmtD(ci).split(',')[0] ?? ''}</div>
-  </div>
-  <div style="text-align:center">
-    <div class="dates-arrow">→</div>
-    <div class="nights-pill">${nightsN} noche${nightsN !== 1 ? 's' : ''}</div>
-  </div>
-  <div class="dates-block">
-    <div class="dates-block-lbl">CHECK-OUT</div>
-    <div class="dates-block-val">${fmtDShort(co)}</div>
-    <div class="dates-block-sub">${fmtD(co).split(',')[0] ?? ''}</div>
-  </div>
-</div>
-
-<!-- Liquidación -->
-<div class="finance-card">
-  <div class="finance-row subtotal">
-    <span>Precio por noche</span><span>${fmt(price)}</span>
-  </div>
-  <div class="finance-row subtotal">
-    <span>Noches (${billable}${freeNights ? ` facturables de ${nightsN}` : ''})</span><span>${fmt(subtotal)}</span>
-  </div>
-  ${discPct > 0    ? `<div class="finance-row disc"><span>Descuento ${fmtPct(discPct)}%</span><span>− ${fmt(discount)}</span></div>` : ''}
-  ${surcharge > 0  ? `<div class="finance-row"><span>Recargo adicional</span><span>+ ${fmt(surcharge)}</span></div>` : ''}
-  <div class="finance-row total">
-    <span>TOTAL ESTADÍA</span><span>${fmt(total)}</span>
-  </div>
-  ${payRows.map(p => `
-  <div class="finance-row payment-row-item">
-    <span>↳ ${p.label}${p.date ? ' · ' + p.date : ''}${p.note ? ' · ' + p.note : ''}</span>
-    <span>${fmt(p.amount)}</span>
-  </div>`).join('')}
-  ${paid > 0 ? `<div class="finance-row paid-row"><span>Total abonado</span><span>${fmt(paid)}</span></div>` : ''}
-  <div class="finance-row balance-row">
-    <span>${balance > 0 ? '⚠️ Saldo pendiente al check-in' : '✅ Sin saldo pendiente'}</span>
-    <span>${balance > 0 ? fmt(balance) : '—'}</span>
-  </div>
-</div>
-
-${notes ? `
-<div class="notes-card">
-  <div class="card-title" style="margin-bottom:8px">📝 Observaciones</div>
-  <div class="notes-text">${notes}</div>
-</div>` : ''}
-
-<div class="footer">
-  <p>Este documento es un comprobante interno de reserva generado por <strong>MILA PMS</strong>.<br>
-  Barranca de Termas — Departamentos Turísticos · <em>Documento emitido el ${now}</em></p>
-  <p style="margin-top:10px;font-size:10px;color:#94a3b8;border:1px solid #e2e8f0;display:inline-block;padding:4px 12px;border-radius:4px;letter-spacing:.04em">
-    ☒ Documento no válido como factura
-  </p>
-</div>
-
 </body></html>`);
     win.document.close();
     setTimeout(() => win.print(), 500);
