@@ -16,7 +16,8 @@ import { getHolidaysForYear, isWeekend } from '../services/arg-holidays.js';
 import { logAction } from '../services/audit-service.js';
 import { cachedQuery, cache } from '../services/supabase-cache.js';
 import { Bus, EVENTS } from '../services/event-bus.js';
-import { fetchMonthlyRates, fetchCustomColumns, monthsInRange, buildTariffGrid, groupRowsByPrice } from '../services/tariff-service.js';
+import { fetchMonthlyRates, fetchCustomColumns, monthsInRange, buildTariffGrid, groupRowsByPrice, getSuggestedNightlyPrices } from '../services/tariff-service.js';
+import { createQuote, updateQuote, markQuoteConverted, fetchOverlappingQuotes } from '../services/quote-service.js';
 
 const DAY_NAMES   = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
 const MONTH_NAMES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio',
@@ -2045,6 +2046,7 @@ export class Calendar {
     const sig = this._selectionAbort.signal;
 
     let startUnit = null, startDate = null, endDate = null, isBlocking = false;
+    let lastClientX = 0, lastClientY = 0;
 
     const onMouseDown = (e) => {
       if (e.target.closest('.bar')) return;
@@ -2064,6 +2066,7 @@ export class Calendar {
       if (!cell || cell.dataset.unitId !== startUnit) return;
       this._drag.moved = true;
       endDate = cell.dataset.date;
+      lastClientX = e.clientX; lastClientY = e.clientY;
 
       if (startDate && endDate) {
         const d1 = new Date(Math.min(+new Date(startDate+'T12:00:00'), +new Date(endDate+'T12:00:00')));
@@ -2140,7 +2143,9 @@ export class Calendar {
           if (softPeriods2.length && !(await this._confirmSoftPeriods(softPeriods2))) {
             startUnit = null; startDate = null; endDate = null; isBlocking = false; return;
           }
-          this.bookingForm.open({ unitId: startUnit, checkIn: d1, checkOut: toISODate(last) });
+          this._showRangeActionPopover(lastClientX, lastClientY, {
+            unitId: startUnit, checkIn: d1, checkOut: toISODate(last),
+          });
         }
       }
       startUnit = null; startDate = null; endDate = null; isBlocking = false;
@@ -2149,6 +2154,348 @@ export class Calendar {
     grid.addEventListener('mousedown', onMouseDown, { signal: sig });
     document.addEventListener('mousemove', onMouseMove, { signal: sig });
     document.addEventListener('mouseup', onMouseUp, { signal: sig });
+  }
+
+  // ══════════════════════════════════════════════════
+  // COTIZACIÓN RÁPIDA — mini planilla desde el calendario
+  // ══════════════════════════════════════════════════
+
+  // Al soltar el drag sobre un rango libre: menú chiquito "Reservar / Cotizar"
+  // pegado al mouse, en vez de saltar directo al form de reserva.
+  _showRangeActionPopover(x, y, { unitId, checkIn, checkOut }) {
+    document.getElementById('cal-range-popover')?.remove();
+
+    const unit = this.ctx.units?.find(u => u.id === unitId);
+    const nights = Math.round((new Date(checkOut) - new Date(checkIn)) / 86400000);
+    const fmtD = iso => new Date(iso + 'T12:00:00').toLocaleDateString('es-AR', { day: '2-digit', month: 'short' });
+
+    const pop = document.createElement('div');
+    pop.id = 'cal-range-popover';
+    const PAD = 10;
+    const left = Math.min(x + PAD, window.innerWidth - 210);
+    const top  = Math.min(y + PAD, window.innerHeight - 130);
+    pop.style.cssText = `position:fixed;left:${left}px;top:${top}px;z-index:3200;
+      background:var(--color-surface);border:1px solid var(--color-border);border-radius:12px;
+      box-shadow:0 12px 32px rgba(0,0,0,.25);padding:10px;width:200px;font-family:inherit`;
+    pop.innerHTML = `
+      <div style="font-size:.72rem;color:var(--color-text-3);margin-bottom:8px;line-height:1.3">
+        ${unit ? unit.name + ' · ' : ''}${fmtD(checkIn)} → ${fmtD(checkOut)}<br>
+        <strong style="color:var(--color-text)">${nights} noche${nights !== 1 ? 's' : ''}</strong>
+      </div>
+      <button id="rap-quote" style="width:100%;text-align:left;display:flex;align-items:center;gap:8px;
+        padding:8px 10px;margin-bottom:6px;border:none;border-radius:8px;background:var(--color-surface-2);
+        color:var(--color-text);font-size:.82rem;font-weight:600;cursor:pointer">
+        🧮 Cotizar
+      </button>
+      <button id="rap-book" style="width:100%;text-align:left;display:flex;align-items:center;gap:8px;
+        padding:8px 10px;border:none;border-radius:8px;background:var(--color-primary);
+        color:#fff;font-size:.82rem;font-weight:600;cursor:pointer">
+        🛏️ Reservar
+      </button>`;
+    document.body.appendChild(pop);
+
+    const close = () => pop.remove();
+    pop.querySelector('#rap-quote').addEventListener('click', () => {
+      close();
+      this._openQuickQuote({ unitId, checkIn, checkOut });
+    });
+    pop.querySelector('#rap-book').addEventListener('click', () => {
+      close();
+      this.bookingForm.open({ unitId, checkIn, checkOut });
+    });
+
+    setTimeout(() => {
+      document.addEventListener('click', function onDoc(e) {
+        if (!pop.contains(e.target)) { close(); document.removeEventListener('click', onDoc); }
+      });
+    }, 0);
+  }
+
+  // Panel principal — mini planilla de cotización (tipo Excel rápido)
+  async _openQuickQuote({ unitId, checkIn, checkOut }, existingQuote = null) {
+    document.getElementById('cal-quote-overlay')?.remove();
+
+    const unit = this.ctx.units?.find(u => u.id === unitId);
+    const fmtD = iso => new Date(iso + 'T12:00:00').toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' });
+
+    // Precio sugerido por noche: misma fuente que el Cuadro Tarifario
+    // (tarifa mensual + columnas personalizadas de fin de semana largo / temporada).
+    let nightsData;
+    if (existingQuote) {
+      nightsData = existingQuote.nights_detail.map(n => ({ ...n }));
+    } else {
+      const suggested = await getSuggestedNightlyPrices(this.db, this.ctx.hotelId, unitId, checkIn, checkOut);
+      nightsData = suggested.map(n => ({ date: n.date, price: n.price ?? 0, free: false, source: n.source, label: n.label }));
+    }
+
+    // Avisar si ya había otra cotización abierta sobre las mismas fechas
+    let overlapWarning = '';
+    if (!existingQuote) {
+      const overlaps = await fetchOverlappingQuotes(this.db, this.ctx.hotelId, unitId, checkIn, checkOut);
+      if (overlaps.length) {
+        overlapWarning = `<div style="font-size:.72rem;background:#f59e0b18;color:#b45309;border:1px solid #f59e0b40;
+          border-radius:8px;padding:7px 10px;margin-bottom:10px">
+          ⚠️ Ya hay ${overlaps.length} cotización${overlaps.length !== 1 ? 'es' : ''} sin convertir para fechas superpuestas.
+        </div>`;
+      }
+    }
+
+    let discountMode  = existingQuote?.discount_mode  ?? 'pct';
+    let discountValue = existingQuote?.discount_value  ?? 0;
+    let surchargeMode  = existingQuote?.surcharge_mode ?? 'pct';
+    let surchargeValue = existingQuote?.surcharge_value ?? 0;
+    let guestName = existingQuote?.guest_name ?? '';
+    let quoteNotes = existingQuote?.notes ?? '';
+
+    const ov = document.createElement('div');
+    ov.id = 'cal-quote-overlay';
+    ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:3300;display:flex;align-items:center;justify-content:center;padding:14px';
+    ov.innerHTML = `
+      <div id="cal-quote-modal" style="background:var(--color-surface);border-radius:16px;padding:20px;
+        width:640px;max-width:96vw;max-height:92vh;overflow-y:auto;box-shadow:0 24px 70px rgba(0,0,0,.4)">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+          <div style="font-weight:800;font-size:1.02rem">🧮 Cotización rápida</div>
+          <button id="cq-close" style="border:none;background:none;font-size:1.2rem;cursor:pointer;color:var(--color-text-3);line-height:1">✕</button>
+        </div>
+        <div style="font-size:.78rem;color:var(--color-text-3);margin-bottom:12px">
+          ${unit?.name ?? 'Unidad'} · ${fmtD(checkIn)} → ${fmtD(checkOut)}
+        </div>
+        ${overlapWarning}
+
+        <input id="cq-guest" type="text" placeholder="Nombre del huésped (opcional)" value="${guestName.replace(/"/g,'&quot;')}"
+          style="width:100%;box-sizing:border-box;padding:8px 10px;border-radius:8px;border:1px solid var(--color-border);
+          background:var(--color-surface-2);color:var(--color-text);font-size:.82rem;margin-bottom:12px">
+
+        <div style="font-size:.7rem;font-weight:700;color:var(--color-text-3);margin-bottom:6px">
+          PRECIO POR NOCHE · tocá una celda para editarla
+        </div>
+        <div id="cq-grid" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px"></div>
+
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
+          <div style="flex:1;min-width:150px;background:var(--color-surface-2);border-radius:10px;padding:8px 10px">
+            <div style="font-size:.68rem;color:var(--color-text-3);margin-bottom:4px">Descuento</div>
+            <div style="display:flex;gap:5px">
+              <input id="cq-disc-val" type="number" min="0" step="any" value="${discountValue || ''}" placeholder="0"
+                style="width:0;flex:1;padding:5px 6px;border-radius:6px;border:1px solid var(--color-border);
+                background:var(--color-surface);color:var(--color-text);font-size:.82rem">
+              <select id="cq-disc-mode" style="border-radius:6px;border:1px solid var(--color-border);
+                background:var(--color-surface);color:var(--color-text);font-size:.78rem;padding:0 4px">
+                <option value="pct" ${discountMode === 'pct' ? 'selected' : ''}>%</option>
+                <option value="amt" ${discountMode === 'amt' ? 'selected' : ''}>$</option>
+              </select>
+            </div>
+          </div>
+          <div style="flex:1;min-width:150px;background:var(--color-surface-2);border-radius:10px;padding:8px 10px">
+            <div style="font-size:.68rem;color:var(--color-text-3);margin-bottom:4px">Recargo</div>
+            <div style="display:flex;gap:5px">
+              <input id="cq-surc-val" type="number" min="0" step="any" value="${surchargeValue || ''}" placeholder="0"
+                style="width:0;flex:1;padding:5px 6px;border-radius:6px;border:1px solid var(--color-border);
+                background:var(--color-surface);color:var(--color-text);font-size:.82rem">
+              <select id="cq-surc-mode" style="border-radius:6px;border:1px solid var(--color-border);
+                background:var(--color-surface);color:var(--color-text);font-size:.78rem;padding:0 4px">
+                <option value="pct" ${surchargeMode === 'pct' ? 'selected' : ''}>%</option>
+                <option value="amt" ${surchargeMode === 'amt' ? 'selected' : ''}>$</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <textarea id="cq-notes" placeholder="Notas (ej: late check-out incluido, condición especial...)"
+          style="width:100%;box-sizing:border-box;min-height:44px;padding:8px 10px;border-radius:8px;
+          border:1px solid var(--color-border);background:var(--color-surface-2);color:var(--color-text);
+          font-size:.78rem;resize:vertical;margin-bottom:14px">${quoteNotes}</textarea>
+
+        <div style="border-top:1px solid var(--color-border);padding-top:12px;display:flex;
+          align-items:center;justify-content:space-between;margin-bottom:16px">
+          <div id="cq-summary-nights" style="font-size:.82rem;color:var(--color-text-2)"></div>
+          <div id="cq-summary-total" style="font-size:1.15rem;font-weight:800;color:var(--color-text)"></div>
+        </div>
+
+        <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">
+          <button id="cq-cancel" style="padding:9px 16px;border-radius:9px;border:1px solid var(--color-border);
+            background:none;color:var(--color-text-2);font-size:.82rem;cursor:pointer;font-weight:600">Cancelar</button>
+          <button id="cq-save" style="padding:9px 16px;border-radius:9px;border:1px solid var(--color-border);
+            background:var(--color-surface-2);color:var(--color-text);font-size:.82rem;cursor:pointer;font-weight:700">
+            💾 Guardar cotización</button>
+          <button id="cq-convert" style="padding:9px 18px;border-radius:9px;border:none;
+            background:var(--color-primary);color:#fff;font-size:.82rem;cursor:pointer;font-weight:800">
+            ✓ Convertir en reserva</button>
+        </div>
+      </div>`;
+    document.body.appendChild(ov);
+
+    // ── Render de la planilla (una celda por noche) ──
+    const grid = document.getElementById('cq-grid');
+    const renderCell = (n) => {
+      const d = new Date(n.date + 'T12:00:00');
+      const wknd = isWeekend(n.date);
+      const dayLbl = d.toLocaleDateString('es-AR', { weekday: 'short' }).replace('.', '');
+      const dateLbl = d.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' });
+      const cell = document.createElement('div');
+      cell.className = 'cq-cell';
+      cell.dataset.date = n.date;
+      cell.style.cssText = `min-width:78px;flex:1 0 78px;border:1px solid var(--color-border);
+        border-radius:9px;padding:6px 7px;background:${n.free ? '#22c55e12' : wknd ? 'var(--color-surface-2)' : 'var(--color-surface)'};
+        ${wknd && !n.free ? 'border-color:#f59e0b55' : ''}`;
+      cell.innerHTML = `
+        <div style="font-size:.62rem;color:var(--color-text-3);display:flex;justify-content:space-between">
+          <span style="text-transform:capitalize">${dayLbl}</span><span>${dateLbl}</span>
+        </div>
+        ${n.label ? `<div style="font-size:.56rem;color:#f59e0b;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${n.label}</div>` : ''}
+        <input type="number" min="0" step="any" value="${n.free ? 0 : n.price}" ${n.free ? 'disabled' : ''}
+          data-price-input
+          style="width:100%;box-sizing:border-box;margin-top:3px;padding:3px 4px;border-radius:6px;
+          border:1px solid var(--color-border);background:var(--color-surface);color:var(--color-text);
+          font-size:.82rem;font-weight:700;${n.free ? 'opacity:.5' : ''}">
+        <label style="display:flex;align-items:center;gap:4px;margin-top:4px;font-size:.6rem;color:var(--color-text-3);cursor:pointer">
+          <input type="checkbox" data-free-toggle ${n.free ? 'checked' : ''} style="margin:0"> sin cargo
+        </label>`;
+      return cell;
+    };
+
+    grid.innerHTML = '';
+    nightsData.forEach(n => grid.appendChild(renderCell(n)));
+
+    const recalc = () => {
+      let subtotal = 0, chargedNights = 0;
+      grid.querySelectorAll('.cq-cell').forEach(cell => {
+        const date  = cell.dataset.date;
+        const n     = nightsData.find(x => x.date === date);
+        const free  = cell.querySelector('[data-free-toggle]').checked;
+        const input = cell.querySelector('[data-price-input]');
+        n.free  = free;
+        n.price = free ? 0 : (parseFloat(input.value) || 0);
+        input.disabled = free;
+        input.style.opacity = free ? '.5' : '1';
+        cell.style.background = free ? '#22c55e12' : (isWeekend(date) ? 'var(--color-surface-2)' : 'var(--color-surface)');
+        if (!free) { subtotal += n.price; chargedNights++; }
+      });
+
+      const discMode = document.getElementById('cq-disc-mode').value;
+      const discRaw  = parseFloat(document.getElementById('cq-disc-val').value) || 0;
+      const discAmt  = discMode === 'pct' ? Math.round(subtotal * discRaw / 100) : discRaw;
+
+      const surcMode = document.getElementById('cq-surc-mode').value;
+      const surcRaw  = parseFloat(document.getElementById('cq-surc-val').value) || 0;
+      const surcAmt  = surcMode === 'pct' ? Math.round(subtotal * surcRaw / 100) : surcRaw;
+
+      const total = Math.max(0, subtotal - discAmt + surcAmt);
+      const freeCount = nightsData.filter(n => n.free).length;
+
+      document.getElementById('cq-summary-nights').innerHTML =
+        `${nightsData.length} noche${nightsData.length !== 1 ? 's' : ''}` +
+        (freeCount ? ` <span style="color:#22c55e">· ${freeCount} sin cargo</span>` : '') +
+        (discAmt ? ` <span style="color:#ef4444">· −${formatARS(discAmt)}</span>` : '') +
+        (surcAmt ? ` <span style="color:#f59e0b">· +${formatARS(surcAmt)}</span>` : '');
+      document.getElementById('cq-summary-total').textContent = `TOTAL ${formatARS(total)}`;
+
+      return { subtotal, discAmt, surcAmt, total, discMode, discRaw, surcMode, surcRaw };
+    };
+
+    grid.addEventListener('input', recalc);
+    grid.addEventListener('change', recalc);
+    document.getElementById('cq-disc-val').addEventListener('input', recalc);
+    document.getElementById('cq-disc-mode').addEventListener('change', recalc);
+    document.getElementById('cq-surc-val').addEventListener('input', recalc);
+    document.getElementById('cq-surc-mode').addEventListener('change', recalc);
+    recalc();
+
+    const close = () => ov.remove();
+    document.getElementById('cq-close').addEventListener('click', close);
+    document.getElementById('cq-cancel').addEventListener('click', close);
+    ov.addEventListener('click', e => { if (e.target === ov) close(); });
+
+    const buildPayload = () => {
+      const calc = recalc();
+      return {
+        hotel_id:        this.ctx.hotelId,
+        unit_id:         unitId,
+        check_in:        checkIn,
+        check_out:       checkOut,
+        nights_detail:   nightsData.map(n => ({ date: n.date, price: n.price, free: !!n.free })),
+        discount_mode:   calc.discRaw ? calc.discMode : null,
+        discount_value:  calc.discRaw || 0,
+        surcharge_mode:  calc.surcRaw ? calc.surcMode : null,
+        surcharge_value: calc.surcRaw || 0,
+        subtotal:        calc.subtotal,
+        total:            calc.total,
+        guest_name:       document.getElementById('cq-guest').value.trim() || null,
+        notes:            document.getElementById('cq-notes').value.trim() || null,
+        created_by:       AppContext.user?.id ?? null,
+      };
+    };
+
+    document.getElementById('cq-save').addEventListener('click', async () => {
+      const payload = buildPayload();
+      const btn = document.getElementById('cq-save');
+      btn.disabled = true; btn.textContent = 'Guardando…';
+      try {
+        const { data, error } = existingQuote
+          ? await updateQuote(this.db, existingQuote.id, payload)
+          : await createQuote(this.db, payload);
+        if (error) throw error;
+        showToast('Cotización guardada ✓', 'success');
+        close();
+      } catch (err) {
+        showToast('Error al guardar la cotización', 'error');
+        btn.disabled = false; btn.textContent = '💾 Guardar cotización';
+      }
+    });
+
+    document.getElementById('cq-convert').addEventListener('click', async () => {
+      const payload = buildPayload();
+      if (!payload.total || payload.nights_detail.every(n => n.free)) {
+        if (!confirm('El total es $0 — ¿convertir en reserva de todas formas?')) return;
+      }
+
+      // Guardar (o actualizar) la cotización primero, para no perder el
+      // detalle noche a noche aunque la reserva quede con precio promedio.
+      const { data: savedQuote, error } = existingQuote
+        ? await updateQuote(this.db, existingQuote.id, payload)
+        : await createQuote(this.db, payload);
+      if (error) { showToast('Error al guardar la cotización', 'error'); return; }
+
+      const billableNights = payload.nights_detail.filter(n => !n.free).length;
+      const avgPrice = billableNights > 0 ? Math.round(payload.total / billableNights) : 0;
+      const freeCount = payload.nights_detail.length - billableNights;
+
+      // El form de reserva sólo admite precio único por noche + % desc. —
+      // le pasamos el promedio y el desglose exacto queda en las notas
+      // para que no se pierda lo que se cotizó.
+      const detailLines = payload.nights_detail
+        .map(n => `${this._fmtShort(n.date)}: ${n.free ? 'sin cargo' : formatARS(n.price)}`)
+        .join(' · ');
+      const notesForBooking = [
+        '🧮 Cotización aplicada:',
+        detailLines,
+        `TOTAL cotizado: ${formatARS(payload.total)}`,
+        payload.notes ? `Notas: ${payload.notes}` : '',
+      ].filter(Boolean).join('\n');
+
+      close();
+
+      const unsub = Bus.on(EVENTS.BOOKING_CREATED, ({ bookingId }) => {
+        markQuoteConverted(this.db, savedQuote.id, bookingId);
+        unsub();
+      });
+
+      this.bookingForm.open({
+        unitId, checkIn, checkOut,
+        price: avgPrice,
+        notes: notesForBooking,
+      });
+      if (payload.guest_name) {
+        const [fn, ...rest] = payload.guest_name.split(' ');
+        const fnEl = document.getElementById('f-firstname');
+        const lnEl = document.getElementById('f-lastname');
+        if (fnEl) fnEl.value = fn;
+        if (lnEl) lnEl.value = rest.join(' ');
+      }
+
+      if (freeCount > 0) {
+        showToast(`Reserva precargada con precio promedio (había ${freeCount} noche${freeCount !== 1 ? 's' : ''} sin cargo) — el detalle quedó en Notas`, 'info');
+      }
+    });
   }
 
   // ── Bloquear rango ──────────────────────────────

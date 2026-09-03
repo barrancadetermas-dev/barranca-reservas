@@ -3,7 +3,7 @@
 // Funciones compartidas para Calendario (PC), tab mobile
 // y el editor en Configuración.
 // ══════════════════════════════════════════════════
-import { AppContext } from '../supabase-config.js';
+import { AppContext, toISODate } from '../supabase-config.js';
 
 const MONTH_NAMES = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
 export { MONTH_NAMES };
@@ -55,6 +55,46 @@ export async function upsertCustomPrice(db, customColumnId, unitId, fields) {
   return db.from('tariff_custom_prices').upsert({
     custom_column_id: customColumnId, unit_id: unitId, ...fields,
   }, { onConflict: 'custom_column_id,unit_id' });
+}
+
+// ── Precio sugerido noche a noche para una unidad en un rango ──────
+// Reutiliza EXACTAMENTE la misma fuente que el Cuadro Tarifario:
+// 1) Columna personalizada (ej: "Finde largo 21/Nov") si la fecha cae
+//    dentro de su rango y tiene precio cargado para esa unidad → prioridad.
+// 2) Si no, la tarifa mensual cargada para esa unidad ese mes.
+// 3) Si no hay nada cargado, precio null (el usuario lo completa a mano).
+// Devuelve un array de { date, price, source, label } — uno por noche
+// (check_out NO incluido, como toda noche de hotelería).
+export async function getSuggestedNightlyPrices(db, hotelId, unitId, checkInISO, checkOutISO) {
+  const months = monthsInRange(checkInISO, checkOutISO);
+  const [rates, customCols] = await Promise.all([
+    fetchMonthlyRates(db, hotelId, months),
+    fetchCustomColumns(db, hotelId, checkInISO, checkOutISO),
+  ]);
+
+  const rateMap = new Map();
+  rates.forEach(r => { if (r.unit_id === unitId) rateMap.set(`${r.year}|${r.month}`, r); });
+
+  const nights = [];
+  let d = new Date(checkInISO + 'T12:00:00');
+  const end = new Date(checkOutISO + 'T12:00:00');
+  while (d < end) {
+    const dateISO = toISODate(d);
+    // Buscar columna personalizada vigente para esta fecha/unidad
+    const col = customCols.find(c =>
+      (c.date_from ?? '0000-01-01') <= dateISO && (c.date_to ?? '9999-12-31') >= dateISO &&
+      c.tariff_custom_prices?.some(p => p.unit_id === unitId && p.price != null)
+    );
+    if (col) {
+      const p = col.tariff_custom_prices.find(x => x.unit_id === unitId);
+      nights.push({ date: dateISO, price: p.price, source: 'custom', label: col.title });
+    } else {
+      const r = rateMap.get(`${d.getFullYear()}|${d.getMonth() + 1}`);
+      nights.push({ date: dateISO, price: r?.price_per_night ?? null, source: r ? 'monthly' : 'none', label: null });
+    }
+    d.setDate(d.getDate() + 1);
+  }
+  return nights;
 }
 
 // ── Helper: meses distintos cubiertos por un rango de fechas (YYYY-MM-DD) ──
