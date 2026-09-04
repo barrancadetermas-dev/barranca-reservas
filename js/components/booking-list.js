@@ -1991,7 +1991,9 @@ export class BookingList {
         uid:   bu.unit_id,
         name:  bu.units?.name ?? '—',
         color: bu.units?.color ?? '#94A3B8',
-        total: (bu.price_per_night ?? 0) * nights,
+        // Restar las noches sin cargo de la reserva (bonificadas, no se
+        // cobran) — si no, el desglose por depto sobreestima el total.
+        total: (bu.price_per_night ?? 0) * Math.max(0, nights - (booking.free_nights ?? 0)),
       }));
       const sumTotals   = unitTotals.reduce((s,u) => s + u.total, 0) || 1;
       const generalPaid = bPayments.filter(p => !p.unit_id).reduce((s,p) => s + (p.amount ?? 0), 0);

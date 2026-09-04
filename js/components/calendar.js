@@ -2244,6 +2244,9 @@ export class Calendar {
     let discountValue = existingQuote?.discount_value  ?? 0;
     let surchargeMode  = existingQuote?.surcharge_mode ?? 'pct';
     let surchargeValue = existingQuote?.surcharge_value ?? 0;
+    let lateCheckout       = existingQuote?.late_checkout ?? false;
+    let lateCheckoutPaid   = existingQuote?.late_checkout_paid ?? true;
+    let lateCheckoutAmount = existingQuote?.late_checkout_amount ?? '';
     let guestName = existingQuote?.guest_name ?? '';
     let quoteNotes = existingQuote?.notes ?? '';
 
@@ -2271,36 +2274,52 @@ export class Calendar {
         </div>
         <div id="cq-grid" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px"></div>
 
-        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
-          <div style="flex:1;min-width:150px;background:var(--color-surface-2);border-radius:10px;padding:8px 10px">
-            <div style="font-size:.68rem;color:var(--color-text-3);margin-bottom:4px">Descuento</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1.3fr;gap:8px;margin-bottom:14px">
+          <div style="background:var(--color-surface-2);border-radius:10px;padding:8px 10px">
+            <div style="font-size:.68rem;color:var(--color-text-3);margin-bottom:4px;font-weight:600">DESCUENTO</div>
             <div style="display:flex;gap:5px">
               <input id="cq-disc-val" type="number" min="0" step="any" value="${discountValue || ''}" placeholder="0"
-                style="width:0;flex:1;padding:5px 6px;border-radius:6px;border:1px solid var(--color-border);
+                style="min-width:0;flex:1 1 auto;padding:5px 6px;border-radius:6px;border:1px solid var(--color-border);
                 background:var(--color-surface);color:var(--color-text);font-size:.82rem">
-              <select id="cq-disc-mode" style="border-radius:6px;border:1px solid var(--color-border);
-                background:var(--color-surface);color:var(--color-text);font-size:.78rem;padding:0 4px">
+              <select id="cq-disc-mode" style="flex:0 0 46px;width:46px;padding:5px 2px;border-radius:6px;
+                border:1px solid var(--color-border);background:var(--color-surface);color:var(--color-text);font-size:.78rem">
                 <option value="pct" ${discountMode === 'pct' ? 'selected' : ''}>%</option>
                 <option value="amt" ${discountMode === 'amt' ? 'selected' : ''}>$</option>
               </select>
             </div>
           </div>
-          <div style="flex:1;min-width:150px;background:var(--color-surface-2);border-radius:10px;padding:8px 10px">
-            <div style="font-size:.68rem;color:var(--color-text-3);margin-bottom:4px">Recargo</div>
+          <div style="background:var(--color-surface-2);border-radius:10px;padding:8px 10px">
+            <div style="font-size:.68rem;color:var(--color-text-3);margin-bottom:4px;font-weight:600">RECARGO</div>
             <div style="display:flex;gap:5px">
               <input id="cq-surc-val" type="number" min="0" step="any" value="${surchargeValue || ''}" placeholder="0"
-                style="width:0;flex:1;padding:5px 6px;border-radius:6px;border:1px solid var(--color-border);
+                style="min-width:0;flex:1 1 auto;padding:5px 6px;border-radius:6px;border:1px solid var(--color-border);
                 background:var(--color-surface);color:var(--color-text);font-size:.82rem">
-              <select id="cq-surc-mode" style="border-radius:6px;border:1px solid var(--color-border);
-                background:var(--color-surface);color:var(--color-text);font-size:.78rem;padding:0 4px">
+              <select id="cq-surc-mode" style="flex:0 0 46px;width:46px;padding:5px 2px;border-radius:6px;
+                border:1px solid var(--color-border);background:var(--color-surface);color:var(--color-text);font-size:.78rem">
                 <option value="pct" ${surchargeMode === 'pct' ? 'selected' : ''}>%</option>
                 <option value="amt" ${surchargeMode === 'amt' ? 'selected' : ''}>$</option>
               </select>
             </div>
           </div>
+          <div style="background:var(--color-surface-2);border-radius:10px;padding:8px 10px">
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none;margin-bottom:4px">
+              <input type="checkbox" id="cq-lco" ${lateCheckout ? 'checked' : ''} style="width:14px;height:14px;cursor:pointer">
+              <span style="font-size:.68rem;font-weight:600;color:var(--color-text-3)">🌅 LATE CHECK-OUT</span>
+            </label>
+            <div id="cq-lco-opts" style="display:${lateCheckout ? 'flex' : 'none'};flex-direction:column;gap:5px">
+              <label style="display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none">
+                <input type="checkbox" id="cq-lco-paid" ${lateCheckoutPaid ? 'checked' : ''} style="width:13px;height:13px;cursor:pointer">
+                <span style="font-size:.72rem;color:var(--color-text-2)">${lateCheckoutPaid ? '✅ Se cobra' : '🎁 Sin cargo'}</span>
+              </label>
+              <input id="cq-lco-amount" type="number" min="0" step="500" value="${lateCheckoutAmount || ''}"
+                placeholder="½ noche" ${lateCheckoutPaid ? '' : 'disabled'}
+                style="width:100%;box-sizing:border-box;padding:4px 6px;border-radius:6px;border:1px solid var(--color-border);
+                background:var(--color-surface);color:var(--color-text);font-size:.78rem;${lateCheckoutPaid ? '' : 'opacity:.5'}">
+            </div>
+          </div>
         </div>
 
-        <textarea id="cq-notes" placeholder="Notas (ej: late check-out incluido, condición especial...)"
+        <textarea id="cq-notes" placeholder="Notas (ej: condición especial, forma de pago acordada...)"
           style="width:100%;box-sizing:border-box;min-height:44px;padding:8px 10px;border-radius:8px;
           border:1px solid var(--color-border);background:var(--color-surface-2);color:var(--color-text);
           font-size:.78rem;resize:vertical;margin-bottom:14px">${quoteNotes}</textarea>
@@ -2379,17 +2398,23 @@ export class Calendar {
       const surcRaw  = parseFloat(document.getElementById('cq-surc-val').value) || 0;
       const surcAmt  = surcMode === 'pct' ? Math.round(subtotal * surcRaw / 100) : surcRaw;
 
-      const total = Math.max(0, subtotal - discAmt + surcAmt);
+      const lcoOn    = document.getElementById('cq-lco').checked;
+      const lcoPaid  = lcoOn && document.getElementById('cq-lco-paid').checked;
+      const avgNight = chargedNights > 0 ? subtotal / chargedNights : 0;
+      const lcoAmt   = lcoPaid ? (parseFloat(document.getElementById('cq-lco-amount').value) || Math.round(avgNight * 0.5)) : 0;
+
+      const total = Math.max(0, subtotal - discAmt + surcAmt + lcoAmt);
       const freeCount = nightsData.filter(n => n.free).length;
 
       document.getElementById('cq-summary-nights').innerHTML =
         `${nightsData.length} noche${nightsData.length !== 1 ? 's' : ''}` +
         (freeCount ? ` <span style="color:#22c55e">· ${freeCount} sin cargo</span>` : '') +
         (discAmt ? ` <span style="color:#ef4444">· −${formatARS(discAmt)}</span>` : '') +
-        (surcAmt ? ` <span style="color:#f59e0b">· +${formatARS(surcAmt)}</span>` : '');
+        (surcAmt ? ` <span style="color:#f59e0b">· +${formatARS(surcAmt)}</span>` : '') +
+        (lcoOn ? ` <span style="color:#8b5cf6">· 🌅 ${lcoPaid ? '+' + formatARS(lcoAmt) : 'sin cargo'}</span>` : '');
       document.getElementById('cq-summary-total').textContent = `TOTAL ${formatARS(total)}`;
 
-      return { subtotal, discAmt, surcAmt, total, discMode, discRaw, surcMode, surcRaw };
+      return { subtotal, discAmt, surcAmt, lcoOn, lcoPaid, lcoAmt, total, discMode, discRaw, surcMode, surcRaw };
     };
 
     grid.addEventListener('input', recalc);
@@ -2398,6 +2423,26 @@ export class Calendar {
     document.getElementById('cq-disc-mode').addEventListener('change', recalc);
     document.getElementById('cq-surc-val').addEventListener('input', recalc);
     document.getElementById('cq-surc-mode').addEventListener('change', recalc);
+
+    // Late check-out: mismo patrón que el form de reserva — el checkbox
+    // principal muestra "¿Se cobra?", que a su vez muestra el monto.
+    const lcoBox   = document.getElementById('cq-lco');
+    const lcoOpts  = document.getElementById('cq-lco-opts');
+    const lcoPaidCb = document.getElementById('cq-lco-paid');
+    const lcoAmtEl = document.getElementById('cq-lco-amount');
+    const lcoPaidLabel = () => lcoPaidCb.nextElementSibling;
+    lcoBox.addEventListener('change', () => {
+      lcoOpts.style.display = lcoBox.checked ? 'flex' : 'none';
+      recalc();
+    });
+    lcoPaidCb.addEventListener('change', () => {
+      lcoAmtEl.disabled = !lcoPaidCb.checked;
+      lcoAmtEl.style.opacity = lcoPaidCb.checked ? '1' : '.5';
+      lcoPaidLabel().textContent = lcoPaidCb.checked ? '✅ Se cobra' : '🎁 Sin cargo';
+      recalc();
+    });
+    lcoAmtEl.addEventListener('input', recalc);
+
     recalc();
 
     const close = () => ov.remove();
@@ -2417,6 +2462,9 @@ export class Calendar {
         discount_value:  calc.discRaw || 0,
         surcharge_mode:  calc.surcRaw ? calc.surcMode : null,
         surcharge_value: calc.surcRaw || 0,
+        late_checkout:        calc.lcoOn,
+        late_checkout_paid:   calc.lcoOn ? calc.lcoPaid : null,
+        late_checkout_amount: calc.lcoOn && calc.lcoPaid ? calc.lcoAmt : null,
         subtotal:        calc.subtotal,
         total:            calc.total,
         guest_name:       document.getElementById('cq-guest').value.trim() || null,
@@ -2456,12 +2504,25 @@ export class Calendar {
       if (error) { showToast('Error al guardar la cotización', 'error'); return; }
 
       const billableNights = payload.nights_detail.filter(n => !n.free).length;
-      const avgPrice = billableNights > 0 ? Math.round(payload.total / billableNights) : 0;
-      const freeCount = payload.nights_detail.length - billableNights;
+      const freeCount      = payload.nights_detail.length - billableNights;
 
-      // El form de reserva sólo admite precio único por noche + % desc. —
-      // le pasamos el promedio y el desglose exacto queda en las notas
-      // para que no se pierda lo que se cotizó.
+      // IMPORTANTE — "noche sin cargo" es una noche de estadía BONIFICADA,
+      // no una noche extra a cobrar. El form de reserva ya tiene su propio
+      // campo nativo `f-free-nights` (cantidad de noches) que resta del
+      // total facturable: billable = noches_totales − noches_sin_cargo.
+      // Antes acá promediábamos el total ya neto de todo entre TODAS las
+      // noches, y como el form multiplica precio × noches_totales (sin
+      // saber de la noche gratis), esa noche terminaba cobrándose igual.
+      // Ahora: el precio que mandamos es el promedio de las noches PAGAS
+      // únicamente, y la cantidad de noches sin cargo se traslada tal
+      // cual al campo nativo — así el form la resta correctamente y las
+      // fechas de check-in/check-out no se tocan (sigue siendo la misma
+      // estadía completa, solo que 1 noche queda bonificada).
+      const avgPrice = billableNights > 0 ? Math.round(payload.subtotal / billableNights) : 0;
+
+      // El form de reserva sólo admite un precio único por noche —
+      // el desglose exacto (que puede variar por noche, ej. finde largo)
+      // queda además en las notas para no perder el detalle cotizado.
       const detailLines = payload.nights_detail
         .map(n => `${this._fmtShort(n.date)}: ${n.free ? 'sin cargo' : formatARS(n.price)}`)
         .join(' · ');
@@ -2484,6 +2545,14 @@ export class Calendar {
         price: avgPrice,
         notes: notesForBooking,
       });
+
+      const setAndFire = (id, val, evt = 'input') => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.value = val;
+        el.dispatchEvent(new Event(evt, { bubbles: true }));
+      };
+
       if (payload.guest_name) {
         const [fn, ...rest] = payload.guest_name.split(' ');
         const fnEl = document.getElementById('f-firstname');
@@ -2492,8 +2561,43 @@ export class Calendar {
         if (lnEl) lnEl.value = rest.join(' ');
       }
 
+      // ── Noches sin cargo: dato que se traslada explícitamente ──
+      if (freeCount > 0) setAndFire('f-free-nights', freeCount);
+
+      // ── Descuento / recargo: van a sus propios campos nativos,
+      //    ya NO se mezclan dentro del precio promedio ──
+      if (payload.discount_value) {
+        const modeEl = document.getElementById('f-discount-mode');
+        if (modeEl) modeEl.value = payload.discount_mode;
+        setAndFire('f-discount', payload.discount_value);
+      }
+      if (payload.surcharge_value) {
+        const modeEl = document.getElementById('f-surcharge-mode');
+        if (modeEl) modeEl.value = payload.surcharge_mode;
+        setAndFire('f-surcharge', payload.surcharge_value);
+      }
+
+      // Trasladar el Late Check-out tal cual quedó cotizado — mismos
+      // campos y misma lógica que ya usa el form de reserva.
+      if (payload.late_checkout) {
+        const lcoEl = document.getElementById('f-late-checkout');
+        if (lcoEl) {
+          lcoEl.checked = true;
+          lcoEl.dispatchEvent(new Event('change', { bubbles: true }));
+          const paidEl = document.getElementById('f-late-checkout-paid');
+          if (paidEl) {
+            paidEl.checked = !!payload.late_checkout_paid;
+            paidEl.dispatchEvent(new Event('change', { bubbles: true }));
+            if (payload.late_checkout_paid && payload.late_checkout_amount) {
+              const amtEl = document.getElementById('f-late-checkout-amount');
+              if (amtEl) { amtEl.value = payload.late_checkout_amount; amtEl.dispatchEvent(new Event('input', { bubbles: true })); }
+            }
+          }
+        }
+      }
+
       if (freeCount > 0) {
-        showToast(`Reserva precargada con precio promedio (había ${freeCount} noche${freeCount !== 1 ? 's' : ''} sin cargo) — el detalle quedó en Notas`, 'info');
+        showToast(`Reserva precargada: ${freeCount} noche${freeCount !== 1 ? 's' : ''} sin cargo aplicada${freeCount !== 1 ? 's' : ''} — no se cobra${freeCount !== 1 ? 'n' : ''}`, 'info');
       }
     });
   }

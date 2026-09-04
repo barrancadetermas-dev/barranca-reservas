@@ -193,7 +193,7 @@ export class Statistics {
     try {
       const { data: bookings } = await this.db
         .from('bookings')
-        .select('id, check_in, check_out, price_per_night, total_amount, status, nights, source, booking_units(unit_id, price_per_night)')
+        .select('id, check_in, check_out, price_per_night, total_amount, status, nights, free_nights, source, booking_units(unit_id, price_per_night)')
         .eq('hotel_id', this.ctx.hotelId)
         .neq('status', 'cancelled').neq('status', 'blocked')
         .lte('check_in', lastDayStr).gt('check_out', firstDay);
@@ -362,7 +362,13 @@ export class Statistics {
         // Si no existe (reserva vieja o unidad única sin precio propio), repartir
         // el total de la reserva en partes iguales entre sus unidades (fallback).
         if (unitPrice != null && unitPrice > 0) {
-          statsMap[unit_id].revenue += unitPrice * nights;
+          // Noches sin cargo: prorratear su proporción dentro de la ventana
+          // del reporte (nights puede venir recortado al mes visible) —
+          // ocupan la unidad igual (no tocan nightsOcc) pero no facturan.
+          const totalNights = Math.round((new Date(b.check_out + 'T00:00:00') - new Date(b.check_in + 'T00:00:00')) / 86400000);
+          const freeNights  = b.free_nights ?? 0;
+          const billableRatio = totalNights > 0 ? Math.max(0, totalNights - freeNights) / totalNights : 1;
+          statsMap[unit_id].revenue += unitPrice * nights * billableRatio;
         } else {
           const totalNights = Math.round((new Date(b.check_out + 'T00:00:00') - new Date(b.check_in + 'T00:00:00')) / 86400000);
           if (totalNights > 0) {

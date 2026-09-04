@@ -21,6 +21,9 @@ CREATE TABLE IF NOT EXISTS quick_quotes (
   discount_value     NUMERIC DEFAULT 0,
   surcharge_mode     TEXT,              -- 'pct' | 'amt' | null
   surcharge_value    NUMERIC DEFAULT 0,
+  late_checkout        BOOLEAN DEFAULT false,
+  late_checkout_paid   BOOLEAN,          -- null si late_checkout=false
+  late_checkout_amount NUMERIC,          -- null = sin cargo / no aplica
   subtotal           NUMERIC NOT NULL DEFAULT 0,
   total              NUMERIC NOT NULL DEFAULT 0,
   guest_name         TEXT,
@@ -46,3 +49,9 @@ DO $$ BEGIN
       WITH CHECK (hotel_id IN (SELECT hotel_id FROM hotel_users WHERE user_id = auth.uid()));
   END IF;
 END $$;
+
+-- ── Si la tabla ya existía de una corrida anterior de este script
+--    (CREATE TABLE IF NOT EXISTS no agrega columnas nuevas) ──────────
+ALTER TABLE quick_quotes ADD COLUMN IF NOT EXISTS late_checkout        BOOLEAN DEFAULT false;
+ALTER TABLE quick_quotes ADD COLUMN IF NOT EXISTS late_checkout_paid   BOOLEAN;
+ALTER TABLE quick_quotes ADD COLUMN IF NOT EXISTS late_checkout_amount NUMERIC;

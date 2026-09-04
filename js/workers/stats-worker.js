@@ -43,7 +43,15 @@ function computeUnitStats({ bookings, units, firstDay, lastDay, daysInMonth }) {
       s.totalPriceNights += nights * (b.price_per_night ?? 0);
       // Precio real de la unidad si existe; si no, repartir el total entre unidades (fallback)
       if (unitPrice != null && unitPrice > 0) {
-        s.revenue += unitPrice * nights;
+        // Noches sin cargo: prorratear su proporción dentro de la ventana
+        // del reporte (nights puede venir recortado al mes visible) —
+        // ocupan la unidad igual (no tocan nightsOcc) pero no facturan.
+        const totalNightsFull = Math.round(
+          (new Date(b.check_out + 'T00:00:00') - new Date(b.check_in + 'T00:00:00')) / 86400000
+        );
+        const freeNights   = b.free_nights ?? 0;
+        const billableRatio = totalNightsFull > 0 ? Math.max(0, totalNightsFull - freeNights) / totalNightsFull : 1;
+        s.revenue += unitPrice * nights * billableRatio;
       } else {
         const totalNights = Math.round(
           (new Date(b.check_out + 'T00:00:00') - new Date(b.check_in + 'T00:00:00')) / 86400000
