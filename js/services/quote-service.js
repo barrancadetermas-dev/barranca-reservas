@@ -33,6 +33,19 @@ export async function fetchOverlappingQuotes(db, hotelId, unitId, checkInISO, ch
   return data ?? [];
 }
 
+// Reservas REALES que se superponen con el rango — para no dejar
+// cotizar (ni mucho menos convertir) sobre noches ya ocupadas.
+export async function fetchOverlappingBookings(db, hotelId, unitId, checkInISO, checkOutISO) {
+  const { data, error } = await db.from('bookings')
+    .select('id,check_in,check_out,status,guests!bookings_guest_id_fkey(first_name,last_name),booking_units(unit_id)')
+    .eq('hotel_id', hotelId)
+    .neq('status', 'cancelled')
+    .lt('check_in', checkOutISO).gt('check_out', checkInISO)
+    .order('check_in', { ascending: true });
+  if (error) { console.warn('[Quote] fetchOverlappingBookings:', error.message); return []; }
+  return (data ?? []).filter(b => (b.booking_units ?? []).some(bu => bu.unit_id === unitId));
+}
+
 export async function deleteQuote(db, id) {
   return db.from('quick_quotes').delete().eq('id', id);
 }

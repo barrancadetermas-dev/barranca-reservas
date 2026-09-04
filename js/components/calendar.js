@@ -17,7 +17,7 @@ import { logAction } from '../services/audit-service.js';
 import { cachedQuery, cache } from '../services/supabase-cache.js';
 import { Bus, EVENTS } from '../services/event-bus.js';
 import { fetchMonthlyRates, fetchCustomColumns, monthsInRange, buildTariffGrid, groupRowsByPrice, getSuggestedNightlyPrices } from '../services/tariff-service.js';
-import { createQuote, updateQuote, markQuoteConverted, fetchOverlappingQuotes } from '../services/quote-service.js';
+import { createQuote, updateQuote, markQuoteConverted, fetchOverlappingQuotes, fetchOverlappingBookings } from '../services/quote-service.js';
 
 const DAY_NAMES   = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
 const MONTH_NAMES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio',
@@ -2218,6 +2218,27 @@ export class Calendar {
     const unit = this.ctx.units?.find(u => u.id === unitId);
     const fmtD = iso => new Date(iso + 'T12:00:00').toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' });
 
+    // ── Reservas REALES que se superponen — no se pueden cotizar/reservar ──
+    const overlappingBookings = await fetchOverlappingBookings(this.db, this.ctx.hotelId, unitId, checkIn, checkOut);
+    const occupiedDates = new Set(); // fechas (noches) tomadas por una reserva real
+    overlappingBookings.forEach(b => {
+      let d = new Date(b.check_in + 'T12:00:00');
+      const end = new Date(b.check_out + 'T12:00:00');
+      while (d < end) { occupiedDates.add(toISODate(d)); d.setDate(d.getDate() + 1); }
+    });
+    let bookingWarning = '';
+    if (overlappingBookings.length) {
+      const rows = overlappingBookings.map(b => {
+        const g = b.guests ? `${b.guests.first_name ?? ''} ${b.guests.last_name ?? ''}`.trim() : 'Sin nombre';
+        return `<div>🔒 <strong>${g || 'Sin nombre'}</strong> · ${this._fmtShort(b.check_in)} → ${this._fmtShort(b.check_out)}</div>`;
+      }).join('');
+      bookingWarning = `<div style="font-size:.72rem;background:#ef444418;color:#b91c1c;border:1px solid #ef444450;
+        border-radius:8px;padding:7px 10px;margin-bottom:10px;line-height:1.6">
+        ⛔ Hay ${overlappingBookings.length} reserva${overlappingBookings.length !== 1 ? 's' : ''} ya confirmada${overlappingBookings.length !== 1 ? 's' : ''} en parte de este rango — esas noches quedan bloqueadas:
+        ${rows}
+      </div>`;
+    }
+
     // Precio sugerido por noche: misma fuente que el Cuadro Tarifario
     // (tarifa mensual + columnas personalizadas de fin de semana largo / temporada).
     let nightsData;
@@ -2227,6 +2248,7 @@ export class Calendar {
       const suggested = await getSuggestedNightlyPrices(this.db, this.ctx.hotelId, unitId, checkIn, checkOut);
       nightsData = suggested.map(n => ({ date: n.date, price: n.price ?? 0, free: false, source: n.source, label: n.label }));
     }
+    nightsData.forEach(n => { n.occupied = occupiedDates.has(n.date); if (n.occupied) n.free = false; });
 
     // Avisar si ya había otra cotización abierta sobre las mismas fechas
     let overlapWarning = '';
@@ -2263,6 +2285,7 @@ export class Calendar {
         <div style="font-size:.78rem;color:var(--color-text-3);margin-bottom:12px">
           ${unit?.name ?? 'Unidad'} · ${fmtD(checkIn)} → ${fmtD(checkOut)}
         </div>
+        ${bookingWarning}
         ${overlapWarning}
 
         <input id="cq-guest" type="text" placeholder="Nombre del huésped (opcional)" value="${guestName.replace(/"/g,'&quot;')}"
@@ -2302,20 +2325,24 @@ export class Calendar {
             </div>
           </div>
           <div style="background:var(--color-surface-2);border-radius:10px;padding:8px 10px">
-            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none;margin-bottom:4px">
-              <input type="checkbox" id="cq-lco" ${lateCheckout ? 'checked' : ''} style="width:14px;height:14px;cursor:pointer">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
               <span style="font-size:.68rem;font-weight:600;color:var(--color-text-3)">🌅 LATE CHECK-OUT</span>
-            </label>
-            <div id="cq-lco-opts" style="display:${lateCheckout ? 'flex' : 'none'};flex-direction:column;gap:5px">
-              <label style="display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none">
-                <input type="checkbox" id="cq-lco-paid" ${lateCheckoutPaid ? 'checked' : ''} style="width:13px;height:13px;cursor:pointer">
-                <span style="font-size:.72rem;color:var(--color-text-2)">${lateCheckoutPaid ? '✅ Se cobra' : '🎁 Sin cargo'}</span>
+              <input type="checkbox" id="cq-lco" ${lateCheckout ? 'checked' : ''}
+                style="width:14px;height:14px;cursor:pointer;margin:0;accent-color:var(--color-primary)">
+            </div>
+            <div id="cq-lco-opts" style="display:${lateCheckout ? 'flex' : 'none'};align-items:center;gap:6px;
+              border:1px solid var(--color-border);border-radius:6px;background:var(--color-surface);padding:4px 6px;height:20px">
+              <label style="display:flex;align-items:center;gap:4px;cursor:pointer;user-select:none;white-space:nowrap;flex-shrink:0">
+                <input type="checkbox" id="cq-lco-paid" ${lateCheckoutPaid ? 'checked' : ''} style="width:12px;height:12px;cursor:pointer;margin:0">
+                <span id="cq-lco-paid-label" style="font-size:.68rem;color:var(--color-text-2);white-space:nowrap">${lateCheckoutPaid ? '✅ Se cobra' : '🎁 Sin cargo'}</span>
               </label>
               <input id="cq-lco-amount" type="number" min="0" step="500" value="${lateCheckoutAmount || ''}"
                 placeholder="½ noche" ${lateCheckoutPaid ? '' : 'disabled'}
-                style="width:100%;box-sizing:border-box;padding:4px 6px;border-radius:6px;border:1px solid var(--color-border);
-                background:var(--color-surface);color:var(--color-text);font-size:.78rem;${lateCheckoutPaid ? '' : 'opacity:.5'}">
+                style="flex:1;min-width:0;border:none;background:transparent;color:var(--color-text);
+                font-size:.78rem;font-weight:600;padding:0;${lateCheckoutPaid ? '' : 'opacity:.5'}">
             </div>
+            <div id="cq-lco-hint" style="display:${lateCheckout ? 'none' : 'flex'};align-items:center;height:20px;
+              padding:4px 6px;font-size:.66rem;color:var(--color-text-3);opacity:.6">Tocá el switch para activar</div>
           </div>
         </div>
 
@@ -2354,8 +2381,17 @@ export class Calendar {
       cell.className = 'cq-cell';
       cell.dataset.date = n.date;
       cell.style.cssText = `min-width:78px;flex:1 0 78px;border:1px solid var(--color-border);
-        border-radius:9px;padding:6px 7px;background:${n.free ? '#22c55e12' : wknd ? 'var(--color-surface-2)' : 'var(--color-surface)'};
-        ${wknd && !n.free ? 'border-color:#f59e0b55' : ''}`;
+        border-radius:9px;padding:6px 7px;background:${n.occupied ? '#ef444414' : n.free ? '#22c55e12' : wknd ? 'var(--color-surface-2)' : 'var(--color-surface)'};
+        ${n.occupied ? 'border-color:#ef444460' : wknd && !n.free ? 'border-color:#f59e0b55' : ''}`;
+      if (n.occupied) {
+        cell.innerHTML = `
+          <div style="font-size:.62rem;color:var(--color-text-3);display:flex;justify-content:space-between">
+            <span style="text-transform:capitalize">${dayLbl}</span><span>${dateLbl}</span>
+          </div>
+          <div style="margin-top:10px;text-align:center;font-size:.68rem;font-weight:700;color:#b91c1c">🔒 Ocupada</div>
+          <div style="margin-top:12px"></div>`;
+        return cell;
+      }
       cell.innerHTML = `
         <div style="font-size:.62rem;color:var(--color-text-3);display:flex;justify-content:space-between">
           <span style="text-transform:capitalize">${dayLbl}</span><span>${dateLbl}</span>
@@ -2380,6 +2416,7 @@ export class Calendar {
       grid.querySelectorAll('.cq-cell').forEach(cell => {
         const date  = cell.dataset.date;
         const n     = nightsData.find(x => x.date === date);
+        if (n.occupied) return; // noche bloqueada por reserva real — no entra en el cálculo
         const free  = cell.querySelector('[data-free-toggle]').checked;
         const input = cell.querySelector('[data-price-input]');
         n.free  = free;
@@ -2405,14 +2442,24 @@ export class Calendar {
 
       const total = Math.max(0, subtotal - discAmt + surcAmt + lcoAmt);
       const freeCount = nightsData.filter(n => n.free).length;
+      const occCount  = nightsData.filter(n => n.occupied).length;
 
       document.getElementById('cq-summary-nights').innerHTML =
         `${nightsData.length} noche${nightsData.length !== 1 ? 's' : ''}` +
+        (occCount  ? ` <span style="color:#ef4444">· ${occCount} ocupada${occCount !== 1 ? 's' : ''}</span>` : '') +
         (freeCount ? ` <span style="color:#22c55e">· ${freeCount} sin cargo</span>` : '') +
         (discAmt ? ` <span style="color:#ef4444">· −${formatARS(discAmt)}</span>` : '') +
         (surcAmt ? ` <span style="color:#f59e0b">· +${formatARS(surcAmt)}</span>` : '') +
         (lcoOn ? ` <span style="color:#8b5cf6">· 🌅 ${lcoPaid ? '+' + formatARS(lcoAmt) : 'sin cargo'}</span>` : '');
       document.getElementById('cq-summary-total').textContent = `TOTAL ${formatARS(total)}`;
+
+      const convertBtn = document.getElementById('cq-convert');
+      if (convertBtn) {
+        convertBtn.disabled = occCount > 0;
+        convertBtn.style.opacity = occCount > 0 ? '.5' : '1';
+        convertBtn.style.cursor  = occCount > 0 ? 'not-allowed' : 'pointer';
+        convertBtn.title = occCount > 0 ? 'Hay noches ocupadas por otra reserva — no se puede convertir' : '';
+      }
 
       return { subtotal, discAmt, surcAmt, lcoOn, lcoPaid, lcoAmt, total, discMode, discRaw, surcMode, surcRaw };
     };
@@ -2428,17 +2475,19 @@ export class Calendar {
     // principal muestra "¿Se cobra?", que a su vez muestra el monto.
     const lcoBox   = document.getElementById('cq-lco');
     const lcoOpts  = document.getElementById('cq-lco-opts');
+    const lcoHint  = document.getElementById('cq-lco-hint');
     const lcoPaidCb = document.getElementById('cq-lco-paid');
     const lcoAmtEl = document.getElementById('cq-lco-amount');
-    const lcoPaidLabel = () => lcoPaidCb.nextElementSibling;
+    const lcoPaidLabel = document.getElementById('cq-lco-paid-label');
     lcoBox.addEventListener('change', () => {
       lcoOpts.style.display = lcoBox.checked ? 'flex' : 'none';
+      lcoHint.style.display = lcoBox.checked ? 'none' : 'flex';
       recalc();
     });
     lcoPaidCb.addEventListener('change', () => {
       lcoAmtEl.disabled = !lcoPaidCb.checked;
       lcoAmtEl.style.opacity = lcoPaidCb.checked ? '1' : '.5';
-      lcoPaidLabel().textContent = lcoPaidCb.checked ? '✅ Se cobra' : '🎁 Sin cargo';
+      lcoPaidLabel.textContent = lcoPaidCb.checked ? '✅ Se cobra' : '🎁 Sin cargo';
       recalc();
     });
     lcoAmtEl.addEventListener('input', recalc);
@@ -2457,7 +2506,7 @@ export class Calendar {
         unit_id:         unitId,
         check_in:        checkIn,
         check_out:       checkOut,
-        nights_detail:   nightsData.map(n => ({ date: n.date, price: n.price, free: !!n.free })),
+        nights_detail:   nightsData.map(n => ({ date: n.date, price: n.price, free: !!n.free, occupied: !!n.occupied })),
         discount_mode:   calc.discRaw ? calc.discMode : null,
         discount_value:  calc.discRaw || 0,
         surcharge_mode:  calc.surcRaw ? calc.surcMode : null,
@@ -2492,6 +2541,10 @@ export class Calendar {
 
     document.getElementById('cq-convert').addEventListener('click', async () => {
       const payload = buildPayload();
+      if (nightsData.some(n => n.occupied)) {
+        showToast('Hay noches ocupadas por otra reserva en este rango — no se puede convertir', 'error');
+        return;
+      }
       if (!payload.total || payload.nights_detail.every(n => n.free)) {
         if (!confirm('El total es $0 — ¿convertir en reserva de todas formas?')) return;
       }
