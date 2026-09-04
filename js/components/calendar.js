@@ -2250,6 +2250,26 @@ export class Calendar {
     }
     nightsData.forEach(n => { n.occupied = occupiedDates.has(n.date); if (n.occupied) n.free = false; });
 
+    // Sugerencia: tramo contiguo más largo de noches libres dentro del rango,
+    // para cuando algo bloquea completar la estadía tal cual se pidió.
+    let suggestionHtml = '';
+    if (nightsData.some(n => n.occupied)) {
+      let bestStart = -1, bestLen = 0, curStart = -1, curLen = 0;
+      nightsData.forEach((n, i) => {
+        if (!n.occupied) {
+          if (curLen === 0) curStart = i;
+          curLen++;
+          if (curLen > bestLen) { bestLen = curLen; bestStart = curStart; }
+        } else { curLen = 0; }
+      });
+      if (bestLen > 0) {
+        const startDate = nightsData[bestStart].date;
+        const lastNightDate = new Date(nightsData[bestStart + bestLen - 1].date + 'T12:00:00');
+        lastNightDate.setDate(lastNightDate.getDate() + 1); // checkout = día después de la última noche libre
+        suggestionHtml = ` <span style="color:var(--color-text-3)">· Sugerencia: (${this._fmtShort(startDate)} al ${this._fmtShort(toISODate(lastNightDate))}) ${bestLen} noche${bestLen !== 1 ? 's' : ''}</span>`;
+      }
+    }
+
     // Avisar si ya había otra cotización abierta sobre las mismas fechas
     let overlapWarning = '';
     if (!existingQuote) {
@@ -2446,7 +2466,7 @@ export class Calendar {
 
       document.getElementById('cq-summary-nights').innerHTML =
         `${nightsData.length} noche${nightsData.length !== 1 ? 's' : ''}` +
-        (occCount  ? ` <span style="color:#ef4444">· ${occCount} ocupada${occCount !== 1 ? 's' : ''}</span>` : '') +
+        (occCount  ? ` <span style="color:#ef4444">· ${occCount} ocupada${occCount !== 1 ? 's' : ''}</span>${suggestionHtml}` : '') +
         (freeCount ? ` <span style="color:#22c55e">· ${freeCount} sin cargo</span>` : '') +
         (discAmt ? ` <span style="color:#ef4444">· −${formatARS(discAmt)}</span>` : '') +
         (surcAmt ? ` <span style="color:#f59e0b">· +${formatARS(surcAmt)}</span>` : '') +
