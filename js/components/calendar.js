@@ -17,8 +17,7 @@ import { logAction } from '../services/audit-service.js';
 import { cachedQuery, cache } from '../services/supabase-cache.js';
 import { Bus, EVENTS } from '../services/event-bus.js';
 import { fetchMonthlyRates, fetchCustomColumns, monthsInRange, buildTariffGrid, groupRowsByPrice, getSuggestedNightlyPrices } from '../services/tariff-service.js';
-import { createQuote, updateQuote, markQuoteConverted, fetchOverlappingQuotes, fetchOverlappingBookings } from '../services/quote-service.js';
-import { fetchDisponibilidad } from '../modules/mila-assistant/mila-data.js';
+import { createQuote, updateQuote, markQuoteConverted, fetchOverlappingQuotes, fetchOverlappingBookings, fetchAvailableUnitsForNight } from '../services/quote-service.js';
 
 const DAY_NAMES   = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
 const MONTH_NAMES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio',
@@ -2436,15 +2435,10 @@ export class Calendar {
       }), 0);
 
       let list = [];
-      try { list = await fetchDisponibilidad(n.date, nextDate); } catch { /* red/servicio caído */ }
+      try { list = await fetchAvailableUnitsForNight(this.db, this.ctx.hotelId, this.ctx.units, n.date, unitId); } catch { /* red/servicio caído */ }
       if (!document.body.contains(pop)) return; // se cerró mientras esperaba
 
-      const candidates = list.filter(u => {
-        if (String(u.id) === String(unitId)) return false;
-        if (!u.available) return false; // 1 sola noche: o está libre, o no (no hay "parcial" posible)
-        const full = this.ctx.units?.find(x => x.id === u.id);
-        return (full?.max_guests ?? 99) >= totalPax;
-      });
+      const candidates = list.filter(u => (u.max_guests ?? 99) >= totalPax);
 
       if (!candidates.length) {
         pop.innerHTML = `<div style="font-size:.72rem;color:var(--color-text-2);padding:4px 6px;line-height:1.4">
@@ -2455,15 +2449,12 @@ export class Calendar {
 
       pop.innerHTML = `<div style="font-size:.66rem;font-weight:700;color:var(--color-text-3);padding:2px 6px 6px">
         ${this._fmtShort(n.date)} · ${totalPax} pasajero${totalPax !== 1 ? 's' : ''} — elegí unidad</div>` +
-        candidates.map(c => {
-          const full = this.ctx.units?.find(x => x.id === c.id);
-          return `<button type="button" data-alt-id="${c.id}" style="display:flex;align-items:center;justify-content:space-between;
+        candidates.map(c => `<button type="button" data-alt-id="${c.id}" style="display:flex;align-items:center;justify-content:space-between;
             width:100%;text-align:left;padding:6px 8px;border:none;border-radius:7px;background:var(--color-surface-2);
             color:var(--color-text);font-size:.78rem;font-weight:600;cursor:pointer;margin-bottom:4px">
             <span>${c.sort_order ? `#${c.sort_order} · ` : ''}${c.name}</span>
-            <span style="font-size:.66rem;color:var(--color-text-3);font-weight:500">👥 ${full?.max_guests ?? '—'}</span>
-          </button>`;
-        }).join('');
+            <span style="font-size:.66rem;color:var(--color-text-3);font-weight:500">👥 ${c.max_guests ?? '—'}</span>
+          </button>`).join('');
 
       pop.querySelectorAll('[data-alt-id]').forEach(btn => {
         btn.addEventListener('click', async () => {

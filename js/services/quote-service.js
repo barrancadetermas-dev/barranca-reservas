@@ -60,6 +60,39 @@ export async function fetchOverlappingBookings(db, hotelId, unitId, checkInISO, 
     .filter(Boolean);
 }
 
+// Unidades DISPONIBLES para una noche puntual (sin cruzar al chunk de
+// mila-assistant — se resuelve acá mismo, con la misma lógica de tramos
+// que ya usa fetchOverlappingBookings, para no generar un chunk circular
+// entre calendar/booking-form/statistics/mila-assistant).
+export async function fetchAvailableUnitsForNight(db, hotelId, units, dateISO, excludeUnitId) {
+  const nextDate = (() => {
+    const d = new Date(dateISO + 'T12:00:00');
+    d.setDate(d.getDate() + 1);
+    const y = d.getFullYear(), m = String(d.getMonth() + 1).padStart(2, '0'), da = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${da}`;
+  })();
+
+  const { data, error } = await db.from('bookings')
+    .select('booking_units(unit_id,segment_check_in,segment_check_out)')
+    .eq('hotel_id', hotelId)
+    .neq('status', 'cancelled')
+    .lt('check_in', nextDate).gt('check_out', dateISO);
+  if (error) { console.warn('[Quote] fetchAvailableUnitsForNight:', error.message); return []; }
+
+  const occupied = new Set();
+  (data ?? []).forEach(b => {
+    (b.booking_units ?? []).forEach(bu => {
+      const segIn  = bu.segment_check_in  ?? dateISO;   // si no hay tramo propio, asumimos que sí cubre (fallback conservador via check general de abajo)
+      const segOut = bu.segment_check_out ?? nextDate;
+      if (segIn <= dateISO && segOut > dateISO) occupied.add(bu.unit_id);
+    });
+  });
+
+  return (units ?? [])
+    .filter(u => u.id !== excludeUnitId && !occupied.has(u.id))
+    .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
+}
+
 export async function deleteQuote(db, id) {
   return db.from('quick_quotes').delete().eq('id', id);
 }
