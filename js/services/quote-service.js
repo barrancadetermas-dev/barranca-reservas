@@ -35,15 +35,29 @@ export async function fetchOverlappingQuotes(db, hotelId, unitId, checkInISO, ch
 
 // Reservas REALES que se superponen con el rango — para no dejar
 // cotizar (ni mucho menos convertir) sobre noches ya ocupadas.
+// IMPORTANTE: si booking_units tiene segment_check_in/segment_check_out
+// (estadía dividida entre 2 unidades), la ocupación de ESA unidad se
+// limita a su tramo — no a las fechas completas de la reserva.
 export async function fetchOverlappingBookings(db, hotelId, unitId, checkInISO, checkOutISO) {
   const { data, error } = await db.from('bookings')
-    .select('id,check_in,check_out,status,guests!bookings_guest_id_fkey(first_name,last_name),booking_units(unit_id)')
+    .select('id,check_in,check_out,status,guests!bookings_guest_id_fkey(first_name,last_name),booking_units(unit_id,segment_check_in,segment_check_out)')
     .eq('hotel_id', hotelId)
     .neq('status', 'cancelled')
     .lt('check_in', checkOutISO).gt('check_out', checkInISO)
     .order('check_in', { ascending: true });
   if (error) { console.warn('[Quote] fetchOverlappingBookings:', error.message); return []; }
-  return (data ?? []).filter(b => (b.booking_units ?? []).some(bu => bu.unit_id === unitId));
+  return (data ?? [])
+    .map(b => {
+      const bu = (b.booking_units ?? []).find(x => x.unit_id === unitId);
+      if (!bu) return null;
+      // Tramo real de ESTA unidad dentro de la reserva (o la reserva
+      // completa si no está dividida).
+      const segIn  = bu.segment_check_in  ?? b.check_in;
+      const segOut = bu.segment_check_out ?? b.check_out;
+      if (segIn >= checkOutISO || segOut <= checkInISO) return null; // no se superpone realmente
+      return { ...b, check_in: segIn, check_out: segOut };
+    })
+    .filter(Boolean);
 }
 
 export async function deleteQuote(db, id) {
