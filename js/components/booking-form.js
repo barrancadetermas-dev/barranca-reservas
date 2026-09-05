@@ -2559,22 +2559,6 @@ export class BookingForm {
       const children = parseInt(document.getElementById('f-children')?.value) || 0;
 
       let bookingId = this._editingId;
-      // Estadía dividida entre 2 unidades (Cotización Rápida → "Completar
-      // estadía en otra unidad"): esas filas de booking_units tienen
-      // segment_check_in/segment_check_out propios. Los leemos ANTES de
-      // borrar para no perderlos si el usuario solo está agregando un
-      // teléfono o una seña, sin tocar las unidades/fechas divididas.
-      let existingSegments = new Map(); // unit_id -> { segment_check_in, segment_check_out }
-      if (bookingId) {
-        try {
-          const { data: prevUnits } = await this.db.from('booking_units')
-            .select('unit_id, segment_check_in, segment_check_out')
-            .eq('booking_id', bookingId);
-          (prevUnits ?? []).forEach(u => {
-            if (u.segment_check_in || u.segment_check_out) existingSegments.set(u.unit_id, u);
-          });
-        } catch { /* columnas nuevas — si no existen, no hay nada que preservar */ }
-      }
       if (bookingId) {
         // UPDATE — intentar con free_nights primero
         let { error: upErr } = await this._withTimeout(this.db.from('bookings').update({
@@ -2629,21 +2613,13 @@ export class BookingForm {
       // Insertar/actualizar unidades — upsert SIN ignoreDuplicates para que
       // actualice el precio si el usuario lo cambió en una edición.
       const isMultiUnit = this._selectedUnitIds.size >= 2;
-      const unitRows = [...this._selectedUnitIds].map(uid => {
-        const seg = existingSegments.get(uid);
-        return {
-          booking_id: bookingId,
-          unit_id: uid,
-          // Multi-unidad: precio individual cargado por el usuario.
-          // Unidad única: el mismo precio general de la reserva.
-          price_per_night: isMultiUnit ? (parseFloat(this._unitPrices[uid]) || 0) : price,
-          // Preservar el tramo de fecha si esta unidad ya tenía uno
-          // (reserva dividida) y sigue estando seleccionada — si el
-          // usuario la sacó de la selección, su tramo se pierde con ella
-          // (correcto: ya no cubre ninguna noche de esta reserva).
-          ...(seg ? { segment_check_in: seg.segment_check_in, segment_check_out: seg.segment_check_out } : {}),
-        };
-      });
+      const unitRows = [...this._selectedUnitIds].map(uid => ({
+        booking_id: bookingId,
+        unit_id: uid,
+        // Multi-unidad: precio individual cargado por el usuario.
+        // Unidad única: el mismo precio general de la reserva.
+        price_per_night: isMultiUnit ? (parseFloat(this._unitPrices[uid]) || 0) : price,
+      }));
       if (unitRows.length) {
         const { error: buErr } = await this._withTimeout(
           this.db.from('booking_units').upsert(unitRows, { onConflict: 'booking_id,unit_id' }),
