@@ -2749,6 +2749,17 @@ export class Calendar {
       const hasSplit = payload.nights_detail.some(n => n.altUnitId);
       if (hasSplit && !payload.guest_name) {
         showToast('Para dividir la estadía entre 2 unidades, cargá el nombre del huésped', 'error');
+        const guestEl = document.getElementById('cq-guest');
+        if (guestEl) {
+          guestEl.style.borderColor = '#ef4444';
+          guestEl.style.boxShadow = '0 0 0 2px #ef444440';
+          guestEl.placeholder = '⚠️ Requerido para dividir entre 2 unidades';
+          guestEl.focus();
+          guestEl.addEventListener('input', function clearErr() {
+            guestEl.style.borderColor = ''; guestEl.style.boxShadow = '';
+            guestEl.removeEventListener('input', clearErr);
+          }, { once: true });
+        }
         return;
       }
 
