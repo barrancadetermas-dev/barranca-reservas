@@ -2525,7 +2525,7 @@ export class Calendar {
       const cell = document.createElement('div');
       cell.className = 'cq-cell';
       cell.dataset.date = n.date;
-      cell.style.cssText = `min-width:78px;flex:1 0 78px;border:1px solid var(--color-border);
+      cell.style.cssText = `min-width:86px;flex:1 0 86px;border:1px solid var(--color-border);
         border-radius:9px;padding:6px 7px;background:${n.occupied ? '#ef444414' : n.free ? '#22c55e12' : wknd ? 'var(--color-surface-2)' : 'var(--color-surface)'};
         ${n.occupied ? 'border-color:#ef444460' : wknd && !n.free ? 'border-color:#f59e0b55' : ''}`;
       if (n.occupied) {
@@ -2557,9 +2557,9 @@ export class Calendar {
           </div>
         <input type="number" min="0" step="any" value="${n.free ? 0 : n.price}" ${n.free ? 'disabled' : ''}
           data-price-input
-          style="width:100%;box-sizing:border-box;margin-top:3px;padding:3px 4px;border-radius:6px;
+          style="width:100%;box-sizing:border-box;margin-top:3px;padding:3px 2px;border-radius:6px;
           border:1px solid var(--color-border);background:var(--color-surface);color:var(--color-text);
-          font-size:.82rem;font-weight:700;${n.free ? 'opacity:.5' : ''}">
+          font-size:.76rem;font-weight:700;text-align:center;-moz-appearance:textfield;${n.free ? 'opacity:.5' : ''}">
         <label style="display:flex;align-items:center;gap:4px;margin-top:4px;font-size:.6rem;color:var(--color-text-3);cursor:pointer">
           <input type="checkbox" data-free-toggle ${n.free ? 'checked' : ''} style="margin:0"> sin cargo
         </label>`;
@@ -2591,9 +2591,9 @@ export class Calendar {
         ${n.label ? `<div style="font-size:.56rem;color:#f59e0b;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${n.label}</div>` : ''}
         <input type="number" min="0" step="any" value="${n.free ? 0 : n.price}" ${n.free ? 'disabled' : ''}
           data-price-input
-          style="width:100%;box-sizing:border-box;margin-top:3px;padding:3px 4px;border-radius:6px;
+          style="width:100%;box-sizing:border-box;margin-top:3px;padding:3px 2px;border-radius:6px;
           border:1px solid var(--color-border);background:var(--color-surface);color:var(--color-text);
-          font-size:.82rem;font-weight:700;${n.free ? 'opacity:.5' : ''}">
+          font-size:.76rem;font-weight:700;text-align:center;-moz-appearance:textfield;${n.free ? 'opacity:.5' : ''}">
         <label style="display:flex;align-items:center;gap:4px;margin-top:4px;font-size:.6rem;color:var(--color-text-3);cursor:pointer">
           <input type="checkbox" data-free-toggle ${n.free ? 'checked' : ''} style="margin:0"> sin cargo
         </label>`;
@@ -2649,10 +2649,14 @@ export class Calendar {
 
       const convertBtn = document.getElementById('cq-convert');
       if (convertBtn) {
-        convertBtn.disabled = occCount > 0;
+        // OJO: no usar convertBtn.disabled = true — un botón nativo
+        // disabled no dispara 'click' en absoluto, y el chequeo/aviso
+        // de "hay noches ocupadas" que tiene el propio handler nunca
+        // llegaría a ejecutarse (quedaba en silencio total al tocarlo).
+        // Se deja SIEMPRE clickeable, solo con la pinta de apagado.
         convertBtn.style.opacity = occCount > 0 ? '.5' : '1';
         convertBtn.style.cursor  = occCount > 0 ? 'not-allowed' : 'pointer';
-        convertBtn.title = occCount > 0 ? 'Hay noches ocupadas por otra reserva — no se puede convertir' : '';
+        convertBtn.title = occCount > 0 ? `Quedan ${occCount} noche${occCount !== 1 ? 's' : ''} ocupada${occCount !== 1 ? 's' : ''} sin resolver — tocá "🔀 Otra unidad" en esa celda o cambiá el rango` : '';
       }
 
       return { subtotal, discAmt, surcAmt, lcoOn, lcoPaid, lcoAmt, total, discMode, discRaw, surcMode, surcRaw };
@@ -2738,8 +2742,9 @@ export class Calendar {
     document.getElementById('cq-convert').addEventListener('click', async () => {
      try {
       const payload = buildPayload();
-      if (nightsData.some(n => n.occupied)) {
-        showToast('Hay noches ocupadas por otra reserva en este rango — no se puede convertir', 'error');
+      const stillOccupied = nightsData.filter(n => n.occupied).length;
+      if (stillOccupied > 0) {
+        showToast(`Quedan ${stillOccupied} noche${stillOccupied !== 1 ? 's' : ''} ocupada${stillOccupied !== 1 ? 's' : ''} sin resolver — tocá "🔀 Otra unidad" en esa celda, o cambiá el rango`, 'error');
         return;
       }
       if (!payload.total || payload.nights_detail.every(n => n.free)) {

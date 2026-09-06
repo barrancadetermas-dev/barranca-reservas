@@ -1235,3 +1235,12 @@
     var(--period-brd, transparent) 5px, var(--period-brd, transparent) 6px
   );
 }
+
+/* Cotización rápida — inputs de precio por noche: sacar las flechitas
+   del spinner nativo (Chrome/Safari) para que el número no quede cortado
+   en celdas angostas tipo mini-planilla. */
+.cq-cell input[data-price-input]::-webkit-inner-spin-button,
+.cq-cell input[data-price-input]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
