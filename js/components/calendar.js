@@ -3032,13 +3032,13 @@ export class Calendar {
       showToast(`✓ Reserva dividida creada: ${segmentLines}`, 'success');
       document.dispatchEvent(new CustomEvent('booking:changed'));
 
-      // Ofrecer completar datos (teléfono, DNI, seña) sin forzarlo —
-      // abrir para editar es seguro: el guardado de booking-form.js ya
-      // preserva los tramos de fecha si no se cambian las unidades.
+      // Abrir directo con los datos ya cargados (huésped, fechas, precio,
+      // notas) para completar teléfono/DNI/seña — sin preguntar antes:
+      // un confirm() disparado por setTimeout puede no depender de un
+      // gesto del usuario y el navegador lo bloquea en silencio, dejando
+      // la sensación de "apreté convertir y no pasó nada".
       setTimeout(() => {
-        if (confirm('Reserva dividida creada ✓\n\n¿Abrir para completar datos del huésped o cargar una seña?')) {
-          this.bookingForm.openEdit(newB.id);
-        }
+        this.bookingForm.openEdit(newB.id);
       }, 300);
     } catch (err) {
       console.error('[SplitBooking]', err);
