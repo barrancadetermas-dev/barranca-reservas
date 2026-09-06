@@ -2484,6 +2484,7 @@ export class Calendar {
 
       pop.querySelectorAll('[data-alt-id]').forEach(btn => {
         btn.addEventListener('click', async () => {
+         try {
           const altUnitId = btn.dataset.altId;
           closePop();
           let price = 0;
@@ -2496,10 +2497,20 @@ export class Calendar {
           n.free      = false;
           n.price     = price;
           const idx = nightsData.findIndex(x => x.date === n.date);
-          const fresh = renderCell(n);
-          grid.replaceChild(fresh, grid.children[idx]);
+          if (idx === -1 || !grid.children[idx]) {
+            console.warn('[QuickQuote] No se encontró la celda a reemplazar, re-dibujando toda la planilla');
+            grid.innerHTML = '';
+            nightsData.forEach(nn => grid.appendChild(renderCell(nn)));
+          } else {
+            const fresh = renderCell(n);
+            grid.replaceChild(fresh, grid.children[idx]);
+          }
           recalc();
           showToast('Noche completada con otra unidad — revisá el precio sugerido', 'success');
+         } catch (err) {
+           console.error('[QuickQuote] Error asignando unidad alternativa:', err);
+           showToast('Error asignando la unidad alternativa: ' + (err?.message ?? 'ver consola'), 'error');
+         }
         });
       });
     };
@@ -2554,13 +2565,22 @@ export class Calendar {
         </label>`;
         cell.querySelector('[data-undo-alt]').addEventListener('click', (e) => {
           e.stopPropagation();
-          n.altUnitId = null;
-          n.occupied  = true; // vuelve a estar bloqueada por la reserva real
-          n.free = false;
-          const idx = nightsData.findIndex(x => x.date === n.date);
-          const fresh = renderCell(n);
-          grid.replaceChild(fresh, grid.children[idx]);
-          recalc();
+          try {
+            n.altUnitId = null;
+            n.occupied  = true; // vuelve a estar bloqueada por la reserva real
+            n.free = false;
+            const idx = nightsData.findIndex(x => x.date === n.date);
+            if (idx === -1 || !grid.children[idx]) {
+              grid.innerHTML = '';
+              nightsData.forEach(nn => grid.appendChild(renderCell(nn)));
+            } else {
+              const fresh = renderCell(n);
+              grid.replaceChild(fresh, grid.children[idx]);
+            }
+            recalc();
+          } catch (err) {
+            console.error('[QuickQuote] Error deshaciendo unidad alternativa:', err);
+          }
         });
         return cell;
       }
@@ -2716,6 +2736,7 @@ export class Calendar {
     });
 
     document.getElementById('cq-convert').addEventListener('click', async () => {
+     try {
       const payload = buildPayload();
       if (nightsData.some(n => n.occupied)) {
         showToast('Hay noches ocupadas por otra reserva en este rango — no se puede convertir', 'error');
@@ -2840,6 +2861,10 @@ export class Calendar {
       if (freeCount > 0) {
         showToast(`Reserva precargada: ${freeCount} noche${freeCount !== 1 ? 's' : ''} sin cargo aplicada${freeCount !== 1 ? 's' : ''} — no se cobra${freeCount !== 1 ? 'n' : ''}`, 'info');
       }
+     } catch (err) {
+       console.error('[QuickQuote] Error al convertir:', err);
+       showToast('Error al convertir en reserva: ' + (err?.message ?? 'ver consola'), 'error');
+     }
     });
   }
 
