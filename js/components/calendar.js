@@ -17,7 +17,7 @@ import { logAction } from '../services/audit-service.js';
 import { cachedQuery, cache } from '../services/supabase-cache.js';
 import { Bus, EVENTS } from '../services/event-bus.js';
 import { fetchMonthlyRates, fetchCustomColumns, monthsInRange, buildTariffGrid, groupRowsByPrice, getSuggestedNightlyPrices } from '../services/tariff-service.js';
-import { createQuote, updateQuote, markQuoteConverted, fetchOverlappingQuotes, fetchOverlappingBookings } from '../services/quote-service.js';
+import { createQuote, updateQuote, markQuoteConverted, fetchOverlappingQuotes, fetchOverlappingBookings, fetchAvailableUnitsForNight } from '../services/quote-service.js';
 
 const DAY_NAMES   = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
 const MONTH_NAMES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio',
@@ -222,8 +222,20 @@ export class Calendar {
     }
 
     const params = { hotelId: this.ctx.hotelId, firstDay, lastDay };
-    const bookings = await cachedQuery(this.db, 'bookings', params, () =>
-      this.db.from('bookings').select(`
+    const selectFull = `
+        id, check_in, check_out, status, source, is_blocked, block_reason,
+        late_checkout, late_checkout_charged, free_nights, discount_pct, surcharge_amount,
+        total_amount, total_paid, balance, nights, pax,
+        adults, children, notes, price_per_night, created_at,
+        checked_in_at, checked_out_at,
+        guests!bookings_guest_id_fkey(first_name, last_name, bad_experience, tags),
+        booking_units(unit_id, price_per_night, segment_check_in, segment_check_out, units(name, sort_order, color, max_guests))
+      `;
+    // Fallback si todavía no se corrió la migración de "estadía dividida"
+    // (columnas segment_check_in/segment_check_out) — sin esto, el
+    // calendario entero dejaba de renderizar ante cualquier error de la
+    // consulta principal.
+    const selectBasic = `
         id, check_in, check_out, status, source, is_blocked, block_reason,
         late_checkout, late_checkout_charged, free_nights, discount_pct, surcharge_amount,
         total_amount, total_paid, balance, nights, pax,
@@ -231,12 +243,26 @@ export class Calendar {
         checked_in_at, checked_out_at,
         guests!bookings_guest_id_fkey(first_name, last_name, bad_experience, tags),
         booking_units(unit_id, price_per_night, units(name, sort_order, color, max_guests))
-      `)
-      .eq('hotel_id', this.ctx.hotelId)
-      .neq('status', 'cancelled')
-      .lte('check_in', lastDay)
-      .gt('check_out', firstDay)
-    );
+      `;
+    let bookings;
+    try {
+      bookings = await cachedQuery(this.db, 'bookings', params, () =>
+        this.db.from('bookings').select(selectFull)
+          .eq('hotel_id', this.ctx.hotelId)
+          .neq('status', 'cancelled')
+          .lte('check_in', lastDay)
+          .gt('check_out', firstDay)
+      );
+    } catch (err) {
+      console.warn('[Calendar] Falta correr migration_quick_quotes.sql (segment_check_in/out) — usando consulta sin estadía dividida:', err?.message ?? err);
+      bookings = await cachedQuery(this.db, 'bookings', params, () =>
+        this.db.from('bookings').select(selectBasic)
+          .eq('hotel_id', this.ctx.hotelId)
+          .neq('status', 'cancelled')
+          .lte('check_in', lastDay)
+          .gt('check_out', firstDay)
+      );
+    }
 
     // Pagos en consulta SEPARADA — evita el bug de duplicación por Cartesian
     // join (booking_units × payments) y permite el desglose real por unidad.
@@ -410,13 +436,20 @@ export class Calendar {
     bookings.forEach(b => {
       const ci = b.check_in;
       const co = b.check_out;
-      (b.booking_units ?? []).forEach(({ unit_id }) => {
+      (b.booking_units ?? []).forEach(({ unit_id, segment_check_in, segment_check_out }) => {
         if (!map[unit_id]) return;
+        // Estadía dividida entre 2 unidades: esta unidad puntual solo
+        // ocupa SU tramo (segment_check_in/out), no la reserva completa.
+        // Si no tiene tramo propio, cubre la reserva completa (de siempre).
+        const uCi = segment_check_in  ?? ci;
+        const uCo = segment_check_out ?? co;
         this._dateRange.forEach(iso => {
-          if (iso >= ci && iso < co) {
+          if (iso >= uCi && iso < uCo) {
             map[unit_id][iso].push({
               ...b,
-              _cellType: this._getCellType(ci, co, iso),
+              check_in: uCi, check_out: uCo, // para que _renderBar dibuje solo este tramo
+              _isSplitSegment: !!(segment_check_in || segment_check_out),
+              _cellType: this._getCellType(uCi, uCo, iso),
             });
           }
         });
@@ -2290,6 +2323,8 @@ export class Calendar {
     let lateCheckoutPaid   = existingQuote?.late_checkout_paid ?? true;
     let lateCheckoutAmount = existingQuote?.late_checkout_amount ?? '';
     let guestName = existingQuote?.guest_name ?? '';
+    let adults    = existingQuote?.adults   ?? 2;
+    let children  = existingQuote?.children ?? 0;
     let quoteNotes = existingQuote?.notes ?? '';
 
     const ov = document.createElement('div');
@@ -2308,9 +2343,19 @@ export class Calendar {
         ${bookingWarning}
         ${overlapWarning}
 
-        <input id="cq-guest" type="text" placeholder="Nombre del huésped (opcional)" value="${guestName.replace(/"/g,'&quot;')}"
-          style="width:100%;box-sizing:border-box;padding:8px 10px;border-radius:8px;border:1px solid var(--color-border);
-          background:var(--color-surface-2);color:var(--color-text);font-size:.82rem;margin-bottom:12px">
+        <div style="display:flex;gap:8px;margin-bottom:12px">
+          <input id="cq-guest" type="text" placeholder="Nombre del huésped (opcional)" value="${guestName.replace(/"/g,'&quot;')}"
+            style="flex:2;min-width:0;box-sizing:border-box;padding:8px 10px;border-radius:8px;border:1px solid var(--color-border);
+            background:var(--color-surface-2);color:var(--color-text);font-size:.82rem">
+          <input id="cq-adults" type="number" min="1" step="1" value="${adults}" title="Adultos"
+            style="flex:0 0 56px;box-sizing:border-box;padding:8px 4px;border-radius:8px;border:1px solid var(--color-border);
+            background:var(--color-surface-2);color:var(--color-text);font-size:.82rem;text-align:center">
+          <span style="font-size:.68rem;color:var(--color-text-3);align-self:center">ad.</span>
+          <input id="cq-children" type="number" min="0" step="1" value="${children}" title="Niños"
+            style="flex:0 0 56px;box-sizing:border-box;padding:8px 4px;border-radius:8px;border:1px solid var(--color-border);
+            background:var(--color-surface-2);color:var(--color-text);font-size:.82rem;text-align:center">
+          <span style="font-size:.68rem;color:var(--color-text-3);align-self:center">niños</span>
+        </div>
 
         <div style="font-size:.7rem;font-weight:700;color:var(--color-text-3);margin-bottom:6px">
           PRECIO POR NOCHE · tocá una celda para editarla
@@ -2390,6 +2435,75 @@ export class Calendar {
       </div>`;
     document.body.appendChild(ov);
 
+    // "🔀 Completar estadía en otra unidad" — para una noche puntual
+    // bloqueada. Busca unidades disponibles ESA noche con capacidad
+    // suficiente para adultos+niños (misma lógica de disponibilidad que
+    // ya usa "Dividir estadía" en el form de reserva).
+    const openAltUnitPicker = async (n, cell) => {
+      document.getElementById('cal-altunit-popover')?.remove();
+
+      const adultsN   = parseInt(document.getElementById('cq-adults')?.value)   || 1;
+      const childrenN = parseInt(document.getElementById('cq-children')?.value) || 0;
+      const totalPax  = adultsN + childrenN;
+      const nextDate  = toISODate(new Date(new Date(n.date + 'T12:00:00').getTime() + 86400000));
+
+      const pop = document.createElement('div');
+      pop.id = 'cal-altunit-popover';
+      const rect = cell.getBoundingClientRect();
+      pop.style.cssText = `position:fixed;left:${Math.min(rect.left, window.innerWidth - 230)}px;
+        top:${rect.bottom + 6}px;z-index:3400;background:var(--color-surface);border:1px solid var(--color-border);
+        border-radius:10px;box-shadow:0 12px 32px rgba(0,0,0,.3);padding:8px;width:220px;font-family:inherit`;
+      pop.innerHTML = `<div style="font-size:.68rem;color:var(--color-text-3);padding:4px 6px">Buscando unidades libres…</div>`;
+      document.body.appendChild(pop);
+      const closePop = () => pop.remove();
+      setTimeout(() => document.addEventListener('click', function onDoc(e) {
+        if (!pop.contains(e.target)) { closePop(); document.removeEventListener('click', onDoc); }
+      }), 0);
+
+      let list = [];
+      try { list = await fetchAvailableUnitsForNight(this.db, this.ctx.hotelId, this.ctx.units, n.date, unitId); } catch { /* red/servicio caído */ }
+      if (!document.body.contains(pop)) return; // se cerró mientras esperaba
+
+      const candidates = list.filter(u => (u.max_guests ?? 99) >= totalPax);
+
+      if (!candidates.length) {
+        pop.innerHTML = `<div style="font-size:.72rem;color:var(--color-text-2);padding:4px 6px;line-height:1.4">
+          No hay otra unidad libre esa noche con capacidad para ${totalPax} pasajero${totalPax !== 1 ? 's' : ''}.
+        </div>`;
+        return;
+      }
+
+      pop.innerHTML = `<div style="font-size:.66rem;font-weight:700;color:var(--color-text-3);padding:2px 6px 6px">
+        ${this._fmtShort(n.date)} · ${totalPax} pasajero${totalPax !== 1 ? 's' : ''} — elegí unidad</div>` +
+        candidates.map(c => `<button type="button" data-alt-id="${c.id}" style="display:flex;align-items:center;justify-content:space-between;
+            width:100%;text-align:left;padding:6px 8px;border:none;border-radius:7px;background:var(--color-surface-2);
+            color:var(--color-text);font-size:.78rem;font-weight:600;cursor:pointer;margin-bottom:4px">
+            <span>${c.sort_order ? `#${c.sort_order} · ` : ''}${c.name}</span>
+            <span style="font-size:.66rem;color:var(--color-text-3);font-weight:500">👥 ${c.max_guests ?? '—'}</span>
+          </button>`).join('');
+
+      pop.querySelectorAll('[data-alt-id]').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const altUnitId = btn.dataset.altId;
+          closePop();
+          let price = 0;
+          try {
+            const suggested = await getSuggestedNightlyPrices(this.db, this.ctx.hotelId, altUnitId, n.date, nextDate);
+            price = suggested?.[0]?.price ?? 0;
+          } catch { /* si falla, el usuario la carga a mano */ }
+          n.altUnitId = altUnitId;
+          n.occupied  = false;
+          n.free      = false;
+          n.price     = price;
+          const idx = nightsData.findIndex(x => x.date === n.date);
+          const fresh = renderCell(n);
+          grid.replaceChild(fresh, grid.children[idx]);
+          recalc();
+          showToast('Noche completada con otra unidad — revisá el precio sugerido', 'success');
+        });
+      });
+    };
+
     // ── Render de la planilla (una celda por noche) ──
     const grid = document.getElementById('cq-grid');
     const renderCell = (n) => {
@@ -2408,8 +2522,46 @@ export class Calendar {
           <div style="font-size:.62rem;color:var(--color-text-3);display:flex;justify-content:space-between">
             <span style="text-transform:capitalize">${dayLbl}</span><span>${dateLbl}</span>
           </div>
-          <div style="margin-top:10px;text-align:center;font-size:.68rem;font-weight:700;color:#b91c1c">🔒 Ocupada</div>
-          <div style="margin-top:12px"></div>`;
+          <div style="margin-top:8px;text-align:center;font-size:.66rem;font-weight:700;color:#b91c1c">🔒 Ocupada</div>
+          <button type="button" data-alt-unit-btn
+            style="width:100%;margin-top:5px;padding:3px 2px;border-radius:6px;border:1px dashed #ef444460;
+            background:none;color:#b91c1c;font-size:.6rem;font-weight:700;cursor:pointer">🔀 Otra unidad</button>`;
+        cell.querySelector('[data-alt-unit-btn]').addEventListener('click', (e) => {
+          e.stopPropagation();
+          openAltUnitPicker(n, cell);
+        });
+        return cell;
+      }
+      if (n.altUnitId) {
+        const altUnit = this.ctx.units?.find(u => u.id === n.altUnitId);
+        cell.style.borderColor = '#8b5cf660';
+        cell.innerHTML = `
+          <div style="font-size:.62rem;color:var(--color-text-3);display:flex;justify-content:space-between">
+            <span style="text-transform:capitalize">${dayLbl}</span><span>${dateLbl}</span>
+          </div>
+          <div style="font-size:.56rem;color:#8b5cf6;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+            display:flex;align-items:center;justify-content:space-between">
+            <span>🔀 ${altUnit?.name ?? 'Otra unidad'}</span>
+            <span data-undo-alt style="cursor:pointer;font-weight:800" title="Deshacer">✕</span>
+          </div>
+        <input type="number" min="0" step="any" value="${n.free ? 0 : n.price}" ${n.free ? 'disabled' : ''}
+          data-price-input
+          style="width:100%;box-sizing:border-box;margin-top:3px;padding:3px 4px;border-radius:6px;
+          border:1px solid var(--color-border);background:var(--color-surface);color:var(--color-text);
+          font-size:.82rem;font-weight:700;${n.free ? 'opacity:.5' : ''}">
+        <label style="display:flex;align-items:center;gap:4px;margin-top:4px;font-size:.6rem;color:var(--color-text-3);cursor:pointer">
+          <input type="checkbox" data-free-toggle ${n.free ? 'checked' : ''} style="margin:0"> sin cargo
+        </label>`;
+        cell.querySelector('[data-undo-alt]').addEventListener('click', (e) => {
+          e.stopPropagation();
+          n.altUnitId = null;
+          n.occupied  = true; // vuelve a estar bloqueada por la reserva real
+          n.free = false;
+          const idx = nightsData.findIndex(x => x.date === n.date);
+          const fresh = renderCell(n);
+          grid.replaceChild(fresh, grid.children[idx]);
+          recalc();
+        });
         return cell;
       }
       cell.innerHTML = `
@@ -2463,10 +2615,12 @@ export class Calendar {
       const total = Math.max(0, subtotal - discAmt + surcAmt + lcoAmt);
       const freeCount = nightsData.filter(n => n.free).length;
       const occCount  = nightsData.filter(n => n.occupied).length;
+      const altCount  = nightsData.filter(n => n.altUnitId).length;
 
       document.getElementById('cq-summary-nights').innerHTML =
         `${nightsData.length} noche${nightsData.length !== 1 ? 's' : ''}` +
         (occCount  ? ` <span style="color:#ef4444">· ${occCount} ocupada${occCount !== 1 ? 's' : ''}</span>${suggestionHtml}` : '') +
+        (altCount  ? ` <span style="color:#8b5cf6">· ${altCount} en otra unidad</span>` : '') +
         (freeCount ? ` <span style="color:#22c55e">· ${freeCount} sin cargo</span>` : '') +
         (discAmt ? ` <span style="color:#ef4444">· −${formatARS(discAmt)}</span>` : '') +
         (surcAmt ? ` <span style="color:#f59e0b">· +${formatARS(surcAmt)}</span>` : '') +
@@ -2526,7 +2680,7 @@ export class Calendar {
         unit_id:         unitId,
         check_in:        checkIn,
         check_out:       checkOut,
-        nights_detail:   nightsData.map(n => ({ date: n.date, price: n.price, free: !!n.free, occupied: !!n.occupied })),
+        nights_detail:   nightsData.map(n => ({ date: n.date, price: n.price, free: !!n.free, occupied: !!n.occupied, altUnitId: n.altUnitId ?? null })),
         discount_mode:   calc.discRaw ? calc.discMode : null,
         discount_value:  calc.discRaw || 0,
         surcharge_mode:  calc.surcRaw ? calc.surcMode : null,
@@ -2537,6 +2691,8 @@ export class Calendar {
         subtotal:        calc.subtotal,
         total:            calc.total,
         guest_name:       document.getElementById('cq-guest').value.trim() || null,
+        adults:           parseInt(document.getElementById('cq-adults')?.value)   || 2,
+        children:         parseInt(document.getElementById('cq-children')?.value) || 0,
         notes:            document.getElementById('cq-notes').value.trim() || null,
         created_by:       AppContext.user?.id ?? null,
       };
@@ -2569,12 +2725,24 @@ export class Calendar {
         if (!confirm('El total es $0 — ¿convertir en reserva de todas formas?')) return;
       }
 
+      const hasSplit = payload.nights_detail.some(n => n.altUnitId);
+      if (hasSplit && !payload.guest_name) {
+        showToast('Para dividir la estadía entre 2 unidades, cargá el nombre del huésped', 'error');
+        return;
+      }
+
       // Guardar (o actualizar) la cotización primero, para no perder el
       // detalle noche a noche aunque la reserva quede con precio promedio.
       const { data: savedQuote, error } = existingQuote
         ? await updateQuote(this.db, existingQuote.id, payload)
         : await createQuote(this.db, payload);
       if (error) { showToast('Error al guardar la cotización', 'error'); return; }
+
+      if (hasSplit) {
+        close();
+        await this._createSplitBooking(payload, savedQuote.id, unitId, checkIn, checkOut);
+        return;
+      }
 
       const billableNights = payload.nights_detail.filter(n => !n.free).length;
       const freeCount      = payload.nights_detail.length - billableNights;
@@ -2673,6 +2841,168 @@ export class Calendar {
         showToast(`Reserva precargada: ${freeCount} noche${freeCount !== 1 ? 's' : ''} sin cargo aplicada${freeCount !== 1 ? 's' : ''} — no se cobra${freeCount !== 1 ? 'n' : ''}`, 'info');
       }
     });
+  }
+
+  // ══════════════════════════════════════════════════
+  // ESTADÍA DIVIDIDA — 1 sola reserva, 2 unidades por tramos de fecha.
+  // Camino aislado (no toca booking-form.js): mismo huésped, misma
+  // estadía total, mismo descuento/recargo/late-checkout — solo cambia
+  // qué unidad cubre cada noche. Se llama únicamente cuando alguna noche
+  // de la Cotización Rápida quedó resuelta con "🔀 Completar en otra unidad".
+  // ══════════════════════════════════════════════════
+  async _createSplitBooking(payload, quoteId, primaryUnitId, checkIn, checkOut) {
+    showToast('Creando reserva dividida…', 'info');
+    try {
+      const billableNights = payload.nights_detail.filter(n => !n.free).length;
+      const freeCount      = payload.nights_detail.length - billableNights;
+      const avgPrice       = billableNights > 0 ? Math.round(payload.subtotal / billableNights) : 0;
+
+      // Mismas conversiones %/$ que usa booking-form.js al guardar, para
+      // que el trigger de la base (recalculate_booking_totals) calcule
+      // exactamente lo mismo que ya calculó esta planilla.
+      const discPct = payload.discount_mode === 'amt'
+        ? (payload.subtotal > 0 ? Math.min(100, (payload.discount_value / payload.subtotal) * 100) : 0)
+        : (payload.discount_value || 0);
+      const surchAmt = payload.surcharge_mode === 'pct'
+        ? Math.round(payload.subtotal * (payload.surcharge_value || 0) / 100)
+        : (payload.surcharge_value || 0);
+      const discAmt  = Math.round(payload.subtotal * (discPct / 100));
+      const lateAmt  = (payload.late_checkout && payload.late_checkout_paid)
+        ? Math.round(payload.late_checkout_amount || avgPrice * 0.5) : 0;
+      const total    = Math.max(0, payload.subtotal - discAmt + surchAmt + lateAmt);
+
+      // ── Agrupar noches por unidad (primaria + cada unidad alternativa) ──
+      const segmentFor = (dates) => {
+        const sorted = dates.slice().sort();
+        const to = new Date(sorted[sorted.length - 1] + 'T12:00:00');
+        to.setDate(to.getDate() + 1);
+        return { from: sorted[0], to: toISODate(to) };
+      };
+      // Precio real de ESA unidad (promedio de sus propias noches pagas) —
+      // más preciso que repartir el promedio general entre las 2 unidades,
+      // y consistente con cómo el resto de la app ya usa booking_units.price_per_night
+      // para el desglose "por departamento" (tooltips, finanzas, estadísticas).
+      const avgPriceFor = (dates) => {
+        const nights = payload.nights_detail.filter(n => dates.includes(n.date) && !n.free);
+        if (!nights.length) return 0;
+        return Math.round(nights.reduce((s, n) => s + n.price, 0) / nights.length);
+      };
+      const primaryDates = payload.nights_detail.filter(n => !n.altUnitId).map(n => n.date);
+      const altGroups = new Map();
+      payload.nights_detail.forEach(n => {
+        if (!n.altUnitId) return;
+        if (!altGroups.has(n.altUnitId)) altGroups.set(n.altUnitId, []);
+        altGroups.get(n.altUnitId).push(n.date);
+      });
+      const unitLabel = (id) => this.ctx.units?.find(u => u.id === id)?.name ?? 'Unidad';
+
+      const unitSegments = [];
+      if (primaryDates.length) {
+        unitSegments.push({ unit_id: primaryUnitId, price_per_night: avgPriceFor(primaryDates), ...segmentFor(primaryDates) });
+      }
+      altGroups.forEach((dates, altId) => {
+        unitSegments.push({ unit_id: altId, price_per_night: avgPriceFor(dates), ...segmentFor(dates) });
+      });
+
+      // ── Huésped: la Cotización Rápida solo pide el nombre — se crea
+      //    un huésped mínimo, editable después desde la reserva ──────
+      const [fn, ...rest] = payload.guest_name.trim().split(' ');
+      const { data: newGuest, error: gErr } = await this.db.from('guests').insert({
+        hotel_id: this.ctx.hotelId, first_name: fn || 'Huésped', last_name: rest.join(' ') || '',
+      }).select('id').single();
+      if (gErr) throw new Error('No fue posible crear el huésped: ' + gErr.message);
+
+      const detailLines = payload.nights_detail
+        .map(n => `${this._fmtShort(n.date)}: ${n.free ? 'sin cargo' : formatARS(n.price)}${n.altUnitId ? ` (${unitLabel(n.altUnitId)})` : ''}`)
+        .join(' · ');
+      const segmentLines = unitSegments
+        .map(s => `${unitLabel(s.unit_id)}: ${this._fmtShort(s.from)} → ${this._fmtShort(s.to)}`)
+        .join(' · ');
+      const notesForBooking = [
+        '🔀 Estadía dividida entre 2 unidades:',
+        segmentLines,
+        '🧮 Cotización aplicada:',
+        detailLines,
+        `TOTAL cotizado: ${formatARS(payload.total)}`,
+        payload.notes ? `Notas: ${payload.notes}` : '',
+      ].filter(Boolean).join('\n');
+
+      const corePayload = {
+        hotel_id: this.ctx.hotelId,
+        guest_id: newGuest.id,
+        check_in: checkIn,
+        check_out: checkOut,
+        source: 'direct',
+        price_per_night: avgPrice,
+        discount_pct: discPct,
+        surcharge_amount: surchAmt,
+        total_amount: total,
+        total_paid: 0,
+        balance: total,
+        notes: notesForBooking,
+        status: 'pending',
+        late_checkout: !!payload.late_checkout,
+        late_checkout_charged: payload.late_checkout ? !!payload.late_checkout_paid : true,
+      };
+
+      let { data: newB, error: insErr } = await this.db.from('bookings')
+        .insert({ ...corePayload, free_nights: freeCount }).select('id').single();
+      if (insErr?.message?.includes('free_nights') || insErr?.message?.includes('does not exist')) {
+        const retry = await this.db.from('bookings').insert(corePayload).select('id').single();
+        newB = retry.data; insErr = retry.error;
+      }
+      if (insErr) throw new Error('No fue posible crear la reserva: ' + insErr.message);
+
+      try {
+        await this.db.from('bookings').update({
+          pax: (payload.adults || 2) + (payload.children || 0),
+          adults: payload.adults || 2, children: payload.children || 0,
+        }).eq('id', newB.id);
+      } catch { /* columnas opcionales, silencioso */ }
+
+      let { error: buErr } = await this.db.from('booking_units').insert(
+        unitSegments.map(s => ({
+          booking_id: newB.id, unit_id: s.unit_id, price_per_night: s.price_per_night,
+          segment_check_in: s.from, segment_check_out: s.to,
+        }))
+      );
+      if (buErr?.message?.includes('segment_check_in') || buErr?.message?.includes('does not exist')) {
+        // Migración de "estadía dividida" no corrida todavía en esta base —
+        // reintentamos sin los tramos para no dejar la reserva sin unidades
+        // asignadas (huérfana). Igual quedan las 2 unidades en la reserva,
+        // solo que sin el corte de fechas — ver notas de la reserva.
+        console.warn('[SplitBooking] Falta correr migration_quick_quotes.sql — guardando sin tramos de fecha');
+        const retry = await this.db.from('booking_units').insert(
+          unitSegments.map(s => ({ booking_id: newB.id, unit_id: s.unit_id, price_per_night: s.price_per_night }))
+        );
+        buErr = retry.error;
+      }
+      if (buErr) throw new Error('Reserva creada, pero falló asignar las unidades: ' + buErr.message);
+
+      await markQuoteConverted(this.db, quoteId, newB.id);
+      cache?.invalidate?.('bookings');
+
+      Bus.emit(EVENTS.BOOKING_CREATED, {
+        bookingId: newB.id, guestName: payload.guest_name,
+        unitNames: unitSegments.map(s => unitLabel(s.unit_id)),
+        checkIn, checkOut, pax: (payload.adults || 2) + (payload.children || 0), total,
+      });
+
+      showToast(`✓ Reserva dividida creada: ${segmentLines}`, 'success');
+      document.dispatchEvent(new CustomEvent('booking:changed'));
+
+      // Ofrecer completar datos (teléfono, DNI, seña) sin forzarlo —
+      // abrir para editar es seguro: el guardado de booking-form.js ya
+      // preserva los tramos de fecha si no se cambian las unidades.
+      setTimeout(() => {
+        if (confirm('Reserva dividida creada ✓\n\n¿Abrir para completar datos del huésped o cargar una seña?')) {
+          this.bookingForm.openEdit(newB.id);
+        }
+      }, 300);
+    } catch (err) {
+      console.error('[SplitBooking]', err);
+      showToast(err.message || 'Error creando la reserva dividida', 'error');
+    }
   }
 
   // ── Bloquear rango ──────────────────────────────

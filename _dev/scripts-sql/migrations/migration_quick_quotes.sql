@@ -55,3 +55,16 @@ END $$;
 ALTER TABLE quick_quotes ADD COLUMN IF NOT EXISTS late_checkout        BOOLEAN DEFAULT false;
 ALTER TABLE quick_quotes ADD COLUMN IF NOT EXISTS late_checkout_paid   BOOLEAN;
 ALTER TABLE quick_quotes ADD COLUMN IF NOT EXISTS late_checkout_amount NUMERIC;
+
+-- ── Estadía dividida entre 2 unidades (Cotización Rápida → "Completar
+--    estadía en otra unidad") — cada fila de booking_units puede cubrir
+--    solo UN TRAMO de fechas dentro de la estadía completa de la reserva.
+--    Si quedan en NULL, la unidad cubre la estadía completa (comportamiento
+--    de siempre, 100% compatible con todo lo que ya existe). ──────────────
+ALTER TABLE booking_units ADD COLUMN IF NOT EXISTS segment_check_in  DATE;
+ALTER TABLE booking_units ADD COLUMN IF NOT EXISTS segment_check_out DATE;
+
+-- ── Pasajeros de la cotización (para el chequeo de capacidad al
+--    ofrecer "Completar estadía en otra unidad") ──────────────────
+ALTER TABLE quick_quotes ADD COLUMN IF NOT EXISTS adults   INTEGER DEFAULT 2;
+ALTER TABLE quick_quotes ADD COLUMN IF NOT EXISTS children INTEGER DEFAULT 0;
