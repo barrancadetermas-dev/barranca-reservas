@@ -2952,6 +2952,7 @@ export class Calendar {
         hotel_id: this.ctx.hotelId, first_name: fn || 'Huésped', last_name: rest.join(' ') || '',
       }).select('id').single();
       if (gErr) throw new Error('No fue posible crear el huésped: ' + gErr.message);
+      console.log('[SplitBooking] 1/3 huésped creado:', newGuest.id);
 
       const detailLines = payload.nights_detail
         .map(n => `${this._fmtShort(n.date)}: ${n.free ? 'sin cargo' : formatARS(n.price)}${n.altUnitId ? ` (${unitLabel(n.altUnitId)})` : ''}`)
@@ -2993,6 +2994,7 @@ export class Calendar {
         newB = retry.data; insErr = retry.error;
       }
       if (insErr) throw new Error('No fue posible crear la reserva: ' + insErr.message);
+      console.log('[SplitBooking] 2/3 reserva creada:', newB.id);
 
       try {
         await this.db.from('bookings').update({
@@ -3019,6 +3021,7 @@ export class Calendar {
         buErr = retry.error;
       }
       if (buErr) throw new Error('Reserva creada, pero falló asignar las unidades: ' + buErr.message);
+      console.log('[SplitBooking] 3/3 unidades asignadas:', unitSegments);
 
       await markQuoteConverted(this.db, quoteId, newB.id);
       cache?.invalidate?.('bookings');
@@ -3037,8 +3040,16 @@ export class Calendar {
       // un confirm() disparado por setTimeout puede no depender de un
       // gesto del usuario y el navegador lo bloquea en silencio, dejando
       // la sensación de "apreté convertir y no pasó nada".
-      setTimeout(() => {
-        this.bookingForm.openEdit(newB.id);
+      // OJO: el try/catch de arriba NO cubre lo que pasa DENTRO de un
+      // setTimeout (corre en otro tick) — si openEdit() fallaba acá,
+      // quedaba en silencio total, sin toast ni error visible. Blindado.
+      setTimeout(async () => {
+        try {
+          await this.bookingForm.openEdit(newB.id);
+        } catch (openErr) {
+          console.error('[SplitBooking] Error abriendo la reserva creada para editar:', openErr);
+          showToast(`Reserva creada ✓ pero no se pudo abrir para editar (buscala en Reservas — ID: ${newB.id})`, 'warning');
+        }
       }, 300);
     } catch (err) {
       console.error('[SplitBooking]', err);
