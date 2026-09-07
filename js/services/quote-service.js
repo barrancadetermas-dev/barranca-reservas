@@ -3,16 +3,42 @@
 // CRUD sobre quick_quotes. Ver migration_quick_quotes.sql
 // ══════════════════════════════════════════════════
 
+// Columnas que se agregaron después de la primera versión de la tabla
+// (late_checkout*, adults, children) — si migration_quick_quotes.sql
+// todavía no se corrió en esta base, reintenta sin ellas para no dejar
+// la cotización sin guardar por una columna que falta.
+const OPTIONAL_COLUMNS = ['late_checkout', 'late_checkout_paid', 'late_checkout_amount', 'adults', 'children'];
+
+function isMissingColumnError(error) {
+  return !!error?.message && (error.message.includes('does not exist') || error.code === '42703' || error.code === 'PGRST204');
+}
+
+function stripOptionalColumns(payload) {
+  const clean = { ...payload };
+  OPTIONAL_COLUMNS.forEach(k => delete clean[k]);
+  return clean;
+}
+
 export async function createQuote(db, payload) {
-  const { data, error } = await db.from('quick_quotes').insert(payload).select().single();
+  let { data, error } = await db.from('quick_quotes').insert(payload).select().single();
+  if (error && isMissingColumnError(error)) {
+    console.warn('[Quote] createQuote: reintentando sin columnas opcionales (falta correr migration_quick_quotes.sql) —', error.message);
+    ({ data, error } = await db.from('quick_quotes').insert(stripOptionalColumns(payload)).select().single());
+  }
   if (error) { console.warn('[Quote] createQuote:', error.message); return { data: null, error }; }
   return { data, error: null };
 }
 
 export async function updateQuote(db, id, fields) {
-  const { data, error } = await db.from('quick_quotes')
+  let { data, error } = await db.from('quick_quotes')
     .update({ ...fields, updated_at: new Date().toISOString() })
     .eq('id', id).select().single();
+  if (error && isMissingColumnError(error)) {
+    console.warn('[Quote] updateQuote: reintentando sin columnas opcionales (falta correr migration_quick_quotes.sql) —', error.message);
+    ({ data, error } = await db.from('quick_quotes')
+      .update({ ...stripOptionalColumns(fields), updated_at: new Date().toISOString() })
+      .eq('id', id).select().single());
+  }
   if (error) { console.warn('[Quote] updateQuote:', error.message); return { data: null, error }; }
   return { data, error: null };
 }

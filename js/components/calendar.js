@@ -2740,19 +2740,24 @@ export class Calendar {
     });
 
     document.getElementById('cq-convert').addEventListener('click', async () => {
+     console.log('[QuickQuote] click en Convertir en reserva');
      try {
       const payload = buildPayload();
       const stillOccupied = nightsData.filter(n => n.occupied).length;
+      console.log('[QuickQuote] stillOccupied:', stillOccupied, '| total:', payload.total, '| hasSplit:', payload.nights_detail.some(n => n.altUnitId), '| guest_name:', payload.guest_name);
       if (stillOccupied > 0) {
+        console.log('[QuickQuote] CORTA: quedan noches ocupadas sin resolver');
         showToast(`Quedan ${stillOccupied} noche${stillOccupied !== 1 ? 's' : ''} ocupada${stillOccupied !== 1 ? 's' : ''} sin resolver — tocá "🔀 Otra unidad" en esa celda, o cambiá el rango`, 'error');
         return;
       }
       if (!payload.total || payload.nights_detail.every(n => n.free)) {
-        if (!confirm('El total es $0 — ¿convertir en reserva de todas formas?')) return;
+        console.log('[QuickQuote] total en $0 — pidiendo confirmación');
+        if (!confirm('El total es $0 — ¿convertir en reserva de todas formas?')) { console.log('[QuickQuote] CORTA: usuario canceló el confirm de $0'); return; }
       }
 
       const hasSplit = payload.nights_detail.some(n => n.altUnitId);
       if (hasSplit && !payload.guest_name) {
+        console.log('[QuickQuote] CORTA: falta nombre de huésped para dividir estadía');
         showToast('Para dividir la estadía entre 2 unidades, cargá el nombre del huésped', 'error');
         const guestEl = document.getElementById('cq-guest');
         if (guestEl) {
@@ -2770,12 +2775,19 @@ export class Calendar {
 
       // Guardar (o actualizar) la cotización primero, para no perder el
       // detalle noche a noche aunque la reserva quede con precio promedio.
+      console.log('[QuickQuote] guardando cotización…');
       const { data: savedQuote, error } = existingQuote
         ? await updateQuote(this.db, existingQuote.id, payload)
         : await createQuote(this.db, payload);
-      if (error) { showToast('Error al guardar la cotización', 'error'); return; }
+      if (error) {
+        console.log('[QuickQuote] CORTA: error al guardar la cotización', error);
+        showToast('Error al guardar la cotización: ' + (error.message ?? ''), 'error');
+        return;
+      }
+      console.log('[QuickQuote] cotización guardada:', savedQuote?.id);
 
       if (hasSplit) {
+        console.log('[QuickQuote] es reserva dividida → llamando _createSplitBooking');
         close();
         await this._createSplitBooking(payload, savedQuote.id, unitId, checkIn, checkOut);
         return;
