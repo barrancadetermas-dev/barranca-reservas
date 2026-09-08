@@ -612,6 +612,19 @@ export class Calendar {
       const unitBks = (this._lastRenderedBookings ?? [])
         .filter(b => !b.is_blocked && b.status !== 'cancelled' && b.status !== 'blocked'
                   && (b.booking_units ?? []).some(bu => bu.unit_id === unit.id))
+        // Estadía dividida entre 2 unidades: acá abajo se calculan
+        // recambios y huecos comparando checkout↔checkin CONSECUTIVOS de
+        // esta unidad puntual — si se usan las fechas generales de la
+        // reserva (en vez del tramo real que le toca a ESTA unidad), una
+        // reserva dividida "tapa" con su rango completo a la reserva que
+        // ocupa el medio, y nunca se detecta el recambio en ninguno de
+        // los 2 bordes del tramo.
+        .map(b => {
+          const bu  = (b.booking_units ?? []).find(x => x.unit_id === unit.id);
+          const uCi = bu?.segment_check_in  ?? b.check_in;
+          const uCo = bu?.segment_check_out ?? b.check_out;
+          return (uCi === b.check_in && uCo === b.check_out) ? b : { ...b, check_in: uCi, check_out: uCo };
+        })
         .sort((a, b) => a.check_in < b.check_in ? -1 : 1);
 
       // Late checkout map — el día de salida queda "medio ocupado"
@@ -2756,6 +2769,40 @@ export class Calendar {
       }
 
       const hasSplit = payload.nights_detail.some(n => n.altUnitId);
+
+      // LIMITACIÓN ACTUAL: cada unidad de una reserva dividida solo puede
+      // tener UN tramo de fechas (una entrada en booking_units). Si la
+      // unidad original queda libre, ocupada por otra reserva, y libre
+      // de nuevo (unidad "sandwich" — ej. libre 9-11, Masmanian 11-14,
+      // libre otra vez 14-16), necesitaría DOS tramos separados en la
+      // misma unidad, que hoy no se puede representar. Se detecta acá
+      // y se bloquea con una explicación, en vez de guardar mal.
+      const isContiguous = (dates) => {
+        const sorted = [...new Set(dates)].sort();
+        for (let i = 1; i < sorted.length; i++) {
+          const prev = new Date(sorted[i-1] + 'T12:00:00');
+          prev.setDate(prev.getDate() + 1);
+          if (toISODate(prev) !== sorted[i]) return false;
+        }
+        return true;
+      };
+      if (hasSplit) {
+        const primaryDatesCheck = payload.nights_detail.filter(n => !n.altUnitId).map(n => n.date);
+        const altGroupsCheck = new Map();
+        payload.nights_detail.forEach(n => { if (n.altUnitId) { if (!altGroupsCheck.has(n.altUnitId)) altGroupsCheck.set(n.altUnitId, []); altGroupsCheck.get(n.altUnitId).push(n.date); } });
+
+        let brokenUnitName = null;
+        if (!isContiguous(primaryDatesCheck)) brokenUnitName = unit?.name ?? 'la unidad original';
+        else for (const [altId, dates] of altGroupsCheck) {
+          if (!isContiguous(dates)) { brokenUnitName = this.ctx.units?.find(u => u.id === altId)?.name ?? 'la otra unidad'; break; }
+        }
+
+        if (brokenUnitName) {
+          console.log('[QuickQuote] CORTA: alguna unidad quedaría con 2 tramos separados (no soportado hoy)');
+          showToast(`"${brokenUnitName}" quedaría con 2 tramos separados (libre-ocupada-libre) — hoy solo se admite 1 tramo por unidad. Asigná esa unidad completa a "Otra unidad" desde la primera noche bloqueada en adelante, para que quede en un solo tramo continuo.`, 'error');
+          return;
+        }
+      }
       // El form de reserva exige apellido obligatorio (Paso 1) — si acá
       // solo se carga un nombre, se crea el huésped con apellido vacío y
       // al guardar la reserva creada, la validación lo rebota en silencio
