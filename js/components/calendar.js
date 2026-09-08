@@ -2344,7 +2344,7 @@ export class Calendar {
         ${overlapWarning}
 
         <div style="display:flex;gap:8px;margin-bottom:12px">
-          <input id="cq-guest" type="text" placeholder="Nombre del huésped (opcional)" value="${guestName.replace(/"/g,'&quot;')}"
+          <input id="cq-guest" type="text" placeholder="Nombre y apellido (obligatorio solo si dividís entre 2 unidades)" value="${guestName.replace(/"/g,'&quot;')}"
             style="flex:2;min-width:0;box-sizing:border-box;padding:8px 10px;border-radius:8px;border:1px solid var(--color-border);
             background:var(--color-surface-2);color:var(--color-text);font-size:.82rem">
           <input id="cq-adults" type="number" min="1" step="1" value="${adults}" title="Adultos"
@@ -2756,14 +2756,20 @@ export class Calendar {
       }
 
       const hasSplit = payload.nights_detail.some(n => n.altUnitId);
-      if (hasSplit && !payload.guest_name) {
-        console.log('[QuickQuote] CORTA: falta nombre de huésped para dividir estadía');
-        showToast('Para dividir la estadía entre 2 unidades, cargá el nombre del huésped', 'error');
+      // El form de reserva exige apellido obligatorio (Paso 1) — si acá
+      // solo se carga un nombre, se crea el huésped con apellido vacío y
+      // al guardar la reserva creada, la validación lo rebota en silencio
+      // (parecía que "Guardar cambios" no hacía nada). Por eso acá abajo
+      // pedimos nombre Y apellido, no solo que no esté vacío.
+      const nameWords = (payload.guest_name ?? '').trim().split(/\s+/).filter(Boolean);
+      if (hasSplit && nameWords.length < 2) {
+        console.log('[QuickQuote] CORTA: falta nombre y apellido para dividir estadía');
+        showToast('Para dividir la estadía entre 2 unidades, cargá nombre Y apellido del huésped', 'error');
         const guestEl = document.getElementById('cq-guest');
         if (guestEl) {
           guestEl.style.borderColor = '#ef4444';
           guestEl.style.boxShadow = '0 0 0 2px #ef444440';
-          guestEl.placeholder = '⚠️ Requerido para dividir entre 2 unidades';
+          guestEl.placeholder = '⚠️ Nombre Y apellido (obligatorio para dividir)';
           guestEl.focus();
           guestEl.addEventListener('input', function clearErr() {
             guestEl.style.borderColor = ''; guestEl.style.boxShadow = '';
@@ -2952,11 +2958,16 @@ export class Calendar {
         unitSegments.push({ unit_id: altId, price_per_night: avgPriceFor(dates), ...segmentFor(dates) });
       });
 
-      // ── Huésped: la Cotización Rápida solo pide el nombre — se crea
-      //    un huésped mínimo, editable después desde la reserva ──────
-      const [fn, ...rest] = payload.guest_name.trim().split(' ');
+      // ── Huésped: la Cotización Rápida pide nombre Y apellido (ya
+      //    validado arriba) — se crea un huésped mínimo, completable
+      //    después desde la reserva. Red de seguridad: el form de reserva
+      //    exige apellido no vacío, así que nunca lo dejamos en blanco
+      //    (si de algún modo llegó un solo nombre, se usa dos veces).
+      const nameWords = payload.guest_name.trim().split(/\s+/).filter(Boolean);
+      const fn = nameWords[0] || 'Huésped';
+      const ln = nameWords.slice(1).join(' ') || nameWords[0] || 'S/D';
       const { data: newGuest, error: gErr } = await this.db.from('guests').insert({
-        hotel_id: this.ctx.hotelId, first_name: fn || 'Huésped', last_name: rest.join(' ') || '',
+        hotel_id: this.ctx.hotelId, first_name: fn, last_name: ln,
       }).select('id').single();
       if (gErr) throw new Error('No fue posible crear el huésped: ' + gErr.message);
       console.log('[SplitBooking] 1/3 huésped creado:', newGuest.id);
