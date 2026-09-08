@@ -2360,7 +2360,7 @@ export class Calendar {
         <div style="font-size:.7rem;font-weight:700;color:var(--color-text-3);margin-bottom:6px">
           PRECIO POR NOCHE · tocá una celda para editarla
         </div>
-        <div id="cq-grid" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px"></div>
+        <div id="cq-grid" style="display:grid;grid-template-columns:repeat(auto-fill,86px);gap:6px;margin-bottom:14px"></div>
 
         <div style="display:grid;grid-template-columns:1fr 1fr 1.3fr;gap:8px;margin-bottom:14px">
           <div style="background:var(--color-surface-2);border-radius:10px;padding:8px 10px">
@@ -2525,7 +2525,7 @@ export class Calendar {
       const cell = document.createElement('div');
       cell.className = 'cq-cell';
       cell.dataset.date = n.date;
-      cell.style.cssText = `min-width:86px;flex:1 0 86px;border:1px solid var(--color-border);
+      cell.style.cssText = `width:86px;border:1px solid var(--color-border);
         border-radius:9px;padding:6px 7px;background:${n.occupied ? '#ef444414' : n.free ? '#22c55e12' : wknd ? 'var(--color-surface-2)' : 'var(--color-surface)'};
         ${n.occupied ? 'border-color:#ef444460' : wknd && !n.free ? 'border-color:#f59e0b55' : ''}`;
       if (n.occupied) {
@@ -2812,16 +2812,11 @@ export class Calendar {
 
       // El form de reserva sólo admite un precio único por noche —
       // el desglose exacto (que puede variar por noche, ej. finde largo)
-      // queda además en las notas para no perder el detalle cotizado.
-      const detailLines = payload.nights_detail
-        .map(n => `${this._fmtShort(n.date)}: ${n.free ? 'sin cargo' : formatARS(n.price)}`)
-        .join(' · ');
-      const notesForBooking = [
-        '🧮 Cotización aplicada:',
-        detailLines,
-        `TOTAL cotizado: ${formatARS(payload.total)}`,
-        payload.notes ? `Notas: ${payload.notes}` : '',
-      ].filter(Boolean).join('\n');
+      // queda completo en la cotización guardada (quick_quotes); acá
+      // en las notas de la reserva va solo un resumen corto, porque
+      // `bookings.notes` tiene un límite duro de 200 caracteres en la
+      // base — un desglose noche a noche lo pasaba de largo siempre.
+      const notesForBooking = this._buildQuoteSummaryNote(payload);
 
       close();
 
@@ -2966,20 +2961,14 @@ export class Calendar {
       if (gErr) throw new Error('No fue posible crear el huésped: ' + gErr.message);
       console.log('[SplitBooking] 1/3 huésped creado:', newGuest.id);
 
-      const detailLines = payload.nights_detail
-        .map(n => `${this._fmtShort(n.date)}: ${n.free ? 'sin cargo' : formatARS(n.price)}${n.altUnitId ? ` (${unitLabel(n.altUnitId)})` : ''}`)
-        .join(' · ');
       const segmentLines = unitSegments
         .map(s => `${unitLabel(s.unit_id)}: ${this._fmtShort(s.from)} → ${this._fmtShort(s.to)}`)
         .join(' · ');
-      const notesForBooking = [
-        '🔀 Estadía dividida entre 2 unidades:',
-        segmentLines,
-        '🧮 Cotización aplicada:',
-        detailLines,
-        `TOTAL cotizado: ${formatARS(payload.total)}`,
-        payload.notes ? `Notas: ${payload.notes}` : '',
-      ].filter(Boolean).join('\n');
+      // `bookings.notes` tiene un límite duro de 200 caracteres en la base
+      // (constraint bookings_notes_check) — el desglose noche a noche
+      // completo queda a salvo en quick_quotes (linkeada más abajo);
+      // acá solo un resumen corto de qué unidad cubre qué tramo.
+      const notesForBooking = this._buildQuoteSummaryNote(payload, `🔀 ${segmentLines}`);
 
       const corePayload = {
         hotel_id: this.ctx.hotelId,
@@ -4698,6 +4687,27 @@ export class Calendar {
     const [,m,d] = iso.split('-');
     return `${parseInt(d)} ${MONTH_SHORT[parseInt(m)-1]}`;
   }
+
+  // Resumen corto para `bookings.notes` al convertir una Cotización Rápida.
+  // IMPORTANTE: bookings.notes tiene un límite duro de 200 caracteres en
+  // la base (constraint bookings_notes_check) — nunca meter acá el
+  // desglose noche a noche completo (eso ya queda a salvo en quick_quotes,
+  // linkeada vía markQuoteConverted). Esto es solo un resumen + lo que el
+  // usuario haya escrito en "Notas", recortado con margen de sobra.
+  _buildQuoteSummaryNote(payload, extraLine = '') {
+    const nights = payload.nights_detail.length;
+    const freeN  = payload.nights_detail.filter(n => n.free).length;
+    const parts = [
+      `🧮 Cotización: ${nights}n · ${formatARS(payload.total)}${freeN ? ` (${freeN} s/cargo)` : ''}`,
+      extraLine || '',
+      payload.notes || '',
+    ].filter(Boolean);
+    let note = parts.join(' · ');
+    const LIMIT = 195; // margen contra el límite real de 200
+    if (note.length > LIMIT) note = note.slice(0, LIMIT - 1) + '…';
+    return note;
+  }
+
   // ══════════════════════════════════════════════════
   // 5. BARRA DE RESUMEN SUPERIOR
   // ══════════════════════════════════════════════════
