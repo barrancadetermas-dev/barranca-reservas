@@ -2427,6 +2427,27 @@ export class BookingForm {
       const notes = document.getElementById('f-notes').value.trim().slice(0, 200);
       const source = document.querySelector('input[name="booking-source"]:checked')?.value ?? 'direct';
 
+      // Estadía dividida entre 2 unidades (Cotización Rápida → "Completar
+      // estadía en otra unidad"): esas filas de booking_units tienen
+      // segment_check_in/segment_check_out propios. Los leemos ANTES de
+      // borrar/validar, tanto para no perderlos al guardar como para que
+      // la validación de superposición de más abajo respete el tramo de
+      // cada unidad (si no, la unidad que quedó libre fuera del tramo
+      // bloqueado —la razón misma de dividir la estadía— se marca como
+      // "superpuesta" contra la reserva original que motivó la división).
+      let bookingId = this._editingId;
+      let existingSegments = new Map(); // unit_id -> { segment_check_in, segment_check_out }
+      if (bookingId) {
+        try {
+          const { data: prevUnits } = await this.db.from('booking_units')
+            .select('unit_id, segment_check_in, segment_check_out')
+            .eq('booking_id', bookingId);
+          (prevUnits ?? []).forEach(u => {
+            if (u.segment_check_in || u.segment_check_out) existingSegments.set(u.unit_id, u);
+          });
+        } catch { /* columnas nuevas — si no existen, no hay nada que preservar */ }
+      }
+
       const nights   = Math.round((new Date(co) - new Date(ci)) / 86400000);
       const billable = Math.max(0, nights - freeN);
       const subtotal = price * billable;
@@ -2471,9 +2492,18 @@ export class BookingForm {
           'validar disponibilidad'
         );
 
-        const realConflicts = (conflicts ?? []).filter(c =>
-          !this._editingId || c.bookings?.id !== this._editingId
-        );
+        // Estadía dividida entre 2 unidades: cada unidad de ESTA reserva
+        // solo ocupa su propio tramo (existingSegments), no el rango
+        // completo — si no se respeta esto, la unidad que quedó libre
+        // fuera del tramo bloqueado (la razón misma de dividir la
+        // estadía) se marca como "superpuesta" contra sí misma.
+        const realConflicts = (conflicts ?? []).filter(c => {
+          if (this._editingId && c.bookings?.id === this._editingId) return false;
+          const seg = existingSegments.get(c.unit_id);
+          const rangeStart = seg?.segment_check_in  ?? ci;
+          const rangeEnd   = seg?.segment_check_out ?? co;
+          return c.bookings.check_in < rangeEnd && c.bookings.check_out > rangeStart;
+        });
         if (realConflicts.length) {
           const g = realConflicts[0].bookings?.guests;
           const name = g ? `${g.first_name} ${g.last_name}` : 'otro huésped';
@@ -2558,23 +2588,6 @@ export class BookingForm {
       const adults   = parseInt(document.getElementById('f-adults')?.value)   || 1;
       const children = parseInt(document.getElementById('f-children')?.value) || 0;
 
-      let bookingId = this._editingId;
-      // Estadía dividida entre 2 unidades (Cotización Rápida → "Completar
-      // estadía en otra unidad"): esas filas de booking_units tienen
-      // segment_check_in/segment_check_out propios. Los leemos ANTES de
-      // borrar para no perderlos si el usuario solo está agregando un
-      // teléfono o una seña, sin tocar las unidades/fechas divididas.
-      let existingSegments = new Map(); // unit_id -> { segment_check_in, segment_check_out }
-      if (bookingId) {
-        try {
-          const { data: prevUnits } = await this.db.from('booking_units')
-            .select('unit_id, segment_check_in, segment_check_out')
-            .eq('booking_id', bookingId);
-          (prevUnits ?? []).forEach(u => {
-            if (u.segment_check_in || u.segment_check_out) existingSegments.set(u.unit_id, u);
-          });
-        } catch { /* columnas nuevas — si no existen, no hay nada que preservar */ }
-      }
       if (bookingId) {
         // UPDATE — intentar con free_nights primero
         let { error: upErr } = await this._withTimeout(this.db.from('bookings').update({
