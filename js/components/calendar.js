@@ -3309,6 +3309,10 @@ export class Calendar {
       const bookingId = bar.dataset.bookingId;
       const booking   = (this._lastRenderedBookings ?? []).find(b => b.id === bookingId);
       if (!booking) return;
+      if (this._isSplitBooking(booking)) {
+        showToast('Esta reserva está dividida entre 2 unidades — para cambiarle fechas, abrila y editala desde ahí (arrastrar/estirar no está soportado todavía)', 'warning');
+        return;
+      }
 
       this._resizeActive = true;
       this._hideTooltip();
@@ -3332,6 +3336,10 @@ export class Calendar {
       const bookingId = bar.dataset.bookingId;
       const booking   = (this._lastRenderedBookings ?? []).find(b => b.id === bookingId);
       if (!booking) return;
+      if (this._isSplitBooking(booking)) {
+        showToast('Esta reserva está dividida entre 2 unidades — para cambiarle fechas, abrila y editala desde ahí (arrastrar/estirar no está soportado todavía)', 'warning');
+        return;
+      }
 
       this._resizeActive = true;
       this._hideTooltip();
@@ -3525,6 +3533,11 @@ export class Calendar {
       const sourceUnitId = cell?.dataset.unitId ?? null;
       const booking      = (this._lastRenderedBookings ?? []).find(b => b.id === bookingId) ?? null;
 
+      if (booking && this._isSplitBooking(booking)) {
+        showToast('Esta reserva está dividida entre 2 unidades — para cambiarle fechas o unidad, abrila y editala desde ahí (arrastrar no está soportado todavía)', 'warning');
+        return;
+      }
+
       // Medir la barra para el ghost
       const barRect = bar.getBoundingClientRect();
 
@@ -3545,9 +3558,19 @@ export class Calendar {
       // Si no tenemos los datos aún, buscar
       if (!booking) {
         this.db.from('bookings')
-          .select('id,check_in,check_out,nights,guests(first_name,last_name),booking_units(unit_id)')
+          .select('id,check_in,check_out,nights,guests(first_name,last_name),booking_units(unit_id,segment_check_in,segment_check_out)')
           .eq('id', bookingId).single()
-          .then(({ data }) => { if (data && _dragState) _dragState.booking = data; });
+          .then(({ data }) => {
+            if (!data || !_dragState) return;
+            if (this._isSplitBooking(data)) {
+              // Recién ahora nos enteramos de que es una reserva dividida —
+              // abortar el arrastre en curso para no corromper los tramos.
+              showToast('Esta reserva está dividida entre 2 unidades — para cambiarle fechas o unidad, abrila y editala desde ahí', 'warning');
+              resetDrag();
+              return;
+            }
+            _dragState.booking = data;
+          });
       }
 
       // Ghost diferido — se crea al primer movimiento real
@@ -3663,6 +3686,10 @@ export class Calendar {
       const bookingId = bar.dataset.bookingId;
       const booking   = (this._lastRenderedBookings ?? []).find(b => b.id === bookingId);
       if (!booking) return;
+      if (this._isSplitBooking(booking)) {
+        showToast('Esta reserva está dividida entre 2 unidades — para cambiarle fechas, abrila y editala desde ahí', 'warning');
+        return;
+      }
 
       const t = e.touches[0];
 
@@ -4891,6 +4918,14 @@ export class Calendar {
     if (!iso) return '';
     const [,m,d] = iso.split('-');
     return `${parseInt(d)} ${MONTH_SHORT[parseInt(m)-1]}`;
+  }
+
+  // Reserva dividida entre 2+ unidades (Cotización Rápida → "Completar
+  // estadía en otra unidad") — arrastrar/estirar el borde todavía no
+  // entiende de tramos por unidad, así que se bloquea explícitamente en
+  // vez de dejar que corrompa segment_check_in/segment_check_out.
+  _isSplitBooking(booking) {
+    return (booking?.booking_units ?? []).some(bu => bu.segment_check_in || bu.segment_check_out);
   }
 
   // Resumen corto para `bookings.notes` al convertir una Cotización Rápida.
