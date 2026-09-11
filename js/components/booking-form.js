@@ -2439,13 +2439,21 @@ export class BookingForm {
       let existingSegments = new Map(); // unit_id -> { segment_check_in, segment_check_out }
       if (bookingId) {
         try {
-          const { data: prevUnits } = await this.db.from('booking_units')
-            .select('unit_id, segment_check_in, segment_check_out')
-            .eq('booking_id', bookingId);
+          const { data: prevUnits } = await this._withTimeout(
+            this.db.from('booking_units')
+              .select('unit_id, segment_check_in, segment_check_out')
+              .eq('booking_id', bookingId),
+            'leer tramos de fecha existentes'
+          );
           (prevUnits ?? []).forEach(u => {
             if (u.segment_check_in || u.segment_check_out) existingSegments.set(u.unit_id, u);
           });
-        } catch { /* columnas nuevas — si no existen, no hay nada que preservar */ }
+        } catch (segErr) {
+          // Columnas nuevas todavía no migradas, timeout, o cualquier otro
+          // problema leyendo tramos: no hay nada que preservar, seguimos
+          // igual que una reserva sin dividir — nunca debe trabar el guardado.
+          console.warn('[BookingForm] No se pudieron leer tramos existentes (se continúa sin preservarlos):', segErr?.message ?? segErr);
+        }
       }
 
       const nights   = Math.round((new Date(co) - new Date(ci)) / 86400000);

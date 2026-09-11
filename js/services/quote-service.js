@@ -119,6 +119,29 @@ export async function fetchAvailableUnitsForNight(db, hotelId, units, dateISO, e
     .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
 }
 
+// Listado de cotizaciones para la pantalla "🧮 Cotizaciones" del calendario.
+// Por defecto trae las "draft" (sin convertir) más recientes primero;
+// pasar status=null para traer todas (incluidas convertidas).
+export async function fetchQuotesList(db, hotelId, { status = 'draft', limit = 100 } = {}) {
+  let q = db.from('quick_quotes')
+    .select('id,unit_id,check_in,check_out,guest_name,total,status,created_at,converted_booking_id,units(name)')
+    .eq('hotel_id', hotelId)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  if (status) q = q.eq('status', status);
+  const { data, error } = await q;
+  if (error) { console.warn('[Quote] fetchQuotesList:', error.message); return []; }
+  return data ?? [];
+}
+
+// Cotización completa (con nights_detail y todo lo demás) para reabrirla
+// en el editor de Cotización Rápida.
+export async function fetchQuoteById(db, id) {
+  const { data, error } = await db.from('quick_quotes').select('*').eq('id', id).single();
+  if (error) { console.warn('[Quote] fetchQuoteById:', error.message); return { data: null, error }; }
+  return { data, error: null };
+}
+
 export async function deleteQuote(db, id) {
   return db.from('quick_quotes').delete().eq('id', id);
 }

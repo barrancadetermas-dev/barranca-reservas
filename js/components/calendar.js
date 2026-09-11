@@ -17,7 +17,7 @@ import { logAction } from '../services/audit-service.js';
 import { cachedQuery, cache } from '../services/supabase-cache.js';
 import { Bus, EVENTS } from '../services/event-bus.js';
 import { fetchMonthlyRates, fetchCustomColumns, monthsInRange, buildTariffGrid, groupRowsByPrice, getSuggestedNightlyPrices } from '../services/tariff-service.js';
-import { createQuote, updateQuote, markQuoteConverted, fetchOverlappingQuotes, fetchOverlappingBookings, fetchAvailableUnitsForNight } from '../services/quote-service.js';
+import { createQuote, updateQuote, markQuoteConverted, fetchOverlappingQuotes, fetchOverlappingBookings, fetchAvailableUnitsForNight, fetchQuotesList, fetchQuoteById, deleteQuote } from '../services/quote-service.js';
 
 const DAY_NAMES   = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
 const MONTH_NAMES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio',
@@ -139,6 +139,10 @@ export class Calendar {
           this._periodModeReady = true;
           this._setupPeriodMode();
         }
+      if (!this._quotesBtnReady) {
+        this._quotesBtnReady = true;
+        document.getElementById('cal-quotes-btn')?.addEventListener('click', () => this._openQuotesList());
+      }
       if (!this._barDragAbort) {
         const grid = document.getElementById('calendar-grid');
         if (grid) {
@@ -2500,26 +2504,60 @@ export class Calendar {
          try {
           const altUnitId = btn.dataset.altId;
           closePop();
-          let price = 0;
+
+          // Extender la unidad alternativa hacia adelante, hasta el final
+          // de la estadía — nunca "volver" a la unidad original después.
+          // Es la limitación de 1 solo tramo por unidad: dejar una noche
+          // libre en el medio en la unidad original arma un "sándwich"
+          // que hoy no se puede guardar. Se resuelve de entrada, sin que
+          // el usuario tenga que saberlo de antemano.
+          const startIdx = nightsData.findIndex(x => x.date === n.date);
+          // Candidatas: TODAS las noches desde acá hasta el final del rango
+          // (incluye las que ya estaban ocupadas por la MISMA reserva que
+          // motivó abrir "Otra unidad" — no solo la noche que tocaste).
+          let candidateExtend = nightsData.slice(startIdx)
+            .filter((night, i) => i === 0 || !night.altUnitId || night.altUnitId === altUnitId);
+          const rangeStart = candidateExtend[0].date;
+          const rangeEndExclusive = toISODate(new Date(new Date(candidateExtend[candidateExtend.length - 1].date + 'T12:00:00').getTime() + 86400000));
+
+          // Verificar que la unidad elegida esté libre en TODO ese tramo —
+          // no alcanza con que esté libre la primera noche; si en el medio
+          // hay OTRA reserva real que también la ocupa, hay que frenar ahí
+          // (esa noche vuelve a quedar "🔒 Ocupada" con su propio botón).
+          let altConflicts = [];
+          try { altConflicts = await fetchOverlappingBookings(this.db, this.ctx.hotelId, altUnitId, rangeStart, rangeEndExclusive); } catch { /* si falla, se sigue sin cortar */ }
+          const altBlockedDates = new Set();
+          altConflicts.forEach(b => {
+            let d = new Date(b.check_in + 'T12:00:00');
+            const end = new Date(b.check_out + 'T12:00:00');
+            while (d < end) { altBlockedDates.add(toISODate(d)); d.setDate(d.getDate() + 1); }
+          });
+          const cutIdx = candidateExtend.findIndex((night, i) => i > 0 && altBlockedDates.has(night.date));
+          const toExtend = cutIdx === -1 ? candidateExtend : candidateExtend.slice(0, cutIdx);
+
+          let suggested = [];
           try {
-            const suggested = await getSuggestedNightlyPrices(this.db, this.ctx.hotelId, altUnitId, n.date, nextDate);
-            price = suggested?.[0]?.price ?? 0;
-          } catch { /* si falla, el usuario la carga a mano */ }
-          n.altUnitId = altUnitId;
-          n.occupied  = false;
-          n.free      = false;
-          n.price     = price;
-          const idx = nightsData.findIndex(x => x.date === n.date);
-          if (idx === -1 || !grid.children[idx]) {
-            console.warn('[QuickQuote] No se encontró la celda a reemplazar, re-dibujando toda la planilla');
-            grid.innerHTML = '';
-            nightsData.forEach(nn => grid.appendChild(renderCell(nn)));
-          } else {
-            const fresh = renderCell(n);
-            grid.replaceChild(fresh, grid.children[idx]);
-          }
+            const extEnd = toISODate(new Date(new Date(toExtend[toExtend.length - 1].date + 'T12:00:00').getTime() + 86400000));
+            suggested = await getSuggestedNightlyPrices(this.db, this.ctx.hotelId, altUnitId, n.date, extEnd);
+          } catch { /* si falla, el usuario carga los precios a mano */ }
+          const priceByDate = new Map(suggested.map(s => [s.date, s.price]));
+
+          toExtend.forEach(night => {
+            night.altUnitId = altUnitId;
+            night.occupied  = false;
+            night.free      = false;
+            night.price     = priceByDate.get(night.date) ?? 0;
+          });
+
+          grid.innerHTML = '';
+          nightsData.forEach(nn => grid.appendChild(renderCell(nn)));
           recalc();
-          showToast('Noche completada con otra unidad — revisá el precio sugerido', 'success');
+          showToast(
+            toExtend.length > 1
+              ? `${toExtend.length} noches completadas con otra unidad (hasta el final de la estadía) — revisá los precios sugeridos`
+              : 'Noche completada con otra unidad — revisá el precio sugerido',
+            'success'
+          );
          } catch (err) {
            console.error('[QuickQuote] Error asignando unidad alternativa:', err);
            showToast('Error asignando la unidad alternativa: ' + (err?.message ?? 'ver consola'), 'error');
@@ -3115,6 +3153,115 @@ export class Calendar {
       showToast(err.message || 'Error creando la reserva dividida', 'error');
     }
   }
+
+  // ══════════════════════════════════════════════════
+  // LISTADO DE COTIZACIONES GUARDADAS — ver / editar / borrar
+  // ══════════════════════════════════════════════════
+  async _openQuotesList() {
+    document.getElementById('cal-quotes-overlay')?.remove();
+
+    const ov = document.createElement('div');
+    ov.id = 'cal-quotes-overlay';
+    ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:3300;display:flex;align-items:center;justify-content:center;padding:14px';
+    ov.innerHTML = `
+      <div style="background:var(--color-surface);border-radius:16px;padding:20px;
+        width:700px;max-width:96vw;max-height:88vh;overflow-y:auto;box-shadow:0 24px 70px rgba(0,0,0,.4)">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+          <div style="font-weight:800;font-size:1.02rem">🧮 Cotizaciones guardadas</div>
+          <button id="cq-list-close" style="border:none;background:none;font-size:1.2rem;cursor:pointer;color:var(--color-text-3);line-height:1">✕</button>
+        </div>
+        <div style="display:flex;gap:6px;margin:10px 0 14px">
+          <button data-filter="draft" class="cq-list-filter" style="padding:5px 12px;border-radius:20px;border:1px solid var(--color-border);
+            background:var(--color-primary);color:#fff;font-size:.76rem;font-weight:700;cursor:pointer">Sin convertir</button>
+          <button data-filter="" class="cq-list-filter" style="padding:5px 12px;border-radius:20px;border:1px solid var(--color-border);
+            background:var(--color-surface-2);color:var(--color-text-2);font-size:.76rem;font-weight:700;cursor:pointer">Todas</button>
+        </div>
+        <div id="cq-list-body" style="display:flex;flex-direction:column;gap:8px;min-height:80px">
+          <div style="text-align:center;color:var(--color-text-3);font-size:.82rem;padding:20px">Cargando…</div>
+        </div>
+      </div>`;
+    document.body.appendChild(ov);
+
+    const close = () => ov.remove();
+    document.getElementById('cq-list-close').addEventListener('click', close);
+    ov.addEventListener('click', e => { if (e.target === ov) close(); });
+
+    const body = document.getElementById('cq-list-body');
+    let currentFilter = 'draft';
+
+    const renderRows = (quotes) => {
+      if (!quotes.length) {
+        body.innerHTML = `<div style="text-align:center;color:var(--color-text-3);font-size:.82rem;padding:24px">
+          No hay cotizaciones${quotes._filtered ? '' : ' guardadas'} todavía.</div>`;
+        return;
+      }
+      body.innerHTML = quotes.map(q => {
+        const nights = Math.round((new Date(q.check_out) - new Date(q.check_in)) / 86400000);
+        const statusTag = q.status === 'converted'
+          ? `<span style="color:#22c55e;font-weight:700">✓ Convertida</span>`
+          : q.status === 'expired'
+            ? `<span style="color:var(--color-text-3)">Vencida</span>`
+            : `<span style="color:#f59e0b;font-weight:700">Sin convertir</span>`;
+        return `
+        <div style="border:1px solid var(--color-border);border-radius:10px;padding:10px 12px;
+          display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
+          <div style="min-width:0;flex:1">
+            <div style="font-size:.84rem;font-weight:700;color:var(--color-text)">
+              ${q.guest_name ?? 'Sin nombre'} <span style="color:var(--color-text-3);font-weight:500">· ${q.units?.name ?? 'Unidad'}</span>
+            </div>
+            <div style="font-size:.72rem;color:var(--color-text-3);margin-top:2px">
+              ${this._fmtShort(q.check_in)} → ${this._fmtShort(q.check_out)} · ${nights} noche${nights !== 1 ? 's' : ''} · ${formatARS(q.total)} · ${statusTag}
+            </div>
+          </div>
+          <div style="display:flex;gap:6px;flex-shrink:0">
+            <button data-edit-quote="${q.id}" ${q.status === 'converted' ? 'disabled title="Ya fue convertida"' : ''}
+              style="padding:6px 10px;border-radius:7px;border:1px solid var(--color-border);
+              background:var(--color-surface-2);color:var(--color-text);font-size:.74rem;font-weight:600;
+              cursor:${q.status === 'converted' ? 'not-allowed' : 'pointer'};opacity:${q.status === 'converted' ? '.5' : '1'}">✏️ Editar</button>
+            <button data-del-quote="${q.id}" style="padding:6px 10px;border-radius:7px;border:1px solid #ef444460;
+              background:none;color:#ef4444;font-size:.74rem;font-weight:600;cursor:pointer">🗑️</button>
+          </div>
+        </div>`;
+      }).join('');
+
+      body.querySelectorAll('[data-edit-quote]').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const { data: full, error } = await fetchQuoteById(this.db, btn.dataset.editQuote);
+          if (error || !full) { showToast('No se pudo abrir la cotización', 'error'); return; }
+          close();
+          this._openQuickQuote({ unitId: full.unit_id, checkIn: full.check_in, checkOut: full.check_out }, full);
+        });
+      });
+      body.querySelectorAll('[data-del-quote]').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          if (!confirm('¿Borrar esta cotización? No se puede deshacer.')) return;
+          const { error } = await deleteQuote(this.db, btn.dataset.delQuote);
+          if (error) { showToast('No se pudo borrar la cotización', 'error'); return; }
+          showToast('Cotización borrada', 'success');
+          load(currentFilter);
+        });
+      });
+    };
+
+    const load = async (status) => {
+      body.innerHTML = `<div style="text-align:center;color:var(--color-text-3);font-size:.82rem;padding:20px">Cargando…</div>`;
+      const quotes = await fetchQuotesList(this.db, this.ctx.hotelId, { status: status || null });
+      quotes._filtered = !!status;
+      renderRows(quotes);
+    };
+
+    ov.querySelectorAll('.cq-list-filter').forEach(btn => {
+      btn.addEventListener('click', () => {
+        ov.querySelectorAll('.cq-list-filter').forEach(b => {
+          b.style.background = 'var(--color-surface-2)'; b.style.color = 'var(--color-text-2)';
+        });
+        btn.style.background = 'var(--color-primary)'; btn.style.color = '#fff';
+        currentFilter = btn.dataset.filter;
+        load(currentFilter);
+      });
+    });
+
+    load('draft');  }
 
   // ── Bloquear rango ──────────────────────────────
   async _blockRange(unitId, checkIn, checkOut, reason) {
