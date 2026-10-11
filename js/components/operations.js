@@ -9,6 +9,8 @@ import { showToast, toISODate, formatDate, formatARS, getUnitColor, getUnitChipH
 import { can } from '../auth/permissions.js';
 import { logAction } from '../services/audit-service.js';
 import { CATEGORIES as EXPENSE_CATEGORIES, categoryColor } from '../services/expense-categories.js';
+import { getSegments, rowsAtDeparture } from '../services/stay-segments.js';
+import { segmentColumns } from '../utils/db-compat.js';
 
 const EXPENSE_METHOD_LABELS = {
   efectivo:      '💵 Efectivo',
@@ -447,33 +449,34 @@ export class OperationsModule {
 
   async _autoCreateCheckoutCleaningTasks(today) {
     try {
-      // Find bookings with checkout today that don't have a cleaning task yet
-      const { data: checkouts } = await this.db
+      // Un depto hay que limpiarlo el día que el huésped LO DEJA: el check-out final
+      // o, en una reserva con cambio de departamento, el día del cambio.
+      const SEG = await segmentColumns(this.db);
+      const { data: active } = await this.db
         .from('bookings')
-        .select('id, booking_units(unit_id)')
+        .select(`id, check_in, check_out, booking_units(unit_id${SEG})`)
         .eq('hotel_id', this.ctx.hotelId)
-        .eq('check_out', today)
+        .lte('check_in', today)
+        .gte('check_out', today)
         .not('status', 'in', '(cancelled,blocked)');
 
-      if (!checkouts?.length) return;
-
-      for (const b of checkouts) {
-        const units = b.booking_units ?? [];
-        for (const bu of units) {
-          // Check if task already exists for this booking+unit+date
+      for (const b of active ?? []) {
+        for (const seg of getSegments(b).filter(sg => sg.to === today)) {
+          // Check if task already exists for this unit+date
           const { data: existing } = await this.db.from('cleaning_tasks')
             .select('id')
             .eq('hotel_id', this.ctx.hotelId)
             .eq('scheduled_date', today)
-            .eq('unit_id', bu.unit_id)
+            .eq('unit_id', seg.unit_id)
             .limit(1);
           if (existing?.length) continue;
 
-          const unitName = this.ctx.units?.find(u => u.id === bu.unit_id)?.name ?? 'Unidad';
+          const unitName = this.ctx.units?.find(u => u.id === seg.unit_id)?.name ?? 'Unidad';
+          const isHandoff = seg.to !== b.check_out;
           await this.db.from('cleaning_tasks').insert({
             hotel_id:       this.ctx.hotelId,
-            unit_id:        bu.unit_id,
-            title:          `Limpieza post check-out — ${unitName}`,
+            unit_id:        seg.unit_id,
+            title:          isHandoff ? `Limpieza por cambio de depto — ${unitName}` : `Limpieza post check-out — ${unitName}`,
             scheduled_date: today,
             status:         'pending',
           });
@@ -1645,7 +1648,8 @@ export class OperationsModule {
   // ── API pública: crear tarea de limpieza al check-out ──
   static async createCheckoutCleaningTask(supabase, ctx, booking) {
     try {
-      const unitIds = (booking.booking_units ?? []).map(bu => bu.unit_id);
+      // Check-out final: se limpia el depto del que sale (los anteriores se limpiaron al cambiar)
+      const unitIds = rowsAtDeparture(booking).map(bu => bu.unit_id);
       for (const unitId of unitIds) {
         const unit = ctx.units.find(u => u.id === unitId);
         await supabase.from('cleaning_tasks').insert({

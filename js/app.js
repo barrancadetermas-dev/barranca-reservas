@@ -42,6 +42,8 @@ import { OperationsModule } from './components/operations.js';
 import { fetchMonthlyRates, fetchCustomColumns, monthsInRange, buildTariffGrid, MONTH_NAMES } from './services/tariff-service.js';
 import { initMilaAssistant } from './modules/mila-assistant/mila-assistant.js';
 import { initEncargadaShare } from './modules/encargada-share/encargada-share.js';
+import { getSegments } from './services/stay-segments.js';
+import { segmentColumns } from './utils/db-compat.js';
 
 let dashboard   = null;
 let calendar    = null;
@@ -2347,9 +2349,10 @@ function openMobileAvailPanel() {
       const hotelId = AppContext.hotelId;
       let bookings = [];
       if (hotelId) {
+        const SEG = await segmentColumns(supabase);
         const { data } = await supabase
           .from('bookings')
-          .select('id,check_in,check_out,status,booking_units(unit_id)')
+          .select(`id,check_in,check_out,status,booking_units(unit_id${SEG})`)
           .eq('hotel_id', hotelId)
           .neq('status', 'cancelled')
           .lte('check_in', co)
@@ -2363,7 +2366,8 @@ function openMobileAvailPanel() {
       bookings.forEach(b => {
         if (b.status === 'cancelled') return;
         if (b.check_in < co && b.check_out > ci) {
-          (b.booking_units ?? []).forEach(bu => occupiedIds.add(bu.unit_id));
+          // Solo cuenta la unidad en las noches que la reserva realmente la ocupa (cambio de depto)
+          getSegments(b).filter(sg => sg.from < co && sg.to > ci).forEach(sg => occupiedIds.add(sg.unit_id));
         }
       });
 

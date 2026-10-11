@@ -1,0 +1,378 @@
+<!doctype html><html lang="es"><head><meta charset="utf-8"><link rel="stylesheet" href="/css/styles.css"><link rel="stylesheet" href="/css/calendar-modal.css"></head><body><div id="toast-container"></div>
+<div class="modal-overlay hidden" id="overlay-booking">
+  <div class="modal modal-lg" id="modal-booking">
+    <div class="modal-header">
+      <h3 class="modal-title" id="booking-modal-title">Nueva Reserva</h3>
+      <button class="modal-close" id="booking-modal-close">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="21" height="21"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+
+    <!-- Steps indicator -->
+    <div class="step-indicator">
+      <div class="step-item active" data-step="1"><div class="step-dot">1</div><span>Huésped</span></div>
+      <div class="step-line"></div>
+      <div class="step-item" data-step="2"><div class="step-dot">2</div><span>Estadía</span></div>
+      <div class="step-line"></div>
+      <div class="step-item" data-step="3"><div class="step-dot">3</div><span>Precios</span></div>
+      <div class="step-line"></div>
+      <div class="step-item" data-step="4"><div class="step-dot">4</div><span>Pagos</span></div>
+      <div class="step-line"></div>
+      <div class="step-item" data-step="5"><div class="step-dot">5</div><span>Resumen</span></div>
+    </div>
+
+    <!-- Step 1: Guest -->
+    <div class="step-content active" id="step-1">
+      <div class="form-group">
+        <label>Buscar huésped existente</label>
+        <div class="search-bar">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16" class="search-icon"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input type="text" id="guest-search" class="search-input" placeholder="Nombre, apellido o DNI...">
+        </div>
+        <div id="guest-results" class="guest-results hidden"></div>
+      </div>
+      <!-- Alerta de mala experiencia (se muestra si el huésped tiene antecedentes) -->
+      <div id="bad-exp-booking-alert-container"></div>
+      <div id="guest-booking-history-badge" class="guest-history-badge" style="display:none"></div>
+      <div class="or-divider"><span>o completar nuevo huésped</span></div>
+      <div class="form-grid-2">
+        <div class="form-group"><label>Nombre <span class="req">*</span></label><input type="text" id="f-firstname" placeholder="Ej: Juan"></div>
+        <div class="form-group"><label>Apellido <span class="req">*</span></label><input type="text" id="f-lastname" placeholder="Ej: Pérez"></div>
+      </div>
+      <div class="form-grid-2">
+        <div class="form-group"><label>DNI</label><input type="text" id="f-dni" placeholder="Ej: 38123456"></div>
+        <div class="form-group"><label>Teléfono</label><input type="text" id="f-phone" placeholder="Ej: +5491123456789"></div>
+      </div>
+      <div class="form-grid-2">
+        <div class="form-group"><label>Email</label><input type="email" id="f-email" placeholder="Ej: juan@correo.com"></div>
+        <div class="form-group">
+          <label>Género</label>
+          <select id="f-gender">
+            <option value="">Sin especificar</option>
+            <option value="male">Masculino</option>
+            <option value="female">Femenino</option>
+            <option value="nonbinary">No binario</option>
+          </select>
+        </div>
+      </div>
+
+      <details class="form-collapsible" id="f-extra-details">
+        <summary>Datos adicionales <em>(registro)</em></summary>
+        <div class="form-grid-2" style="margin-top:10px">
+          <div class="form-group"><label>Localidad</label><input type="text" id="f-locality" placeholder="Ej: Rosario, Santa Fe"></div>
+          <div class="form-group"><label>Edad</label><input type="number" id="f-age" min="0" max="120" placeholder="Ej: 35"></div>
+        </div>
+        <div class="form-grid-2">
+          <div class="form-group"><label>Auto</label><input type="text" id="f-car" placeholder="Ej: VW Gol gris"></div>
+          <div class="form-group"><label>Patente</label><input type="text" id="f-plate" placeholder="Ej: AB123CD" style="text-transform:uppercase"></div>
+        </div>
+        <div class="form-group">
+          <label>Nacionalidad</label>
+          <select id="f-nationality">
+            <option value="">Sin especificar</option>
+            <option value="Argentina">🇦🇷 Argentina</option>
+            <option value="Uruguay">🇺🇾 Uruguay</option>
+            <option value="Brasil">🇧🇷 Brasil</option>
+            <option value="Chile">🇨🇱 Chile</option>
+            <option value="Perú">🇵🇪 Perú</option>
+            <option value="Venezuela">🇻🇪 Venezuela</option>
+            <option value="Ecuador">🇪🇨 Ecuador</option>
+            <option value="Colombia">🇨🇴 Colombia</option>
+            <option value="Bolivia">🇧🇴 Bolivia</option>
+            <option value="Otro">🌍 Otros</option>
+          </select>
+        </div>
+      </details>
+    </div>
+
+    <!-- Step 2: Stay -->
+    <div class="step-content hidden" id="step-2">
+      <div class="form-group">
+        <label>Fechas de estadía <span class="req">*</span></label>
+        <div id="f-date-picker" class="date-picker-container"></div>
+        <input type="date" id="f-checkin"  style="display:none">
+        <input type="date" id="f-checkout" style="display:none">
+      </div>
+      <div class="form-group">
+        <label>Unidades <span class="req">*</span> <span class="label-hint">Podés seleccionar más de una</span></label>
+        <div id="units-selector" class="units-selector"></div>
+        <div id="split-stay-structure"></div>
+        <button type="button" class="btn btn-outline btn-sm split-stay-link" id="btn-split-stay"
+                title="Una misma reserva con 2 o más departamentos en fechas distintas">
+          🔀 Cambiar de departamento durante la estadía
+        </button>
+      </div>
+      <!-- Cantidad de personas -->
+      <div class="form-group">
+        <label>Cantidad de personas <span id="pax-cap-hint" style="font-size:.72rem;color:var(--color-text-3);font-weight:400"></span></label>
+        <div class="pax-grid">
+          <!-- Adultos -->
+          <div class="pax-col">
+            <span class="pax-col-label">🧑 Adultos <span class="pax-col-sub">+13</span></span>
+            <div class="pax-counter">
+              <button type="button" class="pax-btn" id="adults-minus">−</button>
+              <input type="number" id="f-adults" class="pax-input" value="1" min="1" max="20" readonly>
+              <button type="button" class="pax-btn" id="adults-plus">+</button>
+            </div>
+          </div>
+          <!-- Menores -->
+          <div class="pax-col">
+            <span class="pax-col-label">🧒 Menores <span class="pax-col-sub">0-12</span></span>
+            <div class="pax-counter">
+              <button type="button" class="pax-btn" id="children-minus">−</button>
+              <input type="number" id="f-children" class="pax-input" value="0" min="0" max="20" readonly>
+              <button type="button" class="pax-btn" id="children-plus">+</button>
+            </div>
+          </div>
+          <div class="pax-total-bar">
+            <span id="pax-total-num">1</span>
+            <span id="pax-total-label">persona en total</span>
+          </div>
+        </div>
+        <input type="hidden" id="f-pax" value="1">
+      </div>
+      <div class="form-group">
+        <label>Canal de origen <span class="label-hint">¿Cómo llegó esta reserva?</span></label>
+        <div id="f-source-selector">
+          <!-- Renderizado por booking-form.js via _renderSourceSelector() -->
+          <!-- Fallback estático en caso de que JS no haya corrido aún -->
+          <label class="src-chip selected" data-source="direct" style="--src-color:#64748B">
+            <input type="radio" name="booking-source" value="direct" checked style="display:none">
+            <span class="src-dot" style="background:#64748B"></span><span class="src-label">Directo</span>
+          </label>
+          <label class="src-chip" data-source="walkin" style="--src-color:#0891B2">
+            <input type="radio" name="booking-source" value="walkin" style="display:none">
+            <span class="src-dot" style="background:#0891B2"></span><span class="src-label">Espontáneo</span>
+          </label>
+          <label class="src-chip" data-source="booking" style="--src-color:#1D4ED8">
+            <input type="radio" name="booking-source" value="booking" style="display:none">
+            <span class="src-dot" style="background:#1D4ED8"></span><span class="src-label">Booking</span>
+          </label>
+          <label class="src-chip" data-source="airbnb" style="--src-color:#EA580C">
+            <input type="radio" name="booking-source" value="airbnb" style="display:none">
+            <span class="src-dot" style="background:#EA580C"></span><span class="src-label">Airbnb</span>
+          </label>
+          <label class="src-chip" data-source="family" style="--src-color:#7C3AED">
+            <input type="radio" name="booking-source" value="family" style="display:none">
+            <span class="src-dot" style="background:#7C3AED"></span><span class="src-label">Familia</span>
+          </label>
+          <label class="src-chip" data-source="company" style="--src-color:#0F766E">
+            <input type="radio" name="booking-source" value="company" style="display:none">
+            <span class="src-dot" style="background:#0F766E"></span><span class="src-label">Empresa</span>
+          </label>
+          <label class="src-chip" data-source="referral" style="--src-color:#B45309">
+            <input type="radio" name="booking-source" value="referral" style="display:none">
+            <span class="src-dot" style="background:#B45309"></span><span class="src-label">Referido</span>
+          </label>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Observaciones <span class="notes-counter"><span id="notes-count">0</span>/200</span></label>
+        <textarea id="f-notes" maxlength="200" rows="3" placeholder="Viene con mascotas · Gente mayor · Requiere practicuna..."></textarea>
+      </div>
+    </div>
+
+    <!-- Step 3: Pricing -->
+    <div class="step-content hidden" id="step-3">
+      <div class="form-grid-2" id="f-price-single-wrap">
+        <div class="form-group"><label>Precio por noche ($) <span class="req">*</span></label><input type="number" id="f-price" oninput="document.getElementById('price-suggestion-container') && this._runPriceSuggestion?.()" min="0" step="500" placeholder="45000"></div>
+        <div id="price-history-hint" style="margin-top:-8px;margin-bottom:4px"></div>
+      </div>
+      <!-- Precio por tramo — aparece solo cuando la reserva cambia de departamento -->
+      <div class="form-group" id="split-stay-prices"></div>
+      <!-- Precio por unidad — aparece solo con 2+ departamentos seleccionados -->
+      <div class="form-group hidden" id="f-price-multi-wrap" style="display:none">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+          <label style="margin-bottom:0">Precio por noche, por departamento <span class="req">*</span></label>
+          <button type="button" class="btn btn-outline btn-sm" id="btn-same-price-all" style="font-size:.72rem;padding:3px 9px">
+            Mismo precio para todas
+          </button>
+        </div>
+        <div id="per-unit-price-rows"></div>
+        <div style="font-size:.7rem;color:var(--color-text-3);margin-top:4px">
+          El total por noche se suma automáticamente entre los departamentos elegidos.
+        </div>
+      </div>
+      <div class="form-grid-2">
+        <div class="form-group"><label>Noches sin cargo</label><input type="number" id="f-free-nights" min="0" value="0"></div>
+        <div class="form-group">
+          <label style="display:flex;align-items:center;justify-content:space-between">
+            <span>Descuento</span>
+            <span style="display:flex;border:0.5px solid var(--color-border);border-radius:6px;overflow:hidden;font-size:.7rem">
+              <button type="button" id="disc-mode-pct" onclick="window._discModePct()"
+                style="padding:1px 8px;background:var(--color-primary);color:#fff;border:none;cursor:pointer;font-size:.7rem;font-weight:600">%</button>
+              <button type="button" id="disc-mode-amt" onclick="window._discModeAmt()"
+                style="padding:1px 8px;background:var(--color-surface-2);color:var(--color-text-2);border:none;cursor:pointer;font-size:.7rem">$</button>
+            </span>
+          </label>
+          <div style="position:relative">
+            <span id="disc-prefix" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);font-size:.8rem;color:var(--color-text-3);pointer-events:none">%</span>
+            <input type="number" id="f-discount" min="0" step="0.0001" value="0"
+                   style="padding-left:28px">
+            <input type="hidden" id="f-discount-mode" value="pct">
+          </div>
+        </div>
+        <div class="form-group">
+          <label style="display:flex;align-items:center;justify-content:space-between">
+            <span>Recargo</span>
+            <span style="display:flex;border:0.5px solid var(--color-border);border-radius:6px;overflow:hidden;font-size:.7rem">
+              <button type="button" id="surch-mode-pct" onclick="window._surchModePct()"
+                style="padding:1px 8px;background:var(--color-surface-2);color:var(--color-text-2);border:none;cursor:pointer;font-size:.7rem">%</button>
+              <button type="button" id="surch-mode-amt" onclick="window._surchModeAmt()"
+                style="padding:1px 8px;background:var(--color-primary);color:#fff;border:none;cursor:pointer;font-size:.7rem;font-weight:600">$</button>
+            </span>
+          </label>
+          <div style="position:relative">
+            <span id="surch-prefix" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);font-size:.8rem;color:var(--color-text-3);pointer-events:none">$</span>
+            <input type="number" id="f-surcharge" min="0" step="500" value="0" style="padding-left:28px">
+            <input type="hidden" id="f-surcharge-mode" value="amt">
+          </div>
+        </div>
+      </div>
+      <!-- Late Check-out: todo en una sola línea inline -->
+      <div class="form-group" style="margin-top:4px">
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none;white-space:nowrap">
+            <input type="checkbox" id="f-late-checkout" style="width:15px;height:15px;cursor:pointer">
+            <span style="font-size:.82rem">🌅 Late check-out</span>
+          </label>
+          <label id="f-lco-paid-wrap" style="display:none;align-items:center;gap:6px;cursor:pointer;user-select:none;white-space:nowrap">
+            <input type="checkbox" id="f-late-checkout-paid" checked style="width:14px;height:14px;cursor:pointer">
+            <span style="font-size:.78rem;color:var(--color-text-2)">✅ Se cobra</span>
+          </label>
+          <div id="f-lco-amount-wrap" style="display:none;align-items:center;gap=6px">
+            <span style="font-size:.75rem;color:var(--color-text-3);white-space:nowrap">¿Cuánto?</span>
+            <input type="number" id="f-late-checkout-amount" min="0" step="500"
+              placeholder="½ noche" style="width:110px;padding:3px 8px;border-radius:6px;
+              border:1px solid var(--color-border);background:var(--color-surface-2);
+              font-size:.78rem;color:var(--color-text)">
+          </div>
+        </div>
+      </div>
+      <div class="form-grid-2">
+        <div class="form-group">
+          <label>Depósito de garantía ($)
+            <span class="label-hint">Reembolsable al check-out. No se suma al total de la reserva.</span>
+          </label>
+          <input type="number" id="f-deposit" min="0" step="500" value="0">
+        </div>
+      </div>
+      <div class="price-breakdown" id="price-breakdown">
+        <div class="pb-row"><span>Noches</span><span id="pb-nights">—</span></div>
+        <div class="pb-row"><span>Subtotal base</span><span id="pb-subtotal">$—</span></div>
+        <div class="pb-row pb-deduct" id="pbr-free-nights"><span>Noches sin cargo</span><span id="pb-free-nights">−$—</span></div>
+        <div class="pb-row pb-deduct" id="pbr-discount"><span>Descuento</span><span id="pb-discount">−$—</span></div>
+        <div class="pb-row pb-add" id="pbr-surcharge"><span>Recargo</span><span id="pb-surcharge">+$—</span></div>
+        <div class="pb-row pb-add" id="pbr-late-checkout" style="display:none"><span>🌅 Late check-out (½ noche)</span><span id="pb-late-checkout">+$—</span></div>
+        <div class="pb-row pb-commission" id="pbr-commission" style="display:none">
+          <span id="pb-commission-label">Comisión canal</span>
+          <span id="pb-commission">−$—</span>
+        </div>
+        <div class="pb-row pb-total"><span>TOTAL bruto</span><span id="pb-total">$—</span></div>
+        <div class="pb-row pb-net" id="pbr-net" style="display:none">
+          <span>Neto complejo</span>
+          <strong id="pb-net">$—</strong>
+        </div>
+      </div>
+      <!-- ✨ Sugeridor de precio dinámico -->
+      <div id="price-suggestion-container" style="margin-top:14px"></div>
+    </div>
+
+    <!-- Step 4: Payments -->
+    <div class="step-content hidden" id="step-4">
+
+      <!-- Payment rows (rendered by PaymentManager) -->
+      <div id="payments-container"></div>
+
+      <!-- Add payment button -->
+      <button class="btn btn-outline btn-full mt-8" id="btn-add-payment-row" style="margin-bottom:12px">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="14" height="14"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Agregar cobro
+      </button>
+
+      <!-- Compact summary -->
+      <div class="payment-summary-compact">
+        <div class="ps-row">
+          <span class="ps-label">Total reserva</span>
+          <span class="ps-val" id="ps-total">$—</span>
+        </div>
+        <div class="ps-row">
+          <span class="ps-label">Abonado</span>
+          <span class="ps-val ps-paid" id="ps-paid">$0</span>
+        </div>
+        <div class="ps-row ps-row-balance">
+          <span class="ps-label"><strong>Saldo</strong></span>
+          <span class="ps-val ps-balance" id="ps-balance">$—</span>
+        </div>
+      </div>
+
+      <p class="step-note" style="margin-top:8px">💡 Los pagos son opcionales. Podés registrar la reserva ahora y cargar cobros después.</p>
+    </div>
+
+    <!-- ── STEP 5: RESUMEN / VOUCHER ── -->
+    <div class="step-content hidden" id="step-5">
+      <div id="booking-voucher" class="booking-voucher">
+        <!-- Populated by JS in _renderVoucher() -->
+      </div>
+      <!-- Step 5 actions - separate from modal footer -->
+      <div class="voucher-actions">
+        <div class="voucher-actions-left">
+          <button class="btn btn-outline btn-sm" id="btn-voucher-pdf">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+            PDF
+          </button>
+          <button class="btn btn-outline btn-sm" id="btn-voucher-whatsapp">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z"/></svg>
+            Encargada
+          </button>
+        </div>
+        <button class="btn btn-primary" id="btn-voucher-confirm">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="14" height="14"><polyline points="20 6 9 17 4 12"/></svg>
+          Confirmar y Guardar
+        </button>
+      </div>
+    </div>
+
+    <div class="modal-footer">
+      <button class="btn btn-ghost" id="btn-step-back" style="visibility:hidden">← Atrás</button>
+      <div class="flex gap-8">
+        <button class="btn btn-outline" id="btn-booking-cancel">Cancelar</button>
+        <button class="btn btn-primary" id="btn-step-next">Continuar →</button>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="modal-overlay hidden" id="overlay-detail">
+  <div class="modal" id="modal-detail">
+    <div class="modal-header">
+      <h3 class="modal-title">Detalle de Reserva</h3>
+      <button class="modal-close" id="detail-close">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="21" height="21"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body" id="detail-body"></div>
+    <div class="modal-footer">
+      <!-- Fila 1: acciones secundarias -->
+      <div class="detail-footer-actions">
+        <button class="btn btn-ghost btn-sm" id="detail-whatsapp">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z"/></svg>
+          Voucher
+        </button>
+        <button class="btn btn-ghost btn-sm" id="detail-manager-msg">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+          Encargada
+        </button>
+        <button class="btn btn-ghost btn-sm" id="detail-duplicate-btn">📋 Duplicar</button>
+        <button class="btn btn-outline btn-sm" id="detail-checkin-btn" style="display:none">✅ Check-in</button>
+        <button class="btn btn-outline btn-sm" id="detail-checkout-btn" style="display:none">👋 Check-out</button>
+      </div>
+      <!-- Fila 2: acciones principales -->
+      <div class="detail-footer-main">
+        <button class="btn btn-outline btn-sm" id="detail-btn-edit">Editar</button>
+        <button class="btn btn-outline btn-sm" id="detail-btn-cancel-booking" style="color:var(--color-warning)">Cancelar</button>
+        <button class="btn btn-danger btn-sm" id="detail-btn-delete">Eliminar</button>
+      </div>
+    </div>
+  </div>
+</div>
+<script type="module" src="/_dev/tests/harness/harness.js"></script></body></html>

@@ -8,6 +8,8 @@ import { can, isDemo } from "../auth/permissions.js";
 
 import { formatARS, formatDate, showToast, getUnitChipHTML, getSourceBadgeHTML, getBookingBarColor, getUnitLabel, getUnitColor, SOURCE_CONFIG, localToday, localDateISO, AppContext, getNationalityFlag, appendNote } from '../supabase-config.js';
 import { logAction } from '../services/audit-service.js';
+import { alojado } from '../utils/gender.js';
+import { queryWithOptionalColumns, segmentColumns } from '../utils/db-compat.js';
 import { cache } from '../services/supabase-cache.js';
 import { Bus, EVENTS } from '../services/event-bus.js';
 
@@ -154,9 +156,7 @@ export class BookingList {
         return;
       }
 
-      const { data, error } = await this.db
-        .from('bookings')
-        .select(`
+      const buildSelect = (withExtras) => `
           id, check_in, check_out, nights, status, source,
           total_amount, total_paid, balance, price_per_night,
           discount_pct, surcharge_amount,
@@ -164,12 +164,15 @@ export class BookingList {
           checked_in_at, checked_out_at,
           guests!bookings_guest_id_fkey(
             id, first_name, last_name, dni, phone,
-            bad_experience, bad_experience_note, tags, age, car_model, car_plate, nationality
+            bad_experience, bad_experience_note, tags, age, car_model, car_plate, nationality${withExtras ? ', gender' : ''}
           ),
-          booking_units(unit_id, price_per_night, units(name, sort_order, color))
-        `)
-        .eq('hotel_id', this.ctx.hotelId)
-        .order('check_in', { ascending: true });
+          booking_units(unit_id, price_per_night${withExtras ? ', segment_check_in, segment_check_out' : ''}, units(name, sort_order, color))
+        `;
+      const { data, error } = await queryWithOptionalColumns(
+        sel => this.db.from('bookings').select(sel)
+          .eq('hotel_id', this.ctx.hotelId)
+          .order('check_in', { ascending: true }),
+        buildSelect(true), buildSelect(false));
 
       if (error) throw error;
       this._allBookings = data ?? [];
@@ -1078,7 +1081,7 @@ export class BookingList {
 
             if (isCheckInPending)  return banner(payDot, 'CHECK-IN HOY', payColor);
             if (isCheckOutPending) return banner(payDot, 'CHECK-OUT HOY', payColor);
-            if (isStaying)         return banner(payDot, 'ALOJADA', payColor);
+            if (isStaying)         return banner(payDot, alojado(b.guests?.gender, { style: 'upper', fallback: 'female' }), payColor);
             if (isEarlyDeparture)  return banner('🟣', 'SE RETIRÓ ANTES', '#8B5CF6');
             return '';
           })()}
@@ -1180,11 +1183,13 @@ export class BookingList {
   // ── Checkout rápido ───────────────────────────────
   async _openVoucher(id) {
     try {
+      const SEG = await segmentColumns(this.db);
       const { data: booking, error } = await this.db.from('bookings')
-        .select(`id, check_in, check_out, nights, pax, total_amount, total_paid, balance,
+        .select(`id, check_in, check_out, nights, pax, adults, children, total_amount, total_paid, balance,
+          price_per_night, discount_pct, surcharge_amount, free_nights,
           status, source, notes, late_checkout,
           guests!bookings_guest_id_fkey(first_name, last_name, dni, phone, email),
-          booking_units(units(name, color)),
+          booking_units(unit_id, price_per_night${SEG}, units(name, color, sort_order)),
           payments(amount, amount_ars, method, payment_date)`)
         .eq('id', id).single();
       if (error || !booking) { showToast('No se pudo cargar la reserva', 'error'); return; }

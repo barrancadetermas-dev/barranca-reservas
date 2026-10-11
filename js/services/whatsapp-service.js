@@ -3,6 +3,8 @@
 // Vouchers WhatsApp: huésped + encargada
 // ═══════════════════════════════════════════════════
 
+import { getSegments, isSplit } from './stay-segments.js';
+
 const STATUS_LABELS = {
   pending:   '⏳ Sin seña / Pendiente',
   partial:   '🔶 Con seña / Depósito recibido',
@@ -33,9 +35,13 @@ export function generateVoucherText(booking, ctx) {
   const guest     = booking.guests;
   const payments  = booking.payments ?? [];
 
-  const unitsText = (booking.booking_units ?? [])
-    .map(bu => unitLabel(bu.units))
-    .join(' / ');
+  // Cambio de departamento: cada tramo con sus fechas, en orden
+  const unitsText = isSplit(booking)
+    ? getSegments(booking).map(sg => {
+        const dm = iso => iso.split('-').reverse().slice(0, 2).join('/');
+        return `${unitLabel(sg.unit)} (${dm(sg.from)}→${dm(sg.to)})`;
+      }).join(' + ')
+    : (booking.booking_units ?? []).map(bu => unitLabel(bu.units)).join(' / ');
 
   const totalPaid = payments.reduce((s, p) => s + (p.amount_ars ?? p.amount ?? 0), 0);
   const balance   = (booking.total_amount ?? 0) - totalPaid;

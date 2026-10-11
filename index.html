@@ -772,7 +772,18 @@
         <div class="form-group"><label>DNI</label><input type="text" id="f-dni" placeholder="Ej: 38123456"></div>
         <div class="form-group"><label>Teléfono</label><input type="text" id="f-phone" placeholder="Ej: +5491123456789"></div>
       </div>
-      <div class="form-group"><label>Email</label><input type="email" id="f-email" placeholder="Ej: juan@correo.com"></div>
+      <div class="form-grid-2">
+        <div class="form-group"><label>Email</label><input type="email" id="f-email" placeholder="Ej: juan@correo.com"></div>
+        <div class="form-group">
+          <label>Género</label>
+          <select id="f-gender">
+            <option value="">Sin especificar</option>
+            <option value="male">Masculino</option>
+            <option value="female">Femenino</option>
+            <option value="nonbinary">No binario</option>
+          </select>
+        </div>
+      </div>
 
       <details class="form-collapsible" id="f-extra-details">
         <summary>Datos adicionales <em>(registro)</em></summary>
@@ -814,6 +825,11 @@
       <div class="form-group">
         <label>Unidades <span class="req">*</span> <span class="label-hint">Podés seleccionar más de una</span></label>
         <div id="units-selector" class="units-selector"></div>
+        <div id="split-stay-structure"></div>
+        <button type="button" class="btn btn-outline btn-sm split-stay-link" id="btn-split-stay"
+                title="Una misma reserva con 2 o más departamentos en fechas distintas">
+          🔀 Cambiar de departamento durante la estadía
+        </button>
       </div>
       <!-- Cantidad de personas -->
       <div class="form-group">
@@ -891,6 +907,8 @@
         <div class="form-group"><label>Precio por noche ($) <span class="req">*</span></label><input type="number" id="f-price" oninput="document.getElementById('price-suggestion-container') && this._runPriceSuggestion?.()" min="0" step="500" placeholder="45000"></div>
         <div id="price-history-hint" style="margin-top:-8px;margin-bottom:4px"></div>
       </div>
+      <!-- Precio por tramo — aparece solo cuando la reserva cambia de departamento -->
+      <div class="form-group" id="split-stay-prices"></div>
       <!-- Precio por unidad — aparece solo con 2+ departamentos seleccionados -->
       <div class="form-group hidden" id="f-price-multi-wrap" style="display:none">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">

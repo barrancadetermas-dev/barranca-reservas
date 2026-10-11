@@ -3,6 +3,9 @@ import { formatARS, showToast, getUnitLabel, getUnitColor, getUnitChipHTML, AppC
 import { RevenuePanel } from './revenue-panel.js';
 import { FinancePanel } from './finance-panel.js';
 import { CATEGORY_COLORS } from '../services/expense-categories.js';
+import { computeUnitStats } from '../services/unit-stats.js';
+import { getSegments, occupiesNight } from '../services/stay-segments.js';
+import { queryWithOptionalColumns } from '../utils/db-compat.js';
 
 // ══════════════════════════════════════════════════
 // statistics.js v5.1 — MILA
@@ -191,12 +194,15 @@ export class Statistics {
     const daysInMonth = lastDayObj.getDate();
 
     try {
-      const { data: bookings } = await this.db
-        .from('bookings')
-        .select('id, check_in, check_out, price_per_night, total_amount, status, nights, free_nights, source, booking_units(unit_id, price_per_night)')
-        .eq('hotel_id', this.ctx.hotelId)
-        .neq('status', 'cancelled').neq('status', 'blocked')
-        .lte('check_in', lastDayStr).gt('check_out', firstDay);
+      const statsSel = (seg) => `id, check_in, check_out, price_per_night, total_amount, status, nights, free_nights, source, booking_units(unit_id, price_per_night${seg ? ', segment_check_in, segment_check_out' : ''})`;
+      const { data: bookings } = await queryWithOptionalColumns(
+        sel => this.db
+          .from('bookings')
+          .select(sel)
+          .eq('hotel_id', this.ctx.hotelId)
+          .neq('status', 'cancelled').neq('status', 'blocked')
+          .lte('check_in', lastDayStr).gt('check_out', firstDay),
+        statsSel(true), statsSel(false));
 
       this._lastBookings = bookings ?? []; // ← necesario para el gráfico de canales
 
@@ -342,47 +348,8 @@ export class Statistics {
   }
 
   _computeUnitStats(bookings, firstDay, lastDay, daysInMonth) {
-    const statsMap = {};
-    this.ctx.units.forEach(u => {
-      statsMap[u.id] = { unit: u, nightsOcc: 0, revenue: 0, bookingCount: 0, totalPriceNights: 0 };
-    });
-
-    bookings.forEach(b => {
-      const bUnits = b.booking_units ?? [];
-      const unitCount = bUnits.length || 1;
-      bUnits.forEach(({ unit_id, price_per_night: unitPrice }) => {
-        if (!statsMap[unit_id]) return;
-        const ciDate  = new Date(Math.max(new Date(b.check_in + 'T00:00:00'),  new Date(firstDay + 'T00:00:00')));
-        const coDate  = new Date(Math.min(new Date(b.check_out + 'T00:00:00'), new Date(lastDay  + 'T23:59:59')));
-        const nights  = Math.max(0, Math.round((coDate - ciDate) / 86400000));
-        statsMap[unit_id].nightsOcc       += nights;
-        statsMap[unit_id].bookingCount    += 1;
-        statsMap[unit_id].totalPriceNights += nights * (b.price_per_night ?? 0);
-        // Precio real de ESTA unidad (cargado en el formulario) → cálculo exacto.
-        // Si no existe (reserva vieja o unidad única sin precio propio), repartir
-        // el total de la reserva en partes iguales entre sus unidades (fallback).
-        if (unitPrice != null && unitPrice > 0) {
-          // Noches sin cargo: prorratear su proporción dentro de la ventana
-          // del reporte (nights puede venir recortado al mes visible) —
-          // ocupan la unidad igual (no tocan nightsOcc) pero no facturan.
-          const totalNights = Math.round((new Date(b.check_out + 'T00:00:00') - new Date(b.check_in + 'T00:00:00')) / 86400000);
-          const freeNights  = b.free_nights ?? 0;
-          const billableRatio = totalNights > 0 ? Math.max(0, totalNights - freeNights) / totalNights : 1;
-          statsMap[unit_id].revenue += unitPrice * nights * billableRatio;
-        } else {
-          const totalNights = Math.round((new Date(b.check_out + 'T00:00:00') - new Date(b.check_in + 'T00:00:00')) / 86400000);
-          if (totalNights > 0) {
-            statsMap[unit_id].revenue += ((b.total_amount ?? 0) / unitCount) * (nights / totalNights);
-          }
-        }
-      });
-    });
-
-    return Object.values(statsMap).map(s => ({
-      ...s,
-      occupancyPct:     Math.min(100, Math.round((s.nightsOcc / daysInMonth) * 100)),
-      avgPricePerNight: s.nightsOcc > 0 ? Math.round(s.totalPriceNights / s.nightsOcc) : 0,
-    })).sort((a, b) => b.revenue - a.revenue);
+    // Misma función que usa el worker (js/services/unit-stats.js): respeta tramos de estadía
+    return computeUnitStats({ bookings, units: this.ctx.units, firstDay, lastDay, daysInMonth });
   }
 
   _renderUnitStats(stats, month, year, daysInMonth) {
@@ -568,13 +535,16 @@ export class Statistics {
         const { generateMockBookings } = await import('../services/mock-data.js');
         bookings = generateMockBookings(this.ctx.units, year, month);
       } else {
-        const { data } = await this.db
-          .from('bookings')
-          .select('id, check_in, check_out, status, source, pax, booking_units(unit_id), guests!bookings_guest_id_fkey(first_name, last_name)')
-          .eq('hotel_id', this.ctx.hotelId)
-          .neq('status', 'cancelled')
-          .lte('check_in', lastDayStr)
-          .gt('check_out', firstDay);
+        const hmSel = (seg) => `id, check_in, check_out, status, source, pax, booking_units(unit_id${seg ? ', segment_check_in, segment_check_out' : ''}), guests!bookings_guest_id_fkey(first_name, last_name)`;
+        const { data } = await queryWithOptionalColumns(
+          sel => this.db
+            .from('bookings')
+            .select(sel)
+            .eq('hotel_id', this.ctx.hotelId)
+            .neq('status', 'cancelled')
+            .lte('check_in', lastDayStr)
+            .gt('check_out', firstDay),
+          hmSel(true), hmSel(false));
         bookings = data ?? [];
       }
 
@@ -583,11 +553,12 @@ export class Statistics {
       this.ctx.units.forEach(u => { occMap[u.id] = new Set(); });
 
       bookings.forEach(b => {
-        (b.booking_units ?? []).forEach(({ unit_id }) => {
+        // Cada unidad se marca solo durante su tramo (cambio de depto)
+        getSegments(b).forEach(({ unit_id, from, to }) => {
           if (!occMap[unit_id]) return;
-          let d = new Date(Math.max(new Date(b.check_in + 'T00:00:00'), new Date(firstDay + 'T00:00:00')));
+          let d = new Date(Math.max(new Date(from + 'T00:00:00'), new Date(firstDay + 'T00:00:00')));
           // checkout day is NOT occupied — guest leaves that morning
-          const end = new Date(b.check_out + 'T00:00:00');
+          const end = new Date(to + 'T00:00:00');
           const cap  = new Date(lastDayStr + 'T00:00:00');
           while (d < end && d <= cap) {
             occMap[unit_id].add(d.getDate());
@@ -630,16 +601,12 @@ export class Statistics {
           const isToday  = d === todayDay;
           // Find booking info for this cell
           const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-          const booking = occupied ? bookings.find(b =>
-            b.check_in <= dateStr && b.check_out > dateStr &&
-            (b.booking_units ?? []).some(bu => bu.unit_id === u.id)
-          ) : null;
-          const isCheckIn  = booking?.check_in === dateStr;
-          const isCheckOut = bookings.some(b =>
-            b.check_out === dateStr && (b.booking_units ?? []).some(bu => bu.unit_id === u.id)
-          );
+          const booking = occupied ? bookings.find(b => occupiesNight(b, u.id, dateStr)) : null;
+          // Inicio/fin se miran en ESTA unidad (un cambio de depto libera una y ocupa otra)
+          const isCheckIn  = !!booking && getSegments(booking).some(sg => sg.unit_id === u.id && sg.from === dateStr);
+          const isCheckOut = bookings.some(b => getSegments(b).some(sg => sg.unit_id === u.id && sg.to === dateStr));
           const tip = occupied
-            ? `${u.name} · ${dateStr}\n${isCheckIn ? '→ Check-in' : isCheckOut ? '← Check-out' : '● Ocupado'}`
+            ? `${u.name} · ${dateStr}\n${isCheckIn ? (booking.check_in === dateStr ? '→ Check-in' : '→ Llega por cambio de depto') : isCheckOut ? '← Check-out' : '● Ocupado'}`
             : isCheckOut
               ? `${u.name} · ${dateStr}\n← Check-out (libre desde mediodía)`
               : `${u.name} · ${dateStr}\nLibre`;
@@ -1403,17 +1370,22 @@ export class Statistics {
       try {
         const first = `${year}-${String(month+1).padStart(2,'0')}-01`;
         const last  = new Date(Date.UTC(year, month+1, 0)).toISOString().slice(0,10);
-        const { data: bks } = await this.db.from('bookings')
-          .select('total_amount, nights, booking_units(unit_id)')
-          .eq('hotel_id', this.ctx.hotelId)
-          .not('status','in','(cancelled,blocked)')
-          .gte('check_in', first).lte('check_in', last);
-        (bks ?? []).forEach(b => {
-          (b.booking_units ?? []).forEach(bu => {
-            const entry = unitStats.find(u => u.id === bu.unit_id);
-            if (entry) { entry.rev += b.total_amount ?? 0; entry.nights += b.nights ?? 0; }
+        // Misma cuenta que el resto de estadísticas (cada unidad recibe solo SUS noches e ingresos;
+        // antes cada unidad sumaba el total completo de la reserva y se duplicaba con 2 deptos)
+        const unitSel = (seg) => `id, check_in, check_out, price_per_night, total_amount, nights, free_nights, booking_units(unit_id, price_per_night${seg ? ', segment_check_in, segment_check_out' : ''})`;
+        const { data: bks } = await queryWithOptionalColumns(
+          sel => this.db.from('bookings')
+            .select(sel)
+            .eq('hotel_id', this.ctx.hotelId)
+            .not('status','in','(cancelled,blocked)')
+            .lte('check_in', last).gt('check_out', first),
+          unitSel(true), unitSel(false));
+        const dim = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+        computeUnitStats({ bookings: bks ?? [], units: this.ctx.units, firstDay: first, lastDay: last, daysInMonth: dim })
+          .forEach(r => {
+            const entry = unitStats.find(u => u.id === r.unit.id);
+            if (entry) { entry.rev = r.revenue; entry.nights = r.nightsOcc; }
           });
-        });
       } catch { /* silencioso */ }
     }
     const sorted = [...unitStats].sort((a,b) => b.rev - a.rev);

@@ -7,6 +7,8 @@
 // ═══════════════════════════════════════════════════
 
 import { formatDate, showToast } from '../supabase-config.js';
+import { getSegments, overlapsRange } from '../services/stay-segments.js';
+import { segmentColumns } from '../utils/db-compat.js';
 import { can, isDemo } from '../auth/permissions.js';
 
 const STATUS_LABELS = {
@@ -65,13 +67,14 @@ export class WaitlistPanel {
     const today = new Date().toISOString().slice(0, 10);
 
     // Cargar waitlist y reservas activas en paralelo para detectar solapamientos
+    const SEG = await segmentColumns(this.db);
     const [{ data, error }, { data: bookings }] = await Promise.all([
       this.db.from('waitlist')
         .select('*')
         .eq('hotel_id', this.ctx.hotelId)
         .order('created_at', { ascending: false }),
       this.db.from('bookings')
-        .select('id, check_in, check_out, status, booking_units(unit_id)')
+        .select(`id, check_in, check_out, status, booking_units(unit_id${SEG})`)
         .eq('hotel_id', this.ctx.hotelId)
         .not('status', 'in', '(cancelled,blocked)')
         .gte('check_out', today),
@@ -106,8 +109,8 @@ export class WaitlistPanel {
         if (b.check_in >= wco || b.check_out <= wci) return false;
         // Si la espera pide unidades específicas, verificar intersección
         if (wUnits.length > 0) {
-          const bUnits = (b.booking_units ?? []).map(bu => String(bu.unit_id));
-          return wUnits.some(uid => bUnits.includes(String(uid)));
+          // Solo cuenta si la reserva ocupa ESA unidad en esas fechas (respeta cambio de depto)
+          return wUnits.some(uid => overlapsRange(b, uid, wci, wco));
         }
         return true; // pide cualquier unidad → solapamiento total
       });
@@ -115,7 +118,7 @@ export class WaitlistPanel {
       // Verificar si todos los deptos pedidos están ocupados
       if (wUnits.length > 0) {
         const occupiedUnits = new Set(overlapping.flatMap(b =>
-          (b.booking_units ?? []).map(bu => String(bu.unit_id))
+          getSegments(b).filter(sg => sg.from < wco && sg.to > wci).map(sg => sg.unit_id)
         ));
         const allOccupied = wUnits.every(uid => occupiedUnits.has(String(uid)));
         if (allOccupied) return { label: '✗ Ocupado', color: '#dc2626', bg: '#fef2f2' };

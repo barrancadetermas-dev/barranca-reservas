@@ -4,6 +4,8 @@
 // ═══════════════════════════════════════════════════
 
 import { formatARS, showToast, localToday } from '../supabase-config.js';
+import { getSegments } from '../services/stay-segments.js';
+import { segmentColumns } from '../utils/db-compat.js';
 
 const PERIOD_PRESETS = [
   { id: 'today',  label: 'Hoy'     },
@@ -158,12 +160,13 @@ export class FinancePanel {
     });
 
     try {
+      const SEG = await segmentColumns(this.db);   // tramos de cambio de depto (si la base los tiene)
       // Reservas del período + máxima reserva con nombre del huésped
       const [periodoRes, futuroRes, maxBkRes, prevRes] = await Promise.all([
         // Período seleccionado: todas las reservas que INICIAN en el rango
         // Incluye created_at (anticipación) y booking_units con unit_id (unidad más rentable)
         this.db.from('bookings')
-          .select('id,total_amount,total_paid,balance,nights,free_nights,price_per_night,check_in,check_out,status,created_at,booking_units(unit_id,price_per_night,units(name,color))')
+          .select(`id,total_amount,total_paid,balance,nights,free_nights,price_per_night,check_in,check_out,status,created_at,booking_units(unit_id,price_per_night${SEG},units(name,color))`)
           .eq('hotel_id', this.ctx.hotelId)
           .gte('check_in', from)
           .lte('check_in', to)
@@ -230,13 +233,17 @@ export class FinancePanel {
         if (!units.length) return;
         const nights = b.nights ?? 0;
         const billableNights = Math.max(0, nights - (b.free_nights ?? 0));
-        const share  = (b.total_amount ?? 0) / units.length; // fallback parejo
+        // Cambio de depto: cada unidad factura solo las noches de SU tramo
+        const segs = getSegments(b);
+        const segNightsOf = (uid) => segs.find(sg => sg.unit_id === String(uid))?.nights ?? nights;
+        const sumSegNights = segs.reduce((n, sg) => n + sg.nights, 0) || nights || 1;
+        const ratio = nights > 0 ? billableNights / nights : 1;
         units.forEach(bu => {
           if (!bu.unit_id) return;
           const cur = unitRevMap.get(bu.unit_id) ?? { name: bu.units?.name ?? '—', color: bu.units?.color ?? 'var(--color-primary)', total: 0 };
           cur.total += (bu.price_per_night != null && bu.price_per_night > 0)
-            ? bu.price_per_night * billableNights
-            : share;
+            ? bu.price_per_night * segNightsOf(bu.unit_id) * ratio
+            : (b.total_amount ?? 0) * (segNightsOf(bu.unit_id) / sumSegNights);   // fallback proporcional a sus noches
           unitRevMap.set(bu.unit_id, cur);
         });
       });

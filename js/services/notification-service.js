@@ -7,6 +7,8 @@
 // ═══════════════════════════════════════════════════
 
 import { AppContext } from '../supabase-config.js';
+import { getSegments, rowsAtArrival } from './stay-segments.js';
+import { segmentColumns } from '../utils/db-compat.js';
 
 export class NotificationService {
   constructor(supabase) {
@@ -92,25 +94,32 @@ export class NotificationService {
       });
 
       // ── Recambios de hoy (sale uno, entra otro el mismo día) ──
+      const SEG = await segmentColumns(this.db);
       const { data: checkinsHoy } = await this.db
         .from('bookings')
-        .select('id, check_in, booking_units(unit_id, units(name)), guests!bookings_guest_id_fkey(first_name, last_name)')
+        .select(`id, check_in, booking_units(unit_id${SEG}, units(name)), guests!bookings_guest_id_fkey(first_name, last_name)`)
         .eq('hotel_id', AppContext.hotelId)
         .eq('check_in', today)
         .not('status', 'in', '(cancelled,blocked)');
 
+      // Quien DEJA una unidad hoy: check-out final o cambio de departamento a mitad de estadía
       const { data: checkoutsHoy } = await this.db
         .from('bookings')
-        .select('id, check_out, booking_units(unit_id, units(name)), guests!bookings_guest_id_fkey(first_name, last_name)')
+        .select(`id, check_in, check_out, booking_units(unit_id${SEG}, units(name)), guests!bookings_guest_id_fkey(first_name, last_name)`)
         .eq('hotel_id', AppContext.hotelId)
-        .eq('check_out', today)
+        .lte('check_in', today)
+        .gte('check_out', today)
         .not('status', 'in', '(cancelled,blocked)');
 
       (checkinsHoy ?? []).forEach(ci => {
-        const ciUnitId = ci.booking_units?.[0]?.unit_id;
-        const co = (checkoutsHoy ?? []).find(co => co.booking_units?.[0]?.unit_id === ciUnitId);
+        let hit = null, co = null;
+        for (const row of rowsAtArrival(ci)) {
+          co = (checkoutsHoy ?? []).find(x => x.id !== ci.id &&
+            getSegments(x).some(sg => sg.unit_id === String(row.unit_id) && sg.to === today));
+          if (co) { hit = row; break; }
+        }
         if (!co) return; // no hay salida en la misma unidad hoy → no es recambio
-        const unitName = ci.booking_units?.[0]?.units?.name ?? 'Unidad';
+        const unitName = hit?.units?.name ?? 'Unidad';
         const inGuest  = ci.guests ? `${ci.guests.first_name} ${ci.guests.last_name}` : 'Huésped';
         const outGuest = co.guests ? `${co.guests.first_name} ${co.guests.last_name}` : 'Huésped';
         this._list.push({

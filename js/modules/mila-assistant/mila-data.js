@@ -7,6 +7,8 @@
 // cálculos nuevos — solo se re-exponen para el panel.
 // ══════════════════════════════════════════════════
 import { supabase, AppContext } from '../../supabase-config.js';
+import { queryWithOptionalColumns, segmentColumns } from '../../utils/db-compat.js';
+import { getSegments, rowsOnNight, unitNightsInRange } from '../../services/stay-segments.js';
 import { fetchMonthlyRates, fetchCustomColumns, monthsInRange, buildTariffGrid } from '../../services/tariff-service.js';
 
 const guestSel = `guests!bookings_guest_id_fkey(first_name,last_name)`;
@@ -64,18 +66,27 @@ export async function fetchDisponibilidad(checkIn, checkOut) {
   const unitIds = units.map(u => u.id);
   if (!unitIds.length) return [];
 
-  const { data: conflicts } = await supabase.from('booking_units')
-    .select('unit_id, bookings!inner(id, status, check_in, check_out)')
-    .in('unit_id', unitIds)
-    .not('bookings.status', 'in', '(cancelled,blocked)')
-    .lt('bookings.check_in', checkOut)
-    .gt('bookings.check_out', checkIn);
+  // Una reserva con cambio de depto ocupa cada unidad SOLO durante su tramo
+  // (stay-segments.js). Si la base no tiene las columnas de tramo, se reintenta
+  // sin ellas (todas las reservas ocupan su unidad completa, como antes).
+  const BASE = 'unit_id, bookings!inner(id, status, check_in, check_out)';
+  const { data: conflicts } = await queryWithOptionalColumns(
+    sel => supabase.from('booking_units')
+      .select(sel)
+      .in('unit_id', unitIds)
+      .not('bookings.status', 'in', '(cancelled,blocked)')
+      .lt('bookings.check_in', checkOut)
+      .gt('bookings.check_out', checkIn),
+    'unit_id, segment_check_in, segment_check_out, bookings!inner(id, status, check_in, check_out)', BASE);
 
   const byUnit = new Map();
   (conflicts ?? []).forEach(c => {
-    const arr = byUnit.get(c.unit_id) ?? [];
-    arr.push({ from: c.bookings.check_in, to: c.bookings.check_out });
-    byUnit.set(c.unit_id, arr);
+    const segs = getSegments({ check_in: c.bookings.check_in, check_out: c.bookings.check_out, booking_units: [c] });
+    segs.filter(s => s.from < checkOut && s.to > checkIn).forEach(s => {
+      const arr = byUnit.get(c.unit_id) ?? [];
+      arr.push({ from: s.from, to: s.to });
+      byUnit.set(c.unit_id, arr);
+    });
   });
 
   const dayMs   = 86400000;
@@ -143,8 +154,9 @@ export async function fetchFacturacion(desde, hasta) {
 export async function fetchOcupacion(desde, hasta) {
   const hotelId = AppContext.hotelId;
   const units = AppContext.units ?? [];
+  const SEG = await segmentColumns(supabase);
   const { data } = await supabase.from('bookings')
-    .select('check_in, check_out, status, booking_units(unit_id)')
+    .select(`check_in, check_out, status, booking_units(unit_id${SEG})`)
     .eq('hotel_id', hotelId)
     .neq('status', 'cancelled')
     .lte('check_in', hasta)
@@ -162,7 +174,11 @@ export async function fetchOcupacion(desde, hasta) {
     const limit = new Date(to.getTime() + 86400000);
     const co = coRaw < limit ? coRaw : limit;
     const nights = Math.max(0, Math.round((co - ci) / 86400000));
-    occupiedNights += nights * Math.max(1, (b.booking_units ?? []).length);
+    // Cada unidad cuenta solo las noches de su tramo (una reserva con cambio de depto no suma doble)
+    const unitIds = [...new Set(getSegments(b).map(s => s.unit_id))];
+    if (!unitIds.length) { occupiedNights += nights; return; }
+    const winEnd = localDateISOFromDate(new Date(to.getTime() + 86400000));
+    unitIds.forEach(uid => { occupiedNights += unitNightsInRange(b, uid, desde, winEnd); });
   });
 
   const pct = totalUnitNights ? Math.min(100, Math.round((occupiedNights / totalUnitNights) * 100)) : 0;
@@ -349,8 +365,9 @@ export async function fetchOccupancyTrend(days = 7) {
   const startISO = localDateISOFromDate(today);
   const endISO = localDateISOFromDate(new Date(today.getTime() + (days - 1) * 86400000));
 
+  const SEG = await segmentColumns(supabase);
   const { data } = await supabase.from('bookings')
-    .select('check_in, check_out, status, booking_units(unit_id)')
+    .select(`check_in, check_out, status, booking_units(unit_id${SEG})`)
     .eq('hotel_id', hotelId)
     .neq('status', 'cancelled')
     .lte('check_in', endISO)
@@ -364,9 +381,7 @@ export async function fetchOccupancyTrend(days = 7) {
     const dayISO = localDateISOFromDate(dayDate);
     const occupiedUnitIds = new Set();
     bookings.forEach(b => {
-      if (b.check_in <= dayISO && b.check_out > dayISO) {
-        (b.booking_units ?? []).forEach(bu => occupiedUnitIds.add(bu.unit_id));
-      }
+      rowsOnNight(b, dayISO).forEach(bu => occupiedUnitIds.add(bu.unit_id));
     });
     out.push({ date: dayISO, pct: Math.min(100, Math.round((occupiedUnitIds.size / totalUnits) * 100)) });
   }

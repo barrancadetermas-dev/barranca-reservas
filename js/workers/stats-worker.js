@@ -4,6 +4,8 @@
 // Recibe datos crudos y devuelve métricas calculadas
 // ═══════════════════════════════════════════════════
 
+import { computeUnitStats } from '../services/unit-stats.js';
+
 self.addEventListener('message', ({ data }) => {
   const { type, payload, id } = data;
   try {
@@ -23,53 +25,7 @@ self.addEventListener('message', ({ data }) => {
 });
 
 // ── Estadísticas por unidad ───────────────────────
-function computeUnitStats({ bookings, units, firstDay, lastDay, daysInMonth }) {
-  const statsMap = {};
-  units.forEach(u => {
-    statsMap[u.id] = { unit: u, nightsOcc: 0, revenue: 0, bookingCount: 0, totalPriceNights: 0 };
-  });
-
-  bookings.forEach(b => {
-    const bUnits = b.booking_units ?? [];
-    const unitCount = bUnits.length || 1;
-    bUnits.forEach(({ unit_id, price_per_night: unitPrice }) => {
-      if (!statsMap[unit_id]) return;
-      const ciDate  = new Date(Math.max(new Date(b.check_in  + 'T00:00:00'), new Date(firstDay + 'T00:00:00')));
-      const coDate  = new Date(Math.min(new Date(b.check_out + 'T00:00:00'), new Date(lastDay  + 'T23:59:59')));
-      const nights  = Math.max(0, Math.round((coDate - ciDate) / 86400000));
-      const s       = statsMap[unit_id];
-      s.nightsOcc        += nights;
-      s.bookingCount     += 1;
-      s.totalPriceNights += nights * (b.price_per_night ?? 0);
-      // Precio real de la unidad si existe; si no, repartir el total entre unidades (fallback)
-      if (unitPrice != null && unitPrice > 0) {
-        // Noches sin cargo: prorratear su proporción dentro de la ventana
-        // del reporte (nights puede venir recortado al mes visible) —
-        // ocupan la unidad igual (no tocan nightsOcc) pero no facturan.
-        const totalNightsFull = Math.round(
-          (new Date(b.check_out + 'T00:00:00') - new Date(b.check_in + 'T00:00:00')) / 86400000
-        );
-        const freeNights   = b.free_nights ?? 0;
-        const billableRatio = totalNightsFull > 0 ? Math.max(0, totalNightsFull - freeNights) / totalNightsFull : 1;
-        s.revenue += unitPrice * nights * billableRatio;
-      } else {
-        const totalNights = Math.round(
-          (new Date(b.check_out + 'T00:00:00') - new Date(b.check_in + 'T00:00:00')) / 86400000
-        );
-        if (totalNights > 0) s.revenue += ((b.total_amount ?? 0) / unitCount) * (nights / totalNights);
-      }
-    });
-  });
-
-  return Object.values(statsMap).map(s => ({
-    unit:             s.unit,
-    nightsOcc:        s.nightsOcc,
-    revenue:          Math.round(s.revenue),
-    bookingCount:     s.bookingCount,
-    occupancyPct:     Math.min(100, Math.round((s.nightsOcc / daysInMonth) * 100)),
-    avgPricePerNight: s.nightsOcc > 0 ? Math.round(s.totalPriceNights / s.nightsOcc) : 0,
-  })).sort((a, b) => b.revenue - a.revenue);
-}
+// (implementación única en services/unit-stats.js; respeta tramos de estadía)
 
 // ── Datos para gráficos mensuales ──────────────────
 function computeMonthlyChart({ monthlyBookings }) {

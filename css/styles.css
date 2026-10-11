@@ -6872,3 +6872,59 @@ input[type="number"]:focus, select:focus {
   transform: translateY(-1px);
   box-shadow: var(--sh-md);
 }
+
+/* ══════════════════════════════════════════════════
+   Editor de tramos (cambio de departamento en una misma reserva)
+   ══════════════════════════════════════════════════ */
+.split-stay-link { margin-top: 8px; }
+.split-editor {
+  border: 1px solid var(--color-primary); border-radius: var(--r-md);
+  background: var(--color-primary-l); padding: 12px; display: flex; flex-direction: column; gap: 8px;
+}
+.split-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.split-sub { font-size: .74rem; color: var(--color-text-3); margin-left: 6px; font-weight: 400; }
+.split-row {
+  display: grid; grid-template-columns: 26px minmax(110px, 1.2fr) minmax(130px, 1.4fr) auto 22px;
+  align-items: center; gap: 8px; padding: 8px 10px;
+  background: var(--color-surface, #fff); border: 1px solid var(--color-border);
+  border-left: 4px solid var(--split-color, var(--color-primary)); border-radius: var(--r-md);
+}
+.split-n {
+  width: 22px; height: 22px; border-radius: 50%; background: var(--split-color, var(--color-primary));
+  color: #fff; font-size: .72rem; font-weight: 700; display: flex; align-items: center; justify-content: center;
+}
+.split-dates { display: flex; align-items: center; gap: 6px; font-weight: 600; font-size: .86rem; flex-wrap: wrap; }
+.split-arrow { color: var(--color-text-3); }
+.split-bound { padding: 4px 6px; font-size: .8rem; width: auto; }
+.split-unit { padding: 6px 8px; font-size: .84rem; }
+.split-nights { font-size: .78rem; color: var(--color-text-2); white-space: nowrap; }
+.split-del {
+  border: 0; background: transparent; color: var(--color-text-3); font-size: 1.1rem; line-height: 1;
+  cursor: pointer; padding: 0; border-radius: 50%;
+}
+.split-del:hover { color: var(--color-danger); }
+.split-avail { grid-column: 2 / -1; font-size: .74rem; min-height: 1em; }
+.split-avail.free { color: var(--color-success); }
+.split-avail.busy { color: var(--color-danger); font-weight: 600; }
+.split-msg { font-size: .76rem; color: var(--color-danger); min-height: 0; }
+.split-add { align-self: flex-start; }
+.split-price-row { grid-template-columns: 26px 1fr 120px auto; }
+.split-price-name { display: flex; flex-direction: column; font-size: .86rem; font-weight: 600; min-width: 0; }
+.split-price-name small { font-weight: 400; color: var(--color-text-3); font-size: .72rem; }
+.split-sub-total { font-weight: 700; font-size: .84rem; min-width: 80px; text-align: right; }
+.split-total-row { display: flex; justify-content: space-between; padding: 4px 4px 0; font-size: .86rem; }
+@media (max-width: 520px) {
+  .split-row { grid-template-columns: 26px 1fr auto; }
+  .split-dates { grid-column: 2 / -1; }
+  .split-nights { grid-column: 2; }
+  .split-price-row { grid-template-columns: 26px 1fr; }
+  .split-price-row .split-price, .split-price-row .split-sub-total { grid-column: 2; text-align: left; }
+}
+
+/* Ficha de reserva: tramos de alojamiento (cambio de departamento) */
+.detail-stay { margin: 10px 0; padding: 10px 12px; border: 1px solid var(--color-border); border-radius: var(--r-md); background: var(--color-surface-2); }
+.detail-stay-row { display: grid; grid-template-columns: 10px auto 1fr auto; align-items: center; gap: 8px; padding: 5px 0; font-size: .86rem; }
+.detail-stay-row + .detail-stay-row { border-top: 1px dashed var(--color-border); }
+.detail-stay-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--c, var(--color-primary)); }
+.detail-stay-dates { color: var(--color-text-2); font-variant-numeric: tabular-nums; }
+.detail-stay-n { color: var(--color-text-3); font-size: .78rem; }

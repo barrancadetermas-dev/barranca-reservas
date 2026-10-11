@@ -16,6 +16,8 @@ import { getHolidaysForYear, isWeekend } from '../services/arg-holidays.js';
 import { logAction } from '../services/audit-service.js';
 import { cachedQuery, cache } from '../services/supabase-cache.js';
 import { Bus, EVENTS } from '../services/event-bus.js';
+import { getSegments, isSplit, rowsOnNight, occupiesNight, overlapsRange } from '../services/stay-segments.js';
+import { segmentColumns } from '../utils/db-compat.js';
 import { fetchMonthlyRates, fetchCustomColumns, monthsInRange, buildTariffGrid, groupRowsByPrice, getSuggestedNightlyPrices } from '../services/tariff-service.js';
 import { createQuote, updateQuote, markQuoteConverted, fetchOverlappingQuotes, fetchOverlappingBookings, fetchAvailableUnitsForNight, fetchQuotesList, fetchQuoteById, deleteQuote } from '../services/quote-service.js';
 
@@ -356,10 +358,7 @@ export class Calendar {
       const guestName = cb.guests ? `${cb.guests.first_name ?? ''} ${cb.guests.last_name ?? ''}`.trim() : '';
       for (let d = cb.check_in; d < cb.check_out; d = this._addDays(d, 1)) {
         unitIds.forEach(unitId => {
-          const covered = activeBookings.some(b =>
-            b.check_in <= d && b.check_out > d &&
-            (b.booking_units ?? []).some(bu => bu.unit_id === unitId)
-          );
+          const covered = activeBookings.some(b => occupiesNight(b, unitId, d));
           if (!covered) pending.set(`${unitId}|${d}`, guestName);
         });
       }
@@ -400,10 +399,7 @@ export class Calendar {
       const guestName = eb.guests ? `${eb.guests.first_name ?? ''} ${eb.guests.last_name ?? ''}`.trim() : '';
       for (let d = eb.check_out; d < eb.originalCheckOut; d = this._addDays(d, 1)) {
         unitIds.forEach(unitId => {
-          const covered = activeBookings.some(b =>
-            b.id !== eb.id && b.check_in <= d && b.check_out > d &&
-            (b.booking_units ?? []).some(bu => bu.unit_id === unitId)
-          );
+          const covered = activeBookings.some(b => b.id !== eb.id && occupiesNight(b, unitId, d));
           if (!covered) pending.set(`${unitId}|${d}`, guestName);
         });
       }
@@ -1523,10 +1519,19 @@ export class Calendar {
     const { label } = getBookingBarColor(booking);
     const source    = booking.source ?? 'direct';
     const srcCfg    = SOURCE_CONFIG[source] ?? {};
-    const units     = (booking.booking_units ?? []).map(bu => {
-      const u = bu.units ?? {};
-      return `#${u.sort_order ?? '?'} · ${u.name ?? '?'}`;
-    }).join(', ');
+    const bookingSegs = getSegments(booking);
+    const splitStay   = isSplit(booking);
+    const units     = splitStay
+      // Cambio de depto: en orden cronológico y con las fechas de cada tramo
+      ? bookingSegs.map(sg => {
+          const u = sg.unit ?? {};
+          const dm = iso => iso.split('-').reverse().slice(0, 2).join('/');
+          return `#${u.sort_order ?? '?'} · ${u.name ?? '?'} (${dm(sg.from)}→${dm(sg.to)})`;
+        }).join(' → ')
+      : (booking.booking_units ?? []).map(bu => {
+          const u = bu.units ?? {};
+          return `#${u.sort_order ?? '?'} · ${u.name ?? '?'}`;
+        }).join(', ');
     const hasBadExp     = booking.guests?.bad_experience;
     const totalAmount   = booking.total_amount ?? 0;
     const totalPaid     = booking.total_paid   ?? 0;
@@ -1548,7 +1553,8 @@ export class Calendar {
         uid:   bu.unit_id,
         name:  bu.units?.name ?? '—',
         color: bu.units?.color ?? '#94A3B8',
-        total: (bu.price_per_night ?? 0) * nightsCount,
+        // Cambio de depto: precio del tramo × noches de ESE tramo (no todas las de la reserva)
+        total: (bu.price_per_night ?? 0) * (splitStay ? (bookingSegs.find(sg => sg.unit_id === String(bu.unit_id))?.nights ?? 0) : nightsCount),
       }));
       const sumTotals   = unitTotals.reduce((s,u) => s + u.total, 0) || 1;
       const generalPaid = bPayments.filter(p => !p.unit_id).reduce((s,p) => s + (p.amount ?? 0), 0);
@@ -3404,8 +3410,7 @@ export class Calendar {
       // Validación local contra reservas cargadas
       const hasConflict = (this._lastRenderedBookings ?? []).some(other => {
         if (other.id === b.id || other.status === 'cancelled') return false;
-        if (!(other.booking_units ?? []).some(bu => bu.unit_id === targetUnitId)) return false;
-        return other.check_in < newCO && other.check_out > newCI;
+        return overlapsRange(other, targetUnitId, newCI, newCO);   // respeta los tramos de la otra reserva
       });
 
       // Highlights
@@ -3482,17 +3487,22 @@ export class Calendar {
 
       // Validación final en Supabase — excluir cancelled Y blocked para que
       // mover un bloqueo no choque consigo mismo ni con otros bloqueos
-      const { data: conflicts } = await this.db
+      const SEG = await segmentColumns(this.db);
+      const { data: rawConflicts } = await this.db
         .from('booking_units')
-        .select('unit_id, bookings!inner(id, check_in, check_out, status, is_blocked)')
+        .select(`unit_id${SEG}, bookings!inner(id, check_in, check_out, status, is_blocked)`)
         .eq('unit_id', targetUnitId)
         .neq('bookings.status', 'cancelled')
         .neq('bookings.status', 'blocked')
         .neq('bookings.id', booking.id)
         .lt('bookings.check_in', newCO)
         .gt('bookings.check_out', newCI);
+      // Solo cuentan las reservas que realmente ocupan esa unidad en esas noches (tramos)
+      const conflicts = (rawConflicts ?? []).filter(c => overlapsRange(
+        { check_in: c.bookings.check_in, check_out: c.bookings.check_out, booking_units: [c] },
+        targetUnitId, newCI, newCO));
 
-      if (conflicts?.length) {
+      if (conflicts.length) {
         showToast('⚠️ Conflicto: hay otra reserva en esas fechas', 'error');
         this.load(); return;
       }
@@ -3775,8 +3785,7 @@ export class Calendar {
       const hasConflict = (this._lastRenderedBookings ?? []).some(other => {
         if (other.id === booking.id || other.status === 'cancelled') return false;
         const srcUnitId = (booking.booking_units ?? [])[0]?.unit_id;
-        if (!(other.booking_units ?? []).some(bu => bu.unit_id === srcUnitId)) return false;
-        return other.check_in < currentCO && other.check_out > booking.check_in;
+        return overlapsRange(other, srcUnitId, booking.check_in, currentCO);
       });
 
       bar.classList.toggle('resize-conflict', hasConflict);
@@ -3823,16 +3832,21 @@ export class Calendar {
 
       // Validación final
       const srcUnitId = (booking.booking_units ?? [])[0]?.unit_id;
-      const { data: conflicts } = await this.db
+      const SEG = await segmentColumns(this.db);
+      const { data: rawConflicts } = await this.db
         .from('booking_units')
-        .select('unit_id, bookings!inner(id, check_in, check_out, status)')
+        .select(`unit_id${SEG}, bookings!inner(id, check_in, check_out, status)`)
         .eq('unit_id', srcUnitId)
         .neq('bookings.status', 'cancelled')
         .neq('bookings.id', booking.id)
         .lt('bookings.check_in', currentCO)
         .gt('bookings.check_out', booking.check_in);
+      // Solo cuentan las reservas que realmente ocupan esta unidad en esas noches (tramos)
+      const conflicts = (rawConflicts ?? []).filter(c => overlapsRange(
+        { check_in: c.bookings.check_in, check_out: c.bookings.check_out, booking_units: [c] },
+        srcUnitId, booking.check_in, currentCO));
 
-      if (conflicts?.length) {
+      if (conflicts.length) {
         showToast('⚠️ Conflicto: hay otra reserva en esas fechas', 'error');
         bar.style.width = origWidthStyle;
         this.load(); return;
@@ -3924,8 +3938,7 @@ export class Calendar {
       const hasConflict = (this._lastRenderedBookings ?? []).some(other => {
         if (other.id === booking.id || other.status === 'cancelled') return false;
         const srcUnitId = (booking.booking_units ?? [])[0]?.unit_id;
-        if (!(other.booking_units ?? []).some(bu => bu.unit_id === srcUnitId)) return false;
-        return other.check_in < booking.check_out && other.check_out > currentCI;
+        return overlapsRange(other, srcUnitId, currentCI, booking.check_out);
       });
 
       bar.classList.toggle('resize-conflict', hasConflict);
@@ -3972,16 +3985,20 @@ export class Calendar {
 
       // Validación final — mismos límites excluyentes que el resize derecho
       const srcUnitId = (booking.booking_units ?? [])[0]?.unit_id;
-      const { data: conflicts } = await this.db
+      const SEG = await segmentColumns(this.db);
+      const { data: rawConflicts } = await this.db
         .from('booking_units')
-        .select('unit_id, bookings!inner(id, check_in, check_out, status)')
+        .select(`unit_id${SEG}, bookings!inner(id, check_in, check_out, status)`)
         .eq('unit_id', srcUnitId)
         .neq('bookings.status', 'cancelled')
         .neq('bookings.id', booking.id)
         .lt('bookings.check_in', booking.check_out)
         .gt('bookings.check_out', currentCI);
+      const conflicts = (rawConflicts ?? []).filter(c => overlapsRange(
+        { check_in: c.bookings.check_in, check_out: c.bookings.check_out, booking_units: [c] },
+        srcUnitId, currentCI, booking.check_out));
 
-      if (conflicts?.length) {
+      if (conflicts.length) {
         showToast('⚠️ Conflicto: hay otra reserva en esas fechas', 'error');
         bar.style.width = origWidthStyle;
         bar.style.left  = origLeftStyle;
@@ -4194,11 +4211,8 @@ export class Calendar {
       dateRange.forEach(iso => occupancyMap.set(iso, new Set()));
       bookings.forEach(b => {
         if (b.status === 'cancelled') return;
-        dateRange.forEach(iso => {
-          if (b.check_in <= iso && b.check_out > iso) {
-            (b.booking_units ?? []).forEach(bu => occupancyMap.get(iso)?.add(bu.unit_id));
-          }
-        });
+        // cada unidad cuenta solo en las noches de su tramo (cambio de depto)
+        dateRange.forEach(iso => rowsOnNight(b, iso).forEach(bu => occupancyMap.get(iso)?.add(bu.unit_id)));
       });
 
       // Aplicar clases a celdas
@@ -4283,7 +4297,7 @@ export class Calendar {
       bookings.forEach(b => {
         if (b.status === 'cancelled') return;
         if (b.check_in < co && b.check_out > ci) {
-          (b.booking_units ?? []).forEach(bu => occupiedIds.add(bu.unit_id));
+          getSegments(b).filter(sg => sg.from < co && sg.to > ci).forEach(sg => occupiedIds.add(sg.unit_id));
         }
       });
       // Marcar celdas de unidades ocupadas en rojo dentro del rango buscado
@@ -5528,7 +5542,7 @@ export class Calendar {
         return;
       }
       if (b.check_in <= today && b.check_out > today) {
-        (b.booking_units ?? []).forEach(bu => occupied.add(bu.unit_id));
+        rowsOnNight(b, today).forEach(bu => occupied.add(bu.unit_id));   // solo el depto de HOY
       }
       if (b.check_in === today) checkins.push(b);
       if (b.check_out === today) checkouts.push(b);
@@ -5573,8 +5587,7 @@ export class Calendar {
       const occupied = future.filter(d =>
         bookings.some(b =>
           !b.is_blocked && b.status !== 'blocked' && b.status !== 'cancelled' &&
-          (b.booking_units ?? []).some(bu => bu.unit_id === unit.id) &&
-          b.check_in <= d && b.check_out > d
+          occupiesNight(b, unit.id, d)
         )
       ).length;
 

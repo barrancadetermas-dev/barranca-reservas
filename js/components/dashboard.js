@@ -9,6 +9,9 @@ import { fetchDollarRates } from '../services/dollar-api.js';
 import { recordDailyRateSnapshot, getUsdConversionRate } from '../services/usd-rate-history.js';
 import { Bus, EVENTS } from '../services/event-bus.js';
 import { logAction } from '../services/audit-service.js';
+import { alojado, groupGender } from '../utils/gender.js';
+import { queryWithOptionalColumns, segmentColumns } from '../utils/db-compat.js';
+import { rowsOnNight, rowsAtArrival, rowsAtDeparture } from '../services/stay-segments.js';
 // ↑ Sin import de app.js — evita dependencia circular.
 // El badge se actualiza via CustomEvent que app.js escucha.
 
@@ -144,12 +147,13 @@ export class Dashboard {
 
         // 2. Obtener info de la reserva (unidad + fecha check-out)
         const { data: bk } = await this.db.from('bookings')
-          .select('check_out, booking_units(unit_id, units(name))')
+          .select(`check_in, check_out, booking_units(unit_id${await segmentColumns(this.db)}, units(name))`)
           .eq('id', bookingId).single();
 
         if (bk) {
-          const unitId   = bk.booking_units?.[0]?.unit_id;
-          const unitName = bk.booking_units?.[0]?.units?.name ?? '—';
+          const outRow   = rowsAtDeparture(bk)[0] ?? bk.booking_units?.[0];   // depto del que sale
+          const unitId   = outRow?.unit_id;
+          const unitName = outRow?.units?.name ?? '—';
           const today    = bk.check_out;
 
           // 3. Buscar si ya existe una tarea de limpieza para esa unidad hoy
@@ -297,20 +301,26 @@ export class Dashboard {
   // ── KPIs: Check-ins, Check-outs, Recambios, Huéspedes ──
   async _fetchKPIs(today) {
     const hotelId = this.ctx.hotelId;
+    // Columnas de tramo (cambio de depto) si la base ya las tiene
+    const SEG = await segmentColumns(this.db);
 
     // Reservas activas hoy (overlapping today)
-    const { data: activeBookings } = await this.db
-      .from('bookings')
-      .select(`
+    // guests.gender es opcional: si la migración no está aplicada se reintenta sin él
+    const activeSelect = (withGender) => `
         id, check_in, check_out, status, guest_id, checked_in_at, checked_out_at, pax, nights, total_amount, total_paid, balance,
-        guests!bookings_guest_id_fkey(first_name, last_name),
-        booking_units!inner(unit_id, units!inner(name, color, sort_order))
-      `)
-      .eq('hotel_id', hotelId)
-      .neq('status', 'cancelled')
-      .neq('status', 'blocked')
-      .lte('check_in',  today)
-      .gt('check_out', today);
+        guests!bookings_guest_id_fkey(first_name, last_name${withGender ? ', gender' : ''}),
+        booking_units!inner(unit_id${SEG}, units!inner(name, color, sort_order))
+      `;
+    const { data: activeBookings } = await queryWithOptionalColumns(
+      sel => this.db
+        .from('bookings')
+        .select(sel)
+        .eq('hotel_id', hotelId)
+        .neq('status', 'cancelled')
+        .neq('status', 'blocked')
+        .lte('check_in',  today)
+        .gt('check_out', today),
+      activeSelect(true), activeSelect(false));
 
     // Check-ins hoy — incluye canceladas (así una reserva marcada
     // "No vino" sigue viéndose tachada en gris, en vez de desaparecer
@@ -320,7 +330,7 @@ export class Dashboard {
       .select(`
         id, check_in, check_out, checked_in_at, total_amount, total_paid, balance, status, notes, pax,
         guests!bookings_guest_id_fkey(first_name, last_name, phone),
-        booking_units(unit_id, units(name, color, sort_order))
+        booking_units(unit_id${SEG}, units(name, color, sort_order))
       `)
       .eq('hotel_id', hotelId)
       .eq('check_in', today)
@@ -332,7 +342,7 @@ export class Dashboard {
       .select(`
         id, check_in, check_out, checked_out_at, total_amount, total_paid, balance, pax,
         guests!bookings_guest_id_fkey(first_name, last_name),
-        booking_units(unit_id, units(name, color, sort_order))
+        booking_units(unit_id${SEG}, units(name, color, sort_order))
       `)
       .eq('hotel_id', hotelId)
       .eq('check_out', today)
@@ -354,11 +364,12 @@ export class Dashboard {
       if (arrivingToday && !b.checked_in_at) return; // llega hoy pero no hizo check-in todavía
       if (b.checked_out_at) return; // ya se fue (salida anticipada), no cuenta como ocupado
       const guestName = b.guests ? `${b.guests.first_name ?? ''} ${b.guests.last_name ?? ''}`.trim() : '—';
-      (b.booking_units ?? []).forEach(bu => {
+      rowsOnNight(b, today).forEach(bu => {      // solo el depto donde está HOY (cambio de depto)
         occupiedUnitIds.add(bu.unit_id);
         occupiedDetail.push({
           unitName:  bu.units?.name ?? '—',
           guestName,
+          gender: b.guests?.gender ?? null,
         });
       });
     });
@@ -370,13 +381,13 @@ export class Dashboard {
       const checkinByUnit  = new Map(); // unitId -> { unitName, guestName, bookingId }
       checkins.filter(b => b.status !== 'cancelled').forEach(b => {
         const guestName = b.guests ? `${b.guests.first_name ?? ''} ${b.guests.last_name ?? ''}`.trim() : '—';
-        (b.booking_units ?? []).forEach(bu => {
+        rowsAtArrival(b).forEach(bu => {
           checkinByUnit.set(bu.unit_id, { unitName: bu.units?.name ?? '—', guestName, bookingId: b.id });
         });
       });
       checkouts.forEach(b => {
         const guestName = b.guests ? `${b.guests.first_name ?? ''} ${b.guests.last_name ?? ''}`.trim() : '—';
-        (b.booking_units ?? []).forEach(bu => {
+        rowsAtDeparture(b).forEach(bu => {
           const incoming = checkinByUnit.get(bu.unit_id);
           if (incoming) {
             recambios.push({
@@ -414,7 +425,7 @@ export class Dashboard {
     const next7str = localDateISO(next7);
     const { data: upcoming } = await this.db
       .from('bookings')
-      .select('check_in, check_out, total_amount, source, guests!bookings_guest_id_fkey(first_name,last_name), booking_units(units(name,color))')
+      .select(`check_in, check_out, total_amount, source, guests!bookings_guest_id_fkey(first_name,last_name), booking_units(unit_id${SEG}, units(name,color))`)
       .eq('hotel_id', hotelId)
       .neq('status', 'cancelled')
       .gt('check_in', today)
@@ -460,8 +471,10 @@ export class Dashboard {
   // ── Render KPI cards ──────────────────────────────
   _renderKPIs(kpis, today) {
     const gName = b => b.guests ? (b.guests.first_name ?? '') + ' ' + (b.guests.last_name ?? '') : null;
-    const uName = b => b.booking_units?.[0]?.units?.name ?? null;
-    const uColor= b => b.booking_units?.[0]?.units?.color ?? null;
+    // Depto a mostrar: en check-ins el de llegada, en check-outs el de salida (cambio de depto)
+    const pick  = (b, out) => (out ? rowsAtDeparture(b) : rowsAtArrival(b))[0] ?? b.booking_units?.[0];
+    const uName = (b, out) => pick(b, out)?.units?.name ?? null;
+    const uColor= (b, out) => pick(b, out)?.units?.color ?? null;
 
     // Helper: set secondary text under KPI number
     const setSec = (id, html) => {
@@ -498,19 +511,19 @@ export class Dashboard {
     this._animateCounter(coEl, kpis.checkouts.length);
     if (kpis.checkouts.length === 1) {
       const b = kpis.checkouts[0];
-      const col = uColor(b) ?? '#f59e0b';
+      const col = uColor(b, true) ?? '#f59e0b';
       setSec('kpi-checkouts',
         '<span style="display:inline-flex;align-items:center;gap:4px">' +
         '<span style="width:6px;height:6px;border-radius:50%;background:' + col + ';flex-shrink:0"></span>' +
         '<span style="font-size:.68rem;color:var(--color-text-2);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:120px">' +
-        (gName(b) || '—') + ' · ' + (uName(b) || '—') + '</span></span>');
+        (gName(b) || '—') + ' · ' + (uName(b, true) || '—') + '</span></span>');
     } else if (kpis.checkouts.length > 1) {
-      setSec('kpi-checkouts', '<span style="font-size:.68rem;color:var(--color-text-3)">' + kpis.checkouts.map(b => uName(b) ?? '—').join(' · ') + '</span>');
+      setSec('kpi-checkouts', '<span style="font-size:.68rem;color:var(--color-text-3)">' + kpis.checkouts.map(b => uName(b, true) ?? '—').join(' · ') + '</span>');
     } else {
       setSec('kpi-checkouts', '<span style="font-size:.68rem;color:var(--color-text-3)">Sin salidas hoy 😭</span>');
     }
     this._bindKpiTooltip('kpi-checkouts', { emptyText: 'No hay egresos para hoy.',
-      lines: kpis.checkouts.map(b => (uName(b) ?? '—') + ' — ' + (gName(b) || '—')) });
+      lines: kpis.checkouts.map(b => (uName(b, true) ?? '—') + ' — ' + (gName(b) || '—')) });
 
     // ── Recambios ──
     const rcEl = document.getElementById('kpi-recambios-val');
@@ -532,6 +545,10 @@ export class Dashboard {
     this._setKPI('kpi-guests-val', kpis.occupiedUnits);
     this._animateCounter(guEl, kpis.occupiedUnits);
     const occ = kpis.occupiedDetail ?? [];
+    // Etiqueta según el género de quienes están alojados (1 alojada / 2 alojades…).
+    // Con género sin cargar (reservas viejas) queda "Alojadas", como siempre.
+    const guLabel = document.querySelector('#kpi-guests .kpi-label');
+    if (guLabel) guLabel.textContent = alojado(groupGender(occ.map(o => o.gender)), { count: kpis.occupiedUnits, fallback: 'female' });
     if (occ.length === 1) {
       setSec('kpi-guests',
         '<span style="font-size:.68rem;color:var(--color-text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:130px">' +
@@ -676,7 +693,7 @@ export class Dashboard {
 
     const rows = bookings.map(b => {
       const guest  = b.guests ? (b.guests.first_name + ' ' + b.guests.last_name) : 'Sin nombre';
-      const units  = (b.booking_units ?? []).map(bu => bu?.units).filter(Boolean);
+      const units  = rowsAtArrival(b).map(bu => bu?.units).filter(Boolean);
       const nights = Math.round((new Date(b.check_out+'T12:00:00') - new Date(b.check_in+'T12:00:00')) / 86400000);
       const dAway  = Math.round((new Date(b.check_in+'T12:00:00') - new Date(today+'T12:00:00')) / 86400000);
       const dayLabel = dAway === 0
@@ -974,7 +991,9 @@ export class Dashboard {
     // mode: 'arrival' | 'departure' | 'upcoming'
     const b        = booking;
     const guest    = b.guests ? (b.guests.first_name + ' ' + b.guests.last_name) : 'Sin nombre';
-    const units    = (b.booking_units ?? []).map(bu => bu?.units).filter(Boolean);
+    // Llegada → depto de entrada; salida → depto de salida (cambio de depto en la estadía)
+    const unitRows = mode === 'departure' ? rowsAtDeparture(b) : rowsAtArrival(b);
+    const units    = (unitRows.length ? unitRows : (b.booking_units ?? [])).map(bu => bu?.units).filter(Boolean);
     const unitName = units.map(u => u?.name ?? '').filter(Boolean).join(' + ') || '—';
     const nights   = Math.round((new Date(b.check_out+'T12:00:00') - new Date(b.check_in+'T12:00:00')) / 86400000);
     const isCancelled = b.status === 'cancelled';
@@ -1150,7 +1169,7 @@ export class Dashboard {
       const fmtD = s => { const [,m,d] = (s??'').split('-'); return d && m ? d+'/'+m : s; };
       const rows = staying.map(b => {
         const guest = b.guests ? ((b.guests.first_name??'')+' '+(b.guests.last_name??'')).trim() : 'Sin nombre';
-        const units = (b.booking_units ?? []).map(bu => bu?.units).filter(Boolean);
+        const units = rowsOnNight(b, today).map(bu => bu?.units).filter(Boolean);   // depto actual
         const uNames = units.map(u => u?.name).filter(Boolean).join(' + ') || '—';
         const color  = units[0]?.color ?? '#6366f1';
         const nights = b.nights ?? Math.round((new Date(b.check_out+'T12:00:00') - new Date(b.check_in+'T12:00:00'))/86400000);
@@ -1166,12 +1185,12 @@ export class Dashboard {
           + '</div>'
           + (leavesToday
               ? '<span style="font-size:.6rem;font-weight:700;padding:1px 7px;border-radius:4px;background:var(--info-blue-bg,#eff6ff);color:var(--info-blue-txt,#2563eb);white-space:nowrap;flex-shrink:0">Sale hoy</span>'
-              : '<span style="font-size:.6rem;font-weight:700;padding:1px 7px;border-radius:4px;background:var(--state-green-bg,#f0fdf4);color:var(--state-green-txt,#16a34a);white-space:nowrap;flex-shrink:0">Alojado</span>')
+              : '<span style="font-size:.6rem;font-weight:700;padding:1px 7px;border-radius:4px;background:var(--state-green-bg,#f0fdf4);color:var(--state-green-txt,#16a34a);white-space:nowrap;flex-shrink:0">'+alojado(b.guests?.gender)+'</span>')
           + '</div>';
       }).join('');
 
       card.innerHTML =
-        '<div class="card-header"><h3>🛏️ Alojados ahora</h3>'
+        '<div class="card-header"><h3>🛏️ '+alojado(groupGender(staying.map(b => b.guests?.gender)), { count: staying.length })+' ahora</h3>'
         + '<span style="font-size:.65rem;font-weight:700;padding:2px 8px;border-radius:4px;background:var(--color-surface-2);color:var(--color-text-2)">'+staying.length+'</span></div>'
         + '<div style="flex:1;overflow-y:auto;max-height:220px">'+rows+'</div>';
     } catch (err) { console.warn('[Dashboard] staying-now:', err); }
@@ -1190,12 +1209,14 @@ export class Dashboard {
 
       // Mapear bookings activos por unit_id (reservas que ocupan hoy)
       const byUnit = {};
-      [...activeBookings, ...arrivals, ...departures].forEach(b => {
-        (b.booking_units ?? []).forEach(bu => {
-          const uid = String(bu.unit_id ?? bu.id ?? '');
-          if (!byUnit[uid]) byUnit[uid] = b;
-        });
+      // Cada reserva marca solo la unidad donde está hoy / a la que llega / de la que sale
+      const mark = (b, rows) => rows.forEach(bu => {
+        const uid = String(bu.unit_id ?? bu.id ?? '');
+        if (!byUnit[uid]) byUnit[uid] = b;
       });
+      activeBookings.forEach(b => mark(b, rowsOnNight(b, today)));
+      arrivals.forEach(b => mark(b, rowsAtArrival(b)));
+      departures.forEach(b => mark(b, rowsAtDeparture(b)));
 
       // ── Lógica de color por estado/canal ──────────────────────────────────
       // Prioridad: canal externo (Booking/Airbnb/etc) > pagado > seña > sin depósito > libre
@@ -1836,6 +1857,7 @@ export class Dashboard {
   // la curva de ocupación, no solo el dato puntual de hoy.
   // ══════════════════════════════════════════════════
   async _fetchOccupancyForecast(today) {
+    const SEG = await segmentColumns(this.db);
     const hotelId    = this.ctx.hotelId;
     const totalUnits = this.ctx.units?.length || 0;
     const HORIZON     = 28;
@@ -1855,13 +1877,13 @@ export class Dashboard {
       // la carga del Panel de Hoy. Ahora las 2 consultas van juntas.
       const [{ data: bookings, error }, { data: prevBookings }] = await Promise.all([
         this.db.from('bookings')
-          .select('check_in, check_out, booking_units(unit_id)')
+          .select(`check_in, check_out, booking_units(unit_id${SEG})`)
           .eq('hotel_id', hotelId)
           .not('status', 'in', '(cancelled,blocked)')
           .lt('check_in', endISO)
           .gt('check_out', today),
         this.db.from('bookings')
-          .select('check_in, check_out, booking_units(unit_id)')
+          .select(`check_in, check_out, booking_units(unit_id${SEG})`)
           .eq('hotel_id', hotelId)
           .not('status', 'in', '(cancelled,blocked)')
           .lt('check_in', prevEndISO)
@@ -1875,9 +1897,7 @@ export class Dashboard {
         const d   = toISODate(new Date(start.getTime() + i * dayMs));
         const occ = new Set();
         (bookings ?? []).forEach(b => {
-          if (b.check_in <= d && b.check_out > d) {
-            (b.booking_units ?? []).forEach(bu => occ.add(bu.unit_id));
-          }
+          rowsOnNight(b, d).forEach(bu => occ.add(bu.unit_id));
         });
         days.push({ date: d, occupied: occ.size });
       }
@@ -1897,7 +1917,7 @@ export class Dashboard {
           const d   = toISODate(new Date(prevStart.getTime() + i * dayMs));
           const occ = new Set();
           (prevBookings ?? []).forEach(b => {
-            if (b.check_in <= d && b.check_out > d) (b.booking_units ?? []).forEach(bu => occ.add(bu.unit_id));
+            rowsOnNight(b, d).forEach(bu => occ.add(bu.unit_id));
           });
           prevDays.push({ date: d, occupied: occ.size });
         }
