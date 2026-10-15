@@ -8,8 +8,11 @@ import { can, isDemo } from "../auth/permissions.js";
 
 import { formatARS, formatDate, showToast, getUnitChipHTML, getSourceBadgeHTML, getBookingBarColor, getUnitLabel, getUnitColor, SOURCE_CONFIG, localToday, localDateISO, AppContext, getNationalityFlag, appendNote } from '../supabase-config.js';
 import { logAction } from '../services/audit-service.js';
-import { alojado } from '../utils/gender.js';
+import { alojado, genderSymbolHTML } from '../utils/gender.js';
+import { escapeHtml } from '../services/voucher-template.js';
+import { specialChipsHTML } from '../services/special-dates.js';
 import { queryWithOptionalColumns, segmentColumns } from '../utils/db-compat.js';
+import { registerCheckIn } from '../services/checkin-service.js';
 import { cache } from '../services/supabase-cache.js';
 import { Bus, EVENTS } from '../services/event-bus.js';
 
@@ -436,13 +439,16 @@ export class BookingList {
             <select id="pf-method" class="form-input">
               <option value="cash">💵 Efectivo</option>
               <option value="transfer" selected>🏦 Transferencia</option>
-              <option value="card">💳 Tarjeta</option>
+              <option value="debit_card">💳 Tarjeta de débito</option>
+              <option value="credit_card">💳 Tarjeta de crédito</option>
               <option value="mercadopago">💙 MercadoPago</option>
+              <option value="naranjax">🟠 Naranja X</option>
+              <option value="uala">🟣 Ualá</option>
             </select>
           </div>
           <div class="form-group">
             <label class="form-label">Fecha</label>
-            <input type="date" id="pf-date" class="form-input" value="${new Date().toISOString().slice(0,10)}">
+            <input type="date" id="pf-date" class="form-input" value="${localToday()}">
           </div>
           <div class="form-group">
             <label class="form-label">Notas (opcional)</label>
@@ -465,11 +471,35 @@ export class BookingList {
       const btn = modal.querySelector('#pf-confirm');
       btn.disabled = true; btn.textContent = '⏳ Registrando…';
 
-      // 1. Insertar el pago (el trigger SQL recalcula total_paid y balance automáticamente)
+      // 0. Verificar el saldo REAL en la base antes de cobrar. El del cartel salió de la lista
+      //    cargada hace rato: si otra pantalla (o persona) ya cobró, esto duplicaría el pago.
+      const { data: fresh, error: freshErr } = await this.db.from('bookings')
+        .select('balance, status').eq('id', id).maybeSingle();
+      if (freshErr || !fresh) {
+        showToast('No se pudo verificar el saldo: ' + (freshErr?.message ?? 'reserva no encontrada'), 'error');
+        btn.disabled = false; btn.textContent = `Confirmar pago ${formatARS(balance)}`;
+        return;
+      }
+      const freshBalance = Math.round(Number(fresh.balance) || 0);
+      if (fresh.status === 'cancelled') {
+        close(); showToast('Esa reserva está cancelada: no se registra el pago', 'warning'); this.load(); return;
+      }
+      if (freshBalance <= 0) {
+        close(); showToast('ℹ️ Esa reserva ya no tiene saldo pendiente (se actualizó la lista)', 'info');
+        document.dispatchEvent(new CustomEvent('booking:changed')); this.load(); return;
+      }
+      if (Math.abs(freshBalance - Math.round(balance)) > 1) {
+        close(); showToast(`⚠️ El saldo cambió: ahora son ${formatARS(freshBalance)}. Volvé a abrir el cobro.`, 'warning');
+        this.load(); return;
+      }
+
+      // 1. Insertar el pago (el trigger SQL recalcula total_paid y balance automáticamente).
+      //    amount_ars se envía explícito: es la columna que suma el trigger de saldos.
       const { error: payErr } = await this.db.from('payments').insert({
         booking_id:   id,
         hotel_id:     this.ctx.hotelId,
         amount:       balance,
+        amount_ars:   balance,
         currency:     'ARS',
         payment_type: 'balance',
         method:       document.getElementById('pf-method').value,
@@ -918,13 +948,13 @@ export class BookingList {
             <div class="bl-col-guest">
               ${BookingList._avatar(g, unitColorsForAccent)}
               <div class="bl-guest-info">
-                <div class="bl-guest-name bl-guest-name-hover" data-booking-id="${b.id}">${getNationalityFlag(g?.nationality) ? getNationalityFlag(g?.nationality) + ' ' : ''}${guest}${flagHTML ? ' '+flagHTML : ''}</div>
+                <div class="bl-guest-name bl-guest-name-hover" data-booking-id="${b.id}">${getNationalityFlag(g?.nationality) ? getNationalityFlag(g?.nationality) + ' ' : ''}${escapeHtml(guest)}${genderSymbolHTML(g?.gender)}${flagHTML ? ' '+flagHTML : ''}</div>
                 <div class="bl-guest-meta">${unitChipsHTML}${getSourceBadgeHTML(b.source)}${b.late_checkout ? '<span style="font-size:.65rem;padding:1px 5px;border-radius:3px;background:rgba(251,191,36,.15);color:#b45309;font-weight:600;white-space:nowrap">🌅 Late CO</span>' : ''}</div>
               </div>
             </div>
             <div class="bl-col-dates">
               <span class="bl-dates">${formatDate(b.check_in)} → ${formatDate(b.check_out)}</span>
-              <span class="bl-nights">${nights} ${nights === 1 ? 'noche' : 'noches'}</span>${b.pax ? '<span style="font-size:.68rem;color:var(--color-text-3);margin-left:4px">👥 ' + b.pax + '</span>' : ''}
+              <span class="bl-nights">${nights} ${nights === 1 ? 'noche' : 'noches'}</span>${specialChipsHTML(b.check_in, b.check_out, { mode: 'row' })}${b.pax ? '<span style="font-size:.68rem;color:var(--color-text-3);margin-left:4px">👥 ' + b.pax + '</span>' : ''}
             </div>
             <div class="bl-col-amount">
               ${(() => {
@@ -1228,21 +1258,12 @@ export class BookingList {
 
   // ── Check-in TARDÍO ──
   async _doLateCheckIn(id) {
-    if (!navigator.onLine) { showToast('📵 Sin conexión — necesitás internet para registrar el check-in', 'warning'); return; }
     const booking = this._allBookings.find(b => b.id === id);
     const guestName = booking?.guests ? `${booking.guests.first_name} ${booking.guests.last_name}` : 'este huésped';
     if (!confirm(`¿Registrar check-in de ${guestName}?\n\nSe registrará la hora actual como momento de llegada.`)) return;
-    try {
-      const { data: updated, error } = await this.db.from('bookings')
-        .update({ checked_in_at: new Date().toISOString() })
-        .eq('id', id).select('id');
-      if (error) throw error;
-      if (!updated?.length) throw new Error('No se pudo registrar el check-in — revisá los permisos.');
-      Bus.emit(EVENTS.CHECKIN_DONE, { bookingId: id, guestName });
-      showToast(`✅ Check-in registrado: ${guestName}`, 'success');
-      document.dispatchEvent(new CustomEvent('booking:changed'));
-      this.load();
-    } catch (err) { showToast('Error: ' + err.message, 'error'); }
+    // Misma lógica que el Dashboard y la ficha (services/checkin-service.js)
+    const res = await registerCheckIn(this.db, id, { guestName });
+    if (res.ok) this.load();
   }
 
   // ── Check-out ANTICIPADO ──

@@ -18,6 +18,9 @@ import { cachedQuery, cache } from '../services/supabase-cache.js';
 import { Bus, EVENTS } from '../services/event-bus.js';
 import { getSegments, isSplit, rowsOnNight, occupiesNight, overlapsRange } from '../services/stay-segments.js';
 import { segmentColumns } from '../utils/db-compat.js';
+import { genderSymbolHTML } from '../utils/gender.js';
+import { specialChipsHTML } from '../services/special-dates.js';
+import { escapeHtml } from '../services/voucher-template.js';
 import { fetchMonthlyRates, fetchCustomColumns, monthsInRange, buildTariffGrid, groupRowsByPrice, getSuggestedNightlyPrices } from '../services/tariff-service.js';
 import { createQuote, updateQuote, markQuoteConverted, fetchOverlappingQuotes, fetchOverlappingBookings, fetchAvailableUnitsForNight, fetchQuotesList, fetchQuoteById, deleteQuote } from '../services/quote-service.js';
 
@@ -228,47 +231,40 @@ export class Calendar {
     }
 
     const params = { hotelId: this.ctx.hotelId, firstDay, lastDay };
-    const selectFull = `
+    // Consulta por niveles: cada migración opcional (género, estadía dividida) se pide solo
+    // si la base la tiene; si una falla, se reintenta sin ella en vez de dejar el calendario en blanco.
+    const makeSelect = ({ gender, seg }) => `
         id, check_in, check_out, status, source, is_blocked, block_reason,
         late_checkout, late_checkout_charged, free_nights, discount_pct, surcharge_amount,
         total_amount, total_paid, balance, nights, pax,
         adults, children, notes, price_per_night, created_at,
         checked_in_at, checked_out_at,
-        guests!bookings_guest_id_fkey(first_name, last_name, bad_experience, tags),
-        booking_units(unit_id, price_per_night, segment_check_in, segment_check_out, units(name, sort_order, color, max_guests))
+        guests!bookings_guest_id_fkey(first_name, last_name, bad_experience, tags${gender ? ', gender' : ''}),
+        booking_units(unit_id, price_per_night${seg ? ', segment_check_in, segment_check_out' : ''}, units(name, sort_order, color, max_guests))
       `;
-    // Fallback si todavía no se corrió la migración de "estadía dividida"
-    // (columnas segment_check_in/segment_check_out) — sin esto, el
-    // calendario entero dejaba de renderizar ante cualquier error de la
-    // consulta principal.
-    const selectBasic = `
-        id, check_in, check_out, status, source, is_blocked, block_reason,
-        late_checkout, late_checkout_charged, free_nights, discount_pct, surcharge_amount,
-        total_amount, total_paid, balance, nights, pax,
-        adults, children, notes, price_per_night, created_at,
-        checked_in_at, checked_out_at,
-        guests!bookings_guest_id_fkey(first_name, last_name, bad_experience, tags),
-        booking_units(unit_id, price_per_night, units(name, sort_order, color, max_guests))
-      `;
-    let bookings;
-    try {
-      bookings = await cachedQuery(this.db, 'bookings', params, () =>
-        this.db.from('bookings').select(selectFull)
-          .eq('hotel_id', this.ctx.hotelId)
-          .neq('status', 'cancelled')
-          .lte('check_in', lastDay)
-          .gt('check_out', firstDay)
-      );
-    } catch (err) {
-      console.warn('[Calendar] Falta correr migration_quick_quotes.sql (segment_check_in/out) — usando consulta sin estadía dividida:', err?.message ?? err);
-      bookings = await cachedQuery(this.db, 'bookings', params, () =>
-        this.db.from('bookings').select(selectBasic)
-          .eq('hotel_id', this.ctx.hotelId)
-          .neq('status', 'cancelled')
-          .lte('check_in', lastDay)
-          .gt('check_out', firstDay)
-      );
+    const tiers = [
+      { gender: true,  seg: true  },
+      { gender: false, seg: true  },    // falta la migración de género
+      { gender: false, seg: false },    // falta también la de estadía dividida
+    ];
+    let bookings, lastErr;
+    for (const t of tiers) {
+      try {
+        bookings = await cachedQuery(this.db, 'bookings', params, () =>
+          this.db.from('bookings').select(makeSelect(t))
+            .eq('hotel_id', this.ctx.hotelId)
+            .neq('status', 'cancelled')
+            .lte('check_in', lastDay)
+            .gt('check_out', firstDay)
+        );
+        lastErr = null;
+        break;
+      } catch (err) {
+        lastErr = err;
+        console.warn('[Calendar] consulta reintentada con menos columnas (falta una migración opcional):', err?.message ?? err);
+      }
     }
+    if (lastErr) throw lastErr;
 
     // Pagos en consulta SEPARADA — evita el bug de duplicación por Cartesian
     // join (booking_units × payments) y permite el desglose real por unidad.
@@ -1280,7 +1276,7 @@ export class Calendar {
       bar.style.cssText += ';display:flex;align-items:center;justify-content:center;padding:0 1px';
       bar.innerHTML = avatar;
     } else {
-      bar.innerHTML = avatar + canalChip + splitChip + '<span style="' + nameStyle + '">' + guestFull + '</span>' + lateChip;
+      bar.innerHTML = avatar + canalChip + splitChip + '<span style="' + nameStyle + '">' + escapeHtml(guestFull) + (isBlock ? '' : genderSymbolHTML(booking.guests?.gender)) + '</span>' + lateChip + (isBlock ? '' : specialChipsHTML(booking.check_in, booking.check_out, { mode: 'bar' }));
     }
 
     // 🔄 Recambio: al centro superior de la celda, entre las dos barras
@@ -1391,7 +1387,7 @@ export class Calendar {
       `;
       ext.innerHTML = Calendar._guestAvatar(booking.guests, 16) +
         '<span style="font-size:.75rem;font-weight:700;color:' + textColor + ';overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0">' +
-        guestFull + '</span>';
+        escapeHtml(guestFull) + (isBlock ? '' : genderSymbolHTML(booking.guests?.gender)) + '</span>';
       cell.appendChild(ext);
     }
   }
@@ -1606,7 +1602,7 @@ export class Calendar {
       ? new Date(booking.created_at).toLocaleDateString('es-AR', { day:'2-digit', month:'2-digit', year:'numeric' })
       : '';
     tip.innerHTML = `
-      <div class="ct-guest">${guest}${hasBadExp ? ' <span style="color:#EF4444">⚠️</span>' : ''}</div>
+      <div class="ct-guest">${escapeHtml(guest)}${(booking.status === 'blocked' || booking.is_blocked) ? '' : genderSymbolHTML(booking.guests?.gender)}${hasBadExp ? ' <span style="color:#EF4444">⚠️</span>' : ''}</div>
       ${emitidaStr ? `<div style="font-size:.62rem;color:#64748B;margin-top:1px">Emitida ${emitidaStr}</div>` : ''}
       <div class="ct-unit">🛏️ ${units || '—'}</div>
       <div class="ct-dates" style="margin-top:6px">📅 ${booking.check_in} → ${booking.check_out}</div>

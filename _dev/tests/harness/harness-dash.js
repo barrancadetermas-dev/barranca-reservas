@@ -17,12 +17,17 @@ const BOOKING = {
   ],
 };
 window.__calls = [];
+window.__booking = BOOKING;
+window.__updateRows = null;   // filas que devuelve un UPDATE (null = una fila)
+window.__events = [];
+document.addEventListener('booking:changed', () => window.__events.push('changed'));
 function builder(table) {
-  const rec = { table, op: 'select', filters: [] };
+  const rec = { table, op: 'select', args: [], filters: [] };
   const q = new Proxy({}, { get(_, prop) {
     if (prop === 'then') {
       window.__calls.push({ ...rec });
       const f = rec.filters.join('|'); let data = [];
+      if (rec.op === 'update') { data = window.__updateRows ?? [{ id: BOOKING.id }]; const single0 = rec.filters.includes('single'); const o0 = { data: single0 ? (data[0] ?? null) : data, error: null }; return (res, rej) => Promise.resolve(o0).then(res, rej); }
       if (table === 'booking_units' && f.includes('limit')) data = []; // sonda de columnas de tramo
       else if (table === 'bookings') {
         const m = (re) => (f.match(re) ?? [])[1];
@@ -38,7 +43,7 @@ function builder(table) {
       return (res, rej) => Promise.resolve(out).then(res, rej);
     }
     return (...args) => {
-      if (['insert', 'update', 'upsert', 'delete'].includes(prop)) rec.op = prop;
+      if (['insert', 'update', 'upsert', 'delete'].includes(prop)) { rec.op = prop; rec.args.push([prop, ...args]); }
       rec.filters.push(prop === 'single' || prop === 'maybeSingle' ? 'single' : `${prop}(${args.map(a => JSON.stringify(a)).join(',')})`);
       return q;
     };

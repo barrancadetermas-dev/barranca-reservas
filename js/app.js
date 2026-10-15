@@ -42,7 +42,8 @@ import { OperationsModule } from './components/operations.js';
 import { fetchMonthlyRates, fetchCustomColumns, monthsInRange, buildTariffGrid, MONTH_NAMES } from './services/tariff-service.js';
 import { initMilaAssistant } from './modules/mila-assistant/mila-assistant.js';
 import { initEncargadaShare } from './modules/encargada-share/encargada-share.js';
-import { getSegments } from './services/stay-segments.js';
+import { getSegments, rowsAtArrival } from './services/stay-segments.js';
+import { registerCheckIn } from './services/checkin-service.js';
 import { segmentColumns } from './utils/db-compat.js';
 
 let dashboard   = null;
@@ -1101,27 +1102,24 @@ function setupDetailModal() {
 }
 
 export async function markCheckIn(bookingId) {
-  if (!can('checkInOut')) { showToast('🔒 Sin permiso', 'warning'); return; }
-  if (isDemo()) { showDemoAction(null); return; }
-  const { error } = await supabase.from('bookings')
-    .update({ checked_in_at: new Date().toISOString() }).eq('id', bookingId);
-  if (error) { showToast('Error al registrar check-in', 'error'); Sound?.error(); return; }
-  await logAction('CHECKIN', 'booking', bookingId, 'Check-in registrado');
-  showToast('✅ Check-in registrado', 'success');
-  Sound?.checkIn();
-  document.dispatchEvent(new CustomEvent('booking:changed'));
+  // Misma lógica que Dashboard y lista (services/checkin-service.js): idempotente,
+  // con permisos, auditoría y errores reales. Aquí solo se agrega el WhatsApp de bienvenida.
+  const res = await registerCheckIn(supabase, bookingId);
+  if (!res.ok || !res.changed) return res;
 
   // ── Ofrecer WhatsApp de bienvenida ──────────────────
   try {
+    const SEG = await segmentColumns(supabase);
     const { data: booking } = await supabase
       .from('bookings')
-      .select('guests!bookings_guest_id_fkey(first_name,last_name,phone), booking_units(units(name,sort_order))')
+      .select(`check_in, check_out, guests!bookings_guest_id_fkey(first_name,last_name,phone), booking_units(unit_id${SEG}, units(name,sort_order))`)
       .eq('id', bookingId).single();
 
     const phone = booking?.guests?.phone?.replace(/\D/g, '');
     if (phone) {
       const guestName = `${booking.guests.first_name} ${booking.guests.last_name}`.trim();
-      const unitName  = (booking.booking_units ?? [])[0]?.units?.name ?? 'su departamento';
+      // Con cambio de depto, el huésped entra al depto del primer tramo
+      const unitName  = (rowsAtArrival(booking)[0] ?? (booking.booking_units ?? [])[0])?.units?.name ?? 'su departamento';
       const config    = AppContext.config ?? {};
       const wifi      = config.wifi_name     ? `📶 WiFi: *${config.wifi_name}* · Clave: *${config.wifi_pass ?? '—'}*` : '';
       const checkIn   = config.checkin_hour  ?? '14:00';
@@ -1158,6 +1156,7 @@ export async function markCheckIn(bookingId) {
       }
     }
   } catch { /* WhatsApp es opcional */ }
+  return res;
 }
 
 export async function markCheckOut(bookingId) {
@@ -1172,7 +1171,7 @@ export async function markCheckOut(bookingId) {
   try {
     const { data: booking } = await supabase
       .from('bookings')
-      .select('*, guests!bookings_guest_id_fkey(first_name,last_name), booking_units(unit_id,units(name))')
+      .select(`*, guests!bookings_guest_id_fkey(first_name,last_name), booking_units(unit_id${await segmentColumns(supabase)},units(name))`)
       .eq('id', bookingId).single();
     if (booking) {
       const { OperationsModule } = await import('./components/operations.js');

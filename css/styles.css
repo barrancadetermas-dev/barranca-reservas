@@ -6928,3 +6928,117 @@ input[type="number"]:focus, select:focus {
 .detail-stay-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--c, var(--color-primary)); }
 .detail-stay-dates { color: var(--color-text-2); font-variant-numeric: tabular-nums; }
 .detail-stay-n { color: var(--color-text-3); font-size: .78rem; }
+
+/* Banner de error fijo del formulario de reserva */
+.form-error-banner {
+  margin: 0 20px 8px; padding: 10px 14px; border-radius: var(--r-md);
+  background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; font-size: .84rem; font-weight: 600; line-height: 1.35;
+}
+.form-error-banner.hidden { display: none; }
+
+/* Estado de ALOJAMIENTO (separado del estado de pago) */
+.stay-badge { display: inline-block; margin-top: 4px; padding: 2px 9px; border-radius: 99px; font-size: .68rem; font-weight: 700; letter-spacing: .02em; }
+.stay-pending_checkin { background: #fef3c7; color: #92400e; }
+.stay-in_house        { background: #dcfce7; color: #166534; }
+.stay-checked_out     { background: #e2e8f0; color: #475569; }
+
+/* Símbolo de género junto al nombre (♂ ♀ ⚧): hereda el color del texto para leerse sobre cualquier fondo */
+.g-sym { display: inline-block; margin-left: 4px; font-size: .9em; font-weight: 700; line-height: 1; opacity: .85; color: inherit; vertical-align: baseline; flex: none; }
+
+/* ── Fechas especiales (feriados, finde largo, Carnaval, Semana Santa, verano) ── */
+.sd-wrap { display: inline-flex; align-items: center; gap: 3px; flex-wrap: wrap; vertical-align: middle; margin-left: 5px; }
+.sd-chip {
+  display: inline-flex; align-items: center; gap: 2px; padding: 0 6px; border-radius: 99px;
+  font-size: .62rem; font-weight: 700; line-height: 1.55; white-space: nowrap; letter-spacing: .01em;
+  background: #f1f5f9; color: #334155; border: 1px solid rgba(15, 23, 42, .12); cursor: help;
+}
+.sd-newyear, .sd-christmas { background: #fef3c7; color: #92400e; border-color: #fcd34d; }
+.sd-carnival               { background: #fae8ff; color: #86198f; border-color: #f0abfc; }
+.sd-easter                 { background: #ede9fe; color: #5b21b6; border-color: #c4b5fd; }
+.sd-holiday, .sd-longweekend { background: #dbeafe; color: #1e40af; border-color: #93c5fd; }
+.sd-puente                 { background: #e0f2fe; color: #075985; border-color: #7dd3fc; }
+.sd-summer                 { background: #fff7ed; color: #c2410c; border-color: #fdba74; }
+.sd-icon { padding: 0 3px; }
+.sd-more { font-size: .6rem; font-weight: 700; color: inherit; opacity: .85; cursor: help; }
+.bl-col-dates .sd-wrap { display: flex; margin: 3px 0 0; }
+.detail-specials { display: flex; flex-wrap: wrap; gap: 4px; margin: 8px 0 2px; }
+.detail-specials .sd-wrap { margin: 0; }
+.detail-specials .sd-chip { font-size: .7rem; padding: 1px 8px; }
+
+/* ═══════════════════════════════════════════════════════════════════
+   Paso 2 compacto (fechas · unidades · personas · canal · notas)
+   Dos columnas en escritorio (calendario | resto) y una columna ajustada
+   en celular. Solo cambia la distribución: la lógica no se toca.
+   ═══════════════════════════════════════════════════════════════════ */
+#step-2 .form-group { margin-bottom: 10px; }
+#step-2 .form-group > label { margin-bottom: 4px; font-size: .78rem; }
+#step-2 .s2-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; }
+#step-2 .s2-side { display: flex; flex-direction: column; min-width: 0; }
+
+/* Calendario compacto: celdas bajas y un solo mes visible */
+#step-2 .drp-wrapper { border-radius: var(--r-lg); }
+#step-2 .drp-month { padding: 8px 10px; min-width: 0; }
+#step-2 .drp-month:last-child { display: none; }
+#step-2 .drp-month-title { margin-bottom: 6px; font-size: .8rem; }
+#step-2 .drp-day-headers { margin-bottom: 2px; }
+#step-2 .drp-day-name { padding: 2px 0; font-size: .64rem; }
+#step-2 .drp-days { gap: 1px; }
+#step-2 .drp-day { aspect-ratio: auto; height: 31px; font-size: .76rem; }
+#step-2 .drp-footer { padding: 6px 12px; font-size: .76rem; }
+
+/* Unidades: tarjetas en grilla de 2 columnas, más bajas */
+#step-2 .units-selector { grid-template-columns: repeat(auto-fill, minmax(135px, 1fr)); gap: 6px; }
+#step-2 .units-selector .unit-option:first-child { grid-column: auto; }
+#step-2 .unit-option { padding: 6px 9px !important; gap: 2px !important; }
+#step-2 .unit-option-row1 { gap: 7px !important; }
+#step-2 .unit-option-row2 { padding-left: 23px !important; gap: 6px !important; }
+#step-2 .unit-option-name { font-size: .8rem; }
+#step-2 .unit-option-detail { font-size: .68rem; }
+
+/* Personas, canal y notas */
+#step-2 .pax-grid { gap: 8px; }
+#step-2 #f-notes { min-height: 0; resize: none; padding: 7px 10px; }
+#step-2 #f-source-selector { gap: 5px; }
+
+@media (min-width: 760px) {
+  #modal-booking.s2-wide { max-width: 880px; transition: max-width .18s ease; }
+  #step-2 .s2-grid { grid-template-columns: 300px minmax(0, 1fr); gap: 18px; align-items: start; }
+  #step-2 .s2-cal { position: sticky; top: 0; }
+}
+@media (max-width: 759px) {
+  #step-2 .drp-day { height: 30px; }
+  #step-2 .units-selector { grid-template-columns: 1fr 1fr; }
+}
+
+/* Paso 2 · ajustes finos (nombres en una línea, canal legible, personas en una fila) */
+#step-2 .unit-option-row1 { min-width: 0; }
+#step-2 .unit-option-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; font-size: .78rem; }
+#step-2 .unit-option input[type="checkbox"] { width: 14px; height: 14px; margin-left: auto; }
+#step-2 .unit-option-row2 { padding-left: 19px !important; }
+#step-2 .unit-option { padding: 5px 8px !important; }
+#step-2 .split-stay-link { align-self: flex-start; width: auto; margin: 4px 0 6px; padding: 3px 10px; font-size: .74rem; }
+#step-2 .pax-grid { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; }
+#step-2 .pax-total-bar { margin-left: auto; padding: 0; font-size: .76rem; display: inline-flex; align-items: baseline; gap: 4px; }
+#step-2 #f-source-selector { display: flex; flex-wrap: wrap; gap: 5px; }
+#step-2 .src-chip { flex: none; width: auto !important; min-width: 0; padding: 4px 9px; font-size: .74rem; white-space: nowrap; overflow: visible; }
+#step-2 .src-chip .src-label { overflow: visible; text-overflow: clip; max-width: none; }
+@media (min-width: 760px) {
+  #step-2 .units-selector { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 759px) {
+  #step-2 .drp-day { height: 28px; }
+  #step-2 .drp-month-title { margin-bottom: 4px; }
+  #step-2 #f-source-selector { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 4px; -webkit-overflow-scrolling: touch; scrollbar-width: thin; }
+  #step-2 .form-group { margin-bottom: 8px; }
+}
+
+/* Paso 2 · canal de origen: en escritorio, todos los canales a la vista con su nombre
+   (un parche anterior los dejaba en una sola fila cortada, ocultando Despegar/Expedia).
+   En celular se conserva el diseño original (puntos de color; el nombre aparece al elegir). */
+@media (min-width: 769px) {
+  #step-2 #f-source-selector { flex-wrap: wrap !important; overflow: visible !important; gap: 5px !important; padding-bottom: 0 !important; }
+  #step-2 .src-chip { padding: 4px 9px !important; }
+  #step-2 .src-chip .src-label { display: inline !important; }
+}
+#step-2 #f-notes { height: 50px; }
+@media (min-width: 760px) { #step-2 .form-group { margin-bottom: 8px; } }

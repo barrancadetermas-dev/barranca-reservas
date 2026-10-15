@@ -9,8 +9,10 @@ import { fetchDollarRates } from '../services/dollar-api.js';
 import { recordDailyRateSnapshot, getUsdConversionRate } from '../services/usd-rate-history.js';
 import { Bus, EVENTS } from '../services/event-bus.js';
 import { logAction } from '../services/audit-service.js';
-import { alojado, groupGender } from '../utils/gender.js';
-import { queryWithOptionalColumns, segmentColumns } from '../utils/db-compat.js';
+import { alojado, groupGender, genderSymbolHTML } from '../utils/gender.js';
+import { escapeHtml } from '../services/voucher-template.js';
+import { queryWithOptionalColumns, segmentColumns, genderColumn } from '../utils/db-compat.js';
+import { registerCheckIn } from '../services/checkin-service.js';
 import { rowsOnNight, rowsAtArrival, rowsAtDeparture } from '../services/stay-segments.js';
 // ↑ Sin import de app.js — evita dependencia circular.
 // El badge se actualiza via CustomEvent que app.js escucha.
@@ -35,23 +37,17 @@ export class Dashboard {
     // Exponer para handlers inline de los cards de arrival/departure
     window._dashCheckIn  = async (bookingId, rowId, guest) => {
       if (!confirm(`Registrar check-in de ${guest}?`)) return;
-      try {
-        await this.db.from('bookings')
-          .update({ checked_in_at: new Date().toISOString() }).eq('id', bookingId);
-        const row = document.getElementById(rowId);
-        if (row) {
-          row.classList.add('done');
-          row.querySelector('.dac-btn')?.remove();
-          row.querySelector('.dac-left').insertAdjacentHTML('beforeend',
-            `<span class="dac-done-label">✓ Check-in registrado</span>`);
-          row.insertAdjacentHTML('beforeend', `<span class="dac-done-badge">✓</span>`);
-        }
-        document.dispatchEvent(new CustomEvent('show:toast', { detail: { msg: `✅ Check-in: ${guest}`, type: 'success' } }));
-        document.dispatchEvent(new CustomEvent('booking:changed'));
-        if (typeof Sound !== 'undefined') Sound?.checkIn?.();
-        Bus.emit(EVENTS.CHECKIN_DONE, { bookingId, guestName: guest, unitName: '' });
-      } catch (e) {
-        document.dispatchEvent(new CustomEvent('show:toast', { detail: { msg: 'Error: ' + e.message, type: 'error' } }));
+      // Misma lógica que la lista de reservas y la ficha (services/checkin-service.js):
+      // idempotente, con permisos, auditoría y errores reales de la base.
+      const res = await registerCheckIn(this.db, bookingId, { guestName: guest });
+      if (!res.ok) return;                       // el servicio ya avisó el motivo
+      const row = document.getElementById(rowId);
+      if (row && !row.classList.contains('done')) {
+        row.classList.add('done');
+        row.querySelector('.dac-btn')?.remove();
+        row.querySelector('.dac-left')?.insertAdjacentHTML('beforeend',
+          `<span class="dac-done-label">✓ Check-in registrado</span>`);
+        row.insertAdjacentHTML('beforeend', `<span class="dac-done-badge">✓</span>`);
       }
     };
 
@@ -301,8 +297,9 @@ export class Dashboard {
   // ── KPIs: Check-ins, Check-outs, Recambios, Huéspedes ──
   async _fetchKPIs(today) {
     const hotelId = this.ctx.hotelId;
-    // Columnas de tramo (cambio de depto) si la base ya las tiene
+    // Columnas de tramo (cambio de depto) y de género, si la base ya las tiene
     const SEG = await segmentColumns(this.db);
+    const GEN = await genderColumn(this.db);
 
     // Reservas activas hoy (overlapping today)
     // guests.gender es opcional: si la migración no está aplicada se reintenta sin él
@@ -329,7 +326,7 @@ export class Dashboard {
       .from('bookings')
       .select(`
         id, check_in, check_out, checked_in_at, total_amount, total_paid, balance, status, notes, pax,
-        guests!bookings_guest_id_fkey(first_name, last_name, phone),
+        guests!bookings_guest_id_fkey(first_name, last_name, phone${GEN}),
         booking_units(unit_id${SEG}, units(name, color, sort_order))
       `)
       .eq('hotel_id', hotelId)
@@ -341,7 +338,7 @@ export class Dashboard {
       .from('bookings')
       .select(`
         id, check_in, check_out, checked_out_at, total_amount, total_paid, balance, pax,
-        guests!bookings_guest_id_fkey(first_name, last_name),
+        guests!bookings_guest_id_fkey(first_name, last_name${GEN}),
         booking_units(unit_id${SEG}, units(name, color, sort_order))
       `)
       .eq('hotel_id', hotelId)
@@ -425,7 +422,7 @@ export class Dashboard {
     const next7str = localDateISO(next7);
     const { data: upcoming } = await this.db
       .from('bookings')
-      .select(`check_in, check_out, total_amount, source, guests!bookings_guest_id_fkey(first_name,last_name), booking_units(unit_id${SEG}, units(name,color))`)
+      .select(`check_in, check_out, total_amount, source, guests!bookings_guest_id_fkey(first_name,last_name${GEN}), booking_units(unit_id${SEG}, units(name,color))`)
       .eq('hotel_id', hotelId)
       .neq('status', 'cancelled')
       .gt('check_in', today)
@@ -733,7 +730,7 @@ export class Dashboard {
             dayLabel +
             (srcIcon ? '<span style="font-size:.72rem" title="' + (b.source ?? '') + '">' + srcIcon + '</span>' : '') +
           '</div>' +
-          '<div style="font-size:.82rem;font-weight:600;color:var(--color-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + guest + '</div>' +
+          '<div style="font-size:.82rem;font-weight:600;color:var(--color-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + escapeHtml(guest) + genderSymbolHTML(b.guests?.gender) + '</div>' +
           '<div style="display:flex;align-items:center;justify-content:space-between;margin-top:1px">' +
             '<span style="font-size:.7rem;color:var(--color-text-3)">' + unitNames + ' · ' + nights + ' noche' + (nights!==1?'s':'') + '</span>' +
             (b.total_amount > 0 ? '<span style="font-size:.7rem;font-weight:700;color:var(--color-text-2)">$' + Math.round(b.total_amount).toLocaleString('es-AR') + '</span>' : '') +
@@ -1051,7 +1048,7 @@ export class Dashboard {
             '<span style="font-size:.72rem;font-weight:700;color:var(--color-text-3);text-decoration:line-through;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + unitName + '</span>' +
             statusChip +
           '</div>' +
-          '<div style="font-size:.82rem;font-weight:600;color:var(--color-text-3);text-decoration:line-through;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + guest + '</div>' +
+          '<div style="font-size:.82rem;font-weight:600;color:var(--color-text-3);text-decoration:line-through;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + escapeHtml(guest) + genderSymbolHTML(b.guests?.gender) + '</div>' +
           '<div style="font-size:.72rem;color:var(--color-text-3)">' + nights + ' noche' + (nights !== 1 ? 's' : '') + (ncAmount > 0 ? ' · NC ' + formatARS(ncAmount) : '') + '</div>' +
         '</div>' +
       '</div>';
@@ -1093,7 +1090,7 @@ export class Dashboard {
           '<span style="font-size:.7rem;font-weight:600;color:var(--color-text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:120px">' + unitName + '</span>' +
           statusChip +
         '</div>' +
-        '<div style="font-size:.82rem;font-weight:600;color:var(--color-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + guest + '</div>' +
+        '<div style="font-size:.82rem;font-weight:600;color:var(--color-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + escapeHtml(guest) + genderSymbolHTML(b.guests?.gender) + '</div>' +
         '<div style="display:flex;align-items:center;justify-content:space-between;margin-top:1px;gap:6px;flex-wrap:wrap">' +
           '<span style="font-size:.7rem;color:var(--color-text-3)">' + nights + ' noche' + (nights !== 1 ? 's' : '') +
             (b.pax ? ' · 👥 ' + b.pax : '') + '</span>' +

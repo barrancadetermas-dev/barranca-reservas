@@ -816,12 +816,16 @@
 
     <!-- Step 2: Stay -->
     <div class="step-content hidden" id="step-2">
+     <div class="s2-grid">
+      <div class="s2-cal">
       <div class="form-group">
         <label>Fechas de estadía <span class="req">*</span></label>
         <div id="f-date-picker" class="date-picker-container"></div>
         <input type="date" id="f-checkin"  style="display:none">
         <input type="date" id="f-checkout" style="display:none">
       </div>
+      </div>
+      <div class="s2-side">
       <div class="form-group">
         <label>Unidades <span class="req">*</span> <span class="label-hint">Podés seleccionar más de una</span></label>
         <div id="units-selector" class="units-selector"></div>
@@ -897,8 +901,10 @@
       </div>
       <div class="form-group">
         <label>Observaciones <span class="notes-counter"><span id="notes-count">0</span>/200</span></label>
-        <textarea id="f-notes" maxlength="200" rows="3" placeholder="Viene con mascotas · Gente mayor · Requiere practicuna..."></textarea>
+        <textarea id="f-notes" maxlength="200" rows="2" placeholder="Viene con mascotas · Gente mayor · Requiere practicuna..."></textarea>
       </div>
+      </div>
+     </div>
     </div>
 
     <!-- Step 3: Pricing -->
@@ -1062,6 +1068,7 @@
       </div>
     </div>
 
+    <div id="booking-form-error" class="form-error-banner hidden" role="alert" aria-live="assertive"></div>
     <div class="modal-footer">
       <button class="btn btn-ghost" id="btn-step-back" style="visibility:hidden">← Atrás</button>
       <div class="flex gap-8">

@@ -60,3 +60,29 @@ export function groupGender(genders = []) {
   if (!list.length || list.some(g => g === null)) return null;
   return list.every(g => g === list[0]) ? list[0] : 'male';
 }
+
+// ── Símbolo junto al nombre ────────────────────────────────────
+// Solo con el género DECLARADO y guardado; nunca se infiere del nombre.
+// Sin dato → no se muestra nada. Es independiente de "Alojado/a/e".
+export const GENDER_SYMBOLS = {
+  male:      { symbol: '♂', label: 'Masculino'  },
+  female:    { symbol: '♀', label: 'Femenino'   },
+  nonbinary: { symbol: '⚧', label: 'No binario' },
+};
+
+/** { symbol, label } o null si no hay género válido. */
+export function genderSymbol(gender) {
+  const g = normalizeGender(gender);
+  return g ? GENDER_SYMBOLS[g] : null;
+}
+
+/**
+ * HTML del símbolo (accesible: tiene texto alternativo y tooltip) o '' si no hay dato.
+ * Los símbolos son distintos entre sí, así que no dependen del color.
+ */
+export function genderSymbolHTML(gender) {
+  const g = normalizeGender(gender);
+  if (!g) return '';
+  const { symbol, label } = GENDER_SYMBOLS[g];
+  return `<span class="g-sym g-sym-${g}" role="img" aria-label="${label}" title="${label}">${symbol}</span>`;
+}

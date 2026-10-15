@@ -36,3 +36,25 @@ export function segmentColumns(db) {
     .catch(() => { _segmentProbe = null; return ''; });
   return _segmentProbe;
 }
+
+const _colProbes = new Map();
+/**
+ * ¿Existe la columna `table.column`? Se consulta una vez y se recuerda
+ * (un error de red no se recuerda). Devuelve el texto a sumar a un select.
+ * @returns {Promise<string>} `, column` o ''
+ */
+export function optionalColumn(db, table, column) {
+  const key = `${table}.${column}`;
+  if (!_colProbes.has(key)) {
+    _colProbes.set(key, Promise.resolve(db.from(table).select(column).limit(1))
+      .then(r => {
+        if (!r?.error) return `, ${column}`;
+        if (/column|schema cache/i.test(r.error.message ?? '')) return '';
+        _colProbes.delete(key); return '';
+      })
+      .catch(() => { _colProbes.delete(key); return ''; }));
+  }
+  return _colProbes.get(key);
+}
+/** `, gender` si la base ya tiene guests.gender, o ''. */
+export const genderColumn = (db) => optionalColumn(db, 'guests', 'gender');

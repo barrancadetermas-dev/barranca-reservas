@@ -25,10 +25,15 @@ import { Sound } from '../services/sound-service.js';
 import { fetchDisponibilidad } from '../modules/mila-assistant/mila-data.js';
 import { getUsdConversionRate } from '../services/usd-rate-history.js';
 import { queryWithOptionalColumns } from '../utils/db-compat.js';
+import { genderSymbolHTML } from '../utils/gender.js';
+import { specialChipsHTML } from '../services/special-dates.js';
 import { SplitStayEditor } from './split-stay-editor.js';
 import { findConflicts } from '../services/availability-service.js';
 import { getSegments, isSplit, toBookingUnitRows, segmentsSubtotal, handoffs } from '../services/stay-segments.js';
 import { escapeHtml } from '../services/voucher-template.js';
+import { resolveGuestCounts } from '../utils/guest-count.js';
+import { friendlyDbError } from '../utils/db-errors.js';
+import { stayStatus, STAY_STATUS_LABELS } from '../services/checkin-service.js';
 // PriceSuggester se carga lazy en _runPriceSuggestion()
 
 const PAYMENT_METHODS = [
@@ -491,9 +496,12 @@ export class BookingForm {
       setVal('f-deposit',     b.deposit_amount  ?? 0);
       setVal('f-notes',       b.notes           ?? '');
       document.getElementById('notes-count').textContent = (b.notes ?? '').length;
-      // Pax
-      if (document.getElementById('f-adults'))   document.getElementById('f-adults').value   = b.adults   ?? b.pax ?? 2;
-      if (document.getElementById('f-children')) document.getElementById('f-children').value = b.children ?? 0;
+      // Personas: se cargan TODAS las guardadas (ver utils/guest-count.js) y se refresca el
+      // contador/total. Antes el contador quedaba en el "2" del _reset aunque hubiera 4.
+      const gc = resolveGuestCounts(b);
+      if (document.getElementById('f-adults'))   document.getElementById('f-adults').value   = gc.adults;
+      if (document.getElementById('f-children')) document.getElementById('f-children').value = gc.children;
+      this._updatePaxCap?.();
 
       this._updateBreakdown();
       this._updateBlockedDates();
@@ -550,10 +558,10 @@ export class BookingForm {
     const balance       = Math.max(0, total - totalPaid);
 
     // Botones check-in/out
-    const now   = new Date();
-    const ciDate = new Date(booking.check_in + 'T12:00:00');
-    const showCI = !booking.checked_in_at  && ciDate <= now && booking.status !== 'cancelled';
-    const showCO = !!booking.checked_in_at && !booking.checked_out_at && booking.status !== 'cancelled';
+    // Estado de ALOJAMIENTO (independiente del de pago): misma regla que Dashboard y lista
+    const stay   = stayStatus(booking, toISODate(new Date()));
+    const showCI = stay === 'pending_checkin';
+    const showCO = stay === 'in_house';
     const ciBtn = document.getElementById('detail-checkin-btn');
     const coBtn = document.getElementById('detail-checkout-btn');
     if (ciBtn) ciBtn.style.display = showCI ? '' : 'none';
@@ -565,7 +573,7 @@ export class BookingForm {
       </div>` : ''}
       <div class="detail-header-row">
         <div>
-          <div class="detail-guest-name">${escapeHtml(guest)}</div>
+          <div class="detail-guest-name">${escapeHtml(guest)}${genderSymbolHTML(booking.guests?.gender)}</div>
           <div class="detail-meta">
             <span class="chip" style="background:${badgeColor}20;color:${badgeColor}">■ ${srcCfg.label}</span>
             <span class="detail-unit">${escapeHtml(unitNames)}</span>
@@ -573,6 +581,8 @@ export class BookingForm {
         </div>
         <div class="detail-status">
           <span class="status-badge status-${booking.status}">${statusLabels[booking.status] ?? booking.status}</span>
+          ${['pending_checkin','in_house','checked_out'].includes(stay)
+            ? `<span class="stay-badge stay-${stay}" title="Estado de alojamiento">${STAY_STATUS_LABELS[stay]}</span>` : ''}
         </div>
       </div>
       <div class="detail-dates">
@@ -583,7 +593,7 @@ export class BookingForm {
         </div>
         <div class="detail-nights">
           ${nights} noche${nights !== 1 ? 's' : ''}
-          ${(booking.pax || booking.adults) ? `<br><span style="font-size:.72rem;color:var(--color-text-3)">👥 ${booking.adults ?? booking.pax ?? 1} adulto${(booking.adults ?? 1) !== 1 ? 's' : ''}${booking.children ? ` + ${booking.children} menor${booking.children !== 1 ? 'es' : ''}` : ''}</span>` : ''}
+          ${(booking.pax || booking.adults) ? `<br><span style="font-size:.72rem;color:var(--color-text-3)">👥 ${(() => { const gc = resolveGuestCounts(booking); return `${gc.adults} adulto${gc.adults !== 1 ? 's' : ''}${gc.children ? ` + ${gc.children} menor${gc.children !== 1 ? 'es' : ''}` : ''}`; })()}</span>` : ''}
         </div>
         <div style="text-align:right">
           <span class="detail-label">Check-out</span>
@@ -591,6 +601,7 @@ export class BookingForm {
           ${booking.checked_out_at ? `<span style="font-size:.65rem;color:var(--color-success);display:block">✓ Registrado</span>` : ''}
         </div>
       </div>
+      ${(() => { const chips = specialChipsHTML(booking.check_in, booking.check_out, { mode: 'full' }); return chips ? `<div class="detail-specials">${chips}</div>` : ''; })()}
       ${split ? `
       <div class="detail-stay">
         <div class="detail-label">🔀 Alojamiento · cambio de departamento</div>
@@ -908,6 +919,14 @@ export class BookingForm {
   }
 
   _isSplit() { return !!this._splitEditor?.active; }
+
+  /** Banner de error fijo dentro del formulario ('' lo oculta). */
+  _showSubmitError(msg) {
+    const el = document.getElementById('booking-form-error');
+    if (!el) return;
+    el.textContent = msg || '';
+    el.classList.toggle('hidden', !msg);
+  }
 
   /** Texto de departamentos de la reserva en curso (con fechas si hay cambio de depto). */
   _unitsText(sep = ', ') {
@@ -1387,6 +1406,9 @@ export class BookingForm {
 
   // ── Navegación de pasos — LIBRE (sin validación forzada) ──
   _goToStep(step) {
+    this._showSubmitError('');
+    // El paso 2 usa dos columnas en pantallas anchas: el modal se ensancha solo en ese paso
+    document.getElementById('modal-booking')?.classList.toggle('s2-wide', step === 2);
     this._currentStep = step;
 
     document.querySelectorAll('.step-content').forEach((el, i) => {
@@ -2390,6 +2412,7 @@ export class BookingForm {
     if (btn)        { btn.disabled        = true; btn.textContent        = 'Guardando...'; }
     if (confirmBtn) { confirmBtn.disabled = true; confirmBtn.textContent = 'Guardando...'; }
 
+    this._showSubmitError('');
     let _safetyTimer = setTimeout(() => {
       if (btn) { btn.disabled = false; btn.textContent = this._editingId ? 'Guardar cambios' : 'Confirmar reserva'; }
       showToast('La operación tardó demasiado. Verificá tu conexión.', 'error');
@@ -2589,13 +2612,22 @@ export class BookingForm {
         bookingId = newB.id;
       }
 
-      // ── Columnas opcionales (pax, comisiones) — silencioso si no existen ──
-      try {
-        await this._withTimeout(
+      // ── Cantidad de personas ──
+      // Antes este UPDATE estaba dentro de un try/catch vacío y además ignoraba el `error`
+      // de la respuesta: si fallaba (permisos, red) la reserva quedaba con la cantidad por
+      // defecto sin avisar. Ahora un fallo real corta el guardado con un mensaje claro.
+      // Solo se tolera que la base aún no tenga adults/children (se guarda al menos pax).
+      {
+        let { error: paxErr } = await this._withTimeout(
           this.db.from('bookings').update({ pax, adults, children }).eq('id', bookingId),
           'Actualizar pasajeros'
         );
-      } catch { /* columnas opcionales */ }
+        if (paxErr && /adults|children/i.test(paxErr.message ?? '')) {
+          ({ error: paxErr } = await this._withTimeout(
+            this.db.from('bookings').update({ pax }).eq('id', bookingId), 'Actualizar pasajeros'));
+        }
+        if (paxErr) throw new Error('No se pudo guardar la cantidad de personas: ' + paxErr.message);
+      }
 
       // Unidades / tramos de la reserva. Upsert (actualiza precio y tramos si cambiaron)
       // y después se borran las que ya no están.
@@ -2808,19 +2840,11 @@ export class BookingForm {
     } catch (err) {
       console.error('[MILA] Booking save error:', err);
       // Mostrar el error real siempre — ayuda a diagnosticar
-      const raw = err?.message ?? String(err) ?? 'Error desconocido';
-      const userMsg = raw.includes('violates foreign key')
-        ? 'ID de unidad o huésped inválido. Recargá la página.'
-        : raw.includes('invalid input value for enum payment_method')
-        ? 'Ese método de pago no existe todavía en la base de datos — correr migration_payment_method_enum.sql en Supabase.'
-        : raw.includes('violates not-null')
-        ? 'Falta un campo requerido en la base de datos.'
-        : raw.includes('duplicate')
-        ? 'Ya existe una reserva con esos datos.'
-        : raw.includes('permission') || raw.includes('policy')
-        ? 'Sin permisos. Verificá las políticas RLS en Supabase.'
-        : raw;
-      showToast(`❌ ${userMsg}`, 'error');
+      // Mensaje claro y accionable: se muestra como aviso Y como banner fijo dentro del formulario
+      // (el aviso desaparece solo; el banner queda hasta el próximo intento).
+      const userMsg = friendlyDbError(err, { source: document.querySelector('input[name="booking-source"]:checked')?.value });
+      this._showSubmitError(userMsg);
+      showToast(`❌ ${userMsg}`, 'error', 7000);
     } finally {
       clearTimeout(_safetyTimer);
       this._submitting = false;
