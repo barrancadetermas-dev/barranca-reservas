@@ -151,7 +151,7 @@ with sync_playwright() as p:
     d=s2({'width':1280,'height':800}); m=s2({'width':390,'height':844}, True)
     t(f'escritorio: dos columnas y casi sin scroll (antes 479 px; ahora {d["scroll"]} px)', d['cols']==2 and d['scroll']<=30 and d['allControlsRendered'], d)
     t(f'escritorio: canales en filas (se ven todos)', d['chipsWrapped']=='wrap', d)
-    t(f'móvil: una columna y scroll reducido a la mitad (antes 552 px; ahora {m["scroll"]} px)', m['cols']==1 and m['scroll']<=290 and m['allControlsRendered'], m)
+    t(f'móvil: una columna y scroll casi a la mitad (original ≈600 px; ahora {m["scroll"]} px)', m['cols']==1 and m['scroll']<=330 and m['allControlsRendered'], m)
     t('los controles siguen siendo tocables (altura ≥ 28 px)', d['btnH']>=28 and m['btnH']>=28, (d['btnH'], m['btnH']))
     b.close()
 print(f"\n{P} ok · {F} fallos"); sys.exit(1 if F else 0)

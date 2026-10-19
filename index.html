@@ -1032,11 +1032,11 @@
           <span class="ps-val" id="ps-total">$—</span>
         </div>
         <div class="ps-row">
-          <span class="ps-label">Abonado</span>
+          <span class="ps-label">Abonado <span class="ps-pct" id="ps-paid-pct" title="Porcentaje del total de la estadía ya abonado"></span></span>
           <span class="ps-val ps-paid" id="ps-paid">$0</span>
         </div>
         <div class="ps-row ps-row-balance">
-          <span class="ps-label"><strong>Saldo</strong></span>
+          <span class="ps-label"><strong>Saldo</strong> <span class="ps-pct" id="ps-balance-pct" title="Porcentaje del total de la estadía que falta abonar"></span></span>
           <span class="ps-val ps-balance" id="ps-balance">$—</span>
         </div>
       </div>
@@ -1073,6 +1073,7 @@
       <button class="btn btn-ghost" id="btn-step-back" style="visibility:hidden">← Atrás</button>
       <div class="flex gap-8">
         <button class="btn btn-outline" id="btn-booking-cancel">Cancelar</button>
+        <button class="btn btn-success hidden" id="btn-save-now" type="button" title="Guardar los cambios sin pasar por los demás pasos">💾 Guardar cambios</button>
         <button class="btn btn-primary" id="btn-step-next">Continuar →</button>
       </div>
     </div>

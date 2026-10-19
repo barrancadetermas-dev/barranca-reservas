@@ -19,7 +19,8 @@ import { Bus, EVENTS } from '../services/event-bus.js';
 import { getSegments, isSplit, rowsOnNight, occupiesNight, overlapsRange } from '../services/stay-segments.js';
 import { segmentColumns } from '../utils/db-compat.js';
 import { genderSymbolHTML } from '../utils/gender.js';
-import { specialChipsHTML } from '../services/special-dates.js';
+import { specialChipsHTML, specialsForStay, emojiHTML } from '../services/special-dates.js';
+import { guestCountsText, promoLabel } from '../utils/booking-display.js';
 import { escapeHtml } from '../services/voucher-template.js';
 import { fetchMonthlyRates, fetchCustomColumns, monthsInRange, buildTariffGrid, groupRowsByPrice, getSuggestedNightlyPrices } from '../services/tariff-service.js';
 import { createQuote, updateQuote, markQuoteConverted, fetchOverlappingQuotes, fetchOverlappingBookings, fetchAvailableUnitsForNight, fetchQuotesList, fetchQuoteById, deleteQuote } from '../services/quote-service.js';
@@ -1036,7 +1037,7 @@ export class Calendar {
 
     // Gradiente con transición muy leve (4 pp): cada sección ocupa casi
     // una celda entera pero con un suave paso de color en el límite.
-    const T = 4; // puntos de transición
+    const T = 0; // corte NÍTIDO: cada tramo (normal / descuento / recargo / noche gratis) es un bloque definido (con 4 puntos de mezcla se veía borroso)
     if (freeN > 0 && totalN > 0) {
       const p = Math.round(((totalN - freeN) / totalN) * 100);
       barBg = `linear-gradient(to right, ${color} 0%, ${color} ${p-T}%, ${yellow} ${p+T}%, ${yellow} 100%)`;
@@ -1044,7 +1045,7 @@ export class Calendar {
     } else if (discPct > 0 && surcharge > 0 && total > 0) {
       const surchargeRatio = Math.min(surcharge / total, 0.6);
       const p          = Math.round(Math.max(55, 100 - surchargeRatio * 80));
-      const darkFactor = Math.max(0.35, 0.75 - surchargeRatio * 0.8);
+      const darkFactor = Math.max(0.6, 0.85 - surchargeRatio * 0.4);   // más oscuro que la base pero NUNCA casi negro
       const dk = darken(color, darkFactor);
       barBg = `linear-gradient(to right, ${color} 0%, ${color} ${p-T}%, ${dk} ${p+T}%, ${dk} 100%)`;
 
@@ -1055,7 +1056,7 @@ export class Calendar {
     } else if (surcharge > 0 && total > 0) {
       const surchargeRatio = Math.min(surcharge / total, 0.6);
       const p          = Math.round(Math.max(55, 100 - surchargeRatio * 80));
-      const darkFactor = Math.max(0.35, 0.75 - surchargeRatio * 0.8);
+      const darkFactor = Math.max(0.6, 0.85 - surchargeRatio * 0.4);
       const darkColor  = darken(color, darkFactor);
       barBg = `linear-gradient(to right, ${color} 0%, ${color} ${p-T}%, ${darkColor} ${p+T}%, ${darkColor} 100%)`;
     }
@@ -1104,7 +1105,7 @@ export class Calendar {
       } else if (discPct > 0) {
         futureColor = orange;                    // descuento → naranja
       } else if (surcharge > 0 && total > 0) {
-        futureColor = darken(color, 0.75);       // recargo → verde más oscuro
+        futureColor = darken(color, 0.8);        // recargo → algo más oscuro
       } else {
         futureColor = lighten(color, 0.30);      // normal → apenas más claro
       }
@@ -1116,14 +1117,11 @@ export class Calendar {
           // Arrancó hoy: sin porción pasada — mantener el gradiente de precio ya calculado.
           // No sobreescribir barBg: si tiene descuento/noche gratis, se preserva.
         } else {
-          // Tiene días pasados: oscurecer pasado, luego el gradiente de precio en el futuro.
-          // Si barBg tenía gradiente (descuento→naranja), reemplazamos la porción pasada
-          // con darkPast y dejamos el color base en la sección actual+futura.
-          barBg = 'linear-gradient(to right, '
-            + darkPast + ' 0%, '
-            + darkPast + ' ' + passedPct + '%, '
-            + color    + ' ' + passedPct + '%, '
-            + color    + ' 100%)';
+          // Tiene días pasados: el tramo transcurrido se marca con una CAPA translúcida encima
+          // del fondo. Antes se REEMPLAZABA todo el fondo por "oscuro→color base" y se perdía
+          // el naranja del descuento, el amarillo de la noche gratis y el tono del recargo.
+          barBg = 'linear-gradient(to right, rgba(15,23,42,.30) 0%, rgba(15,23,42,.30) ' + passedPct + '%, '
+            + 'transparent ' + passedPct + '%, transparent 100%), ' + barBg;
         }
       }
     }
@@ -1182,7 +1180,6 @@ export class Calendar {
       overflow:hidden;white-space:nowrap;
       cursor:grab;
       transition:filter .15s,transform .15s,box-shadow .15s;
-      ${isPast ? 'filter:grayscale(52%) opacity(.62);' : ''}
     `;
     bar.dataset.bookingId = booking.id;
     bar.draggable = false;
@@ -1319,7 +1316,7 @@ export class Calendar {
       if (!this._barDrag.active) this._moveTooltip(e);
     });
     bar.addEventListener('mouseleave', () => {
-      bar.style.filter    = isPast ? 'grayscale(52%) opacity(.62)' : '';
+      bar.style.filter    = '';   // el atenuado de pasadas lo define .bar.past-bar (CSS)
       bar.style.transform = '';
       bar.style.boxShadow = '';
       this._hideTooltip();
@@ -1402,7 +1399,7 @@ export class Calendar {
     const left = document.createElement('div');
     left.className = 'bar bar-split-left';
     left.style.background = coColor;
-    if (coIsPast) left.style.filter = 'grayscale(52%) opacity(.62)';
+    if (coIsPast) left.style.filter = 'saturate(.7)';
     left.dataset.bookingId = coBooking.id;
     left.addEventListener('mouseenter', (e) => this._showTooltip(coBooking, e));
     left.addEventListener('mousemove',  (e) => this._moveTooltip(e));
@@ -1417,7 +1414,7 @@ export class Calendar {
     const right = document.createElement('div');
     right.className = 'bar bar-split-right';
     right.style.background = ciColor;
-    if (ciIsPast) right.style.filter = 'grayscale(52%) opacity(.62)';
+    if (ciIsPast) right.style.filter = 'saturate(.7)';
     right.dataset.bookingId = ciBooking.id;
     right.addEventListener('mouseenter', (e) => this._showTooltip(ciBooking, e));
     right.addEventListener('mousemove',  (e) => this._moveTooltip(e));
@@ -1606,7 +1603,10 @@ export class Calendar {
       ${emitidaStr ? `<div style="font-size:.62rem;color:#64748B;margin-top:1px">Emitida ${emitidaStr}</div>` : ''}
       <div class="ct-unit">🛏️ ${units || '—'}</div>
       <div class="ct-dates" style="margin-top:6px">📅 ${booking.check_in} → ${booking.check_out}</div>
-      <div class="ct-nights">🌙 ${booking.nights ?? '?'} noches${booking.pax ? ` · 👥 ${booking.adults ?? booking.pax} adultos${booking.children ? ` + ${booking.children} menores` : ''}` : ''}</div>
+      <div class="ct-nights">🌙 ${booking.nights ?? '?'} noches${(booking.pax || booking.adults) ? ` · ${guestCountsText(booking).short}` : ''}</div>
+      ${promoLabel(booking.nights, booking.free_nights) ? `<div class="ct-promo">🎁 PROMO ${promoLabel(booking.nights, booking.free_nights)} (${booking.free_nights} noche${booking.free_nights === 1 ? '' : 's'} sin cargo)</div>` : ''}
+      ${(() => { if (booking.status === 'blocked' || booking.is_blocked) return ''; const sp = specialsForStay(booking.check_in, booking.check_out); if (!sp.any) return '';
+        return `<div class="ct-specials">${sp.all.map(e => `<div>${emojiHTML(e.emoji)} ${escapeHtml(e.detail)}</div>`).join('')}${sp.summer ? '<div>☀️ Temporada de verano (2/1 al 10/3)</div>' : ''}</div>`; })()}
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">
         <span style="padding:2px 8px;border-radius:99px;font-size:.7rem;font-weight:700;
           background:${getBookingBarColor(booking).color}22;color:${getBookingBarColor(booking).color};

@@ -27,6 +27,7 @@ import { getUsdConversionRate } from '../services/usd-rate-history.js';
 import { queryWithOptionalColumns } from '../utils/db-compat.js';
 import { genderSymbolHTML } from '../utils/gender.js';
 import { specialChipsHTML } from '../services/special-dates.js';
+import { promoLabel, paymentPercents, pctOf, fmtPct as fmtPctPay } from '../utils/booking-display.js';
 import { SplitStayEditor } from './split-stay-editor.js';
 import { findConflicts } from '../services/availability-service.js';
 import { getSegments, isSplit, toBookingUnitRows, segmentsSubtotal, handoffs } from '../services/stay-segments.js';
@@ -102,6 +103,11 @@ export class BookingForm {
       }
       if (e.target.closest('#btn-step-next')) {
         this._nextStep();
+        return;
+      }
+      // Editar una reserva: guardar desde CUALQUIER paso, sin tener que llegar hasta el final
+      if (e.target.closest('#btn-save-now')) {
+        this._submit();
         return;
       }
       if (e.target.closest('#btn-step-back')) {
@@ -581,6 +587,7 @@ export class BookingForm {
         </div>
         <div class="detail-status">
           <span class="status-badge status-${booking.status}">${statusLabels[booking.status] ?? booking.status}</span>
+          ${promoLabel(booking.nights, booking.free_nights) ? `<span class="promo-badge" title="${freeNights} noche${freeNights === 1 ? '' : 's'} sin cargo">🎁 PROMO ${promoLabel(booking.nights, booking.free_nights)}</span>` : ''}
           ${['pending_checkin','in_house','checked_out'].includes(stay)
             ? `<span class="stay-badge stay-${stay}" title="Estado de alojamiento">${STAY_STATUS_LABELS[stay]}</span>` : ''}
         </div>
@@ -639,11 +646,12 @@ export class BookingForm {
           <span>Total</span>
           <span>${formatARS(total)}</span>
         </div>
-        ${totalPaid > 0 ? `<div class="detail-breakdown-row paid-row"><span>Pagado</span><span>${formatARS(totalPaid)}</span></div>` : ''}
+        ${(() => { const pp = paymentPercents(totalPaid, total);
+          return `${totalPaid > 0 ? `<div class="detail-breakdown-row paid-row"><span>Pagado${pp ? ` <span class="pct-tag">${fmtPctPay(pp.paidPct, { tiny: pp.tiny })}</span>` : ''}</span><span>${formatARS(totalPaid)}</span></div>` : ''}
         <div class="detail-breakdown-row balance-row" style="color:${balance > 0 ? 'var(--color-warning)' : 'var(--color-success)'}">
-          <span>${balance > 0 ? '⚠ Saldo pendiente' : '✓ Saldado'}</span>
+          <span>${balance > 0 ? '⚠ Saldo pendiente' : '✓ Saldado'}${pp ? ` <span class="pct-tag">${balance > 0 ? 'resta ' + fmtPctPay(pp.restPct) : '100% abonado'}</span>` : ''}</span>
           <span style="font-size:1.05rem">${formatARS(Math.abs(balance))}</span>
-        </div>
+        </div>`; })()}
       </div>
       ${booking.notes ? `<div class="detail-notes"><span class="detail-label">Notas</span><p>${escapeHtml(booking.notes)}</p></div>` : ''}
     `;
@@ -656,7 +664,7 @@ export class BookingForm {
           return `<div class="pay-row-detail">
             <span>${isNeg ? '↩ Devolución' : pm}</span>
             <span style="font-size:.72rem;color:var(--color-text-3)">${p.payment_date ?? ''}</span>
-            <span style="color:${isNeg?'var(--color-warning)':'var(--color-success)'};font-weight:600">${isNeg?'−':'+'}${formatARS(Math.abs(p.amount))}</span>
+            <span style="color:${isNeg?'var(--color-warning)':'var(--color-success)'};font-weight:600">${isNeg?'−':'+'}${formatARS(Math.abs(p.amount))}${(() => { const pc = pctOf(Math.abs(p.amount_ars ?? p.amount), total); return pc != null ? ` <span class="pct-tag" title="Porcentaje del total de la estadía">${isNeg ? '−' : ''}${fmtPctPay(pc)}</span>` : ''; })()}</span>
           </div>`;
         }).join('');
       body.innerHTML += `<div class="detail-payments"><div class="detail-label" style="margin-bottom:8px">Historial de Pagos</div>${payHtml}</div>`;
@@ -1438,6 +1446,8 @@ export class BookingForm {
   // ── Texto del botón "next" según contexto ─────────
   _updateNextBtnText() {
     const btn = document.getElementById('btn-step-next');
+    // "Guardar cambios" directo: solo al EDITAR y en los pasos 1 a 3 (en el 4 el botón principal ya guarda)
+    document.getElementById('btn-save-now')?.classList.toggle('hidden', !(this._editingId && this._currentStep < 4));
     if (!btn) return;
     const step = this._currentStep;
     if (this._editingId) {
@@ -1624,6 +1634,7 @@ export class BookingForm {
         </div>
         <input type="number" class="pay-amount form-control" placeholder="Monto" min="0" step="100"
                value="${existing?.amount ?? ''}">
+        <span class="pay-pct" title="Porcentaje del total de la estadía que representa este pago"></span>
         <div class="pay-usd-rate ${!isFx ? 'hidden' : ''}">
           <span style="font-size:.7rem;color:var(--color-text-3)">Cotiz.</span>
           <input type="number" class="pay-rate form-control" placeholder="1480" min="0" step="1"
@@ -1741,6 +1752,20 @@ export class BookingForm {
     set('ps-total',   formatARS(total));
     set('ps-paid',    formatARS(paid));
     set('ps-balance', formatARS(Math.max(0, balance)));
+
+    // Porcentaje del total de la estadía: por cada pago y en el resumen (abonado / resta)
+    document.querySelectorAll('.payment-row').forEach(row => {
+      const raw  = parseFloat(row.querySelector('.pay-amount')?.value) || 0;
+      const cur  = row.dataset?.currency ?? 'ARS';
+      const rate = parseFloat(row.querySelector('.pay-rate')?.value) || 1;
+      const amt  = (cur === 'USD' ? raw * rate : raw) * (row.querySelector('.pay-method')?.value === 'credit_card' ? 1.10 : 1);
+      const pc   = amt > 0 ? pctOf(amt, total) : null;
+      const tag  = row.querySelector('.pay-pct');
+      if (tag) tag.textContent = pc != null ? fmtPctPay(pc, { tiny: pc < 1 }) : '';
+    });
+    const pp = paymentPercents(paid, total);
+    set('ps-paid-pct',    pp ? (paid > 0 ? fmtPctPay(pp.paidPct, { tiny: pp.tiny }) : '0%') : '');
+    set('ps-balance-pct', pp ? fmtPctPay(pp.restPct) : '');
   }
 
   // ── Notas de crédito abiertas (reprogramaciones sin fecha nueva aún) ──
@@ -2409,6 +2434,8 @@ export class BookingForm {
     this._submitting = true;
     const btn = document.getElementById('btn-step-next');
     const confirmBtn = document.getElementById('btn-voucher-confirm');
+    const saveNowBtn = document.getElementById('btn-save-now');
+    if (saveNowBtn) { saveNowBtn.disabled = true; saveNowBtn.textContent = 'Guardando...'; }
     if (btn)        { btn.disabled        = true; btn.textContent        = 'Guardando...'; }
     if (confirmBtn) { confirmBtn.disabled = true; confirmBtn.textContent = 'Guardando...'; }
 
@@ -2848,6 +2875,7 @@ export class BookingForm {
     } finally {
       clearTimeout(_safetyTimer);
       this._submitting = false;
+      if (saveNowBtn) { saveNowBtn.disabled = false; saveNowBtn.textContent = '💾 Guardar cambios'; }
       if (btn) {
         btn.disabled    = false;
         this._updateNextBtnText();

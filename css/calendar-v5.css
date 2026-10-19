@@ -1060,8 +1060,8 @@
 .bar-end    { left: 0 !important; right: 5px !important; border-radius: 0 var(--cal-bar-r) var(--cal-bar-r) 0 !important; }
 .bar-middle { left: 0 !important; right: 0 !important; border-radius: 0 !important; }
 .bar-solo   { left: 5px !important; right: 5px !important; border-radius: var(--cal-bar-r) !important; }
-.bar.past-bar { filter: brightness(.88) saturate(.7) !important; opacity: .75 !important; }
-.bar.past-bar:hover { filter: brightness(1) saturate(.9) !important; opacity: 1 !important; }
+.bar.past-bar { filter: saturate(.7) !important; opacity: .9 !important; }   /* suave: el texto sigue nítido */
+.bar.past-bar:hover { filter: none !important; opacity: 1 !important; }
 
 /* Search highlight */
 .bar.cal-search-match {

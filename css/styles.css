@@ -2850,10 +2850,9 @@ select {
   pointer-events: none;
   z-index: 0;
 }
-/* Barras pasadas: mantener color pero desaturar/oscurecer para indicar que pasó */
-.cal-cell:not(.week-cell).past-col .bar {
-  filter: saturate(.45) brightness(.72) !important;
-}
+/* Barras pasadas: el atenuado lo define UNA sola regla (.bar.past-bar, en calendar-v5.css).
+   Antes esta regla oscurecía (brightness .72) TODA barra cuyo día de ingreso fuera pasado,
+   aunque la estadía siguiera en curso, y apagaba el degradé de descuento/recargo. */
 /* Modo ocultar días pasados — manejado desde JS con scroll */
 .cal-cell:not(.week-cell).today-col {
   background: rgba(99,102,241,.05) !important;
@@ -6945,22 +6944,28 @@ input[type="number"]:focus, select:focus {
 /* Símbolo de género junto al nombre (♂ ♀ ⚧): hereda el color del texto para leerse sobre cualquier fondo */
 .g-sym { display: inline-block; margin-left: 4px; font-size: .9em; font-weight: 700; line-height: 1; opacity: .85; color: inherit; vertical-align: baseline; flex: none; }
 
-/* ── Fechas especiales (feriados, finde largo, Carnaval, Semana Santa, verano) ── */
+/* ── Fechas especiales (feriados, finde largo, Carnaval, Semana Santa, verano) ──
+   Calendario: solo íconos mínimos (el detalle va en el tooltip). Lista y ficha: chips chicos con texto. */
+.sd-bar { display: inline-flex; align-items: center; gap: 2px; margin-left: 4px; vertical-align: middle; flex: none; }
+.sd-ico { font-size: .6rem; line-height: 1; opacity: .92; cursor: help; }
+.sd-ico.sd-sun { font-size: .54rem; opacity: .72; }
 .sd-wrap { display: inline-flex; align-items: center; gap: 3px; flex-wrap: wrap; vertical-align: middle; margin-left: 5px; }
 .sd-chip {
-  display: inline-flex; align-items: center; gap: 2px; padding: 0 6px; border-radius: 99px;
-  font-size: .62rem; font-weight: 700; line-height: 1.55; white-space: nowrap; letter-spacing: .01em;
-  background: #f1f5f9; color: #334155; border: 1px solid rgba(15, 23, 42, .12); cursor: help;
+  display: inline-flex; align-items: center; gap: 2px; padding: 0 5px; border-radius: 99px;
+  font-size: .58rem; font-weight: 600; line-height: 1.5; white-space: nowrap;
+  background: #f1f5f9; color: #475569; border: 1px solid rgba(15, 23, 42, .1); cursor: help;
 }
-.sd-newyear, .sd-christmas { background: #fef3c7; color: #92400e; border-color: #fcd34d; }
-.sd-carnival               { background: #fae8ff; color: #86198f; border-color: #f0abfc; }
-.sd-easter                 { background: #ede9fe; color: #5b21b6; border-color: #c4b5fd; }
-.sd-holiday, .sd-longweekend { background: #dbeafe; color: #1e40af; border-color: #93c5fd; }
-.sd-puente                 { background: #e0f2fe; color: #075985; border-color: #7dd3fc; }
-.sd-summer                 { background: #fff7ed; color: #c2410c; border-color: #fdba74; }
-.sd-icon { padding: 0 3px; }
-.sd-more { font-size: .6rem; font-weight: 700; color: inherit; opacity: .85; cursor: help; }
+.sd-newyear, .sd-christmas { background: #fffbeb; color: #92400e; border-color: #fde68a; }
+.sd-carnival               { background: #fdf4ff; color: #86198f; border-color: #f5d0fe; }
+.sd-easter                 { background: #f5f3ff; color: #5b21b6; border-color: #ddd6fe; }
+.sd-holiday, .sd-longweekend { background: #eff6ff; color: #1e40af; border-color: #bfdbfe; }
+.sd-puente                 { background: #f0f9ff; color: #075985; border-color: #bae6fd; }
+.sd-summer                 { background: #fff7ed; color: #c2410c; border-color: #fed7aa; }
+.sd-more { font-size: .56rem; font-weight: 700; color: inherit; opacity: .75; cursor: help; }
 .bl-col-dates .sd-wrap { display: flex; margin: 3px 0 0; }
+/* Tooltip del calendario: PROMO y detalle de fechas especiales */
+.ct-specials { margin-top: 6px; font-size: .68rem; line-height: 1.55; color: #cbd5e1; border-top: 1px solid rgba(255,255,255,.08); padding-top: 6px; }
+.ct-promo { margin-top: 4px; font-size: .72rem; font-weight: 700; color: #fcd34d; }
 .detail-specials { display: flex; flex-wrap: wrap; gap: 4px; margin: 8px 0 2px; }
 .detail-specials .sd-wrap { margin: 0; }
 .detail-specials .sd-chip { font-size: .7rem; padding: 1px 8px; }
@@ -7042,3 +7047,25 @@ input[type="number"]:focus, select:focus {
 }
 #step-2 #f-notes { height: 50px; }
 @media (min-width: 760px) { #step-2 .form-group { margin-bottom: 8px; } }
+
+/* PROMO (noches sin cargo), porcentajes de pago y personas */
+.promo-badge { display: inline-flex; align-items: center; gap: 2px; margin-left: 6px; padding: 1px 7px; border-radius: 99px; font-size: .62rem; font-weight: 800; letter-spacing: .03em; background: #fef3c7; color: #92400e; border: 1px solid #fcd34d; white-space: nowrap; }
+.pct-tag { display: inline-block; margin-left: 4px; padding: 0 5px; border-radius: 99px; font-size: .64rem; font-weight: 700; background: rgba(15,23,42,.07); color: inherit; white-space: nowrap; vertical-align: middle; }
+.bl-pax { font-size: .68rem; color: var(--color-text-3); margin-left: 4px; white-space: nowrap; }
+.ps-pct { font-size: .68rem; font-weight: 700; opacity: .8; margin-left: 4px; }
+.pay-pct { font-size: .66rem; font-weight: 700; color: var(--color-text-3); white-space: nowrap; align-self: center; min-width: 34px; text-align: right; }
+
+/* Botón "Guardar cambios" directo del formulario de reserva */
+.btn-success { background: #16a34a; color: #fff; border: 1px solid #15803d; }
+.btn-success:hover:not(:disabled) { background: #15803d; }
+.btn-success:disabled { opacity: .65; cursor: default; }
+.btn.hidden { display: none !important; }
+
+/* Bandera de Argentina dibujada con CSS (el emoji 🇦🇷 se ve como "AR" en Windows) */
+.flag-ar {
+  display: inline-block; width: 1.25em; height: .84em; border-radius: 1.5px; vertical-align: -.1em;
+  background:
+    radial-gradient(circle at 50% 50%, #f6b40e 0 .1em, transparent .11em),
+    linear-gradient(to bottom, #74acdf 0 33.4%, #ffffff 33.4% 66.6%, #74acdf 66.6% 100%);
+  box-shadow: 0 0 0 .5px rgba(15, 23, 42, .35);
+}

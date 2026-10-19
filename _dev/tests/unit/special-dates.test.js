@@ -1,7 +1,7 @@
 // tests/unit/special-dates.test.js — Fechas especiales (módulo REAL)
 import { describe, test, expect } from './framework.js';
 import {
-  easterSunday, holidaysForYear, holidaysOn, longWeekends, isSummerStay, specialsForStay, specialChipsHTML, weekday,
+  emojiHTML, easterSunday, holidaysForYear, holidaysOn, longWeekends, isSummerStay, specialsForStay, specialChipsHTML, weekday,
 } from '../../../js/services/special-dates.js';
 
 const lw = y => longWeekends(y).filter(l => l.from.startsWith(String(y)) || l.to.startsWith(String(y))).map(l => `${l.from.slice(5)}..${l.to.slice(5)}`);
@@ -141,12 +141,31 @@ describe('🎯 Detección en estadías', () => {
 });
 
 describe('🏷 Presentación', () => {
-  test('modo bar: principal + ☀️ (sin texto de verano)', () => {
-    const h = specialChipsHTML('2026-12-31', '2027-01-03', { mode: 'bar' }); expect(h).toContain('Año Nuevo'); expect(h).toContain('☀️'); expect(h.includes('☀️ Verano')).toBe(false);
+  test('modo bar (calendario): SOLO íconos, sin cartel de texto', () => {
+    const h = specialChipsHTML('2026-12-31', '2027-01-03', { mode: 'bar' });
+    expect(h.includes('🎆')).toBe(true); expect(h.includes('☀️')).toBe(true);
+    expect(h.includes('sd-chip')).toBe(false);                                        // nada de píldoras
+    expect(h.replace(/<[^>]*>/g, '').replace(/\s/g, '').length <= 8).toBe(true);      // el texto visible son solo 2 emojis
   });
-  test('modo row: dice Verano', () => { expect(specialChipsHTML('2026-02-03', '2026-02-06')).toContain('Verano'); });
+  test('modo bar: el detalle completo está en el tooltip (title)', () => {
+    const h = specialChipsHTML('2026-12-23', '2027-01-04', { mode: 'bar' });
+    expect(h).toContain('Navidad'); expect(h).toContain('Año Nuevo'); expect(h).toContain('Temporada de verano');
+  });
+  test('modo bar: Finde largo muestra la bandera (dibujada con CSS, no emoji) y el tooltip dice "Finde largo" con sus fechas', () => {
+    const h = specialChipsHTML('2026-11-21', '2026-11-23', { mode: 'bar' });
+    expect(h).toContain('class="flag-ar"'); expect(h.replace(/<[^>]*>/g, '').includes('🇦🇷')).toBe(false);   // el emoji solo queda en el tooltip
+    expect(h).toContain('Finde largo 21/11 al 23/11');
+  });
+  test('la bandera es la única que se reemplaza; los demás emojis se muestran tal cual', () => {
+    expect(emojiHTML('🇦🇷')).toContain('flag-ar'); expect(emojiHTML('🎄')).toBe('🎄'); expect(emojiHTML('🎭')).toBe('🎭');
+  });
+  test('modo row (lista): chip chico con texto y Verano como ícono', () => {
+    expect(specialChipsHTML('2026-02-03', '2026-02-06')).toContain('☀️');
+    expect(specialChipsHTML('2026-11-21', '2026-11-23')).toContain('Finde largo');
+  });
+  test('modo full (ficha): lista todo, incluido Verano con texto', () => {
+    const h = specialChipsHTML('2026-12-23', '2027-01-04', { mode: 'full' });
+    expect(h).toContain('Navidad'); expect(h).toContain('Año Nuevo'); expect(h).toContain('☀️ Verano');
+  });
   test('estadía común → vacío', () => { expect(specialChipsHTML('2026-10-20', '2026-10-24')).toBe(''); });
-  test('el tooltip lista TODAS las fechas (incluye verano)', () => {
-    const h = specialChipsHTML('2026-12-23', '2027-01-04', { mode: 'bar' }); expect(h).toContain('Navidad'); expect(h).toContain('Año Nuevo'); expect(h).toContain('Temporada de verano');
-  });
 });

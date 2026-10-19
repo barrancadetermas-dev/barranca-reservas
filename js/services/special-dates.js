@@ -271,7 +271,7 @@ export function specialsForStay(checkIn, checkOut) {
     events.push({
       id: `${h.key}@${h.date}`, type, priority: PRIORITY[type],
       emoji: h.emoji, label: h.name, short: h.short, chip,
-      detail: `${h.name} · ${when}${moved}${h.kind === 'puente' ? ' · día no laborable' : h.kind === 'no_laborable' ? ' · día no laborable' : ''}`,
+      detail: `${h.name} · ${when}${moved}${h.kind === 'puente' || h.kind === 'no_laborable' ? ' · día no laborable' : ''}${lw && !isNamed ? ` · Finde largo ${fmtDM(lw.from)} al ${fmtDM(lw.to)} (${lw.days} días)` : ''}`,
       from: h.date, to: h.date,
       ...(lw ? { longWeekend: { from: lw.from, to: lw.to, days: lw.days } } : {}),
     });
@@ -300,6 +300,14 @@ export function specialsForStay(checkIn, checkOut) {
 // ── Presentación (HTML compacto, reutilizable en calendario, lista y ficha) ──
 const escAttr = s => String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
 
+/**
+ * Emoji listo para mostrar. La bandera 🇦🇷 NO se dibuja en Windows (Chrome/Edge muestran las letras "AR"),
+ * así que se reemplaza por una bandita hecha con CSS (.flag-ar) que se ve igual en cualquier sistema.
+ */
+export const emojiHTML = (emoji) => emoji === '🇦🇷'
+  ? '<span class="flag-ar" role="img" aria-label="Argentina"></span>'
+  : emoji;
+
 /** Texto del tooltip con TODAS las fechas especiales de la estadía. */
 export function specialsTitle(sp) {
   if (!sp.any) return '';
@@ -309,30 +317,35 @@ export function specialsTitle(sp) {
 }
 
 /**
- * Chips de fechas especiales. Nunca duplica etiquetas: un solo chip principal,
- * "+N" con el resto en el tooltip, y ☀️ aparte (el verano es una temporada, no un feriado).
+ * Indicadores de fechas especiales. Nunca duplica etiquetas: un solo indicador principal,
+ * el resto en el tooltip, y ☀️ aparte (el verano es una temporada, no un feriado).
  * @param {{ mode?:'bar'|'row'|'full' }} [o]
- *   bar  → principal + ☀️ (sin texto de verano) + "+N"  (espacio mínimo)
- *   row  → principal + "Verano" + "+N"
- *   full → principal + todos los demás + "Verano"
+ *   bar  → SOLO íconos mínimos (🇦🇷 ☀️), sin cartel: es el modo del calendario, donde el espacio
+ *          es poco; todo el detalle va en el tooltip (title)
+ *   row  → chip chico con texto + ☀️ + "+N"  (lista de reservas)
+ *   full → todos los chips, con texto           (ficha)
  */
 export function specialChipsHTML(checkIn, checkOut, { mode = 'row' } = {}) {
   const sp = specialsForStay(checkIn, checkOut);
   if (!sp.any) return '';
   const title = escAttr(specialsTitle(sp));
-  const parts = [];
-  const chip = (e, extra = '') =>
-    `<span class="sd-chip sd-${e.type}${extra}" title="${title}">${e.emoji} ${escAttr(e.chip)}</span>`;
-  if (mode === 'full') {
-    sp.all.forEach(e => parts.push(`<span class="sd-chip sd-${e.type}" title="${escAttr(e.detail)}">${e.emoji} ${escAttr(e.type === 'holiday' || e.type === 'puente' ? e.short : e.chip)}${e.longWeekend && e.type !== 'longweekend' && e.type !== 'carnival' && e.type !== 'easter' ? ' · Finde largo' : ''}</span>`));
-  } else if (sp.primary) {
-    parts.push(chip(sp.primary));
-    if (sp.others.length) parts.push(`<span class="sd-more" title="${title}">+${sp.others.length}</span>`);
+
+  if (mode === 'bar') {
+    const icons = [];
+    if (sp.primary) icons.push(`<span class="sd-ico sd-${sp.primary.type}" title="${title}" aria-label="${escAttr(sp.primary.chip)}">${emojiHTML(sp.primary.emoji)}</span>`);
+    if (sp.summer)  icons.push(`<span class="sd-ico sd-sun" title="${title}" aria-label="Temporada de verano">☀️</span>`);
+    return `<span class="sd-bar">${icons.join('')}</span>`;
   }
-  if (sp.summer) {
-    parts.push(mode === 'bar'
-      ? `<span class="sd-chip sd-summer sd-icon" title="${title}" aria-label="Temporada de verano">☀️</span>`
-      : `<span class="sd-chip sd-summer" title="${title}">☀️ Verano</span>`);
+
+  const parts = [];
+  const chip = (e) => `<span class="sd-chip sd-${e.type}" title="${title}">${emojiHTML(e.emoji)} ${escAttr(e.chip)}</span>`;
+  if (mode === 'full') {
+    sp.all.forEach(e => parts.push(`<span class="sd-chip sd-${e.type}" title="${escAttr(e.detail)}">${emojiHTML(e.emoji)} ${escAttr(e.type === 'holiday' || e.type === 'puente' ? e.short : e.chip)}${e.longWeekend && e.type !== 'longweekend' && e.type !== 'carnival' && e.type !== 'easter' ? ' · Finde largo' : ''}</span>`));
+    if (sp.summer) parts.push(`<span class="sd-chip sd-summer" title="Temporada de verano (2/1 al 10/3)">☀️ Verano</span>`);
+  } else {
+    if (sp.primary) parts.push(chip(sp.primary));
+    if (sp.others.length) parts.push(`<span class="sd-more" title="${title}">+${sp.others.length}</span>`);
+    if (sp.summer) parts.push(`<span class="sd-chip sd-summer" title="${title}">☀️</span>`);
   }
   return `<span class="sd-wrap">${parts.join('')}</span>`;
 }

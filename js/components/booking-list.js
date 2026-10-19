@@ -11,6 +11,7 @@ import { logAction } from '../services/audit-service.js';
 import { alojado, genderSymbolHTML } from '../utils/gender.js';
 import { escapeHtml } from '../services/voucher-template.js';
 import { specialChipsHTML } from '../services/special-dates.js';
+import { guestCountsText, promoLabel, paymentProgressText } from '../utils/booking-display.js';
 import { queryWithOptionalColumns, segmentColumns } from '../utils/db-compat.js';
 import { registerCheckIn } from '../services/checkin-service.js';
 import { cache } from '../services/supabase-cache.js';
@@ -954,7 +955,7 @@ export class BookingList {
             </div>
             <div class="bl-col-dates">
               <span class="bl-dates">${formatDate(b.check_in)} → ${formatDate(b.check_out)}</span>
-              <span class="bl-nights">${nights} ${nights === 1 ? 'noche' : 'noches'}</span>${specialChipsHTML(b.check_in, b.check_out, { mode: 'row' })}${b.pax ? '<span style="font-size:.68rem;color:var(--color-text-3);margin-left:4px">👥 ' + b.pax + '</span>' : ''}
+              <span class="bl-nights">${nights} ${nights === 1 ? 'noche' : 'noches'}</span>${promoLabel(b.nights, b.free_nights) ? `<span class="promo-badge" title="${b.free_nights} noche${b.free_nights === 1 ? '' : 's'} sin cargo">🎁 PROMO ${promoLabel(b.nights, b.free_nights)}</span>` : ''}${specialChipsHTML(b.check_in, b.check_out, { mode: 'row' })}${(b.pax || b.adults) ? '<span class="bl-pax" title="Personas: adultos y menores">' + guestCountsText(b).short + '</span>' : ''}
             </div>
             <div class="bl-col-amount">
               ${(() => {
@@ -998,15 +999,15 @@ export class BookingList {
                     return `<div class="bl-amount-total">${formatARS(b.total_amount)}</div>`;
                   })()}
                   ${b.total_paid > 0 && b.balance > 0
-                    ? `<div style="font-size:9px;color:var(--color-text-3);margin-top:2px">−${formatARS(b.total_paid)} cobrado</div>
+                    ? `<div style="font-size:9px;color:var(--color-text-3);margin-top:2px">−${formatARS(b.total_paid)} cobrado · <strong>${paymentProgressText(b.total_paid, b.total_amount)}</strong></div>
                        <div style="margin-top:2px;display:inline-flex;align-items:center;gap:2px;
                             background:#fef2f2;border:0.5px solid #fecaca;border-radius:4px;padding:1px 5px">
                          <svg viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="2.5" width="9" height="9"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
                          <span style="font-size:10px;font-weight:700;color:#dc2626;white-space:nowrap">${formatARS(b.balance)} pendiente</span>
                        </div>`
                     : b.balance <= 0
-                      ? `<div class="bl-amount-paid">✓ Pagado</div>`
-                      : ''
+                      ? `<div class="bl-amount-paid">✓ Pagado · 100%</div>`
+                      : (b.total_amount > 0 && b.status !== 'cancelled' ? `<div style="font-size:9px;color:var(--color-text-3);margin-top:2px">0% abonado · resta 100%</div>` : '')
                   }
                   ${b.total_amount > 0 ? `<div style="margin-top:4px;height:3px;background:var(--color-border);border-radius:2px;overflow:hidden">
                     <div style="height:100%;border-radius:2px;transition:width .4s;background:${
