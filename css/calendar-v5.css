@@ -1062,9 +1062,6 @@
 .bar-solo   { left: 5px !important; right: 5px !important; border-radius: var(--cal-bar-r) !important; }
 .bar.past-bar { filter: saturate(.7) !important; opacity: .9 !important; }   /* suave: el texto sigue nítido */
 .bar.past-bar:hover { filter: none !important; opacity: 1 !important; }
-/* Tramo de late check-out: mismo tratamiento de "pasada" que la barra (sin texto, sin opacidad extra) */
-.bar-lco-ext { top: 8px; bottom: 8px; opacity: .9; }            /* misma altura que .bar */
-.bar-lco-ext.is-past { filter: saturate(.7); opacity: .9; }
 
 /* Search highlight */
 .bar.cal-search-match {
@@ -1081,7 +1078,6 @@
   .cal-toolbar { height: auto; padding: 8px 10px; flex-wrap: wrap; }
   .cal-month-title { min-width: 120px !important; font-size: .82rem !important; }
   .bar { top: 6px !important; bottom: 6px !important; font-size: .62rem !important; }
-  .bar-lco-ext { top: 6px; bottom: 6px; }
   #cal-summary-bar { gap: 4px !important; }
   .cal-kpi { padding: 2px 7px !important; }
   .cal-tb-hint { display: none; }

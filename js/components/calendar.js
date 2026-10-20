@@ -36,9 +36,9 @@ const PAST_OFFSET = 3;    // desktop: 3 días antes de hoy
 // ── Ancho mínimo de columna (px) ──
 const CELL_W_DESK = 38;
 const CELL_W_MOB  = 32;
-// Noches sin cargo: degradé de amarillo a rojo, cubre exactamente las celdas de esas noches.
-const FREE_NIGHT_FROM = '#FACC15';
-const FREE_NIGHT_TO   = '#DC2626';
+// Noches sin cargo: la barra conserva su color y, desde el inicio de esas noches, vira de forma
+// continua (sin corte) hasta este amarillo al final de la reserva.
+const FREE_NIGHT_END = '#FACC15';
 // ── Ancho de la columna de labels (dinámico — ver _measureLabelW) ──
 const LABEL_W_MIN     = 90;
 const LABEL_W_MAX     = 200;
@@ -880,19 +880,34 @@ export class Calendar {
       if (!(width > 0)) return;
       bar.style.left  = `${inset - bL}px`;
       bar.style.width = `${width}px`;
+      const barLeftAbs = fr.left + inset;
+      // Inicio (px desde el borde izquierdo de la barra) del tramo que vira a amarillo
+      let gradStartX = null;
       if (f.freeCount > 0 && f.freeFrom >= 0 && f.freeFrom < cells.length) {
-        const barLeftAbs = fr.left + inset;
-        const startX = cells[f.freeFrom].getBoundingClientRect().left - barLeftAbs;
-        const pct = Math.max(0, Math.min(100, (startX / width) * 100));
-        const free = `linear-gradient(to right, ${f.color} 0%, ${f.color} ${pct}%, ${FREE_NIGHT_FROM} ${pct}%, ${FREE_NIGHT_TO} 100%)`;
-        bar.style.background = f.progressOverlay ? `${f.progressOverlay}, ${free}` : free;
+        gradStartX = cells[f.freeFrom].getBoundingClientRect().left - barLeftAbs;
+      } else if (f.discFrom >= 0) {
+        const idx = Math.min(cells.length - 1, Math.floor(f.discFrom));
+        const cr = cells[idx].getBoundingClientRect();
+        gradStartX = (cr.left + (f.discFrom - idx) * cr.width) - barLeftAbs;
       }
-      // Extensión visual del late checkout (misma izquierda, +65% de la celda de salida)
+      if (gradStartX !== null) {
+        const pct = Math.max(0, Math.min(100, (gradStartX / width) * 100));
+        const g = `linear-gradient(to right, ${f.color} 0%, ${f.color} ${pct}%, ${FREE_NIGHT_END} 100%)`;
+        bar.style.background = f.progressOverlay ? `${f.progressOverlay}, ${g}` : g;
+      }
+      // Extensión visual del late checkout: se dibuja encima de toda la barra (repite avatar y
+      // nombre), así que lleva el mismo degradado estirado a su ancho y el amarillo sigue hasta el final.
       const ext = [...bar.parentElement.children].find(el => el !== bar && el._fit?.extra);
-      if (ext && ext._fit && ext._fit.extra) {
+      if (ext) {
         const lr2 = cells[cells.length - 1].getBoundingClientRect();
+        const extW = width + lr2.width * ext._fit.extra;
         ext.style.left  = bar.style.left;
-        ext.style.width = `${width + lr2.width * ext._fit.extra}px`;
+        ext.style.width = `${extW}px`;
+        if (gradStartX !== null) {
+          const p1 = Math.max(0, Math.min(100, (gradStartX / extW) * 100));
+          const p2 = Math.max(p1, Math.min(100, (width / extW) * 100));
+          ext.style.background = `linear-gradient(to right, ${f.color} 0%, ${f.color} ${p1}%, ${FREE_NIGHT_END} ${p2}%, ${FREE_NIGHT_END} 100%)`;
+        }
       }
     });
   }
@@ -1116,7 +1131,7 @@ export class Calendar {
       // Fallback (antes de medir el layout real): proporción de noches. El ajuste exacto
       // a los límites de celda lo hace _fitBars() una vez que la grilla está en el DOM.
       const p = Math.round(((totalN - Math.min(freeN, totalN)) / totalN) * 100);
-      barBg = `linear-gradient(to right, ${color} 0%, ${color} ${p-T}%, ${FREE_NIGHT_FROM} ${p}%, ${FREE_NIGHT_TO} 100%)`;
+      barBg = `linear-gradient(to right, ${color} 0%, ${color} ${p}%, ${FREE_NIGHT_END} 100%)`;
 
     } else if (discPct > 0 && surcharge > 0 && total > 0) {
       const surchargeRatio = Math.min(surcharge / total, 0.6);
@@ -1126,8 +1141,9 @@ export class Calendar {
       barBg = `linear-gradient(to right, ${color} 0%, ${color} ${p-T}%, ${dk} ${p+T}%, ${dk} 100%)`;
 
     } else if (discPct > 0) {
-      const p = Math.round(100 - discPct);
-      barBg = `linear-gradient(to right, ${color} 0%, ${color} ${p-T}%, ${orange} ${p+T}%, ${orange} 100%)`;
+      // Descuento: el último discPct% del ancho vira de forma continua del color base a amarillo.
+      const p = Math.max(0, Math.min(100, 100 - discPct));
+      barBg = `linear-gradient(to right, ${color} 0%, ${color} ${p}%, ${FREE_NIGHT_END} 100%)`;
 
     } else if (surcharge > 0 && total > 0) {
       const surchargeRatio = Math.min(surcharge / total, 0.6);
@@ -1260,6 +1276,8 @@ export class Calendar {
       transition:filter .15s,transform .15s,box-shadow .15s;
     `;
     bar.dataset.bookingId = booking.id;
+    // Si la barra tiene zona amarilla (noches sin cargo), una sombra sutil mantiene legible el nombre.
+    if ((freeN > 0 || (discPct > 0 && !(surcharge > 0))) && !isBlock) bar.style.textShadow = '0 1px 2px rgba(0,0,0,.45)';
     // Datos para _fitBars(): ancho/borde exactos según la geometría real de las celdas.
     {
       const freeShown = Math.min(freeN, totalN);
@@ -1270,9 +1288,17 @@ export class Calendar {
         freeCount = Math.max(0, this._dayDiff(fs, visEnd));
         freeFrom  = this._dayDiff(visStart, fs);
       }
+      // Descuento puro (sin noches gratis ni recargo): inicio de la zona amarilla en "noches"
+      // desde el inicio visible de la barra (fraccional: 25% de 4 noches = última noche entera).
+      let discFrom = -1;
+      if (freeN <= 0 && discPct > 0 && !(surcharge > 0) && !isBlock) {
+        discFrom = totalN * (1 - Math.min(discPct, 100) / 100) - this._dayDiff(ci, visStart);
+        if (discFrom < 0) discFrom = 0;
+        if (discFrom >= span) discFrom = -1;
+      }
       bar._fit = {
         span, left, rightM, late: startsAfterLate,
-        color, progressOverlay, freeFrom, freeCount,
+        color, progressOverlay, freeFrom, freeCount, discFrom,
       };
     }
     bar.draggable = false;
@@ -1460,8 +1486,11 @@ export class Calendar {
       const yellow  = '#EF9F27';
       // Si está pagada: la extensión es el mismo color verde (no amarillo)
       // Solo aplica amarillo si es gratis Y no está pagada
-      const extBaseColor = (!isPaidB && freeN > 0) ? yellow : color;
-      const extBg   = (!isPaidB && isFree)
+      // Si la barra termina en amarillo (noches sin cargo o descuento, también en las
+      // pagadas: verde→amarillo), _fitBars() le da a la extensión el mismo degradado.
+      const endsYellow = freeN > 0 || (discPct > 0 && !(surcharge > 0));
+      const extBaseColor = endsYellow ? color : ((!isPaidB && freeN > 0) ? yellow : color);
+      const extBg   = (!endsYellow && !isPaidB && isFree)
         ? `linear-gradient(to right, ${extBaseColor} 0%, ${extBaseColor} 20%, ${yellow} 100%)`
         : extBaseColor;
       ext.style.cssText = `

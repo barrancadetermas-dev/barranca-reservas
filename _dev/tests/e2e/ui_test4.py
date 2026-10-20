@@ -132,14 +132,11 @@ with sync_playwright() as p:
     t('las barras pasadas se atenúan SUAVE (saturación) y el texto sigue al 100%', past and all(x['filter']=='saturate(0.7)' and x['opacity']>=0.9 and x['textOpacity']==1 for x in past), [(x['t'][:12],x['filter'],x['opacity'],x['textOpacity']) for x in past])
     d_=f('Descuento'); g_=f('NocheGratis')
     t('reserva EN CURSO con descuento: conserva el tramo del descuento (naranja) además del tramo transcurrido', d_ and d_['bg'].count('linear-gradient')==2 and ('249, 115, 22' in d_['bg'] or '#f97316' in d_['bg'].lower() or 'rgb(255' in d_['bg'] or 'orange' in d_['bg'] or True), d_ and d_['bg'])
-    # las noches sin cargo ahora llevan además una capa de divisores de día → ≥2 capas; el tramo amarillo sigue presente
-    t('reserva EN CURSO con noche gratis: también conserva su tramo (capa transcurrida + amarillo)', g_ and g_['bg'].count('linear-gradient')>=2 and '239, 159, 39' in g_['bg'], g_ and g_['bg'])
+    t('reserva EN CURSO con noche gratis: también conserva su tramo', g_ and g_['bg'].count('linear-gradient')==2, g_ and g_['bg'])
     def crisp(bg):
         stops=[float(x) for x in re.findall(r'(\d+(?:\.\d+)?)%',bg)]
         from collections import Counter; c=Counter(stops); return all(v%2==0 for k,v in c.items() if k not in (0.0,100.0))
-    # Descuento/recargo siguen con corte neto. Las noches sin cargo (fondo con calc()) ahora tienen transición suave a propósito
-    # y su posición exacta se verifica con píxeles en free_nights_test.py
-    t('las transiciones de descuento/recargo siguen NÍTIDAS (las de noches sin cargo son suaves a propósito)', all(crisp(x['bg']) for x in allb if x['bg'] and 'calc(' not in x['bg']), [x['bg'] for x in allb if x['bg'] and 'calc(' not in x['bg'] and not crisp(x['bg'])])
+    t('las transiciones de color son NÍTIDAS (corte neto, sin degradé borroso)', all(crisp(x['bg']) for x in allb if x['bg']), [x['bg'] for x in allb if x['bg'] and not crisp(x['bg'])])
     def tones(bg):
         c=[tuple(map(int,m)) for m in re.findall(r'rgb\((\d+), (\d+), (\d+)\)',bg)]; u=[]
         [u.append(x) for x in c if x not in u]; return u
