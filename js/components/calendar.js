@@ -22,6 +22,13 @@ import { genderSymbolHTML } from '../utils/gender.js';
 import { specialChipsHTML, specialsForStay, emojiHTML } from '../services/special-dates.js';
 import { guestCountsText, promoLabel } from '../utils/booking-display.js';
 import { escapeHtml } from '../services/voucher-template.js';
+
+// Late check-out: la barra de la reserva que sale tarde invade LATE_FRAC de la celda del día de salida
+// y se corta en diagonal (LATE_SKEW px de inclinación). La reserva que entra ese mismo día arranca con un
+// corte paralelo, separado por LATE_GAP px: queda un "|/|" continuo en vez de una tira suelta.
+const LATE_FRAC = 0.62;
+const LATE_SKEW = 12;
+const LATE_GAP  = 3;
 import { fetchMonthlyRates, fetchCustomColumns, monthsInRange, buildTariffGrid, groupRowsByPrice, getSuggestedNightlyPrices } from '../services/tariff-service.js';
 import { createQuote, updateQuote, markQuoteConverted, fetchOverlappingQuotes, fetchOverlappingBookings, fetchAvailableUnitsForNight, fetchQuotesList, fetchQuoteById, deleteQuote } from '../services/quote-service.js';
 
@@ -884,6 +891,12 @@ export class Calendar {
       /* Reservas pasadas más sobrias: lo que viene gana protagonismo */
       #calendar-grid .bar.past-bar { opacity: .55 !important; filter: saturate(.5) !important; box-shadow: none !important; }
       #calendar-grid .bar.past-bar:hover { opacity: 1 !important; filter: none !important; }
+      /* Late check-out: handles dentro de la zona visible (los cortes diagonales recortan los extremos) */
+      #calendar-grid .bar-late-end .bar-resize-handle { right: 14px !important; }
+      #calendar-grid .bar-late-start .bar-resize-handle-left { left: 12px !important; }
+      #calendar-grid .bar-late-end, #calendar-grid .bar-late-start { box-shadow: none !important; }
+      #calendar-grid .bar-late-end   { border-top-right-radius: 0 !important; border-bottom-right-radius: 0 !important; }
+      #calendar-grid .bar-late-start { border-top-left-radius: 0 !important;  border-bottom-left-radius: 0 !important; }
       /* Filtros rápidos */
       #calendar-grid .bar.cal-filter-dim, #calendar-grid .cal-late-strip.cal-filter-dim { opacity: .13 !important; filter: grayscale(.9) !important; }
       /* Turnos de limpieza (salida y entrada el mismo día) */
@@ -1079,10 +1092,6 @@ export class Calendar {
         if (F.source.size && !F.source.has(b.source ?? 'direct')) dim = true;
       }
       bar.classList.toggle('cal-filter-dim', dim);
-      if (bar.classList.contains('bar-span')) {
-        const ext = [...(bar.parentElement?.children ?? [])].find(el => el._fit?.extra);
-        if (ext) { ext.classList.add('cal-late-strip'); ext.classList.toggle('cal-filter-dim', dim); }
-      }
     });
     // Unidad: oculta la fila completa (etiqueta + celdas son hijos directos de la grilla)
     grid.querySelectorAll('.cal-unit-label[data-unit-id], .cal-cell[data-unit-id]').forEach(el => {
@@ -1202,12 +1211,13 @@ export class Calendar {
       if (!fr.width) return;                               // calendario oculto: no se puede medir
       const cs = getComputedStyle(first);
       const bL = parseFloat(cs.borderLeftWidth) || 0;
-      const inset = f.late ? fr.width * 0.66 + 2 : f.left;  // desde el borde izquierdo de la celda
-      const width = (lr.right - fr.left) - inset - f.rightM;
-      pending.push({ bar, f, cells, fr, inset, bL, width });
+      const inset = f.late ? fr.width * LATE_FRAC - (LATE_SKEW - LATE_GAP) : f.left;  // desde el borde izquierdo de la celda
+      const nightsEnd = (lr.right - fr.left) - inset - (f.lateExt ? 0 : f.rightM);       // fin de la última noche (px desde el borde de la barra)
+      const width = nightsEnd + (f.lateExt ? lr.width * LATE_FRAC : 0);                  // + invasión del late check-out
+      pending.push({ bar, f, cells, fr, inset, bL, width, nightsEnd });
     });
     // Escritura en bloque (evita lecturas/escrituras intercaladas = layout thrashing)
-    pending.forEach(({ bar, f, cells, fr, inset, bL, width }) => {
+    pending.forEach(({ bar, f, cells, fr, inset, bL, width, nightsEnd }) => {
       if (!(width > 0)) return;
       bar.style.left  = `${inset - bL}px`;
       bar.style.width = `${width}px`;
@@ -1221,13 +1231,17 @@ export class Calendar {
         const cr = cells[idx].getBoundingClientRect();
         gradStartX = (cr.left + (f.tailFrom - idx) * cr.width) - barLeftAbs;
       }
-      const endColor = (f.freeCount > 0 || !f.tailEnd) ? FREE_NIGHT_END : f.tailEnd;
+      // Late check-out sin cargo en una reserva sin otro degradé: el amarillo arranca donde terminan las noches.
+      if (gradStartX === null && f.lateFreeTail) gradStartX = Math.max(0, nightsEnd - 1);
+      const endColor = (f.freeCount > 0 || !f.tailEnd || f.lateFreeTail && !f.tailEnd) ? FREE_NIGHT_END : f.tailEnd;
       // Fondo final: degradado de cola (si hay) + capa oscura del tramo ya transcurrido (si hay),
       // ambos con límites en px exactos de celda.
       let baseGrad = null;
       if (gradStartX !== null) {
         const pct = Math.max(0, Math.min(100, (gradStartX / width) * 100));
-        baseGrad = `linear-gradient(to right, ${f.color} 0%, ${f.color} ${pct}%, ${endColor} 100%)`;
+        // El degradé llega a su color final al terminar las noches; el tramo de late check-out sigue plano en ese color.
+        const endPct = (f.lateExt && !f.lateFreeTail) ? Math.max(pct, Math.min(100, (nightsEnd / width) * 100)) : 100;
+        baseGrad = `linear-gradient(to right, ${f.color} 0%, ${f.color} ${pct}%, ${endColor} ${endPct}%, ${endColor} 100%)`;
       }
       let passedPx = null;
       if (f.passedIdx > 0) {
@@ -1239,16 +1253,6 @@ export class Calendar {
         bar.style.background = baseGrad;
       }
       if (bar._todayMarker && passedPx !== null) bar._todayMarker.style.left = `${passedPx - 1}px`;
-      // Extensión del late checkout: tira que continúa la barra 65% de una celda hacia el día de salida.
-      const ext = [...bar.parentElement.children].find(el => el !== bar && el._fit?.extra);
-      if (ext) {
-        const lr2 = cells[cells.length - 1].getBoundingClientRect();
-        ext.style.left  = `${inset - bL + width}px`;
-        ext.style.width = `${lr2.width * ext._fit.extra}px`;
-        if (gradStartX !== null) { ext.style.background = endColor; if (ext.style.opacity === '0.9') ext.style.opacity = '1'; }
-        bar.style.borderTopRightRadius = '0';
-        bar.style.borderBottomRightRadius = '0';
-      }
     });
     // Marcadores de huecos (noches sueltas): mismo criterio, ocupan exactamente sus celdas
     root.querySelectorAll('.cal-gap-bar').forEach(el => {
@@ -1594,14 +1598,21 @@ export class Calendar {
     const unitId = (booking.booking_units ?? [])[0]?.unit_id ?? '';
     const lateCoKey = `${unitId}|${ci}`;
     const startsAfterLate = !truncLeft && (this._lateCheckoutMap?.has(lateCoKey) ?? false);
-    const leftStyle = startsAfterLate ? 'calc(66% + 2px)' : `${left}px`;
-    const widthReduceForLate = startsAfterLate ? ' - 66%' : '';
+    // Late check-out propio: la MISMA barra se prolonga LATE_FRAC dentro de la celda de salida (un solo
+    // elemento = mismo color/degradé, sin costura) y termina en diagonal.
+    const hasLateExt = !!booking.late_checkout && !truncRight;
+    const startPx    = LATE_SKEW - LATE_GAP;   // la barra entrante arranca antes y se recorta en diagonal
+    const leftStyle = startsAfterLate ? `calc(${LATE_FRAC * 100}% - ${startPx}px)` : `${left}px`;
+    const widthReduceForLate = startsAfterLate ? ` - ${LATE_FRAC * 100}% + ${startPx}px` : '';
+    const lateAddPct = hasLateExt ? ` + ${LATE_FRAC * 100}%` : '';
 
-    // Ancho INTERACTIVO: solo celdas reales de la reserva (sin extensión late checkout)
-    // La extensión late checkout se agrega como overlay visual sin pointer-events.
-    const widthInteractive = `calc(${span} * 100%${widthReduceForLate} - ${left + rightM}px)`;
-    const borderR = truncRight ? 0 : 6;
-    const borderL = truncLeft  ? 0 : 6;
+    const widthInteractive = `calc(${span} * 100%${lateAddPct}${widthReduceForLate} - ${startsAfterLate ? 0 : left}px - ${hasLateExt ? 0 : rightM}px)`;
+    const borderR = (truncRight || hasLateExt) ? 0 : 6;
+    const borderL = (truncLeft  || startsAfterLate) ? 0 : 6;
+    const S = LATE_SKEW;
+    const clipPath = (hasLateExt || startsAfterLate)
+      ? `polygon(${startsAfterLate ? S + 'px' : '0'} 0, 100% 0, ${hasLateExt ? 'calc(100% - ' + S + 'px)' : '100%'} 100%, 0 100%)`
+      : '';
 
     const firstName = booking.guests?.first_name ?? '';
     const lastName  = booking.guests?.last_name  ?? '';
@@ -1611,7 +1622,7 @@ export class Calendar {
       : `${lastName} ${firstName}`.trim();
 
     const bar = document.createElement('div');
-    bar.className = 'bar bar-span' + (isPast ? ' past-bar' : '');
+    bar.className = 'bar bar-span' + (isPast ? ' past-bar' : '') + (hasLateExt ? ' bar-late-end' : '') + (startsAfterLate ? ' bar-late-start' : '');
 
     if (this._pendingPulse.has(booking.id)) {
       bar.classList.add('bar-new-bounce');
@@ -1626,7 +1637,8 @@ export class Calendar {
       width:${widthInteractive};
       z-index:3;
       border-radius:${borderL}px ${borderR}px ${borderR}px ${borderL}px;
-      display:flex;align-items:center;padding:0 8px;
+      display:flex;align-items:center;padding:0 ${hasLateExt ? S + 4 : 8}px 0 ${startsAfterLate ? S + 6 : 8}px;
+      ${clipPath ? 'clip-path:' + clipPath + ';' : ''}
       overflow:hidden;white-space:nowrap;
       cursor:grab;
       transition:filter .15s,transform .15s,box-shadow .15s;
@@ -1658,6 +1670,8 @@ export class Calendar {
       }
       bar._fit = {
         span, left, rightM, late: startsAfterLate,
+        lateExt: hasLateExt,
+        lateFreeTail: hasLateExt && booking.late_checkout_charged === false && booking.status !== 'paid',
         color, progressOverlay, freeFrom, freeCount, tailFrom, tailEnd,
         baseBg: baseBgPlain,
         passedIdx: (isInProgress && !isPast && span > 1) ? Math.max(0, this._dayDiff(visStart, todayISO)) : 0,
@@ -1840,36 +1854,7 @@ export class Calendar {
 
     cell.appendChild(bar);
 
-    // Extensión visual late checkout: overlay sin pointer-events que
-    // "continúa" la barra 67% hacia el día de salida. No captura clicks.
-    if (booking.late_checkout && !truncRight) {
-      const ext = document.createElement('div');
-      const isFree  = booking.late_checkout_charged === false;
-      const isPaidB = booking.status === 'paid';
-      const yellow  = '#EF9F27';
-      // Si está pagada: la extensión es el mismo color verde (no amarillo)
-      // Solo aplica amarillo si es gratis Y no está pagada
-      // La extensión es solo la TIRA que sobresale al final de la barra (sin avatar ni nombre
-      // propios: antes se dibujaba encima de toda la barra y el texto se veía doble).
-      // Si la barra termina en amarillo (noches sin cargo o descuento), la tira sigue en ese amarillo.
-      const endsYellow = freeN > 0 || (discPct > 0 && !(surcharge > 0)) || (!(discPct > 0) && surchPct > 0);
-      const extBaseColor = endsYellow ? color : ((!isPaidB && freeN > 0) ? yellow : color);
-      const extBg   = (!endsYellow && !isPaidB && isFree)
-        ? `linear-gradient(to right, ${extBaseColor} 0%, ${extBaseColor} 20%, ${yellow} 100%)`
-        : extBaseColor;
-      ext.style.cssText = `
-        position:absolute;top:6px;bottom:6px;
-        left:${leftStyle};
-        width:calc(${span} * 100% + 65%${widthReduceForLate} - ${left + rightM}px);
-        background:${extBg};
-        border-radius:0 6px 6px 0;
-        opacity:${isPast ? 0.4 : 0.9};
-        z-index:2;pointer-events:none;
-        box-sizing:border-box;overflow:hidden;
-      `;
-      ext._fit = { span, left, rightM, late: startsAfterLate, extra: 0.65 };
-      cell.appendChild(ext);
-    }
+    // (El late check-out ya no es un elemento aparte: la barra se prolonga sola, ver hasLateExt.)
   }
 
   // ── Celda dividida (check-out + check-in el mismo día) ──

@@ -573,9 +573,11 @@
       <section id="section-calendar" class="section">
         <div class="cal-toolbar">
           <div class="cal-nav">
-            <button class="btn btn-outline btn-sm" id="cal-prev">‹</button>
-            <button class="btn btn-outline btn-sm" id="cal-today">Hoy</button>
-            <button class="btn btn-outline btn-sm" id="cal-next">›</button>
+            <div class="cal-tb-group" role="group" aria-label="Navegación">
+              <button class="btn btn-outline btn-sm" id="cal-prev" title="Anterior">‹</button>
+              <button class="btn btn-outline btn-sm" id="cal-today">Hoy</button>
+              <button class="btn btn-outline btn-sm" id="cal-next" title="Siguiente">›</button>
+            </div>
             <span class="cal-month-title" id="cal-month-title"></span>
           </div>
           <div class="cal-nav">
@@ -583,10 +585,13 @@
               <input id="cal-search-input" type="text" placeholder="Buscar huésped…" class="input input-sm" style="padding-right:28px;min-width:180px">
               <button id="cal-search-clear" class="hidden" style="position:absolute;right:6px;background:none;border:none;cursor:pointer;color:var(--color-text-3);font-size:12px">✕</button>
             </div>
-            <button class="btn btn-outline btn-sm no-print" id="cal-avail-toggle" title="Disponibilidad">📋</button>
-            <button class="btn btn-outline btn-sm no-print" id="cal-period-btn" title="Períodos especiales" style="font-size:.72rem;letter-spacing:.01em">Períodos</button>
-            <button class="btn btn-outline btn-sm no-print" id="cal-quotes-btn" title="Cotizaciones guardadas" style="font-size:.72rem;letter-spacing:.01em">🧮 Cotizaciones</button>
-            <button class="btn btn-outline btn-sm no-print" id="cal-print-btn" title="Imprimir calendario" onclick="window.print()">🖨️</button>
+            <div class="cal-tb-group no-print" role="toolbar" aria-label="Herramientas del calendario">
+              <button class="btn btn-outline btn-sm no-print" id="cal-avail-toggle" title="Disponibilidad">📋</button>
+              <button class="btn btn-outline btn-sm no-print" id="cal-period-btn" title="Períodos especiales">Períodos</button>
+              <button class="btn btn-outline btn-sm no-print" id="cal-quotes-btn" title="Cotizaciones guardadas">🧮 Cotizaciones</button>
+              <span class="cal-tb-sep" aria-hidden="true"></span>
+              <button class="btn btn-outline btn-sm no-print" id="cal-print-btn" title="Imprimir calendario" onclick="window.print()">🖨️</button>
+            </div>
             <!-- cal-goto-today oculto para que el JS funcione pero sin mostrarse -->
             <button id="cal-goto-today" style="display:none"></button>
           </div>
