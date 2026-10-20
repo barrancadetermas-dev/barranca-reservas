@@ -445,6 +445,7 @@ export class Calendar {
             map[unit_id][iso].push({
               ...b,
               check_in: uCi, check_out: uCo, // para que _renderBar dibuje solo este tramo
+              _fullCheckOut: co,             // salida real de TODA la reserva (las noches sin cargo son las últimas de la estadía completa)
               _isSplitSegment: !!(segment_check_in || segment_check_out),
               _cellType: this._getCellType(uCi, uCo, iso),
             });
@@ -453,6 +454,95 @@ export class Calendar {
       });
     });
     return map;
+  }
+
+  // Borde izquierdo/derecho de una celda del calendario. Las celdas se adjuntan al DOM DESPUÉS de
+  // dibujar sus barras (getComputedStyle daría vacío), así que se mide una celda "sonda" dentro de la
+  // grilla una vez por render.
+  _cellBorderPx(cell) {
+    if (cell?.isConnected) {
+      const cs = getComputedStyle(cell);
+      return { bL: parseFloat(cs.borderLeftWidth) || 0, bR: parseFloat(cs.borderRightWidth) || 0 };
+    }
+    if (!this._cellBorder) {
+      const grid = document.getElementById('calendar-grid');
+      let bL = 0, bR = 0;
+      if (grid) {
+        const probe = document.createElement('div');
+        probe.className = 'cal-cell';
+        probe.style.cssText = 'position:absolute;visibility:hidden;pointer-events:none;width:0;height:0';
+        grid.appendChild(probe);
+        const cs = getComputedStyle(probe);
+        bL = parseFloat(cs.borderLeftWidth) || 0; bR = parseFloat(cs.borderRightWidth) || 0;
+        probe.remove();
+      }
+      this._cellBorder = { bL, bR };
+    }
+    return this._cellBorder;
+  }
+
+  // Fechas (ISO) de las noches sin cargo: las últimas free_nights de la estadía COMPLETA.
+  // El sistema solo guarda la cantidad; esta es la convención que ya usa el calendario para dibujarlas.
+  _freeNightDates(booking) {
+    const n = Math.max(0, parseInt(booking.free_nights, 10) || 0);
+    const fullCo = booking._fullCheckOut ?? booking.check_out;
+    return Array.from({ length: n }, (_, i) => this._addDays(fullCo, -n + i));
+  }
+
+  // Geometría de una barra: expresa el borde izquierdo de la celda j (0..span, contada desde la primera
+  // celda visible) como calc(% del ancho de la barra + px). La barra tiene márgenes en px y la celda un
+  // borde, así que un simple % del ancho NO cae en la línea de la celda (error de varios px).
+  _barGeometry(booking, cell = null) {
+    const ci = booking.check_in, co = booking.check_out;
+    const winStart = this._windowStart;
+    const winEnd   = this._addDays(winStart, this._visibleDays);
+    const visStart = ci < winStart ? winStart : ci;
+    const visEnd   = co > winEnd ? winEnd : co;
+    const span     = Math.max(1, this._dayDiff(visStart, visEnd));
+    const truncL   = ci < winStart, truncR = co > winEnd;
+    const left     = truncL ? 0 : 4, rightM = truncR ? 0 : 4;
+    const unitId   = (booking.booking_units ?? [])[0]?.unit_id ?? '';
+    const afterLate = !truncL && (this._lateCheckoutMap?.has(`${unitId}|${ci}`) ?? false);
+    const aCell = afterLate ? 0.66 : 0;           // la barra arranca en 66% de la celda + 2px
+    const aPx   = afterLate ? 2 : left;
+    const wPx   = left + rightM;                   // px restados al ancho (igual que widthInteractive)
+    const den   = span - aCell;
+    const { bL, bR } = this._cellBorderPx(cell);
+    const edge = (j, dPx = 0) => {
+      const P = ((j - aCell) / den) * 100;
+      return `calc(${P.toFixed(4)}% + ${(P / 100 * wPx - aPx + j * (bL + bR) - bL + dPx).toFixed(3)}px)`;
+    };
+    return { visStart, span, aCell, den, edge };
+  }
+
+  // Capa translúcida del tramo ya transcurrido de una reserva en curso, cortada justo donde empieza hoy.
+  _passedOverlay(booking, passedDays, cell = null) {
+    const { span, edge } = this._barGeometry(booking, cell);
+    const x = edge(Math.min(passedDays, span));
+    return `linear-gradient(to right, rgba(15,23,42,.30) 0%, rgba(15,23,42,.30) ${x}, transparent ${x}, transparent 100%)`;
+  }
+
+  // Fondo de una barra con noches sin cargo. Devuelve null si ninguna noche sin cargo
+  // cae dentro de esta barra. Las noches sin cargo son las últimas freeN de la estadía COMPLETA.
+  _freeNightsBackground(booking, color, yellow, cell = null) {
+    const freeN = Math.max(0, parseInt(booking.free_nights, 10) || 0);
+    if (!freeN) return null;
+    const fullCo = booking._fullCheckOut ?? booking.check_out;
+    const { visStart, span, aCell, den, edge } = this._barGeometry(booking, cell);
+    const k = this._dayDiff(visStart, this._addDays(fullCo, -freeN)); // celdas cobradas visibles
+    if (k >= span) return null;                    // las noches sin cargo caen fuera de esta barra/tramo
+    // líneas divisorias de 1px en cada límite de día (la barra tapa la grilla)
+    const line = 'rgba(255,255,255,.4)';
+    const seps = [];
+    for (let j = Math.max(1, Math.floor(aCell) + 1); j < span; j++) {
+      seps.push(`transparent ${edge(j, -0.5)}`, `${line} ${edge(j, -0.5)}`, `${line} ${edge(j, 0.5)}`, `transparent ${edge(j, 0.5)}`);
+    }
+    const sepLayer = seps.length ? `linear-gradient(to right, ${seps.join(', ')}), ` : '';
+    if (k <= 0) return `${sepLayer}linear-gradient(${yellow}, ${yellow})`;
+    // transición suave centrada en el límite de celda, de ±9% de celda: no invade otra noche
+    const half = 9 / den;                          // % del ancho de barra ≈ 9% de una celda
+    const at = d => edge(k).replace(/calc\(([-\d.]+)%/, (m, P) => `calc(${(parseFloat(P) + d).toFixed(4)}%`);
+    return `${sepLayer}linear-gradient(to right, ${color} 0%, ${color} ${at(-half)}, ${yellow} ${at(half)}, ${yellow} 100%)`;
   }
 
   _getCellType(ci, co, iso) {
@@ -536,6 +626,7 @@ export class Calendar {
     corner.style.setProperty('min-width','0',        'important');
     corner.style.setProperty('max-width','100%',     'important');
     corner.style.setProperty('overflow', 'hidden',   'important');
+    this._cellBorder = null;   // se vuelve a medir en cada render (ver _cellBorderPx)
     grid.appendChild(corner);
 
     // ── Encabezado: columnas de días ──────────────
@@ -1039,8 +1130,10 @@ export class Calendar {
     // una celda entera pero con un suave paso de color en el límite.
     const T = 0; // corte NÍTIDO: cada tramo (normal / descuento / recargo / noche gratis) es un bloque definido (con 4 puntos de mezcla se veía borroso)
     if (freeN > 0 && totalN > 0) {
-      const p = Math.round(((totalN - freeN) / totalN) * 100);
-      barBg = `linear-gradient(to right, ${color} 0%, ${color} ${p-T}%, ${yellow} ${p+T}%, ${yellow} 100%)`;
+      // Las noches sin cargo se ubican por FECHA (últimas freeN noches de la estadía),
+      // no por porcentaje del ancho: así el corte cae justo en el límite de celda aunque
+      // la barra esté recortada por la ventana, arranque tras un late check-out o sea un tramo.
+      barBg = this._freeNightsBackground(booking, color, yellow, cell) ?? color;
 
     } else if (discPct > 0 && surcharge > 0 && total > 0) {
       const surchargeRatio = Math.min(surcharge / total, 0.6);
@@ -1088,8 +1181,6 @@ export class Calendar {
       const passedDays = Math.max(0, Math.round(
         (new Date(todayISO+'T00:00:00') - new Date(visStart2+'T00:00:00')) / msDay
       ));
-      const passedPct  = Math.round((passedDays / span2) * 100);
-      const todayPct   = Math.round(((passedDays + 1) / span2) * 100);
       const darkStart  = darken(color, 0.15);
       const lighten    = (hex, f) => {
         const h = hex.replace('#','');
@@ -1120,8 +1211,7 @@ export class Calendar {
           // Tiene días pasados: el tramo transcurrido se marca con una CAPA translúcida encima
           // del fondo. Antes se REEMPLAZABA todo el fondo por "oscuro→color base" y se perdía
           // el naranja del descuento, el amarillo de la noche gratis y el tono del recargo.
-          barBg = 'linear-gradient(to right, rgba(15,23,42,.30) 0%, rgba(15,23,42,.30) ' + passedPct + '%, '
-            + 'transparent ' + passedPct + '%, transparent 100%), ' + barBg;
+          barBg = this._passedOverlay(booking, passedDays, cell) + ', ' + barBg;
         }
       }
     }
@@ -1150,7 +1240,8 @@ export class Calendar {
     // Ancho INTERACTIVO: solo celdas reales de la reserva (sin extensión late checkout)
     // La extensión late checkout se agrega como overlay visual sin pointer-events.
     const widthInteractive = `calc(${span} * 100%${widthReduceForLate} - ${left + rightM}px)`;
-    const borderR = truncRight ? 0 : 6;
+    // con late check-out la barra sigue en el tramo de extensión: esquina derecha recta (sin solapar capas)
+    const borderR = (truncRight || booking.late_checkout) ? 0 : 6;
     const borderL = truncLeft  ? 0 : 6;
 
     const firstName = booking.guests?.first_name ?? '';
@@ -1367,24 +1458,27 @@ export class Calendar {
       const yellow  = '#EF9F27';
       // Si está pagada: la extensión es el mismo color verde (no amarillo)
       // Solo aplica amarillo si es gratis Y no está pagada
-      const extBaseColor = (!isPaidB && freeN > 0) ? yellow : color;
+      // la extensión sigue el color final de la barra: amarillo solo si este tramo es el que termina en noche sin cargo
+      // (en una estadía dividida en dos unidades, las noches sin cargo están en el último tramo)
+      const endsFree = freeN > 0 && (booking._fullCheckOut ?? booking.check_out) === booking.check_out;
+      const extBaseColor = (!isPaidB && endsFree) ? yellow : color;
       const extBg   = (!isPaidB && isFree)
         ? `linear-gradient(to right, ${extBaseColor} 0%, ${extBaseColor} 20%, ${yellow} 100%)`
         : extBaseColor;
+      // Solo el TRAMO de late check-out, pegado al borde derecho de la barra. Antes esta capa
+      // repetía avatar + nombre DEBAJO de la barra: en reservas pasadas (barra con opacity .9)
+      // ese texto se transparentaba y se veía como un "fantasma" desenfocado. Ahora no lleva texto
+      // y no se superpone con la barra (altura y opacidad las define .bar-lco-ext en calendar-v5.css).
+      ext.className = 'bar-lco-ext' + (isPast ? ' is-past' : '');
+      ext.setAttribute('aria-hidden', 'true');
       ext.style.cssText = `
-        position:absolute;top:6px;bottom:6px;
-        left:${leftStyle};
-        width:calc(${span} * 100% + 65%${widthReduceForLate} - ${left + rightM}px);
+        position:absolute;
+        left:calc(${leftStyle} + ${widthInteractive} - .5px);
+        width:calc(65% + .5px);
         background:${extBg};
-        border-radius:${borderL}px 6px 6px ${borderL}px;
-        opacity:${isPast ? 0.4 : 0.9};
+        border-radius:0 6px 6px 0;
         z-index:2;pointer-events:none;
-        display:flex;align-items:center;
-        padding-left:8px;padding-right:6px;box-sizing:border-box;overflow:hidden;
       `;
-      ext.innerHTML = Calendar._guestAvatar(booking.guests, 16) +
-        '<span style="font-size:.75rem;font-weight:700;color:' + textColor + ';overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0">' +
-        escapeHtml(guestFull) + (isBlock ? '' : genderSymbolHTML(booking.guests?.gender)) + '</span>';
       cell.appendChild(ext);
     }
   }
@@ -1605,6 +1699,7 @@ export class Calendar {
       <div class="ct-dates" style="margin-top:6px">📅 ${booking.check_in} → ${booking.check_out}</div>
       <div class="ct-nights">🌙 ${booking.nights ?? '?'} noches${(booking.pax || booking.adults) ? ` · ${guestCountsText(booking).short}` : ''}</div>
       ${promoLabel(booking.nights, booking.free_nights) ? `<div class="ct-promo">🎁 PROMO ${promoLabel(booking.nights, booking.free_nights)} (${booking.free_nights} noche${booking.free_nights === 1 ? '' : 's'} sin cargo)</div>` : ''}
+      ${(booking.free_nights > 0 && !booking.is_blocked) ? `<div class="ct-promo" style="font-size:.68rem;opacity:.85">Sin cargo: ${this._freeNightDates(booking).map(d => d.slice(8) + '/' + d.slice(5, 7)).join(' · ')}</div>` : ''}
       ${(() => { if (booking.status === 'blocked' || booking.is_blocked) return ''; const sp = specialsForStay(booking.check_in, booking.check_out); if (!sp.any) return '';
         return `<div class="ct-specials">${sp.all.map(e => `<div>${emojiHTML(e.emoji)} ${escapeHtml(e.detail)}</div>`).join('')}${sp.summer ? '<div>☀️ Temporada de verano (2/1 al 10/3)</div>' : ''}</div>`; })()}
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">

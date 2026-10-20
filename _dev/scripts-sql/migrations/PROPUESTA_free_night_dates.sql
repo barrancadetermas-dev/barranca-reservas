@@ -1,0 +1,11 @@
+-- PROPUESTA — NO APLICADA, NO REQUERIDA POR EL CÓDIGO ACTUAL.
+-- Hoy `bookings.free_nights` guarda solo la CANTIDAD de noches sin cargo y el calendario las ubica al final
+-- de la estadía. El trigger de totales usa únicamente la cantidad (free_nights * price_per_night), así que
+-- DÓNDE caen no cambia ningún importe: guardar las fechas sería puramente visual.
+-- Solo tendría sentido si alguna promoción regalara noches que no sean las últimas.
+-- Si algún día se decide, la columna es opcional (NULL = convención actual) y no rompe nada existente:
+--
+--   ALTER TABLE bookings ADD COLUMN IF NOT EXISTS free_night_dates date[];
+--
+-- Además habría que (1) guardarla en booking-form al confirmar la reserva y (2) hacer que
+-- calendar.js `_freeNightDates` y `_freeNightsBackground` lean esas fechas (hoy el degradé asume un tramo final contiguo).

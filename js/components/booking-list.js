@@ -954,8 +954,8 @@ export class BookingList {
               </div>
             </div>
             <div class="bl-col-dates">
-              <span class="bl-dates">${formatDate(b.check_in)} → ${formatDate(b.check_out)}</span>
-              <span class="bl-nights">${nights} ${nights === 1 ? 'noche' : 'noches'}</span>${promoLabel(b.nights, b.free_nights) ? `<span class="promo-badge" title="${b.free_nights} noche${b.free_nights === 1 ? '' : 's'} sin cargo">🎁 PROMO ${promoLabel(b.nights, b.free_nights)}</span>` : ''}${specialChipsHTML(b.check_in, b.check_out, { mode: 'row' })}${(b.pax || b.adults) ? '<span class="bl-pax" title="Personas: adultos y menores">' + guestCountsText(b).short + '</span>' : ''}
+              <div class="bl-dates-line"><span class="bl-dates">${formatDate(b.check_in)} → ${formatDate(b.check_out)}</span></div>
+              <div class="bl-stay-meta"><span class="bl-nights">${nights} ${nights === 1 ? 'noche' : 'noches'}</span>${(b.pax || b.adults) ? '<span class="bl-pax" title="Personas: adultos y menores">' + guestCountsText(b).short + '</span>' : ''}${promoLabel(b.nights, b.free_nights) ? `<span class="promo-badge" title="${b.free_nights} noche${b.free_nights === 1 ? '' : 's'} sin cargo">🎁 PROMO ${promoLabel(b.nights, b.free_nights)}</span>` : ''}${specialChipsHTML(b.check_in, b.check_out, { mode: 'row' })}</div>
             </div>
             <div class="bl-col-amount">
               ${(() => {
@@ -964,56 +964,38 @@ export class BookingList {
                 if (ncMatch && !ncUsed) {
                   const ncAmount = parseInt(ncMatch[1]);
                   return `
-                    <div class="bl-amount-total" style="text-decoration:line-through;opacity:.45">${formatARS(b.total_amount)}</div>
-                    <div class="bl-amount-breakdown" style="opacity:.45">
-                      <span class="bl-balance" style="text-decoration:line-through">${formatARS(b.balance)}</span>
-                    </div>
-                    <div style="font-size:.78rem;font-weight:700;color:#7c3aed;margin-top:2px">🔄 NC ${formatARS(ncAmount)}</div>`;
+                    <div class="bl-money-main"><span class="bl-amount-total" style="text-decoration:line-through;opacity:.45">${formatARS(b.total_amount)}</span></div>
+                    <div class="bl-money-sub">
+                      <span class="bl-balance" style="text-decoration:line-through;opacity:.45">${formatARS(b.balance)}</span>
+                      <span style="font-size:.74rem;font-weight:700;color:#7c3aed;white-space:nowrap">🔄 NC ${formatARS(ncAmount)}</span>
+                    </div>`;
                 }
+                const disc  = parseFloat(b.discount_pct ?? 0);
+                const surch = parseFloat(b.surcharge_amount ?? 0);
+                const subtotal = (b.price_per_night ?? 0) * (b.nights ?? 0);
+                const fmtPct2 = (n) => { const r=Math.round(n*10000)/10000; return Number.isInteger(r)?String(r):r.toFixed(4).replace(/\.?0+$/,''); };
+                let adjHTML = '';
+                if (disc > 0) {
+                  const discAmt = Math.round(subtotal * disc / 100);
+                  adjHTML = `<span class="bl-adj-pill bl-adj-disc">▼ −${formatARS(discAmt)} (${fmtPct2(disc)}%)</span><span class="bl-struck">${formatARS(subtotal)}</span>`;
+                } else if (surch > 0) {
+                  adjHTML = `<span class="bl-adj-pill bl-adj-surch">▲ +${formatARS(surch)} recargo</span><span class="bl-struck">${formatARS(subtotal)}</span>`;
+                }
+                const subHTML = b.total_paid > 0 && b.balance > 0
+                  ? `<span class="bl-paid-txt">−${formatARS(b.total_paid)} cobrado · <strong>${paymentProgressText(b.total_paid, b.total_amount)}</strong></span>
+                     <span class="bl-pending-pill">
+                       <svg viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="2.5" width="9" height="9"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                       <span>${formatARS(b.balance)} pendiente</span>
+                     </span>`
+                  : b.balance <= 0
+                    ? `<span class="bl-amount-paid">✓ Pagado · 100%</span>`
+                    : (b.total_amount > 0 && b.status !== 'cancelled' ? `<span class="bl-paid-txt">0% abonado · resta 100%</span>` : '');
                 return `
-                  ${(() => {
-                    const disc  = parseFloat(b.discount_pct ?? 0);
-                    const surch = parseFloat(b.surcharge_amount ?? 0);
-                    const nights2 = b.nights ?? 0;
-                    const subtotal = (b.price_per_night ?? 0) * nights2;
-                    if (disc > 0) {
-                      const discAmt = Math.round(subtotal * disc / 100);
-                      const fmtPct2 = (n) => { const r=Math.round(n*10000)/10000; return Number.isInteger(r)?String(r):r.toFixed(4).replace(/\.?0+$/,''); };
-                      return `<div style="display:flex;align-items:baseline;gap:4px;justify-content:flex-end">
-                        <span style="font-size:.68rem;color:var(--color-text-3);text-decoration:line-through">${formatARS(subtotal)}</span>
-                        <div class="bl-amount-total">${formatARS(b.total_amount)}</div>
-                      </div>
-                      <div style="font-size:.68rem;font-weight:600;padding:1px 6px;border-radius:4px;background:#f0fdf4;color:#15803d;display:inline-flex;align-items:center;gap:3px;margin-top:2px;white-space:nowrap">
-                        ▼ −${formatARS(discAmt)} (${fmtPct2(disc)}%)
-                      </div>`;
-                    }
-                    if (surch > 0) {
-                      return `<div style="display:flex;align-items:baseline;gap:4px;justify-content:flex-end">
-                        <span style="font-size:.68rem;color:var(--color-text-3);text-decoration:line-through">${formatARS(subtotal)}</span>
-                        <div class="bl-amount-total">${formatARS(b.total_amount)}</div>
-                      </div>
-                      <div style="font-size:.68rem;font-weight:600;padding:1px 6px;border-radius:4px;background:#fff7ed;color:#c2410c;display:inline-flex;align-items:center;gap:3px;margin-top:2px;white-space:nowrap">
-                        ▲ +${formatARS(surch)} recargo
-                      </div>`;
-                    }
-                    return `<div class="bl-amount-total">${formatARS(b.total_amount)}</div>`;
-                  })()}
-                  ${b.total_paid > 0 && b.balance > 0
-                    ? `<div style="font-size:9px;color:var(--color-text-3);margin-top:2px">−${formatARS(b.total_paid)} cobrado · <strong>${paymentProgressText(b.total_paid, b.total_amount)}</strong></div>
-                       <div style="margin-top:2px;display:inline-flex;align-items:center;gap:2px;
-                            background:#fef2f2;border:0.5px solid #fecaca;border-radius:4px;padding:1px 5px">
-                         <svg viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="2.5" width="9" height="9"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                         <span style="font-size:10px;font-weight:700;color:#dc2626;white-space:nowrap">${formatARS(b.balance)} pendiente</span>
-                       </div>`
-                    : b.balance <= 0
-                      ? `<div class="bl-amount-paid">✓ Pagado · 100%</div>`
-                      : (b.total_amount > 0 && b.status !== 'cancelled' ? `<div style="font-size:9px;color:var(--color-text-3);margin-top:2px">0% abonado · resta 100%</div>` : '')
-                  }
-                  ${b.total_amount > 0 ? `<div style="margin-top:4px;height:3px;background:var(--color-border);border-radius:2px;overflow:hidden">
-                    <div style="height:100%;border-radius:2px;transition:width .4s;background:${
+                  <div class="bl-money-main">${adjHTML}<span class="bl-amount-total">${formatARS(b.total_amount)}</span></div>
+                  <div class="bl-money-sub">${subHTML}</div>
+                  ${b.total_amount > 0 ? `<div class="bl-progress"><div class="bl-progress-fill" style="background:${
                       (b.balance ?? 0) <= 0 ? '#16a34a' : (b.total_paid ?? 0) > 0 ? '#f59e0b' : 'var(--color-border)'
-                    };width:${Math.min(100,Math.round(((b.total_paid??0)/(b.total_amount))*100))}%"></div>
-                  </div>` : ''}`;
+                    };width:${Math.min(100,Math.round(((b.total_paid??0)/(b.total_amount))*100))}%"></div></div>` : ''}`;
               })()}
             </div>
             <div class="bl-col-status">
