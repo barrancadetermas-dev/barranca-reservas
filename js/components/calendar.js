@@ -39,6 +39,14 @@ const CELL_W_MOB  = 32;
 // Noches sin cargo: la barra conserva su color y, desde el inicio de esas noches, vira de forma
 // continua (sin corte) hasta este amarillo al final de la reserva.
 const FREE_NIGHT_END = '#FACC15';
+// Recargo: el último tramo (proporcional al % cobrado sobre el alquiler) vira al color base oscurecido
+// (bordó en las barras rojas, verde oscuro en las pagadas). Factor de oscurecimiento del tono final:
+const SURCHARGE_DARKEN = 0.55;
+// Huecos entre reservas: se resaltan los de hasta GAP_ALERT_MAX_NIGHTS noches (difíciles de vender)
+// y se sugiere un descuento según el tamaño del hueco (en %).
+const GAP_ALERT_MAX_NIGHTS = 2;
+const GAP_SUGGESTED_DISCOUNT = { 1: 15, 2: 10 };
+const CAL_FILTERS_LS_KEY = 'mila_cal_filters_v1';
 // ── Ancho de la columna de labels (dinámico — ver _measureLabelW) ──
 const LABEL_W_MIN     = 90;
 const LABEL_W_MAX     = 200;
@@ -603,6 +611,7 @@ export class Calendar {
     // → así cada celda vacía sabe si está dentro de un hueco y cuán chico
     // es, sin recalcular nada durante el loop de celdas (sería muy lento).
     const gapMap = new Map();
+    const gapSegments = new Map();   // huecos cortos a resaltar: `${unitId}|${primer día libre}`
     const recambioSet = new Map();
     // lateCheckoutMap: día de checkout de reservas con late_checkout=true
     // Key: `${unitId}|${checkoutDate}` → { booking, color }
@@ -647,11 +656,24 @@ export class Calendar {
           for (let d = co; d < ci; d = this._addDays(d, 1)) {
             gapMap.set(`${unit.id}|${d}`, gap);
           }
+          // Hueco corto todavía vendible (hoy o a futuro): se resalta como "noche suelta"
+          if (gap <= GAP_ALERT_MAX_NIGHTS && ci > today) {
+            const segStart = co < today ? today : co;
+            const n = this._dayDiff(segStart, ci);
+            if (n > 0) {
+              const nm = (b) => b.guests ? `${b.guests.first_name ?? ''} ${b.guests.last_name ?? ''}`.trim() : '';
+              gapSegments.set(`${unit.id}|${segStart}`, {
+                unitId: unit.id, start: segStart, end: ci, nights: n, fullNights: gap,
+                outGuest: nm(unitBks[i]), inGuest: nm(unitBks[i + 1]),
+              });
+            }
+          }
         }
       }
     });
 
     this._lateCheckoutMap = lateCheckoutMap; // para que _renderBar pueda consultarlo
+    this._markTurnoverHeaders(grid, recambioSet);
 
     // ── Filas de unidades ─────────────────────────
     this.ctx.units.forEach((unit, rowIdx) => {
@@ -791,16 +813,20 @@ export class Calendar {
             const gapSize   = gapMap.get(`${unit.id}|${iso}`) ?? null;
             const heatColor = this._heatmapColor(iso, today, !!cellHol && cellHol.type !== 'vacation', cellHol?.type, gapSize);
             if (heatColor) cell.style.setProperty('background-color', heatColor, 'important');
+            const gapSeg = gapSegments.get(`${unit.id}|${iso}`);
+            if (gapSeg) this._renderGapMarker(cell, gapSeg);
           }
           this._bindEmptyCell(cell, unit.id, iso);
         } else if (bookings.length === 1) {
-          const isRecambio = recambioSet.has(`${unit.id}|${iso}`);
+          const isRecambio = recambioSet.get(`${unit.id}|${iso}`) || false;
+          if (isRecambio) cell.classList.add('cal-turn-cell');
           this._renderBar(cell, bookings[0], today, isRecambio);
         } else {
           const co = bookings.find(b => b._cellType === 'end');
           const ci = bookings.find(b => b._cellType === 'start' || b._cellType === 'solo');
           if (co && ci) {
-            const isRecambio = recambioSet.has(`${unit.id}|${iso}`);
+            const isRecambio = recambioSet.get(`${unit.id}|${iso}`) || false;
+            if (isRecambio) cell.classList.add('cal-turn-cell');
             this._renderSplitCell(cell, co, ci, today, isRecambio);
           } else this._renderBar(cell, bookings[0], today);
         }
@@ -830,6 +856,7 @@ export class Calendar {
       });
     });
 
+    this._applyFilters();
     this._scheduleFitBars();
 
     // Reset scroll al inicio del window DESPUÉS del paint completo
@@ -842,6 +869,310 @@ export class Calendar {
         });
       });
     }
+  }
+
+  // ══════════════════════════════════════════════════
+  // MEJORAS DEL CALENDARIO: leyenda, filtros, huecos, turnos de limpieza
+  // ══════════════════════════════════════════════════
+
+  // ── Estilos propios (inyectados una sola vez; con #calendar-grid para ganarle a las reglas previas) ──
+  _injectEnhancementsCss() {
+    if (document.getElementById('mila-cal-enh-css')) return;
+    const st = document.createElement('style');
+    st.id = 'mila-cal-enh-css';
+    st.textContent = `
+      /* Reservas pasadas más sobrias: lo que viene gana protagonismo */
+      #calendar-grid .bar.past-bar { opacity: .55 !important; filter: saturate(.5) !important; box-shadow: none !important; }
+      #calendar-grid .bar.past-bar:hover { opacity: 1 !important; filter: none !important; }
+      /* Filtros rápidos */
+      #calendar-grid .bar.cal-filter-dim, #calendar-grid .cal-late-strip.cal-filter-dim { opacity: .13 !important; filter: grayscale(.9) !important; }
+      /* Turnos de limpieza (salida y entrada el mismo día) */
+      .cal-cell.cal-turn-cell { box-shadow: inset 0 -3px 0 rgba(245,158,11,.75); }
+      .cal-turn-badge { position:absolute; top:-1px; left:50%; transform:translateX(-50%); z-index:10; pointer-events:auto;
+        font-size:.72rem; line-height:1; padding:2px 4px; border-radius:8px; cursor:help;
+        background:rgba(245,158,11,.96); color:#fff; box-shadow:0 1px 3px rgba(0,0,0,.35); }
+      .cal-day-header .dh-turn { position:absolute; top:1px; right:2px; z-index:3; font-size:.58rem; font-weight:800; line-height:1;
+        padding:1px 3px; border-radius:6px; background:rgba(245,158,11,.95); color:#fff; cursor:help; }
+      /* Huecos / noches sueltas */
+      .cal-gap-bar { position:absolute; top:6px; bottom:6px; left:4px; width:calc(100% - 8px); box-sizing:border-box; z-index:3;
+        display:flex; align-items:center; justify-content:center; gap:3px; overflow:hidden; white-space:nowrap; cursor:pointer;
+        border:1.5px dashed #f59e0b; border-radius:6px; font-size:.66rem; font-weight:800; color:#b45309;
+        background:repeating-linear-gradient(135deg, rgba(245,158,11,.16) 0 6px, rgba(245,158,11,.06) 6px 12px); }
+      .cal-gap-bar:hover { background:rgba(245,158,11,.28); }
+      [data-theme="dark"] .cal-gap-bar { color:#fbbf24; }
+      /* Popovers (leyenda / filtros / huecos) */
+      .cal-enh-pop { position:fixed; z-index:3300; background:var(--color-surface); color:var(--color-text);
+        border:1px solid var(--color-border); border-radius:12px; box-shadow:0 12px 32px rgba(0,0,0,.28);
+        padding:12px; font-size:.78rem; line-height:1.35; max-width:min(340px, calc(100vw - 20px)); max-height:calc(100vh - 90px); overflow:auto; }
+      .cal-enh-pop h4 { margin:0 0 8px; font-size:.82rem; font-weight:800; }
+      .cal-enh-sec { margin-bottom:10px; }
+      .cal-enh-sec > .t { font-size:.64rem; font-weight:800; letter-spacing:.05em; text-transform:uppercase; color:var(--color-text-3); margin-bottom:5px; }
+      .cal-chip { display:inline-flex; align-items:center; gap:5px; margin:0 4px 4px 0; padding:4px 9px; border-radius:999px; cursor:pointer;
+        border:1px solid var(--color-border); background:var(--color-surface-2); color:var(--color-text); font-size:.72rem; font-weight:600; font-family:inherit; }
+      .cal-chip.on { background:var(--color-primary); border-color:var(--color-primary); color:#fff; }
+      .cal-chip .dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+      .cal-leg-row { display:flex; align-items:center; gap:9px; margin:5px 0; }
+      .cal-leg-sw { width:42px; height:14px; border-radius:5px; flex-shrink:0; }
+      .cal-enh-btn { position:relative; }
+      .cal-enh-btn .cnt { position:absolute; top:-5px; right:-5px; min-width:15px; height:15px; border-radius:8px; padding:0 3px; box-sizing:border-box;
+        background:var(--color-primary); color:#fff; font-size:.6rem; font-weight:800; line-height:15px; text-align:center; }
+    `;
+    document.head.appendChild(st);
+  }
+
+  // ── Botones de la barra de herramientas: Filtros y leyenda (?) ──
+  _setupEnhancements() {
+    this._injectEnhancementsCss();
+    if (!this._filters) this._filters = this._loadFilters();
+    if (document.getElementById('cal-filter-btn')) { this._updateFilterBadge(); return; }
+    const anchor = document.getElementById('cal-avail-toggle') ?? document.getElementById('cal-period-btn');
+    if (!anchor?.parentElement) return;
+    const fb = document.createElement('button');
+    fb.id = 'cal-filter-btn';
+    fb.className = 'btn btn-outline btn-sm no-print cal-enh-btn';
+    fb.title = 'Filtros rápidos: estado, canal y unidad';
+    fb.style.cssText = 'font-size:.72rem;letter-spacing:.01em';
+    fb.innerHTML = '🎚️ Filtros<span class="cnt" style="display:none"></span>';
+    fb.addEventListener('click', (e) => { e.stopPropagation(); this._toggleFilterPopover(fb); });
+    const lb = document.createElement('button');
+    lb.id = 'cal-legend-btn';
+    lb.className = 'btn btn-outline btn-sm no-print';
+    lb.title = 'Qué significan los colores';
+    lb.setAttribute('aria-label', 'Leyenda de colores');
+    lb.style.cssText = 'font-weight:800;min-width:30px';
+    lb.textContent = '?';
+    lb.addEventListener('click', (e) => { e.stopPropagation(); this._toggleLegendPopover(lb); });
+    anchor.parentElement.insertBefore(fb, anchor);
+    anchor.parentElement.insertBefore(lb, anchor);
+    this._updateFilterBadge();
+  }
+
+  // ── Popover genérico anclado a un botón ──
+  _openEnhPopover(id, anchorEl, html) {
+    const prev = document.getElementById(id);
+    if (prev) { prev.remove(); return null; }                       // segundo click = cerrar
+    document.querySelectorAll('.cal-enh-pop').forEach(p => p.remove());
+    const pop = document.createElement('div');
+    pop.id = id;
+    pop.className = 'cal-enh-pop';
+    pop.innerHTML = html;
+    document.body.appendChild(pop);
+    const r = anchorEl.getBoundingClientRect();
+    const w = pop.offsetWidth;
+    pop.style.left = `${Math.max(10, Math.min(r.right - w, window.innerWidth - w - 10))}px`;
+    pop.style.top  = `${r.bottom + 6}px`;
+    setTimeout(() => {
+      document.addEventListener('click', function onDoc(e) {
+        if (!pop.isConnected) { document.removeEventListener('click', onDoc); return; }
+        if (!pop.contains(e.target)) { pop.remove(); document.removeEventListener('click', onDoc); }
+      });
+    }, 0);
+    return pop;
+  }
+
+  // ── Leyenda "?" ──
+  _toggleLegendPopover(btn) {
+    const sw = (bg) => `<span class="cal-leg-sw" style="background:${bg}"></span>`;
+    const src = Object.entries(SOURCE_CONFIG).filter(([k, v]) => v.color)
+      .map(([, v]) => `<span class="cal-chip" style="cursor:default"><span class="dot" style="background:${v.color}"></span>${escapeHtml(v.label)}</span>`).join('');
+    const row = (swatch, text) => `<div class="cal-leg-row">${swatch}<span>${text}</span></div>`;
+    const html = `
+      <h4>Qué significan los colores</h4>
+      <div class="cal-enh-sec"><div class="t">Estado de pago</div>
+        ${row(sw('#16A34A'), '<b>Verde</b> · pagada')}
+        ${row(sw('#DC2626'), '<b>Rojo</b> · con seña')}
+        ${row(sw('#EAB308'), '<b>Ámbar</b> · sin seña (directa)')}
+        <div style="margin-top:4px">${src}</div>
+        <div style="font-size:.68rem;color:var(--color-text-3)">Sin seña toma el color del canal. Pagada y con seña ganan siempre.</div>
+      </div>
+      <div class="cal-enh-sec"><div class="t">Precio especial (último tramo de la barra)</div>
+        ${row(sw('linear-gradient(90deg,#DC2626 55%,#FACC15)'), '<b>Amarillo</b> · noches sin cargo (últimas celdas) o descuento (proporcional al %)')}
+        ${row(sw('linear-gradient(90deg,#DC2626 55%,#791515)'), '<b>Bordó</b> · recargo (proporcional al %)')}
+      </div>
+      <div class="cal-enh-sec"><div class="t">Marcas</div>
+        ${row('<span class="cal-leg-sw" style="background:#16A34A;position:relative;overflow:hidden"><span style="position:absolute;left:0;top:0;bottom:0;width:45%;background:rgba(15,23,42,.36)"></span><span style="position:absolute;left:45%;top:0;bottom:0;width:2px;background:#fff"></span></span>', '<b>Línea blanca</b> · hoy; lo anterior ya transcurrió')}
+        ${row(sw('rgba(120,120,120,.45)'), '<b>Apagada</b> · reserva pasada')}
+        ${row('<span class="cal-leg-sw" style="background:transparent;border:1.5px dashed #f59e0b"></span>', '<b>Noche suelta</b> · hueco de 1–2 noches difícil de vender (click: descuento o bloqueo)')}
+        ${row('<span class="cal-turn-badge" style="position:static;transform:none;display:inline-block">🧹</span>', '<b>Turno de limpieza</b> · sale uno y entra otro el mismo día')}
+      </div>`;
+    this._openEnhPopover('cal-legend-pop', btn, html);
+  }
+
+  // ── Filtros rápidos ──
+  _loadFilters() {
+    const empty = () => ({ status: new Set(), source: new Set(), units: new Set() });
+    try {
+      const raw = JSON.parse(localStorage.getItem(CAL_FILTERS_LS_KEY) || 'null');
+      if (!raw) return empty();
+      return { status: new Set(raw.status ?? []), source: new Set(raw.source ?? []), units: new Set((raw.units ?? []).map(String)) };
+    } catch { return empty(); }
+  }
+  _saveFilters() {
+    try {
+      const f = this._filters;
+      localStorage.setItem(CAL_FILTERS_LS_KEY, JSON.stringify({ status: [...f.status], source: [...f.source], units: [...f.units] }));
+    } catch { /* sin storage: el filtro vale solo para la sesión */ }
+  }
+  _filterCount() { const f = this._filters; return f ? f.status.size + f.source.size + f.units.size : 0; }
+  _updateFilterBadge() {
+    const btn = document.getElementById('cal-filter-btn');
+    const cnt = btn?.querySelector('.cnt');
+    if (!cnt) return;
+    const n = this._filterCount();
+    cnt.textContent = n;
+    cnt.style.display = n ? '' : 'none';
+    btn.style.borderColor = n ? 'var(--color-primary)' : '';
+  }
+
+  _toggleFilterPopover(btn) {
+    if (!this._filters) this._filters = this._loadFilters();
+    const build = () => {
+      const F = this._filters;
+      const chip = (kind, val, label, dot) =>
+        `<button class="cal-chip${F[kind].has(val) ? ' on' : ''}" data-kind="${kind}" data-val="${escapeHtml(String(val))}">${dot ? `<span class="dot" style="background:${dot}"></span>` : ''}${escapeHtml(label)}</button>`;
+      const statuses = [['paid','Pagadas','#16A34A'],['partial','Con seña','#DC2626'],['pending','Sin seña','#EAB308'],['blocked','Bloqueos','#374151']]
+        .map(([v,l,d]) => chip('status', v, l, d)).join('');
+      const sources = Object.entries(SOURCE_CONFIG).map(([k, v]) => chip('source', k, v.label, v.dot)).join('');
+      const units = (this.ctx.units ?? []).map(u => chip('units', String(u.id), `#${u.sort_order ?? u.number ?? ''} ${this._getUnitDisplayName(u).replace('Planta Baja','P. Baja').replace('Planta Alta','P. Alta')}`, getUnitColor(u))).join('');
+      return `
+        <h4>Filtros rápidos</h4>
+        <div class="cal-enh-sec"><div class="t">Estado</div>${statuses}</div>
+        <div class="cal-enh-sec"><div class="t">Canal</div>${sources}</div>
+        <div class="cal-enh-sec"><div class="t">Unidad</div>${units}</div>
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+          <span style="font-size:.68rem;color:var(--color-text-3)">Estado y canal atenúan el resto; unidad oculta las demás filas.</span>
+          <button id="cal-filter-clear" class="cal-chip" style="margin:0;flex-shrink:0">Limpiar</button>
+        </div>`;
+    };
+    const pop = this._openEnhPopover('cal-filter-pop', btn, build());
+    if (!pop) return;
+    const rewire = () => {
+      pop.innerHTML = build();
+      pop.querySelectorAll('.cal-chip[data-kind]').forEach(c => c.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const set = this._filters[c.dataset.kind];
+        if (set.has(c.dataset.val)) set.delete(c.dataset.val); else set.add(c.dataset.val);
+        this._saveFilters(); this._applyFilters(); rewire();
+      }));
+      pop.querySelector('#cal-filter-clear')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this._filters = { status: new Set(), source: new Set(), units: new Set() };
+        this._saveFilters(); this._applyFilters(); rewire();
+      });
+    };
+    rewire();
+  }
+
+  _applyFilters() {
+    const grid = document.getElementById('calendar-grid');
+    if (!grid) return;
+    if (!this._filters) this._filters = this._loadFilters();
+    const F = this._filters;
+    const byId = new Map((this._lastRenderedBookings ?? []).map(b => [String(b.id), b]));
+    const statusKey = b => (b.is_blocked || b.status === 'blocked') ? 'blocked'
+      : b.status === 'paid' ? 'paid' : b.status === 'partial' ? 'partial' : 'pending';
+    grid.querySelectorAll('.bar[data-booking-id]').forEach(bar => {
+      const b = byId.get(String(bar.dataset.bookingId));
+      let dim = false;
+      if (b) {
+        if (F.status.size && !F.status.has(statusKey(b))) dim = true;
+        if (F.source.size && !F.source.has(b.source ?? 'direct')) dim = true;
+      }
+      bar.classList.toggle('cal-filter-dim', dim);
+      if (bar.classList.contains('bar-span')) {
+        const ext = [...(bar.parentElement?.children ?? [])].find(el => el._fit?.extra);
+        if (ext) { ext.classList.add('cal-late-strip'); ext.classList.toggle('cal-filter-dim', dim); }
+      }
+    });
+    // Unidad: oculta la fila completa (etiqueta + celdas son hijos directos de la grilla)
+    grid.querySelectorAll('.cal-unit-label[data-unit-id], .cal-cell[data-unit-id]').forEach(el => {
+      el.style.display = (F.units.size && !F.units.has(String(el.dataset.unitId))) ? 'none' : '';
+    });
+    this._updateFilterBadge();
+    this._scheduleFitBarsLight();
+  }
+
+  // ── Turnos de limpieza: insignia en la celda y contador en el encabezado del día ──
+  _appendTurnoverBadge(cell, info) {
+    const out = info?.outGuest, inn = info?.inGuest;
+    const badge = document.createElement('div');
+    badge.className = 'cal-turn-badge';
+    badge.textContent = '🧹';
+    badge.title = '🧹 Turno de limpieza — sale' + (out ? ` ${out}` : ' un huésped') + ' y entra' + (inn ? ` ${inn}` : ' otro') + ' el mismo día';
+    cell.appendChild(badge);
+  }
+
+  _markTurnoverHeaders(grid, recambioSet) {
+    const byDate = new Map();
+    recambioSet.forEach((info, key) => {
+      const iso = key.split('|')[1];
+      if (!byDate.has(iso)) byDate.set(iso, []);
+      byDate.get(iso).push(info.unitName);
+    });
+    byDate.forEach((units, iso) => {
+      const dh = grid.querySelector(`.cal-day-header[data-date="${iso}"]`);
+      if (!dh) return;
+      const tag = document.createElement('span');
+      tag.className = 'dh-turn';
+      tag.textContent = `🧹${units.length}`;
+      tag.title = `${units.length} turno${units.length !== 1 ? 's' : ''} de limpieza (sale y entra el mismo día): ${units.join(', ')}`;
+      dh.appendChild(tag);
+    });
+  }
+
+  // ── Huecos cortos: marcador + popover con sugerencias ──
+  _renderGapMarker(cell, seg) {
+    const el = document.createElement('div');
+    el.className = 'cal-gap-bar';
+    el._fitGap = { span: seg.nights };
+    el.innerHTML = `<span>⚠ ${seg.nights}n</span>`;
+    el.title = `Noche${seg.nights !== 1 ? 's' : ''} suelta${seg.nights !== 1 ? 's' : ''}: hueco de ${seg.nights} noche${seg.nights !== 1 ? 's' : ''}, difícil de vender. Click para ver opciones.`;
+    // No iniciar selección de rango ni abrir el formulario de la celda
+    ['mousedown', 'pointerdown', 'touchstart', 'dblclick'].forEach(t => el.addEventListener(t, e => e.stopPropagation()));
+    el.addEventListener('click', (e) => { e.stopPropagation(); this._showGapPopover(e, seg); });
+    cell.appendChild(el);
+  }
+
+  _showGapPopover(evt, seg) {
+    document.querySelectorAll('.cal-enh-pop').forEach(p => p.remove());
+    const unit = this.ctx.units?.find(u => String(u.id) === String(seg.unitId));
+    const fmt = iso => new Date(iso + 'T12:00:00').toLocaleDateString('es-AR', { day: '2-digit', month: 'short' });
+    const disc = GAP_SUGGESTED_DISCOUNT[Math.min(seg.nights, 2)] ?? GAP_SUGGESTED_DISCOUNT[2];
+    const between = (seg.outGuest || seg.inGuest) ? `<div style="color:var(--color-text-3);margin-bottom:8px">Entre ${escapeHtml(seg.outGuest || '—')} y ${escapeHtml(seg.inGuest || '—')}</div>` : '';
+    const canBlock = can('editBooking');
+    const btn = (id, label, style) => `<button id="${id}" class="cal-chip" style="display:flex;width:100%;margin:0 0 6px;justify-content:flex-start;padding:8px 10px;border-radius:8px;${style ?? ''}">${label}</button>`;
+    const pop = document.createElement('div');
+    pop.id = 'cal-gap-pop';
+    pop.className = 'cal-enh-pop';
+    pop.style.width = '230px';
+    pop.innerHTML = `
+      <h4>⚠ ${seg.nights} noche${seg.nights !== 1 ? 's' : ''} suelta${seg.nights !== 1 ? 's' : ''}</h4>
+      <div style="color:var(--color-text-3);margin-bottom:6px">${unit ? escapeHtml(unit.name ?? '') + ' · ' : ''}${fmt(seg.start)} → ${fmt(seg.end)}</div>
+      ${between}
+      <div style="margin-bottom:8px">Es difícil de vender como está. Opciones:</div>
+      ${btn('gap-quote', `💸 Cotizar con ${disc}% de descuento`)}
+      ${btn('gap-book', '🛏️ Reservar', 'background:var(--color-primary);border-color:var(--color-primary);color:#fff')}
+      ${canBlock ? btn('gap-block', '🔒 Bloquear (mantenimiento / uso propio)') : ''}`;
+    document.body.appendChild(pop);
+    const PAD = 10, w = 230;
+    pop.style.left = `${Math.max(PAD, Math.min(evt.clientX + PAD, window.innerWidth - w - PAD))}px`;
+    pop.style.top  = `${Math.max(PAD, Math.min(evt.clientY + PAD, window.innerHeight - pop.offsetHeight - PAD))}px`;
+    const close = () => pop.remove();
+    const common = { unitId: seg.unitId, checkIn: seg.start, checkOut: seg.end };
+    pop.querySelector('#gap-quote')?.addEventListener('click', () => { close(); this._openQuickQuote(common, null, { discountValue: disc }); });
+    pop.querySelector('#gap-book')?.addEventListener('click',  () => { close(); this.bookingForm.open(common); });
+    pop.querySelector('#gap-block')?.addEventListener('click', () => {
+      close();
+      if (window.confirm(`¿Bloquear ${unit?.name ?? 'la unidad'} del ${fmt(seg.start)} al ${fmt(seg.end)} (${seg.nights} noche${seg.nights !== 1 ? 's' : ''})?`)) {
+        this._blockRange(seg.unitId, seg.start, seg.end, 'Hueco sin vender');
+      }
+    });
+    setTimeout(() => {
+      document.addEventListener('click', function onDoc(e) {
+        if (!pop.isConnected) { document.removeEventListener('click', onDoc); return; }
+        if (!pop.contains(e.target)) { pop.remove(); document.removeEventListener('click', onDoc); }
+      });
+    }, 0);
   }
 
   // ══════════════════════════════════════════════════
@@ -885,30 +1216,52 @@ export class Calendar {
       let gradStartX = null;
       if (f.freeCount > 0 && f.freeFrom >= 0 && f.freeFrom < cells.length) {
         gradStartX = cells[f.freeFrom].getBoundingClientRect().left - barLeftAbs;
-      } else if (f.discFrom >= 0) {
-        const idx = Math.min(cells.length - 1, Math.floor(f.discFrom));
+      } else if (f.tailFrom >= 0) {
+        const idx = Math.min(cells.length - 1, Math.floor(f.tailFrom));
         const cr = cells[idx].getBoundingClientRect();
-        gradStartX = (cr.left + (f.discFrom - idx) * cr.width) - barLeftAbs;
+        gradStartX = (cr.left + (f.tailFrom - idx) * cr.width) - barLeftAbs;
       }
+      const endColor = (f.freeCount > 0 || !f.tailEnd) ? FREE_NIGHT_END : f.tailEnd;
+      // Fondo final: degradado de cola (si hay) + capa oscura del tramo ya transcurrido (si hay),
+      // ambos con límites en px exactos de celda.
+      let baseGrad = null;
       if (gradStartX !== null) {
         const pct = Math.max(0, Math.min(100, (gradStartX / width) * 100));
-        const g = `linear-gradient(to right, ${f.color} 0%, ${f.color} ${pct}%, ${FREE_NIGHT_END} 100%)`;
-        bar.style.background = f.progressOverlay ? `${f.progressOverlay}, ${g}` : g;
+        baseGrad = `linear-gradient(to right, ${f.color} 0%, ${f.color} ${pct}%, ${endColor} 100%)`;
       }
-      // Extensión visual del late checkout: se dibuja encima de toda la barra (repite avatar y
-      // nombre), así que lleva el mismo degradado estirado a su ancho y el amarillo sigue hasta el final.
+      let passedPx = null;
+      if (f.passedIdx > 0) {
+        const idx = Math.min(cells.length - 1, f.passedIdx);
+        passedPx = Math.max(0, Math.min(width, cells[idx].getBoundingClientRect().left - barLeftAbs));
+        const overlay = `linear-gradient(to right, rgba(15,23,42,.36) 0, rgba(15,23,42,.36) ${passedPx}px, transparent ${passedPx}px)`;
+        bar.style.background = `${overlay}, ${baseGrad ?? f.baseBg}`;
+      } else if (baseGrad) {
+        bar.style.background = baseGrad;
+      }
+      if (bar._todayMarker && passedPx !== null) bar._todayMarker.style.left = `${passedPx - 1}px`;
+      // Extensión del late checkout: tira que continúa la barra 65% de una celda hacia el día de salida.
       const ext = [...bar.parentElement.children].find(el => el !== bar && el._fit?.extra);
       if (ext) {
         const lr2 = cells[cells.length - 1].getBoundingClientRect();
-        const extW = width + lr2.width * ext._fit.extra;
-        ext.style.left  = bar.style.left;
-        ext.style.width = `${extW}px`;
-        if (gradStartX !== null) {
-          const p1 = Math.max(0, Math.min(100, (gradStartX / extW) * 100));
-          const p2 = Math.max(p1, Math.min(100, (width / extW) * 100));
-          ext.style.background = `linear-gradient(to right, ${f.color} 0%, ${f.color} ${p1}%, ${FREE_NIGHT_END} ${p2}%, ${FREE_NIGHT_END} 100%)`;
-        }
+        ext.style.left  = `${inset - bL + width}px`;
+        ext.style.width = `${lr2.width * ext._fit.extra}px`;
+        if (gradStartX !== null) { ext.style.background = endColor; if (ext.style.opacity === '0.9') ext.style.opacity = '1'; }
+        bar.style.borderTopRightRadius = '0';
+        bar.style.borderBottomRightRadius = '0';
       }
+    });
+    // Marcadores de huecos (noches sueltas): mismo criterio, ocupan exactamente sus celdas
+    root.querySelectorAll('.cal-gap-bar').forEach(el => {
+      const n = el._fitGap?.span ?? 1;
+      const first = el.parentElement;
+      if (!first) return;
+      let last = first, k = 1;
+      while (k < n && last.nextElementSibling && last.nextElementSibling.classList.contains('cal-cell')) { last = last.nextElementSibling; k++; }
+      const fr = first.getBoundingClientRect(), lr = last.getBoundingClientRect();
+      if (!fr.width) return;
+      const bL = parseFloat(getComputedStyle(first).borderLeftWidth) || 0;
+      el.style.left  = `${4 - bL}px`;
+      el.style.width = `${(lr.right - fr.left) - 8}px`;
     });
   }
 
@@ -1102,6 +1455,9 @@ export class Calendar {
     const total       = booking.total_amount   ?? 0;
     const totalN      = booking.nights         ?? 1;
     const isPaid      = booking.status === 'paid';
+    // % de recargo sobre el alquiler base (precio por noche × noches; si no hay, total sin recargo)
+    const surchBase   = (booking.price_per_night > 0 && totalN > 0) ? booking.price_per_night * totalN : Math.max(total - surcharge, 0);
+    const surchPct    = (surcharge > 0 && surchBase > 0) ? Math.max(0, Math.min(100, surcharge / surchBase * 100)) : 0;
     const orange      = '#F97316';
     const yellow      = '#EF9F27';
 
@@ -1117,6 +1473,7 @@ export class Calendar {
       const b = Math.round(parseInt(h.slice(4,6),16) * factor);
       return `rgb(${r},${g},${b})`;
     };
+    const surchColor  = darken(color, SURCHARGE_DARKEN);
 
     // Degradés proporcionales — aplican para TODAS las reservas.
     // El color base ya es semántico: verde=pagado, rojo=señado, ámbar=sin seña.
@@ -1145,12 +1502,10 @@ export class Calendar {
       const p = Math.max(0, Math.min(100, 100 - discPct));
       barBg = `linear-gradient(to right, ${color} 0%, ${color} ${p}%, ${FREE_NIGHT_END} 100%)`;
 
-    } else if (surcharge > 0 && total > 0) {
-      const surchargeRatio = Math.min(surcharge / total, 0.6);
-      const p          = Math.round(Math.max(55, 100 - surchargeRatio * 80));
-      const darkFactor = Math.max(0.6, 0.85 - surchargeRatio * 0.4);
-      const darkColor  = darken(color, darkFactor);
-      barBg = `linear-gradient(to right, ${color} 0%, ${color} ${p-T}%, ${darkColor} ${p+T}%, ${darkColor} 100%)`;
+    } else if (surchPct > 0) {
+      // Recargo: el último surchPct% del ancho vira de forma continua al tono oscuro (bordó).
+      const p = Math.max(0, Math.min(100, 100 - surchPct));
+      barBg = `linear-gradient(to right, ${color} 0%, ${color} ${p}%, ${surchColor} 100%)`;
     }
 
     // Bloqueos: rayitas diagonales sutiles (igual al card en la tab Reservas)
@@ -1161,6 +1516,7 @@ export class Calendar {
       ), ${color}`;
     }
 
+    const baseBgPlain = barBg;   // fondo sin la capa de "tramo transcurrido" (la reconstruye _fitBars)
     const ci        = booking.check_in;
     const co        = booking.check_out;
     const winStart  = this._windowStart;
@@ -1213,7 +1569,7 @@ export class Calendar {
           // Tiene días pasados: el tramo transcurrido se marca con una CAPA translúcida encima
           // del fondo. Antes se REEMPLAZABA todo el fondo por "oscuro→color base" y se perdía
           // el naranja del descuento, el amarillo de la noche gratis y el tono del recargo.
-          progressOverlay = 'linear-gradient(to right, rgba(15,23,42,.30) 0%, rgba(15,23,42,.30) ' + passedPct + '%, '
+          progressOverlay = 'linear-gradient(to right, rgba(15,23,42,.36) 0%, rgba(15,23,42,.36) ' + passedPct + '%, '
             + 'transparent ' + passedPct + '%, transparent 100%)';
           barBg = progressOverlay + ', ' + barBg;
         }
@@ -1288,17 +1644,23 @@ export class Calendar {
         freeCount = Math.max(0, this._dayDiff(fs, visEnd));
         freeFrom  = this._dayDiff(visStart, fs);
       }
-      // Descuento puro (sin noches gratis ni recargo): inicio de la zona amarilla en "noches"
-      // desde el inicio visible de la barra (fraccional: 25% de 4 noches = última noche entera).
-      let discFrom = -1;
-      if (freeN <= 0 && discPct > 0 && !(surcharge > 0) && !isBlock) {
-        discFrom = totalN * (1 - Math.min(discPct, 100) / 100) - this._dayDiff(ci, visStart);
-        if (discFrom < 0) discFrom = 0;
-        if (discFrom >= span) discFrom = -1;
+      // Tramo final que vira de color: descuento puro → amarillo; recargo puro → tono oscuro.
+      // Inicio en "noches" desde el inicio visible de la barra (fraccional: 25% de 4 noches = última noche).
+      let tailFrom = -1, tailEnd = null, tailPct = 0;
+      if (freeN <= 0 && !isBlock) {
+        if (discPct > 0 && !(surcharge > 0)) { tailPct = Math.min(discPct, 100); tailEnd = FREE_NIGHT_END; }
+        else if (!(discPct > 0) && surchPct > 0) { tailPct = surchPct; tailEnd = surchColor; }
+      }
+      if (tailEnd) {
+        tailFrom = totalN * (1 - tailPct / 100) - this._dayDiff(ci, visStart);
+        if (tailFrom < 0) tailFrom = 0;
+        if (tailFrom >= span) tailFrom = -1;
       }
       bar._fit = {
         span, left, rightM, late: startsAfterLate,
-        color, progressOverlay, freeFrom, freeCount, discFrom,
+        color, progressOverlay, freeFrom, freeCount, tailFrom, tailEnd,
+        baseBg: baseBgPlain,
+        passedIdx: (isInProgress && !isPast && span > 1) ? Math.max(0, this._dayDiff(visStart, todayISO)) : 0,
       };
     }
     bar.draggable = false;
@@ -1317,9 +1679,14 @@ export class Calendar {
       if (_passed3 > 0 && _span3 > 1) {
         const cutPct = Math.round((_passed3 / _span3) * 100);
         const marker = document.createElement('div');
-        marker.style.cssText = 'position:absolute;top:0;bottom:0;width:2px;background:rgba(255,255,255,.7);'
-          + 'left:' + cutPct + '%;z-index:4;pointer-events:none;border-radius:1px';
-        bar.appendChild(marker);
+        marker.className = 'cal-today-marker';
+        marker.title = 'Hoy: lo anterior ya transcurrió';
+        marker.style.cssText = 'position:absolute;top:0;bottom:0;width:2px;background:rgba(255,255,255,.95);'
+          + 'box-shadow:0 0 4px rgba(255,255,255,.9);left:' + cutPct + '%;z-index:4;pointer-events:none;border-radius:1px';
+        // Muescla en la parte superior para que se lea como "marcador de hoy"
+        marker.innerHTML = '<span style="position:absolute;top:0;left:-3px;width:0;height:0;'
+          + 'border-left:4px solid transparent;border-right:4px solid transparent;border-top:5px solid #fff"></span>';
+        bar._todayMarkerEl = marker;   // se agrega más abajo, DESPUÉS de bar.innerHTML (que borraría los hijos)
       }
     }
 
@@ -1395,15 +1762,11 @@ export class Calendar {
       bar.innerHTML = avatar + canalChip + splitChip + '<span style="' + nameStyle + '">' + escapeHtml(guestFull) + (isBlock ? '' : genderSymbolHTML(booking.guests?.gender)) + '</span>' + lateChip + (isBlock ? '' : specialChipsHTML(booking.check_in, booking.check_out, { mode: 'bar' }));
     }
 
+    if (bar._todayMarkerEl) { bar.appendChild(bar._todayMarkerEl); bar._todayMarker = bar._todayMarkerEl; }
+
     // 🔄 Recambio: al centro superior de la celda, entre las dos barras
     if (isRecambio) {
-      const badge = document.createElement('div');
-      badge.title = '🔄 Recambio — sale un huésped y entra otro el mismo día';
-      badge.style.cssText = 'position:absolute;top:1px;left:0;right:0;z-index:10;' +
-        'font-size:1rem;line-height:1;pointer-events:none;text-align:center;' +
-        'filter:drop-shadow(0 0 2px rgba(0,0,0,.25))';
-      badge.textContent = '🔄';
-      cell.appendChild(badge);
+      this._appendTurnoverBadge(cell, isRecambio);
     }
 
     // ── Resize handles — derecha (checkout) y ahora también izquierda (check-in) ──
@@ -1486,9 +1849,10 @@ export class Calendar {
       const yellow  = '#EF9F27';
       // Si está pagada: la extensión es el mismo color verde (no amarillo)
       // Solo aplica amarillo si es gratis Y no está pagada
-      // Si la barra termina en amarillo (noches sin cargo o descuento, también en las
-      // pagadas: verde→amarillo), _fitBars() le da a la extensión el mismo degradado.
-      const endsYellow = freeN > 0 || (discPct > 0 && !(surcharge > 0));
+      // La extensión es solo la TIRA que sobresale al final de la barra (sin avatar ni nombre
+      // propios: antes se dibujaba encima de toda la barra y el texto se veía doble).
+      // Si la barra termina en amarillo (noches sin cargo o descuento), la tira sigue en ese amarillo.
+      const endsYellow = freeN > 0 || (discPct > 0 && !(surcharge > 0)) || (!(discPct > 0) && surchPct > 0);
       const extBaseColor = endsYellow ? color : ((!isPaidB && freeN > 0) ? yellow : color);
       const extBg   = (!endsYellow && !isPaidB && isFree)
         ? `linear-gradient(to right, ${extBaseColor} 0%, ${extBaseColor} 20%, ${yellow} 100%)`
@@ -1498,22 +1862,18 @@ export class Calendar {
         left:${leftStyle};
         width:calc(${span} * 100% + 65%${widthReduceForLate} - ${left + rightM}px);
         background:${extBg};
-        border-radius:${borderL}px 6px 6px ${borderL}px;
+        border-radius:0 6px 6px 0;
         opacity:${isPast ? 0.4 : 0.9};
         z-index:2;pointer-events:none;
-        display:flex;align-items:center;
-        padding-left:8px;padding-right:6px;box-sizing:border-box;overflow:hidden;
+        box-sizing:border-box;overflow:hidden;
       `;
-      ext.innerHTML = Calendar._guestAvatar(booking.guests, 16) +
-        '<span style="font-size:.75rem;font-weight:700;color:' + textColor + ';overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0">' +
-        escapeHtml(guestFull) + (isBlock ? '' : genderSymbolHTML(booking.guests?.gender)) + '</span>';
       ext._fit = { span, left, rightM, late: startsAfterLate, extra: 0.65 };
       cell.appendChild(ext);
     }
   }
 
   // ── Celda dividida (check-out + check-in el mismo día) ──
-  _renderSplitCell(cell, coBooking, ciBooking, todayISO) {
+  _renderSplitCell(cell, coBooking, ciBooking, todayISO, isRecambio = false) {
     const coColor  = getBookingBarColor(coBooking).color;
     const ciColor  = getBookingBarColor(ciBooking).color;
     const coIsPast = coBooking.check_out <= todayISO;
@@ -1522,7 +1882,7 @@ export class Calendar {
     const left = document.createElement('div');
     left.className = 'bar bar-split-left';
     left.style.background = coColor;
-    if (coIsPast) left.style.filter = 'saturate(.7)';
+    if (coIsPast) { left.style.filter = 'saturate(.7)'; left.classList.add('past-bar'); }
     left.dataset.bookingId = coBooking.id;
     left.addEventListener('mouseenter', (e) => this._showTooltip(coBooking, e));
     left.addEventListener('mousemove',  (e) => this._moveTooltip(e));
@@ -1537,7 +1897,7 @@ export class Calendar {
     const right = document.createElement('div');
     right.className = 'bar bar-split-right';
     right.style.background = ciColor;
-    if (ciIsPast) right.style.filter = 'saturate(.7)';
+    if (ciIsPast) { right.style.filter = 'saturate(.7)'; right.classList.add('past-bar'); }
     right.dataset.bookingId = ciBooking.id;
     right.addEventListener('mouseenter', (e) => this._showTooltip(ciBooking, e));
     right.addEventListener('mousemove',  (e) => this._moveTooltip(e));
@@ -1551,6 +1911,7 @@ export class Calendar {
 
     cell.appendChild(left);
     cell.appendChild(right);
+    if (isRecambio) this._appendTurnoverBadge(cell, isRecambio);
     cell.style.background = 'rgba(251,113,133,.04)';
   }
 
@@ -1793,6 +2154,7 @@ export class Calendar {
     // ── Búsqueda de huéspedes en el calendario ──
     this._setupCalSearch();
 
+    this._setupEnhancements();
     this.setupViewToggle();
   }
 
@@ -2387,7 +2749,7 @@ export class Calendar {
   }
 
   // Panel principal — mini planilla de cotización (tipo Excel rápido)
-  async _openQuickQuote({ unitId, checkIn, checkOut }, existingQuote = null) {
+  async _openQuickQuote({ unitId, checkIn, checkOut }, existingQuote = null, prefill = {}) {
     document.getElementById('cal-quote-overlay')?.remove();
 
     const unit = this.ctx.units?.find(u => u.id === unitId);
@@ -2458,7 +2820,7 @@ export class Calendar {
     }
 
     let discountMode  = existingQuote?.discount_mode  ?? 'pct';
-    let discountValue = existingQuote?.discount_value  ?? 0;
+    let discountValue = existingQuote?.discount_value  ?? prefill.discountValue ?? 0;
     let surchargeMode  = existingQuote?.surcharge_mode ?? 'pct';
     let surchargeValue = existingQuote?.surcharge_value ?? 0;
     let lateCheckout       = existingQuote?.late_checkout ?? false;
