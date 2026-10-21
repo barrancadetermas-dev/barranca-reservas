@@ -581,15 +581,16 @@
             <span class="cal-month-title" id="cal-month-title"></span>
           </div>
           <div class="cal-nav">
-            <div style="position:relative;display:flex;align-items:center">
-              <input id="cal-search-input" type="text" placeholder="Buscar huésped…" class="input input-sm" style="padding-right:28px;min-width:180px">
-              <button id="cal-search-clear" class="hidden" style="position:absolute;right:6px;background:none;border:none;cursor:pointer;color:var(--color-text-3);font-size:12px">✕</button>
-            </div>
+            <!-- Orden por criterio: encontrar/ver → planificar → ayuda/salida. Los separadores | los pone el CSS entre cada botón.
+                 Filtros (antes de Disponibilidad) y ? (antes de Imprimir) los inserta calendar.js. -->
             <div class="cal-tb-group no-print" role="toolbar" aria-label="Herramientas del calendario">
-              <button class="btn btn-outline btn-sm no-print" id="cal-avail-toggle" title="Disponibilidad">📋</button>
+              <div class="cal-tb-search">
+                <input id="cal-search-input" type="text" placeholder="Buscar huésped…" class="input input-sm">
+                <button id="cal-search-clear" class="hidden" title="Limpiar búsqueda">✕</button>
+              </div>
+              <button class="btn btn-outline btn-sm no-print" id="cal-avail-toggle" title="Disponibilidad">👁 Disponibilidad</button>
               <button class="btn btn-outline btn-sm no-print" id="cal-period-btn" title="Períodos especiales">Períodos</button>
               <button class="btn btn-outline btn-sm no-print" id="cal-quotes-btn" title="Cotizaciones guardadas">🧮 Cotizaciones</button>
-              <span class="cal-tb-sep" aria-hidden="true"></span>
               <button class="btn btn-outline btn-sm no-print" id="cal-print-btn" title="Imprimir calendario" onclick="window.print()">🖨️</button>
             </div>
             <!-- cal-goto-today oculto para que el JS funcione pero sin mostrarse -->

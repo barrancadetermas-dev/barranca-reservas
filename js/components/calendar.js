@@ -8,7 +8,7 @@
 
 import {
   toISODate, getBookingBarColor, getUnitLabel, getUnitColor,
-  getUnitChipHTML, getSourceBadgeHTML, SOURCE_CONFIG, UNIT_CATALOG,
+  getUnitChipHTML, getSourceBadgeHTML, SOURCE_CONFIG, CHANNEL_BAR_COLORS, UNIT_CATALOG,
   showToast, formatARS, formatDate, AppContext, localToday, localDateISO
 } from '../supabase-config.js';
 import { can } from '../auth/permissions.js';
@@ -20,14 +20,15 @@ import { getSegments, isSplit, rowsOnNight, occupiesNight, overlapsRange } from 
 import { segmentColumns } from '../utils/db-compat.js';
 import { genderSymbolHTML } from '../utils/gender.js';
 import { specialChipsHTML, specialsForStay, emojiHTML } from '../services/special-dates.js';
-import { guestCountsText, promoLabel } from '../utils/booking-display.js';
+import { guestCountsText, promoLabel, fmtPct } from '../utils/booking-display.js';
 import { escapeHtml } from '../services/voucher-template.js';
 
 // Late check-out: la barra de la reserva que sale tarde invade LATE_FRAC de la celda del día de salida
 // y se corta en diagonal (LATE_SKEW px de inclinación). La reserva que entra ese mismo día arranca con un
 // corte paralelo, separado por LATE_GAP px: queda un "|/|" continuo en vez de una tira suelta.
 const LATE_FRAC = 0.62;
-const LATE_SKEW = 12;
+const LATE_SKEW = 8;      // nominal; _fitBars lo recalcula para igualar el ángulo de la celda dividida
+const SPLIT_SKEW = 13;    // inclinación de la celda dividida (styles.css: 10px + 3px) = ángulo de referencia
 const LATE_GAP  = 3;
 import { fetchMonthlyRates, fetchCustomColumns, monthsInRange, buildTariffGrid, groupRowsByPrice, getSuggestedNightlyPrices } from '../services/tariff-service.js';
 import { createQuote, updateQuote, markQuoteConverted, fetchOverlappingQuotes, fetchOverlappingBookings, fetchAvailableUnitsForNight, fetchQuotesList, fetchQuoteById, deleteQuote } from '../services/quote-service.js';
@@ -657,7 +658,7 @@ export class Calendar {
         if (ci === co) {
           const outGuest = unitBks[i].guests ? `${unitBks[i].guests.first_name ?? ''} ${unitBks[i].guests.last_name ?? ''}`.trim() : '—';
           const inGuest  = unitBks[i+1].guests ? `${unitBks[i+1].guests.first_name ?? ''} ${unitBks[i+1].guests.last_name ?? ''}`.trim() : '—';
-          recambioSet.set(`${unit.id}|${ci}`, { outGuest, inGuest, unitName: unit.name ?? `#${unit.unit_number}` });
+          recambioSet.set(`${unit.id}|${ci}`, { outGuest, inGuest, lateOut: !!unitBks[i].late_checkout, unitName: unit.name ?? `#${unit.unit_number}` });
         } else if (ci > co) {
           const gap = Math.round((new Date(ci + 'T12:00:00') - new Date(co + 'T12:00:00')) / 86400000);
           for (let d = co; d < ci; d = this._addDays(d, 1)) {
@@ -897,6 +898,7 @@ export class Calendar {
       #calendar-grid .bar-late-end, #calendar-grid .bar-late-start { box-shadow: none !important; }
       #calendar-grid .bar-late-end   { border-top-right-radius: 0 !important; border-bottom-right-radius: 0 !important; }
       #calendar-grid .bar-late-start { border-top-left-radius: 0 !important;  border-bottom-left-radius: 0 !important; }
+      #calendar-grid .cal-row-hidden, #cal-tariff-wrap .cal-row-hidden { display: none !important; }
       /* Filtros rápidos */
       #calendar-grid .bar.cal-filter-dim, #calendar-grid .cal-late-strip.cal-filter-dim { opacity: .13 !important; filter: grayscale(.9) !important; }
       /* Turnos de limpieza (salida y entrada el mismo día) */
@@ -909,9 +911,9 @@ export class Calendar {
       /* Huecos / noches sueltas */
       .cal-gap-bar { position:absolute; top:6px; bottom:6px; left:4px; width:calc(100% - 8px); box-sizing:border-box; z-index:3;
         display:flex; align-items:center; justify-content:center; gap:3px; overflow:hidden; white-space:nowrap; cursor:pointer;
-        border:1.5px dashed #f59e0b; border-radius:6px; font-size:.66rem; font-weight:800; color:#b45309;
-        background:repeating-linear-gradient(135deg, rgba(245,158,11,.16) 0 6px, rgba(245,158,11,.06) 6px 12px); }
-      .cal-gap-bar:hover { background:rgba(245,158,11,.28); }
+        border:1px dashed rgba(245,158,11,.55); border-radius:6px; font-size:.64rem; font-weight:700; color:rgba(180,83,9,.72);
+        background:repeating-linear-gradient(135deg, rgba(245,158,11,.07) 0 6px, rgba(245,158,11,.025) 6px 12px); }
+      .cal-gap-bar:hover { background:rgba(245,158,11,.16); border-color:#f59e0b; color:#b45309; }
       [data-theme="dark"] .cal-gap-bar { color:#fbbf24; }
       /* Popovers (leyenda / filtros / huecos) */
       .cal-enh-pop { position:fixed; z-index:3300; background:var(--color-surface); color:var(--color-text);
@@ -955,8 +957,10 @@ export class Calendar {
     lb.style.cssText = 'font-weight:800;min-width:30px';
     lb.textContent = '?';
     lb.addEventListener('click', (e) => { e.stopPropagation(); this._toggleLegendPopover(lb); });
-    anchor.parentElement.insertBefore(fb, anchor);
-    anchor.parentElement.insertBefore(lb, anchor);
+    anchor.parentElement.insertBefore(fb, anchor);                 // Filtros: junto a Buscar (antes de Disponibilidad)
+    const printBtn = document.getElementById('cal-print-btn');      // ?: ayuda, justo antes de Imprimir
+    if (printBtn?.parentElement === anchor.parentElement) anchor.parentElement.insertBefore(lb, printBtn);
+    else anchor.parentElement.appendChild(lb);
     this._updateFilterBadge();
   }
 
@@ -986,26 +990,28 @@ export class Calendar {
   // ── Leyenda "?" ──
   _toggleLegendPopover(btn) {
     const sw = (bg) => `<span class="cal-leg-sw" style="background:${bg}"></span>`;
-    const src = Object.entries(SOURCE_CONFIG).filter(([k, v]) => v.color)
-      .map(([, v]) => `<span class="cal-chip" style="cursor:default"><span class="dot" style="background:${v.color}"></span>${escapeHtml(v.label)}</span>`).join('');
+    const chan = Object.values(CHANNEL_BAR_COLORS)
+      .map(v => `<span class="cal-chip" style="cursor:default"><span class="dot" style="background:${v.color}"></span>${escapeHtml(v.label)}</span>`).join('');
     const row = (swatch, text) => `<div class="cal-leg-row">${swatch}<span>${text}</span></div>`;
     const html = `
       <h4>Qué significan los colores</h4>
-      <div class="cal-enh-sec"><div class="t">Estado de pago</div>
+      <div class="cal-enh-sec"><div class="t">Canales con color propio</div>
+        <div>${chan}</div>
+        ${row('<span class="cal-leg-sw" style="background:linear-gradient(90deg,#0EA5E9 35%,#16A34A)"></span>', '<b>Canal → estado</b> · arranca con el color del canal y termina con el del pago (verde pagada · rojo seña · amarillo sin seña)')}
+      </div>
+      <div class="cal-enh-sec"><div class="t">Resto de canales · estado de pago</div>
         ${row(sw('#16A34A'), '<b>Verde</b> · pagada')}
         ${row(sw('#DC2626'), '<b>Rojo</b> · con seña')}
-        ${row(sw('#EAB308'), '<b>Ámbar</b> · sin seña (directa)')}
-        <div style="margin-top:4px">${src}</div>
-        <div style="font-size:.68rem;color:var(--color-text-3)">Sin seña toma el color del canal. Pagada y con seña ganan siempre.</div>
+        ${row(sw('#EAB308'), '<b>Amarillo</b> · sin seña')}
       </div>
       <div class="cal-enh-sec"><div class="t">Precio especial (último tramo de la barra)</div>
-        ${row(sw('linear-gradient(90deg,#DC2626 55%,#FACC15)'), '<b>Amarillo</b> · noches sin cargo (últimas celdas) o descuento (proporcional al %)')}
+        ${row(sw('linear-gradient(90deg,#8B5CF6 55%,#FACC15)'), '<b>Amarillo</b> · noches sin cargo (últimas celdas) o descuento (proporcional al %)')}
         ${row(sw('linear-gradient(90deg,#DC2626 55%,#791515)'), '<b>Bordó</b> · recargo (proporcional al %)')}
       </div>
       <div class="cal-enh-sec"><div class="t">Marcas</div>
         ${row('<span class="cal-leg-sw" style="background:#16A34A;position:relative;overflow:hidden"><span style="position:absolute;left:0;top:0;bottom:0;width:45%;background:rgba(15,23,42,.36)"></span><span style="position:absolute;left:45%;top:0;bottom:0;width:2px;background:#fff"></span></span>', '<b>Línea blanca</b> · hoy; lo anterior ya transcurrió')}
         ${row(sw('rgba(120,120,120,.45)'), '<b>Apagada</b> · reserva pasada')}
-        ${row('<span class="cal-leg-sw" style="background:transparent;border:1.5px dashed #f59e0b"></span>', '<b>Noche suelta</b> · hueco de 1–2 noches difícil de vender (click: descuento o bloqueo)')}
+        ${row('<span class="cal-leg-sw" style="background:transparent;border:1px dashed rgba(245,158,11,.55)"></span>', '<b>Noche suelta</b> · hueco de 1–2 noches difícil de vender (click: descuento o bloqueo)')}
         ${row('<span class="cal-turn-badge" style="position:static;transform:none;display:inline-block">🧹</span>', '<b>Turno de limpieza</b> · sale uno y entra otro el mismo día')}
       </div>`;
     this._openEnhPopover('cal-legend-pop', btn, html);
@@ -1042,7 +1048,7 @@ export class Calendar {
     const build = () => {
       const F = this._filters;
       const chip = (kind, val, label, dot) =>
-        `<button class="cal-chip${F[kind].has(val) ? ' on' : ''}" data-kind="${kind}" data-val="${escapeHtml(String(val))}">${dot ? `<span class="dot" style="background:${dot}"></span>` : ''}${escapeHtml(label)}</button>`;
+        `<button class="cal-chip${F[kind].has(val) ? ' on' : ''}" data-kind="${kind}" data-val="${escapeHtml(String(val))}"${kind === 'units' ? ' title="Click: sumar/quitar · Doble click: solo esta unidad"' : ''}>${dot ? `<span class="dot" style="background:${dot}"></span>` : ''}${escapeHtml(label)}</button>`;
       const statuses = [['paid','Pagadas','#16A34A'],['partial','Con seña','#DC2626'],['pending','Sin seña','#EAB308'],['blocked','Bloqueos','#374151']]
         .map(([v,l,d]) => chip('status', v, l, d)).join('');
       const sources = Object.entries(SOURCE_CONFIG).map(([k, v]) => chip('source', k, v.label, v.dot)).join('');
@@ -1053,7 +1059,7 @@ export class Calendar {
         <div class="cal-enh-sec"><div class="t">Canal</div>${sources}</div>
         <div class="cal-enh-sec"><div class="t">Unidad</div>${units}</div>
         <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
-          <span style="font-size:.68rem;color:var(--color-text-3)">Estado y canal atenúan el resto; unidad oculta las demás filas.</span>
+          <span style="font-size:.68rem;color:var(--color-text-3)">Estado y canal atenúan el resto; unidad oculta las demás filas. Doble click en una unidad = solo esa.</span>
           <button id="cal-filter-clear" class="cal-chip" style="margin:0;flex-shrink:0">Limpiar</button>
         </div>`;
     };
@@ -1064,19 +1070,50 @@ export class Calendar {
       pop.querySelectorAll('.cal-chip[data-kind]').forEach(c => c.addEventListener('click', (e) => {
         e.stopPropagation();
         const set = this._filters[c.dataset.kind];
-        if (set.has(c.dataset.val)) set.delete(c.dataset.val); else set.add(c.dataset.val);
-        this._saveFilters(); this._applyFilters(); rewire();
+        if (c.dataset.kind === 'units' && e.detail >= 2) {
+          // Doble click en una unidad = "solo esta unidad" (el primer click ya la había alternado)
+          set.clear(); set.add(c.dataset.val);
+        } else if (set.has(c.dataset.val)) set.delete(c.dataset.val); else set.add(c.dataset.val);
+        this._saveFilters(); this._applyFilters(true); rewire();
       }));
       pop.querySelector('#cal-filter-clear')?.addEventListener('click', (e) => {
         e.stopPropagation();
         this._filters = { status: new Set(), source: new Set(), units: new Set() };
-        this._saveFilters(); this._applyFilters(); rewire();
+        this._saveFilters(); this._applyFilters(true); rewire();
       });
     };
     rewire();
   }
 
-  _applyFilters() {
+  /** ¿La reserva pasa los filtros activos (estado, canal y unidad)? Lo usan las tarjetas de "próximas reservas". */
+  _bookingPassesFilters(b) {
+    const F = this._filters ?? (this._filters = this._loadFilters());
+    const st = (b.is_blocked || b.status === 'blocked') ? 'blocked' : b.status === 'paid' ? 'paid' : b.status === 'partial' ? 'partial' : 'pending';
+    if (F.status.size && !F.status.has(st)) return false;
+    if (F.source.size && !F.source.has(b.source ?? 'direct')) return false;
+    if (F.units.size && !(b.booking_units ?? []).some(bu => F.units.has(String(bu.unit_id)))) return false;
+    return true;
+  }
+
+  /** Cuadro tarifario: muestra solo las unidades filtradas (y oculta filas que quedan sin ninguna). */
+  _applyTariffFilter() {
+    const wrap = document.getElementById('cal-tariff-wrap');
+    if (!wrap) return;
+    const F = this._filters ?? (this._filters = this._loadFilters());
+    let shown = 0;
+    wrap.querySelectorAll('tbody tr').forEach(tr => {
+      const units = [...tr.querySelectorAll('.cal-tf-unit')];
+      const seps  = [...tr.querySelectorAll('.cal-tf-sep')];
+      const vis = units.filter(u => !F.units.size || F.units.has(String(u.dataset.unitId)));
+      units.forEach(u => u.classList.toggle('cal-row-hidden', !vis.includes(u)));
+      seps.forEach(sp => sp.classList.add('cal-row-hidden'));
+      vis.slice(1).forEach(u => { const prev = u.previousElementSibling; if (prev?.classList.contains('cal-tf-sep')) prev.classList.remove('cal-row-hidden'); });
+      tr.classList.toggle('cal-row-hidden', vis.length === 0);
+      if (vis.length) { tr.style.background = (shown % 2 === 0) ? 'transparent' : 'var(--color-surface-2)'; shown++; }
+    });
+  }
+
+  _applyFilters(refreshSide = false) {
     const grid = document.getElementById('calendar-grid');
     if (!grid) return;
     if (!this._filters) this._filters = this._loadFilters();
@@ -1095,9 +1132,13 @@ export class Calendar {
     });
     // Unidad: oculta la fila completa (etiqueta + celdas son hijos directos de la grilla)
     grid.querySelectorAll('.cal-unit-label[data-unit-id], .cal-cell[data-unit-id]').forEach(el => {
-      el.style.display = (F.units.size && !F.units.has(String(el.dataset.unitId))) ? 'none' : '';
+      // Clase con !important: las etiquetas de unidad tienen `display:flex !important` y un style inline
+      // no las ocultaba → las celdas se iban y las etiquetas quedaban, desfasando toda la grilla.
+      el.classList.toggle('cal-row-hidden', !!(F.units.size && !F.units.has(String(el.dataset.unitId))));
     });
     this._updateFilterBadge();
+    this._applyTariffFilter();
+    if (refreshSide && this._lastRenderedBookings) this._renderMiniAgenda(this._lastRenderedBookings);
     this._scheduleFitBarsLight();
   }
 
@@ -1107,6 +1148,7 @@ export class Calendar {
     const badge = document.createElement('div');
     badge.className = 'cal-turn-badge';
     badge.textContent = '🧹';
+    if (info?.lateOut) badge.style.left = `calc(${LATE_FRAC * 100}% - ${(LATE_SKEW - LATE_GAP) / 2}px)`;   // centrada en el corte diagonal
     badge.title = '🧹 Turno de limpieza — sale' + (out ? ` ${out}` : ' un huésped') + ' y entra' + (inn ? ` ${inn}` : ' otro') + ' el mismo día';
     cell.appendChild(badge);
   }
@@ -1211,16 +1253,24 @@ export class Calendar {
       if (!fr.width) return;                               // calendario oculto: no se puede medir
       const cs = getComputedStyle(first);
       const bL = parseFloat(cs.borderLeftWidth) || 0;
-      const inset = f.late ? fr.width * LATE_FRAC - (LATE_SKEW - LATE_GAP) : f.left;  // desde el borde izquierdo de la celda
+      // Ángulo único: misma pendiente que la celda dividida (SPLIT_SKEW px sobre el alto de la celda).
+      const barH = bar.offsetHeight || (fr.height - 8);
+      const skew = (f.late || f.lateExt) ? Math.max(4, Math.round(SPLIT_SKEW * barH / (fr.height || barH))) : LATE_SKEW;
+      const inset = f.late ? fr.width * LATE_FRAC - (skew - LATE_GAP) : f.left;  // desde el borde izquierdo de la celda
       const nightsEnd = (lr.right - fr.left) - inset - (f.lateExt ? 0 : f.rightM);       // fin de la última noche (px desde el borde de la barra)
       const width = nightsEnd + (f.lateExt ? lr.width * LATE_FRAC : 0);                  // + invasión del late check-out
-      pending.push({ bar, f, cells, fr, inset, bL, width, nightsEnd });
+      pending.push({ bar, f, cells, fr, inset, bL, width, nightsEnd, skew });
     });
     // Escritura en bloque (evita lecturas/escrituras intercaladas = layout thrashing)
-    pending.forEach(({ bar, f, cells, fr, inset, bL, width, nightsEnd }) => {
+    pending.forEach(({ bar, f, cells, fr, inset, bL, width, nightsEnd, skew }) => {
       if (!(width > 0)) return;
       bar.style.left  = `${inset - bL}px`;
       bar.style.width = `${width}px`;
+      if (f.late || f.lateExt) {
+        bar.style.clipPath = `polygon(${f.late ? skew + 'px' : '0'} 0, 100% 0, ${f.lateExt ? `calc(100% - ${skew}px)` : '100%'} 100%, 0 100%)`;
+        bar.style.paddingRight = f.lateExt ? `${skew + 4}px` : '';
+        bar.style.paddingLeft  = f.late ? `${skew + 6}px` : '';
+      }
       const barLeftAbs = fr.left + inset;
       // Inicio (px desde el borde izquierdo de la barra) del tramo que vira a amarillo
       let gradStartX = null;
@@ -1237,11 +1287,18 @@ export class Calendar {
       // Fondo final: degradado de cola (si hay) + capa oscura del tramo ya transcurrido (si hay),
       // ambos con límites en px exactos de celda.
       let baseGrad = null;
+      // Rampa del canal al color de estado (solo canales con color propio): canal sólido en el primer 40%.
+      const ramp = (p) => f.statusColor
+        ? `${f.color} 0%, ${f.color} ${(p * 0.4).toFixed(1)}%, ${f.statusColor} ${p.toFixed(1)}%`
+        : `${f.color} 0%, ${f.color} ${p.toFixed(1)}%`;
       if (gradStartX !== null) {
         const pct = Math.max(0, Math.min(100, (gradStartX / width) * 100));
         // El degradé llega a su color final al terminar las noches; el tramo de late check-out sigue plano en ese color.
         const endPct = (f.lateExt && !f.lateFreeTail) ? Math.max(pct, Math.min(100, (nightsEnd / width) * 100)) : 100;
-        baseGrad = `linear-gradient(to right, ${f.color} 0%, ${f.color} ${pct}%, ${endColor} ${endPct}%, ${endColor} 100%)`;
+        baseGrad = `linear-gradient(to right, ${ramp(pct)}, ${endColor} ${endPct}%, ${endColor} 100%)`;
+      } else if (f.statusColor) {
+        const nPct = f.lateExt ? Math.max(1, Math.min(100, (nightsEnd / width) * 100)) : 100;
+        baseGrad = `linear-gradient(to right, ${ramp(nPct)}, ${f.statusColor} 100%)`;
       }
       let passedPx = null;
       if (f.passedIdx > 0) {
@@ -1445,7 +1502,18 @@ export class Calendar {
   _renderBar(cell, booking, todayISO, isRecambio = false) {
     if (booking._cellType !== 'start' && booking._cellType !== 'solo') return;
 
-    const { color, textColor } = getBookingBarColor(booking);
+    const { color, textColor, statusColor } = getBookingBarColor(booking);
+    // Canal con color propio (Booking/Airbnb/Familia/Expedia): la barra va del color del canal al color del estado de pago.
+    const chanBar = !!statusColor && statusColor !== color;
+    const tailBase = chanBar ? statusColor : color;   // los tramos de recargo oscurecen el color con el que termina la barra
+    // Rampa canal → estado: el canal queda sólido en el primer 40% (ahí va el texto) y vira hasta p%.
+    const ramp = (p) => chanBar
+      ? `${color} 0%, ${color} ${Math.round(p * 0.4)}%, ${statusColor} ${p}%`
+      : `${color} 0%, ${color} ${p}%`;
+    // Recargo: tonos claros (celeste, amarillo) se oscurecen menos para no quedar pesados.
+    const lumOf = (hex) => { const h = hex.replace('#',''); const [r,g,b] = [0,2,4].map(i => parseInt(h.slice(i,i+2),16)/255); return 0.2126*r + 0.7152*g + 0.0722*b; };
+    const lightBase = lumOf(tailBase) > 0.5;
+    const surchFactor = lightBase ? 0.8 : SURCHARGE_DARKEN;
 
     // ── Degradés proporcionales — toda la barra como un solo bloque ──
     // · Noches sin cargo  → amarillo  (noche gratis)
@@ -1477,13 +1545,13 @@ export class Calendar {
       const b = Math.round(parseInt(h.slice(4,6),16) * factor);
       return `rgb(${r},${g},${b})`;
     };
-    const surchColor  = darken(color, SURCHARGE_DARKEN);
+    const surchColor  = darken(tailBase, surchFactor);
 
     // Degradés proporcionales — aplican para TODAS las reservas.
     // El color base ya es semántico: verde=pagado, rojo=señado, ámbar=sin seña.
     // La punta de color indica el tipo de precio especial.
     // Prioridad: noches sin cargo > descuento > recargo
-    let barBg = color;
+    let barBg = chanBar ? `linear-gradient(to right, ${ramp(100)})` : color;
 
     // Gradiente con transición muy leve (4 pp): cada sección ocupa casi
     // una celda entera pero con un suave paso de color en el límite.
@@ -1492,24 +1560,24 @@ export class Calendar {
       // Fallback (antes de medir el layout real): proporción de noches. El ajuste exacto
       // a los límites de celda lo hace _fitBars() una vez que la grilla está en el DOM.
       const p = Math.round(((totalN - Math.min(freeN, totalN)) / totalN) * 100);
-      barBg = `linear-gradient(to right, ${color} 0%, ${color} ${p}%, ${FREE_NIGHT_END} 100%)`;
+      barBg = `linear-gradient(to right, ${ramp(p)}, ${FREE_NIGHT_END} 100%)`;
 
     } else if (discPct > 0 && surcharge > 0 && total > 0) {
       const surchargeRatio = Math.min(surcharge / total, 0.6);
       const p          = Math.round(Math.max(55, 100 - surchargeRatio * 80));
-      const darkFactor = Math.max(0.6, 0.85 - surchargeRatio * 0.4);   // más oscuro que la base pero NUNCA casi negro
-      const dk = darken(color, darkFactor);
-      barBg = `linear-gradient(to right, ${color} 0%, ${color} ${p-T}%, ${dk} ${p+T}%, ${dk} 100%)`;
+      const darkFactor = Math.max(lightBase ? 0.8 : 0.6, 0.85 - surchargeRatio * 0.4);   // más oscuro que la base pero NUNCA casi negro
+      const dk = darken(tailBase, darkFactor);
+      barBg = `linear-gradient(to right, ${ramp(p - T)}, ${dk} ${p+T}%, ${dk} 100%)`;
 
     } else if (discPct > 0) {
       // Descuento: el último discPct% del ancho vira de forma continua del color base a amarillo.
       const p = Math.max(0, Math.min(100, 100 - discPct));
-      barBg = `linear-gradient(to right, ${color} 0%, ${color} ${p}%, ${FREE_NIGHT_END} 100%)`;
+      barBg = `linear-gradient(to right, ${ramp(p)}, ${FREE_NIGHT_END} 100%)`;
 
     } else if (surchPct > 0) {
       // Recargo: el último surchPct% del ancho vira de forma continua al tono oscuro (bordó).
       const p = Math.max(0, Math.min(100, 100 - surchPct));
-      barBg = `linear-gradient(to right, ${color} 0%, ${color} ${p}%, ${surchColor} 100%)`;
+      barBg = `linear-gradient(to right, ${ramp(p)}, ${surchColor} 100%)`;
     }
 
     // Bloqueos: rayitas diagonales sutiles (igual al card en la tab Reservas)
@@ -1645,7 +1713,7 @@ export class Calendar {
     `;
     bar.dataset.bookingId = booking.id;
     // Si la barra tiene zona amarilla (noches sin cargo), una sombra sutil mantiene legible el nombre.
-    if ((freeN > 0 || (discPct > 0 && !(surcharge > 0))) && !isBlock) bar.style.textShadow = '0 1px 2px rgba(0,0,0,.45)';
+    if ((freeN > 0 || (discPct > 0 && !(surcharge > 0))) && !isBlock) bar.style.textShadow = (textColor === 'white' ? '0 1px 2px rgba(0,0,0,.45)' : 'none');
     // Datos para _fitBars(): ancho/borde exactos según la geometría real de las celdas.
     {
       const freeShown = Math.min(freeN, totalN);
@@ -1671,6 +1739,7 @@ export class Calendar {
       bar._fit = {
         span, left, rightM, late: startsAfterLate,
         lateExt: hasLateExt,
+        statusColor: chanBar ? statusColor : null,
         lateFreeTail: hasLateExt && booking.late_checkout_charged === false && booking.status !== 'paid',
         color, progressOverlay, freeFrom, freeCount, tailFrom, tailEnd,
         baseBg: baseBgPlain,
@@ -1978,7 +2047,7 @@ export class Calendar {
     const guest   = booking.guests
       ? `${booking.guests.first_name} ${booking.guests.last_name}`
       : (booking.block_reason ?? 'Bloqueo');
-    const { label } = getBookingBarColor(booking);
+    const { statusLabel: label, statusColor } = getBookingBarColor(booking);
     const source    = booking.source ?? 'direct';
     const srcCfg    = SOURCE_CONFIG[source] ?? {};
     const bookingSegs = getSegments(booking);
@@ -2074,12 +2143,28 @@ export class Calendar {
       <div class="ct-dates" style="margin-top:6px">📅 ${booking.check_in} → ${booking.check_out}</div>
       <div class="ct-nights">🌙 ${booking.nights ?? '?'} noches${(booking.pax || booking.adults) ? ` · ${guestCountsText(booking).short}` : ''}</div>
       ${promoLabel(booking.nights, booking.free_nights) ? `<div class="ct-promo">🎁 PROMO ${promoLabel(booking.nights, booking.free_nights)} (${booking.free_nights} noche${booking.free_nights === 1 ? '' : 's'} sin cargo)</div>` : ''}
+      ${(() => {
+        if (booking.status === 'blocked' || booking.is_blocked) return '';
+        const disc  = parseFloat(booking.discount_pct ?? 0) || 0;
+        const surch = parseFloat(booking.surcharge_amount ?? 0) || 0;
+        const base  = (booking.price_per_night > 0 && booking.nights > 0) ? booking.price_per_night * booking.nights : Math.max(totalAmount - surch, 0);
+        let out = '';
+        if (disc > 0) {
+          const amt = base > 0 ? Math.round(base * disc / 100) : 0;
+          out += `<div class="ct-promo">🏷️ DESCUENTO ${fmtPct(disc)}${amt ? ` (−${formatARS(amt)})` : ''}</div>`;
+        }
+        if (surch > 0) {
+          const pct = base > 0 ? surch / base * 100 : 0;
+          out += `<div class="ct-promo">➕ RECARGO ${pct ? fmtPct(pct) + ' ' : ''}(+${formatARS(surch)})</div>`;
+        }
+        return out;
+      })()}
       ${(() => { if (booking.status === 'blocked' || booking.is_blocked) return ''; const sp = specialsForStay(booking.check_in, booking.check_out); if (!sp.any) return '';
         return `<div class="ct-specials">${sp.all.map(e => `<div>${emojiHTML(e.emoji)} ${escapeHtml(e.detail)}</div>`).join('')}${sp.summer ? '<div>☀️ Temporada de verano (2/1 al 10/3)</div>' : ''}</div>`; })()}
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">
         <span style="padding:2px 8px;border-radius:99px;font-size:.7rem;font-weight:700;
-          background:${getBookingBarColor(booking).color}22;color:${getBookingBarColor(booking).color};
-          border:1px solid ${getBookingBarColor(booking).color}40">${label}</span>
+          background:${statusColor}22;color:${statusColor};
+          border:1px solid ${statusColor}40">${label}</span>
         ${source !== 'direct' && source !== 'blocked' ? '<span style="padding:2px 8px;border-radius:99px;font-size:.7rem;font-weight:700;background:' + (srcCfg.color??'') + '22;color:' + (srcCfg.color??'#64748B') + ';border:1px solid ' + (srcCfg.color??'') + '40">' + (srcCfg.emoji??'') + ' ' + (srcCfg.label??'') + '</span>' : ''}
       </div>
       ${payRow}
@@ -4629,6 +4714,7 @@ export class Calendar {
   // ══════════════════════════════════════════════════
   setupViewToggle() {
     const availBtn = document.getElementById('cal-avail-toggle');
+    if (availBtn && !availBtn.classList.contains('active')) availBtn.textContent = '👁 Disponibilidad';
     if (!availBtn) return;
 
     // ── Guard de idempotencia ──────────────────────────
@@ -6176,8 +6262,8 @@ export class Calendar {
         // Cada unidad muestra su propio puntito de color pegado a su número
         // (ej: "●#2 | ●#3"), en vez de agrupar todos los puntos al inicio.
         const numsLabel = g.units.map(u =>
-          `<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${u.color ?? 'var(--color-primary)'};margin-right:3px;vertical-align:middle"></span>#${u.sort_order ?? '?'}`
-        ).join(' <span style="color:var(--color-text-3)">|</span> ');
+          `<span class="cal-tf-unit" data-unit-id="${u.id}"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${u.color ?? 'var(--color-primary)'};margin-right:3px;vertical-align:middle"></span>#${u.sort_order ?? '?'}</span>`
+        ).join(' <span class="cal-tf-sep" style="color:var(--color-text-3)">|</span> ');
         return `<tr style="background:${i % 2 === 0 ? 'transparent' : 'var(--color-surface-2)'}">
           <td style="padding:5px 10px;font-size:.74rem;font-weight:700;color:var(--color-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:center" title="${g.units.map(u=>u.name).join(', ')}">
             ${numsLabel}
@@ -6194,6 +6280,7 @@ export class Calendar {
             <tbody>${bodyHTML}</tbody>
           </table>
         </div>`;
+      this._applyTariffFilter();
     } catch (err) {
       console.warn('[Calendar] _renderTariffTable:', err.message);
       wrap.innerHTML = '';
@@ -6219,20 +6306,10 @@ export class Calendar {
     const winStart = this._windowStart > today ? this._windowStart : today;
     const winEnd   = this._addDays(this._windowStart, this._visibleDays ?? 35);
 
-    // DEBUG temporal — quitar cuando esté confirmado
-    console.group('[MiniAgenda] debug');
-    console.log('_windowStart:', this._windowStart, '| today:', today, '| _visibleDays:', this._visibleDays);
-    console.log('winStart:', winStart, '| winEnd:', winEnd);
-    console.log('bookings recibidos:', bookings.length);
-    const allNonCancelled = bookings.filter(b => !b.is_blocked && b.status !== 'blocked' && b.status !== 'cancelled');
-    console.log('no bloqueados/cancelados:', allNonCancelled.length, allNonCancelled.map(b => `${b.check_in} [${b.status}]`));
-    const inRange = allNonCancelled.filter(b => b.check_in >= winStart && b.check_in <= winEnd);
-    console.log('en rango fecha:', inRange.length, inRange.map(b => b.check_in));
-    console.groupEnd();
-
     const upcoming = bookings
       .filter(b => !b.is_blocked && b.status !== 'blocked' && b.status !== 'cancelled'
-                && b.check_in >= winStart && b.check_in <= winEnd)
+                && b.check_in >= winStart && b.check_in <= winEnd
+                && this._bookingPassesFilters(b))
       .sort((a, b) => a.check_in.localeCompare(b.check_in))
       .slice(0, SLOTS);
     const cards = [];

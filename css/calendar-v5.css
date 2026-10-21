@@ -1280,9 +1280,24 @@
 }
 #section-calendar .cal-tb-group > button:active { transform: translateY(1px); }
 #section-calendar .cal-tb-group > button:focus-visible { outline: 2px solid var(--color-primary, #4f46e5); outline-offset: 1px; }
-#section-calendar .cal-tb-sep { width: 1px; align-self: stretch; margin: 5px 3px; background: var(--color-border); }
+/* Separador | automático entre cada botón del grupo (sirve también para los botones que inserta el JS) */
+#section-calendar .cal-tb-group { gap: 3px; }
+#section-calendar .cal-tb-group > * { position: relative; }
+#section-calendar .cal-tb-group > * + *::before {
+  content: ''; position: absolute; left: -2px; top: 7px; bottom: 7px; width: 1px;
+  background: var(--color-border); pointer-events: none;
+}
+/* Buscador dentro del grupo */
+#section-calendar .cal-tb-search { position: relative; display: flex; align-items: center; }
+#section-calendar .cal-tb-search #cal-search-input {
+  height: 28px; min-width: 170px; padding: 0 26px 0 10px; border: 0 !important; border-radius: 7px;
+  background: transparent !important; box-shadow: none !important; font-size: .74rem;
+}
+#section-calendar .cal-tb-search #cal-search-input:focus { background: var(--color-surface, #fff) !important; outline: 2px solid var(--color-primary, #4f46e5); outline-offset: 0; }
+#section-calendar .cal-tb-search #cal-search-clear {
+  position: absolute; right: 4px; background: none; border: 0; cursor: pointer; color: var(--color-text-3); font-size: 12px; width: 20px; height: 20px;
+}
 /* Buscador alineado en altura con los grupos */
-#section-calendar .cal-nav #cal-search-input { height: 34px; border-radius: 10px; }
 @media (max-width: 768px) {
   #section-calendar .cal-tb-group { overflow-x: auto; max-width: 100%; }
 }

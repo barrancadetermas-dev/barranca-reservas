@@ -1,0 +1,2 @@
+BORRAR del proyecto: js/components/supabase-config.js (copia sin uso; el real es js/supabase-config.js)
+Luego correr: python3 _dev/tests/e2e/regen_harness.py

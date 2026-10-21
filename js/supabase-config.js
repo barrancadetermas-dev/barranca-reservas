@@ -48,19 +48,30 @@ export function getDefaultColor(index) {
 export const SOURCE_CONFIG = {
   direct:   { label: 'Directo',    dot: '#64748B', color: null,      textColor: null    },
   walkin:   { label: 'Espontáneo', dot: '#0891B2', color: '#0891B2', textColor: 'white' },
-  booking:  { label: 'Booking',    dot: '#1D4ED8', color: '#1D4ED8', textColor: 'white' },
-  airbnb:   { label: 'Airbnb',     dot: '#EA580C', color: '#EA580C', textColor: 'white' },
-  family:   { label: 'Familia',    dot: '#7C3AED', color: '#7C3AED', textColor: 'white' },
+  booking:  { label: 'Booking',    dot: '#0EA5E9', color: '#0EA5E9', textColor: '#082F49' },
+  airbnb:   { label: 'Airbnb',     dot: '#F97316', color: '#F97316', textColor: 'white' },
+  family:   { label: 'Familia',    dot: '#8B5CF6', color: '#8B5CF6', textColor: 'white' },
   company:  { label: 'Empresa',    dot: '#0F766E', color: '#0F766E', textColor: 'white' },
   referral: { label: 'Referido',   dot: '#B45309', color: '#B45309', textColor: 'white' },
   despegar: { label: 'Despegar',    dot: '#059669', color: '#059669', textColor: 'white' },
-  expedia:  { label: 'Expedia',     dot: '#DC2626', color: '#DC2626', textColor: 'white' },
+  expedia:  { label: 'Expedia',     dot: '#E8501A', color: '#E8501A', textColor: 'white' },
 };
 
 // ══════════════════════════════════════════════════
-// COLOR DE BARRA DE RESERVA (prioridad estricta)
-// blocked > family > airbnb > booking > paid > partial > pending
+// COLOR DE BARRA DE RESERVA
+//  1) Bloqueo: gris oscuro.
+//  2) Canales con color propio (Booking, Airbnb, Familia, Expedia): la barra toma el color del canal.
+//  3) Resto de canales (directo, espontáneo, empresa, referido, despegar): color por estado de pago:
+//     verde = pagada · rojo = señada · amarillo = sin seña.
+// `statusLabel`/`statusColor` siempre describen el estado de pago (para tooltips y chips).
 // ══════════════════════════════════════════════════
+export const CHANNEL_BAR_COLORS = {
+  booking: { color: '#0EA5E9', past: '#0369A1', textColor: '#082F49', label: 'Booking' },   // celeste
+  airbnb:  { color: '#F97316', past: '#9A3412', textColor: 'white',   label: 'Airbnb'  },   // naranja
+  family:  { color: '#8B5CF6', past: '#5B21B6', textColor: 'white',   label: 'Familia' },   // lila
+  expedia: { color: '#E8501A', past: '#8A2E10', textColor: 'white',   label: 'Expedia' },   // naranja rojizo
+};
+
 export function getBookingBarColor(booking) {
   const status = booking?.status ?? 'pending';
   const source = booking?.source ?? 'direct';
@@ -69,48 +80,20 @@ export function getBookingBarColor(booking) {
     : false;
 
   if (status === 'blocked' || booking?.is_blocked)
-    return { color: '#374151', textColor: 'rgba(255,255,255,.7)', label: 'Bloqueo', priority: 1 };
+    return { color: '#374151', textColor: 'rgba(255,255,255,.7)', label: 'Bloqueo', statusLabel: 'Bloqueo', statusColor: '#374151', priority: 1 };
 
-  // PAGADO: verde siempre, sin importar el canal — el pago está confirmado.
-  if (status === 'paid')
-    return { color: isPast ? '#14532D' : '#16A34A', textColor: 'white', label: 'Pagado', priority: 1 };
+  // Color/etiqueta del ESTADO DE PAGO (siempre se calcula; es lo que pintan los canales sin color propio)
+  let st;
+  if (status === 'paid')         st = { color: isPast ? '#14532D' : '#16A34A', textColor: 'white',   label: 'Pagado',   priority: 5 };
+  else if (status === 'partial') st = { color: isPast ? '#7F1D1D' : '#DC2626', textColor: 'white',   label: 'Con seña', priority: 6 };
+  else                           st = { color: isPast ? '#78350F' : '#EAB308', textColor: isPast ? 'white' : '#1C1917', label: 'Sin seña', priority: 7 };
 
-  // SEÑADA: rojo, independientemente del canal
-  if (status === 'partial')
-    return { color: isPast ? '#7F1D1D' : '#DC2626', textColor: 'white', label: 'Con seña', priority: 2 };
-
-  // Sin seña — usar color del canal para identificar el origen
-  if (source === 'family')
-    return { color: isPast ? '#4C1D95' : '#7C3AED', textColor: 'white', label: 'Familia', priority: 3 };
-
-  if (source === 'walkin')
-    return { color: isPast ? '#155E75' : '#0891B2', textColor: 'white', label: 'Espontáneo', priority: 3 };
-
-  if (source === 'airbnb')
-    return { color: isPast ? '#7C2D12' : '#EA580C', textColor: 'white', label: 'Airbnb', priority: 4 };
-
-  if (source === 'booking')
-    return { color: isPast ? '#1E3A8A' : '#1D4ED8', textColor: 'white', label: 'Booking', priority: 4 };
-
-  if (source === 'despegar')
-    return { color: isPast ? '#064E3B' : '#059669', textColor: 'white', label: 'Despegar', priority: 4 };
-
-  if (source === 'expedia')
-    return { color: isPast ? '#7F1D1D' : '#DC2626', textColor: 'white', label: 'Expedia', priority: 4 };
-
-  if (source === 'company')
-    return { color: isPast ? '#0D4D4D' : '#0F766E', textColor: 'white', label: 'Empresa', priority: 4 };
-
-  if (source === 'referral')
-    return { color: isPast ? '#78350F' : '#B45309', textColor: 'white', label: 'Referido', priority: 4 };
-
-  // Sin seña, canal directo
-  return {
-    color:     isPast ? '#78350F' : '#EAB308',
-    textColor: isPast ? 'white'   : '#1C1917',
-    label:     'Sin seña',
-    priority:  7,
-  };
+  const ch = CHANNEL_BAR_COLORS[source];
+  if (ch) {
+    return { color: isPast ? ch.past : ch.color, textColor: ch.textColor, label: ch.label,
+             statusLabel: st.label, statusColor: st.color, priority: 3 };
+  }
+  return { ...st, statusLabel: st.label, statusColor: st.color };
 }
 
 // Backward compat
