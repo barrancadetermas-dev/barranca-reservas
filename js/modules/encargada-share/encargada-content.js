@@ -1,3 +1,4 @@
+import { distributionOf, guestsText } from '../../services/booking-pricing.js';
 // ═══════════════════════════════════════════════════
 // encargada-content.js — Contenido para compartir con encargada
 // Genera PDF (ventana imprimible) + texto WhatsApp editable
@@ -119,7 +120,9 @@ function buildReservaBlocks(bookings) {
         car:     [g?.car_model, g?.car_plate].filter(Boolean).join(' · ') || null,
         units:   b.booking_units ?? [],
         nights:  b.nights ?? Math.round((new Date(b.check_out) - new Date(b.check_in)) / 86400000),
-        pax:     (b.adults ?? b.pax ?? '') || '',
+        // Antes solo contaba adultos; ahora adultos + niños (y la distribución por depto si está cargada)
+        pax:     (b.adults != null || b.children != null) ? guestsText(b.adults, b.children) : ((b.pax ?? '') || ''),
+        dist:    distributionOf(b),
         balance: Math.max(0, (b.total_amount ?? 0) - (b.total_paid ?? 0)),
         notes:   b.notes ?? '',
         status:  paymentStatus(b),
@@ -163,7 +166,7 @@ export function generateEncargadaPDF(bookings, rangeLabel, includeAmounts) {
     // ── Modo reservas ──
     const blocks = buildReservaBlocks(bookings);
     totalCount = blocks.length;
-    rows = blocks.map(({ b, name, phone, units, nights, pax, balance, notes, status }) => {
+    rows = blocks.map(({ b, name, phone, units, nights, pax, dist, balance, notes, status }) => {
       const unitHtml = units.map(bu =>
         `<span class="enc-unit">${unitDot(bu)}</span>`).join(' ');
       const amountRow = balance > 0
@@ -182,7 +185,7 @@ export function generateEncargadaPDF(bookings, rangeLabel, includeAmounts) {
           <div class="enc-row"><span class="enc-lbl">Fecha Ingreso:</span><span class="enc-val">${esc(fmtShort(b.check_in))}</span></div>
           <div class="enc-row"><span class="enc-lbl">Fecha Salida:</span><span class="enc-val">${esc(fmtShort(b.check_out))}</span></div>
           <div class="enc-row"><span class="enc-lbl">Noches:</span><span class="enc-val">${nights}</span></div>
-          <div class="enc-row"><span class="enc-lbl">Cant. de Personas:</span><span class="enc-val">${pax !== '' ? esc(String(pax)) : '—'}</span></div>
+          <div class="enc-row"><span class="enc-lbl">Cant. de Personas:</span><span class="enc-val">${pax !== '' ? esc(String(pax)) : '—'}</span></div>${(dist ?? []).map(d => `<div class="enc-row"><span class="enc-lbl">Armado ${esc(d.name || ('#' + d.order))}:</span><span class="enc-val">${esc(guestsText(d.adults, d.children))}</span></div>`).join('')}
           ${amountRow}
           <div class="enc-row enc-notes"><span class="enc-lbl">Nota:</span><span class="enc-val enc-note-text">${esc(notes) || '—'}</span></div>
         </div>`;
@@ -290,7 +293,7 @@ export function generateEncargadaWhatsApp(bookings, rangeLabel, includeAmounts) 
   } else {
     // ── Modo reservas ──
     const blocks = buildReservaBlocks(bookings);
-    blocks.forEach(({ b, name, phone, age, car, units, nights, pax, balance, notes }, i) => {
+    blocks.forEach(({ b, name, phone, age, car, units, nights, pax, dist, balance, notes }, i) => {
       // Unidades: número en negrita, nombre en cursiva
       const unitsText = units.map(bu => {
         const { num, rest } = unitLabelWA(bu);
@@ -312,6 +315,8 @@ export function generateEncargadaWhatsApp(bookings, rangeLabel, includeAmounts) 
         `- Fecha Ingreso: ${fmtShort(b.check_in)}`,
         `- Fecha Salida: ${fmtShort(b.check_out)} _(${nights} ${nights !== 1 ? 'noches' : 'noche'})_`,
         `- Cant. de Personas: ${pax !== '' ? String(pax) : '—'}`,
+        ...(dist ?? []).map(d => { const bu = units.find(x => x.unit_id === d.unitId); const { num } = bu ? unitLabelWA(bu) : { num: d.order };
+          return `   • *${num}* ${guestsText(d.adults, d.children)}`; }),
         age ? `- Edad: ${age}` : null,
         car ? `- Auto: ${car}` : null,
         balance > 0 ? `- Abonan al ingreso: *${fmtMoney(balance)}*` : null,

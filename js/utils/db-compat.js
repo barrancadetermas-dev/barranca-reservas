@@ -58,3 +58,16 @@ export function optionalColumn(db, table, column) {
 }
 /** `, gender` si la base ya tiene guests.gender, o ''. */
 export const genderColumn = (db) => optionalColumn(db, 'guests', 'gender');
+
+/**
+ * ¿La base ya tiene las columnas por unidad de booking_units (migration_multiunidad.sql)?
+ * Devuelve el texto a sumar dentro de `booking_units(unit_id, ...${MU})` o ''.
+ * Se consulta una vez y se recuerda: con la migración sin aplicar, las pantallas siguen funcionando igual que antes.
+ * @returns {Promise<string>}
+ */
+export async function multiUnitColumns(db) {
+  return (await optionalColumn(db, 'booking_units', 'adults'))
+    ? ', adults, children, free_nights, discount_pct, surcharge_amount' : '';
+}
+/** `, unit_pricing` si la base ya tiene bookings.unit_pricing, o ''. */
+export const unitPricingColumn = (db) => optionalColumn(db, 'bookings', 'unit_pricing');

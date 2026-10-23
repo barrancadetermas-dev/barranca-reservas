@@ -21,6 +21,7 @@ import { segmentColumns } from '../utils/db-compat.js';
 import { genderSymbolHTML } from '../utils/gender.js';
 import { specialChipsHTML, specialsForStay, emojiHTML } from '../services/special-dates.js';
 import { guestCountsText, promoLabel, fmtPct } from '../utils/booking-display.js';
+import { unitAdjustments, hasUnitPricing, distributionOf, guestsText } from '../services/booking-pricing.js';
 import { escapeHtml } from '../services/voucher-template.js';
 
 // Late check-out: la barra de la reserva que sale tarde invade LATE_FRAC de la celda del día de salida
@@ -253,16 +254,17 @@ export class Calendar {
     const params = { hotelId: this.ctx.hotelId, firstDay, lastDay };
     // Consulta por niveles: cada migración opcional (género, estadía dividida) se pide solo
     // si la base la tiene; si una falla, se reintenta sin ella en vez de dejar el calendario en blanco.
-    const makeSelect = ({ gender, seg }) => `
+    const makeSelect = ({ gender, seg, mu }) => `
         id, check_in, check_out, status, source, is_blocked, block_reason,
-        late_checkout, late_checkout_charged, free_nights, discount_pct, surcharge_amount,
+        late_checkout, late_checkout_charged, free_nights, discount_pct, surcharge_amount${mu ? ', unit_pricing' : ''},
         total_amount, total_paid, balance, nights, pax,
         adults, children, notes, price_per_night, created_at,
         checked_in_at, checked_out_at,
         guests!bookings_guest_id_fkey(first_name, last_name, bad_experience, tags${gender ? ', gender' : ''}),
-        booking_units(unit_id, price_per_night${seg ? ', segment_check_in, segment_check_out' : ''}, units(name, sort_order, color, max_guests))
+        booking_units(unit_id, price_per_night${seg ? ', segment_check_in, segment_check_out' : ''}${mu ? ', adults, children, free_nights, discount_pct, surcharge_amount' : ''}, units(name, sort_order, color, max_guests))
       `;
     const tiers = [
+      { gender: true,  seg: true, mu: true },   // con columnas por unidad (migration_multiunidad.sql)
       { gender: true,  seg: true  },
       { gender: false, seg: true  },    // falta la migración de género
       { gender: false, seg: false },    // falta también la de estadía dividida
@@ -1521,14 +1523,18 @@ export class Calendar {
     // · Recargo           → color más oscuro (pagó extra)
     //   · Recargo chico   → ligeramente más oscuro
     //   · Recargo grande  → bordó/verde oscuro según color base
-    const freeN       = booking.free_nights    ?? 0;
-    const discPct     = booking.discount_pct   ?? 0;
-    const surcharge   = booking.surcharge_amount ?? 0;
+    // Ajustes del depto de ESTA barra = lo colectivo + lo propio de la unidad (reservas viejas: solo lo colectivo)
+    const _adj        = unitAdjustments(booking, cell?.dataset?.unitId);
+    const freeN       = _adj.freeNights;
+    const discPct     = _adj.discPct;
+    const surcharge   = (booking.surcharge_amount ?? 0) + _adj.surcharge;
+    const _bu         = (booking.booking_units ?? []).find(x => String(x.unit_id) === String(cell?.dataset?.unitId));
+    const _ppn        = (hasUnitPricing(booking) && _bu?.price_per_night > 0) ? _bu.price_per_night : booking.price_per_night;
     const total       = booking.total_amount   ?? 0;
     const totalN      = booking.nights         ?? 1;
     const isPaid      = booking.status === 'paid';
     // % de recargo sobre el alquiler base (precio por noche × noches; si no hay, total sin recargo)
-    const surchBase   = (booking.price_per_night > 0 && totalN > 0) ? booking.price_per_night * totalN : Math.max(total - surcharge, 0);
+    const surchBase   = (_ppn > 0 && totalN > 0) ? _ppn * totalN : Math.max(total - surcharge, 0);
     const surchPct    = (surcharge > 0 && surchBase > 0) ? Math.max(0, Math.min(100, surcharge / surchBase * 100)) : 0;
     const orange      = '#F97316';
     const yellow      = '#EF9F27';
@@ -2157,6 +2163,21 @@ export class Calendar {
           const pct = base > 0 ? surch / base * 100 : 0;
           out += `<div class="ct-promo">➕ RECARGO ${pct ? fmtPct(pct) + ' ' : ''}(+${formatARS(surch)})</div>`;
         }
+        return out;
+      })()}
+      ${(() => {
+        if (booking.status === 'blocked' || booking.is_blocked) return '';
+        const bus = booking.booking_units ?? [];
+        if (bus.length < 2) return '';
+        let out = '';
+        if (hasUnitPricing(booking)) bus.forEach(bu => {
+          const nm = escapeHtml(bu.units?.name ?? 'Depto');
+          if (bu.free_nights > 0)      out += `<div class="ct-promo">🎁 ${nm}: ${bu.free_nights} noche${bu.free_nights === 1 ? '' : 's'} sin cargo</div>`;
+          if (bu.discount_pct > 0)     out += `<div class="ct-promo">🏷️ ${nm}: DESCUENTO ${fmtPct(bu.discount_pct)}</div>`;
+          if (bu.surcharge_amount > 0) out += `<div class="ct-promo">➕ ${nm}: RECARGO (+${formatARS(bu.surcharge_amount)})</div>`;
+        });
+        const dist = distributionOf(booking);
+        if (dist.length) out += `<div class="ct-nights">👥 ${dist.map(d => `${escapeHtml(d.name)}: ${guestsText(d.adults, d.children)}`).join(' · ')}</div>`;
         return out;
       })()}
       ${(() => { if (booking.status === 'blocked' || booking.is_blocked) return ''; const sp = specialsForStay(booking.check_in, booking.check_out); if (!sp.any) return '';
@@ -6367,8 +6388,20 @@ export class Calendar {
       else if (uColors.length === 2) { avBg='linear-gradient(135deg,'+uColors[0]+'44 50%,'+uColors[1]+'44 50%)'; avColor='var(--color-text)'; }
       else { const step=Math.round(360/uColors.length); avBg='conic-gradient('+uColors.map((col,i)=>col+'44 '+(i*step)+'deg '+((i+1)*step)+'deg').join(',')+')'; avColor='var(--color-text)'; }
 
-      const SRC_MAP   = {'booking.com':'🔵','airbnb':'🔴','directo':'🟢','whatsapp':'💬','instagram':'📸','referido':'👥'};
-      const srcIcon   = SRC_MAP[(b.source ?? '').toLowerCase()] ?? '';
+      // Canal (chip con el color del canal; antes el mapa de íconos no coincidía con los valores reales de `source`)
+      const _sc       = SOURCE_CONFIG[b.source ?? 'direct'] ?? {};
+      const srcIcon   = (b.source && b.source !== 'direct' && _sc.color)
+        ? `<span style="font-size:.52rem;font-weight:700;padding:1px 5px;border-radius:6px;background:${_sc.color}22;color:${_sc.color};flex-shrink:0">${escapeHtml(_sc.label ?? b.source)}</span>` : '';
+      // Estado de pago y saldo
+      const _st       = getBookingBarColor(b);
+      const _bal      = Math.max(0, b.balance ?? ((b.total_amount || 0) - (b.total_paid || 0)));
+      const statusRow = '<div style="display:flex;align-items:center;justify-content:space-between;margin-top:3px">' +
+        `<span style="font-size:.52rem;font-weight:700;padding:1px 6px;border-radius:6px;background:${_st.statusColor}22;color:${_st.statusColor}">${_st.statusLabel}</span>` +
+        (_bal > 0 ? `<span style="font-size:.58rem;color:var(--color-text-2)">Saldo $${Math.round(_bal / 1000)}k</span>` : '<span style="font-size:.58rem;font-weight:700;color:#16a34a">Sin saldo</span>') + '</div>';
+      // Personas por depto (si la reserva tiene la distribución cargada)
+      const _dist = distributionOf(b);
+      const distRows = _dist.map(d => '<div style="display:flex;align-items:center;gap:3px;border-top:.5px solid var(--color-border);padding:2px 0;font-size:.58rem">' +
+        `<i style="width:6px;height:6px;border-radius:50%;background:${d.color ?? 'var(--color-primary)'};flex-shrink:0"></i><b>#${d.order}</b><span>${guestsText(d.adults, d.children)}</span></div>`).join('');
       const amtStr    = b.total_amount > 0 ? '$' + Math.round(b.total_amount / 1000) + 'k' : '';
       const isToday2  = days === 0;
 
@@ -6399,7 +6432,7 @@ export class Calendar {
             '<div style="display:flex;align-items:center;justify-content:space-between;padding-top:3px;border-top:0.5px solid var(--color-border)">' +
               '<span class="cal-agenda-slot-unit" style="flex:1;min-width:0">' + unitLabel + '</span>' +
               (amtStr ? '<span style="font-size:.58rem;font-weight:600;color:var(--color-text-2);flex-shrink:0;margin-left:3px">' + amtStr + '</span>' : '') +
-            '</div>' +
+            '</div>' + distRows + statusRow +
           '</div>' +
         '</div>'
       );

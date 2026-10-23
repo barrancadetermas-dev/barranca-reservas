@@ -24,7 +24,8 @@ import { cache } from '../services/supabase-cache.js';
 import { Sound } from '../services/sound-service.js';
 import { fetchDisponibilidad } from '../modules/mila-assistant/mila-data.js';
 import { getUsdConversionRate } from '../services/usd-rate-history.js';
-import { queryWithOptionalColumns } from '../utils/db-compat.js';
+import { queryWithOptionalColumns, multiUnitColumns } from '../utils/db-compat.js';
+import { computeBookingPricing, validateDistribution, autoDistribute, guestsText, hasUnitPricing, distributionOf } from '../services/booking-pricing.js';
 import { genderSymbolHTML } from '../utils/gender.js';
 import { specialChipsHTML } from '../services/special-dates.js';
 import { promoLabel, paymentPercents, pctOf, fmtPct as fmtPctPay } from '../utils/booking-display.js';
@@ -401,10 +402,7 @@ export class BookingForm {
       // que Postgres devuelva un producto cruzado (ej: 4 unidades × 1 pago =
       // el pago aparece 4 veces). Separarlas evita ese bug por completo.
       const [{ data: b, error }, { data: paymentsData }] = await Promise.all([
-        queryWithOptionalColumns(
-          sel => this.db.from('bookings').select(sel).eq('id', bookingId).single(),
-          '*, guests!bookings_guest_id_fkey(*), booking_units(unit_id, price_per_night, segment_check_in, segment_check_out)',
-          '*, guests!bookings_guest_id_fkey(*), booking_units(unit_id, price_per_night)'),
+        this._loadBookingForEdit(bookingId),
         this.db.from('payments').select('*').eq('booking_id', bookingId),
       ]);
 
@@ -442,6 +440,14 @@ export class BookingForm {
       this._unitPrices = {};
       (b.booking_units ?? []).forEach(bu => {
         if (bu.price_per_night != null) this._unitPrices[String(bu.unit_id)] = bu.price_per_night;
+      });
+      // Huéspedes y ajustes propios de cada depto (migration_multiunidad.sql). Reservas viejas: todo vacío.
+      this._resetAdj();
+      (b.booking_units ?? []).forEach(bu => {
+        this._unitAdj[String(bu.unit_id)] = {
+          free: bu.free_nights || 0, disc: parseFloat(bu.discount_pct) || 0, discMode: 'pct',
+          surch: parseFloat(bu.surcharge_amount) || 0, surchMode: 'amt',
+          adults: bu.adults ?? null, children: bu.children ?? null };
       });
       // Reserva vieja con 2+ unidades pero sin precio individual guardado:
       // sugerir como punto de partida el precio total repartido en partes iguales
@@ -549,6 +555,32 @@ export class BookingForm {
                            cancelled:'Cancelada', blocked:'Bloqueada' };
     const hasBadExp  = booking.guests?.bad_experience;
 
+    // Reservas de 2+ deptos: distribución de huéspedes y desglose económico POR UNIDAD
+    const _bus = booking.booking_units ?? [];
+    const _distDetail = (() => {
+      const d = distributionOf(booking);
+      return d.length ? `<div class="detail-stay"><div class="detail-label">👥 Distribución por unidad</div>${d.map(x => `
+        <div class="detail-stay-row" style="--c:${escapeHtml(x.color ?? '#6366f1')}"><span class="detail-stay-dot"></span>
+          <strong>${escapeHtml(x.name)}</strong><span class="detail-stay-n">${guestsText(x.adults, x.children)}</span></div>`).join('')}</div>` : '';
+    })();
+    const _unitDetail = (hasUnitPricing(booking) && _bus.length > 1 && !split) ? (() => {
+      const P = computeBookingPricing({
+        nights: booking.nights ?? 0,
+        units: _bus.map(bu => ({ id: String(bu.unit_id), price: bu.price_per_night || 0, freeNights: bu.free_nights,
+          disc: { mode: 'pct', value: bu.discount_pct }, surch: { mode: 'amt', value: bu.surcharge_amount } })),
+        collective: { freeNights: booking.free_nights, disc: { mode: 'pct', value: booking.discount_pct }, surch: { mode: 'amt', value: booking.surcharge_amount } } });
+      const nm = id => _bus.find(b => String(b.unit_id) === id)?.units?.name ?? 'Depto';
+      const row = (a, b, color) => `<div class="detail-breakdown-row"${color ? ` style="color:${color}"` : ''}><span>${a}</span><span>${b}</span></div>`;
+      const rest = (booking.total_amount ?? 0) - P.total;
+      return P.perUnit.map(u => row(`${escapeHtml(nm(u.id))} · ${booking.nights} × ${formatARS(u.price)}`, formatARS(u.gross))
+        + (u.freeNights > 0 ? row(`&nbsp;&nbsp;🎁 ${u.freeNights} noche${u.freeNights === 1 ? '' : 's'} sin cargo`, `−${formatARS(u.freeAmt)}`, 'var(--color-success)') : '')
+        + (u.discAmt > 0 ? row(`&nbsp;&nbsp;🏷️ Descuento ${fmtPct(u.discPct)}%`, `−${formatARS(u.discAmt)}`, 'var(--color-success)') : '')
+        + (u.surchAmt > 0 ? row('&nbsp;&nbsp;➕ Recargo', `+${formatARS(u.surchAmt)}`, 'var(--color-warning)') : '')
+        + row(`&nbsp;&nbsp;<strong>Neto ${escapeHtml(nm(u.id))}</strong>`, `<strong>${formatARS(u.net)}</strong>`)).join('')
+        + (P.collectiveSurch > 0 ? row('Recargo (toda la reserva)', `+${formatARS(P.collectiveSurch)}`, 'var(--color-warning)') : '')
+        + (booking.late_checkout && rest > 0.5 ? row('Late check-out', `+${formatARS(rest)}`) : '');
+    })() : null;
+
     // Desglose financiero completo
     const nights        = booking.nights ?? 0;
     const pricePerNight = booking.price_per_night ?? 0;
@@ -609,6 +641,7 @@ export class BookingForm {
         </div>
       </div>
       ${(() => { const chips = specialChipsHTML(booking.check_in, booking.check_out, { mode: 'full' }); return chips ? `<div class="detail-specials">${chips}</div>` : ''; })()}
+      ${_distDetail}
       ${split ? `
       <div class="detail-stay">
         <div class="detail-label">🔀 Alojamiento · cambio de departamento</div>
@@ -621,7 +654,8 @@ export class BookingForm {
           </div>`).join('')}
       </div>` : ''}
       <div class="detail-breakdown">
-        ${pricePerNight > 0 ? `
+        ${_unitDetail ?? ''}
+        ${pricePerNight > 0 && !_unitDetail ? `
           ${segPriced ? segs.map(sg => `
           <div class="detail-breakdown-row">
             <span>${escapeHtml(sg.unit?.name ?? 'Depto')} · ${sg.nights} × ${formatARS(sg.pricePerNight)}</span>
@@ -719,6 +753,7 @@ export class BookingForm {
       if (!el) return;
       el.value = ['f-discount','f-surcharge','f-free-nights','f-deposit'].includes(id) ? '0' : '';
     });
+    this._resetAdj();
     const extraDetailsReset = document.getElementById('f-extra-details');
     if (extraDetailsReset) extraDetailsReset.open = false;
 
@@ -982,6 +1017,7 @@ export class BookingForm {
       const first = extra.exitedTo ?? null;
       this._selectedUnitIds = new Set(first ? [String(first)] : []);
       this._unitPrices = {};
+      this._resetAdj();
       this._setSplitUi(false);
       this._renderUnitSelector();
       this._renderPerUnitPrices();
@@ -992,6 +1028,7 @@ export class BookingForm {
     }
     this._selectedUnitIds = new Set(segments.map(sg => sg.unit_id));
     this._unitPrices = {};
+    this._resetAdj();
     segments.forEach(sg => { if (sg.pricePerNight) this._unitPrices[sg.unit_id] = sg.pricePerNight; });
     this._syncSplitPrice(segments);
     this._updatePaxCap?.();
@@ -1075,7 +1112,9 @@ export class BookingForm {
   // lógica existente (breakdown, validación, total): cuando hay 2+ unidades,
   // este método ESCRIBE la suma de los precios individuales dentro de f-price,
   // de modo que el resto del formulario sigue funcionando exactamente igual.
-  _renderPerUnitPrices() {
+  _renderPerUnitPrices() { this._renderPerUnitPricesCore(); this._renderUnitAdjustUI?.(); }
+
+  _renderPerUnitPricesCore() {
     const singleWrap = document.getElementById('f-price-single-wrap');
     const multiWrap  = document.getElementById('f-price-multi-wrap');
     const rowsWrap   = document.getElementById('per-unit-price-rows');
@@ -1537,56 +1576,317 @@ export class BookingForm {
     return true;
   }
 
+  // ══════════════════════════════════════════════════════════════
+  // Reservas de 2+ deptos: ajustes y huéspedes POR UNIDAD
+  // Estado: lo colectivo (toda la reserva) en this._coll, lo de cada depto en this._unitAdj[uid].
+  // Los campos f-free-nights / f-discount / f-surcharge muestran el valor de "a quién se aplica"
+  // (toda la reserva o un depto) según el selector de alcance. El cálculo es único: booking-pricing.js
+  // ══════════════════════════════════════════════════════════════
+  _resetAdj() {
+    this._coll = { free: 0, disc: 0, discMode: 'pct', surch: 0, surchMode: 'amt' };
+    this._unitAdj = {};
+    this._scope = { free: 'all', disc: 'all', surch: 'all' };
+    this._scopeUnit = { free: null, disc: null, surch: null };
+  }
+
+  _isMulti() { return this._selectedUnitIds?.size >= 2 && !this._isSplit(); }
+
+  _unitLabel(uid) {
+    const u = this.ctx?.units?.find(x => String(x.id) === String(uid));
+    return u ? `${u.name}${u.sort_order != null ? ' #' + u.sort_order : ''}` : 'Depto';
+  }
+
+  /** Objeto donde se guarda lo que muestra el campo de cada concepto (toda la reserva o un depto). */
+  _adjTarget(concept) {
+    if (!this._coll) this._resetAdj();
+    const uid = this._scopeUnit[concept];
+    if (this._isMulti() && this._scope[concept] === 'unit' && uid) return (this._unitAdj[uid] ??= {});
+    return this._coll;
+  }
+
+  /** Lo escrito en los campos → estado (en el destino que corresponda a cada concepto). */
+  _syncAdjFromDom() {
+    if (this._adjLoading) return;
+    if (!this._coll) this._resetAdj();
+    const v = id => document.getElementById(id)?.value;
+    Object.assign(this._adjTarget('free'),  { free: parseInt(v('f-free-nights')) || 0 });
+    Object.assign(this._adjTarget('disc'),  { disc: parseFloat(v('f-discount')) || 0, discMode: v('f-discount-mode') || 'pct' });
+    Object.assign(this._adjTarget('surch'), { surch: parseFloat(v('f-surcharge')) || 0, surchMode: v('f-surcharge-mode') || 'amt' });
+  }
+
+  /** Estado → campos (al cambiar el alcance o el depto elegido). */
+  _loadAdjToDom(concept) {
+    const t = this._adjTarget(concept);
+    this._adjLoading = true;
+    try {
+      if (concept === 'free') document.getElementById('f-free-nights').value = t.free ?? 0;
+      if (concept === 'disc') {
+        (t.discMode === 'amt' ? window._discModeAmt : window._discModePct)?.();
+        document.getElementById('f-discount').value = t.disc ?? 0;
+      }
+      if (concept === 'surch') {
+        (t.surchMode === 'pct' ? window._surchModePct : window._surchModeAmt)?.();
+        document.getElementById('f-surcharge').value = t.surch ?? 0;
+      }
+    } finally { this._adjLoading = false; }
+  }
+
+  /** Entradas del cálculo leídas del formulario + resultado de services/booking-pricing.js */
+  _pricing() {
+    this._syncAdjFromDom();
+    const val = id => document.getElementById(id)?.value;
+    const ci = val('f-checkin'), co = val('f-checkout');
+    const nights = ci && co ? Math.max(0, Math.round((new Date(co) - new Date(ci)) / 86400000)) : 0;
+    const price = parseFloat(val('f-price')) || 0;
+    const multi = this._isMulti();
+    const A = this._unitAdj ?? {};
+    const units = multi
+      ? [...this._selectedUnitIds].map(uid => ({
+          id: String(uid), price: parseFloat(this._unitPrices[uid]) || 0, freeNights: A[uid]?.free || 0,
+          disc:  { mode: A[uid]?.discMode  || 'pct', value: A[uid]?.disc  || 0 },
+          surch: { mode: A[uid]?.surchMode || 'amt', value: A[uid]?.surch || 0 } }))
+      : [{ id: 'all', price }];
+    const c = this._coll;
+    const lateChecked = document.getElementById('f-late-checkout')?.checked ?? false;
+    const latePaid    = lateChecked && (document.getElementById('f-late-checkout-paid')?.checked ?? true);
+    const lateAmt     = latePaid ? Math.round(parseFloat(val('f-late-checkout-amount')) || (price * 0.5)) : 0;
+    const P = computeBookingPricing({
+      nights, units, late: lateAmt,
+      collective: { freeNights: c.free, disc: { mode: c.discMode, value: c.disc }, surch: { mode: c.surchMode, value: c.surch } } });
+    return { P, nights, price, ci, co, lateChecked, latePaid, lateAmt };
+  }
+
+  /** Columnas por unidad que se guardan en booking_units (solo con 2+ deptos). */
+  _unitRowExtras(uid, P, multi) {
+    if (!multi) return { adults: null, children: null, free_nights: null, discount_pct: null, surcharge_amount: null };
+    const a = this._unitAdj[uid] ?? {};
+    const pu = P.perUnit.find(x => x.id === String(uid));
+    return {
+      adults: a.adults ?? null, children: a.children ?? null,
+      free_nights: P.unitMode ? (a.free || 0) : 0,
+      discount_pct: P.unitMode ? (pu?.unitDiscPct || 0) : 0,
+      surcharge_amount: P.unitMode ? (pu?.surchAmt || 0) : 0 };
+  }
+
+  /** ¿La base ya tiene las columnas de migration_multiunidad.sql? (se consulta una vez) */
+  async _multiUnitSupported() {
+    if (this._muSupport === true) return true;
+    try {
+      const [a, b] = await Promise.all([
+        this.db.from('booking_units').select('adults').limit(1),
+        this.db.from('bookings').select('unit_pricing').limit(1)]);
+      const ok = !a.error && !b.error;
+      if (ok) this._muSupport = true;
+      return ok;
+    } catch { return false; }
+  }
+
+  async _loadBookingForEdit(bookingId) {
+    const run = sel => this.db.from('bookings').select(sel).eq('id', bookingId).single();
+    const MU = await multiUnitColumns(this.db);
+    return queryWithOptionalColumns(run,
+      `*, guests!bookings_guest_id_fkey(*), booking_units(unit_id, price_per_night, segment_check_in, segment_check_out${MU})`,
+      '*, guests!bookings_guest_id_fkey(*), booking_units(unit_id, price_per_night)');
+  }
+
+  // ── Distribución de huéspedes ──
+  _distributionCheck() {
+    const rows = [...this._selectedUnitIds].map(uid => ({
+      id: String(uid), name: this._unitLabel(uid),
+      adults: this._unitAdj[uid]?.adults ?? null, children: this._unitAdj[uid]?.children ?? null,
+      maxGuests: this.ctx?.units?.find(x => String(x.id) === String(uid))?.max_guests ?? null }));
+    return validateDistribution({
+      adults: parseInt(document.getElementById('f-adults')?.value) || 0,
+      children: parseInt(document.getElementById('f-children')?.value) || 0 }, rows);
+  }
+  /** [{name, text}] por depto, solo si hay distribución cargada (para voucher y resumen). */
+  _distributionLines() {
+    if (!this._isMulti() || !this._distributionCheck().loaded) return [];
+    return [...this._selectedUnitIds].map(uid => ({
+      name: this._unitLabel(uid), text: guestsText(this._unitAdj[uid]?.adults, this._unitAdj[uid]?.children) }));
+  }
+  _distributionHTML() {
+    const d = this._distributionLines();
+    return d.length ? `<div class="voucher-row-sm">👥 ${d.map(x => `${escapeHtml(x.name)}: ${escapeHtml(x.text)}`).join(' · ')}</div>` : '';
+  }
+
+  // ── UI: alcance de cada concepto + "Distribución por unidad" ──
+  _renderUnitAdjustUI() {
+    const scopeWrap = document.getElementById('unit-scope-wrap');
+    const distWrap  = document.getElementById('unit-dist-wrap');
+    if (!scopeWrap || !distWrap) return;
+    if (!this._coll) this._resetAdj();
+    const multi = this._isMulti();
+    scopeWrap.style.display = multi ? '' : 'none';
+    distWrap.style.display  = multi ? '' : 'none';
+    const concepts = ['free', 'disc', 'surch'];
+    const ids = multi ? [...this._selectedUnitIds].map(String) : [];
+    // Un solo depto / cambio de depto: todo vuelve a "toda la reserva" (como siempre)
+    concepts.forEach(c => {
+      if (this._scope[c] === 'unit' && (!multi || !ids.includes(this._scopeUnit[c]))) {
+        this._scope[c] = 'all'; this._scopeUnit[c] = null; this._loadAdjToDom(c);
+      }
+    });
+    if (!multi) { scopeWrap.innerHTML = ''; distWrap.innerHTML = ''; return; }
+
+    const titles = { free: '🎁 Noches sin cargo', disc: '🏷️ Descuento', surch: '➕ Recargo' };
+    scopeWrap.innerHTML = `
+      <div class="ms-title">¿A quién se aplica?</div>
+      ${concepts.map(c => `
+        <div class="ms-row" data-concept="${c}">
+          <span class="ms-lbl">${titles[c]}</span>
+          <span class="ms-seg">
+            <button type="button" data-scope="all"  class="${this._scope[c] === 'all'  ? 'on' : ''}">Toda la reserva</button>
+            <button type="button" data-scope="unit" class="${this._scope[c] === 'unit' ? 'on' : ''}">Una unidad</button>
+          </span>
+          <select class="ms-unit" ${this._scope[c] === 'unit' ? '' : 'style="display:none"'}>
+            ${ids.map(uid => `<option value="${uid}" ${this._scopeUnit[c] === uid ? 'selected' : ''}>${escapeHtml(this._unitLabel(uid))}</option>`).join('')}
+          </select>
+        </div>`).join('')}
+      <div class="ms-applied" id="ms-applied"></div>`;
+    scopeWrap.querySelectorAll('.ms-row').forEach(row => {
+      const c = row.dataset.concept;
+      row.querySelectorAll('[data-scope]').forEach(btn => btn.addEventListener('click', () => {
+        this._syncAdjFromDom();                       // guarda lo que se estaba editando
+        this._scope[c] = btn.dataset.scope;
+        this._scopeUnit[c] = btn.dataset.scope === 'unit' ? (this._scopeUnit[c] && ids.includes(this._scopeUnit[c]) ? this._scopeUnit[c] : ids[0]) : null;
+        this._loadAdjToDom(c);
+        this._renderUnitAdjustUI(); this._updateBreakdown();
+      }));
+      row.querySelector('.ms-unit')?.addEventListener('change', (e) => {
+        this._syncAdjFromDom();
+        this._scopeUnit[c] = e.target.value;
+        this._loadAdjToDom(c);
+        this._renderUnitAdjustUI(); this._updateBreakdown();
+      });
+    });
+
+    this._udOpen ??= new Set([ids[0]]);
+    distWrap.innerHTML = `
+      <details class="ud" open>
+        <summary>👥 Distribución por unidad <span class="ud-chips" id="ud-chips"></span></summary>
+        <div class="ud-actions"><button type="button" class="btn btn-outline btn-sm" id="ud-auto">Repartir automáticamente</button>
+          <small>Opcional: sirve para armar cada depto. La suma debe coincidir con el total de personas.</small></div>
+        ${ids.map(uid => {
+          const u = this.ctx.units.find(x => String(x.id) === uid); const a = this._unitAdj[uid] ?? {};
+          return `<details class="ud-item" data-uid="${uid}" ${this._udOpen.has(uid) ? 'open' : ''}>
+            <summary><span class="ud-dot" style="background:${escapeHtml(u?.color ?? '#6366f1')}"></span><b>${escapeHtml(this._unitLabel(uid))}</b>
+              <span class="ud-sum" data-uid="${uid}"></span></summary>
+            <div class="ud-body">
+              <label>Adultos<input type="number" min="0" max="20" class="ud-in" data-uid="${uid}" data-f="adults" placeholder="—" value="${a.adults ?? ''}"></label>
+              <label>Niños<input type="number" min="0" max="20" class="ud-in" data-uid="${uid}" data-f="children" placeholder="—" value="${a.children ?? ''}"></label>
+              <div class="ud-cap"><div class="ud-capbar"><i data-uid="${uid}"></i></div><small class="ud-capt" data-uid="${uid}"></small></div>
+              <div class="ud-tags" data-uid="${uid}"></div>
+            </div></details>`; }).join('')}
+        <div id="ud-warn"></div>
+        <div id="ud-table"></div>
+      </details>`;
+    distWrap.querySelectorAll('.ud-item').forEach(d => d.addEventListener('toggle', () => {
+      d.open ? this._udOpen.add(d.dataset.uid) : this._udOpen.delete(d.dataset.uid); }));
+    distWrap.querySelectorAll('.ud-in').forEach(inp => inp.addEventListener('input', () => {
+      const a = (this._unitAdj[inp.dataset.uid] ??= {});
+      a[inp.dataset.f] = inp.value === '' ? null : Math.max(0, parseInt(inp.value) || 0);
+      this._refreshUnitDistStatus();
+    }));
+    document.getElementById('ud-auto')?.addEventListener('click', () => {
+      const tot = { adults: parseInt(document.getElementById('f-adults')?.value) || 0, children: parseInt(document.getElementById('f-children')?.value) || 0 };
+      autoDistribute(tot, ids.map(uid => ({ id: uid, maxGuests: this.ctx.units.find(x => String(x.id) === uid)?.max_guests ?? null })))
+        .forEach(r => { const a = (this._unitAdj[r.id] ??= {}); a.adults = r.adults; a.children = r.children; });
+      this._renderUnitAdjustUI();
+    });
+    this._refreshUnitDistStatus();
+  }
+
+  /** Actualiza chips, avisos, capacidad y tabla por unidad sin volver a dibujar los campos. */
+  _refreshUnitDistStatus() {
+    if (!this._isMulti()) return;
+    const q = s => document.getElementById(s);
+    if (!q('ud-chips')) return;
+    const fmt = n => formatARS(n);
+    const { P } = this._pricing();
+    const chk = this._distributionCheck();
+    const totA = parseInt(q('f-adults')?.value) || 0, totC = parseInt(q('f-children')?.value) || 0;
+    const chip = (ok, text) => `<span class="ud-chip ${ok ? 'ok' : 'warn'}">${text}</span>`;
+    q('ud-chips').innerHTML = chk.loaded
+      ? chip(chk.assignedAdults === totA, `Adultos ${chk.assignedAdults}/${totA}`) + chip(chk.assignedChildren === totC, `Niños ${chk.assignedChildren}/${totC}`)
+      : '<span class="ud-chip">sin distribuir</span>';
+    [...this._selectedUnitIds].map(String).forEach(uid => {
+      const a = this._unitAdj[uid] ?? {};
+      const u = this.ctx.units.find(x => String(x.id) === uid);
+      const occ = (a.adults || 0) + (a.children || 0), cap = u?.max_guests ?? 0;
+      const sum = document.querySelector(`.ud-sum[data-uid="${uid}"]`);
+      if (sum) sum.textContent = (a.adults != null || a.children != null) ? `${guestsText(a.adults, a.children)}${cap ? ` · ${occ}/${cap}` : ''}` : 'sin distribuir';
+      const bar = document.querySelector(`.ud-capbar i[data-uid="${uid}"]`);
+      if (bar) { bar.style.width = cap ? Math.min(100, occ / cap * 100) + '%' : '0'; bar.style.background = cap && occ > cap ? '#dc2626' : '#16a34a'; }
+      const capt = document.querySelector(`.ud-capt[data-uid="${uid}"]`);
+      if (capt) capt.textContent = cap ? `Capacidad del depto: ${cap} · ocupa ${occ}` : '';
+      const pu = P.perUnit.find(x => x.id === uid);
+      const tags = document.querySelector(`.ud-tags[data-uid="${uid}"]`);
+      if (tags) {
+        const own = [];
+        if (a.free > 0) own.push(`🎁 ${a.free} noche${a.free !== 1 ? 's' : ''} sin cargo`);
+        if (pu?.unitDiscPct > 0) own.push(`🏷️ Descuento ${fmtPct(pu.unitDiscPct)}%`);
+        if (pu?.surchAmt > 0 && P.unitMode) own.push(`➕ Recargo ${fmt(pu.surchAmt)}`);
+        tags.innerHTML = own.length ? own.map(t => `<span class="ud-tag">${t}</span>`).join('') + '<small>solo este depto</small>' : '<small>Sin ajustes propios</small>';
+      }
+    });
+    q('ud-warn').innerHTML = chk.warnings.map(w => `<div class="ud-alert ${w.blocking ? 'bad' : 'warn'}">${w.blocking ? '⛔' : '⚠️'} ${escapeHtml(w.text)}</div>`).join('');
+    // Resumen de lo aplicado
+    const ap = q('ms-applied');
+    if (ap) {
+      const c = this._coll, items = [];
+      if (c.free > 0)  items.push(`<span class="ud-tag">Toda la reserva · 🎁 ${c.free} sin cargo</span>`);
+      if (c.disc > 0)  items.push(`<span class="ud-tag">Toda la reserva · 🏷️ ${c.discMode === 'amt' ? fmt(c.disc) : fmtPct(c.disc) + '%'}</span>`);
+      if (c.surch > 0) items.push(`<span class="ud-tag">Toda la reserva · ➕ ${c.surchMode === 'pct' ? fmtPct(c.surch) + '%' : fmt(c.surch)}</span>`);
+      [...this._selectedUnitIds].map(String).forEach(uid => {
+        const a = this._unitAdj[uid] ?? {}, n = this._unitLabel(uid);
+        if (a.free > 0)  items.push(`<span class="ud-tag">${escapeHtml(n)} · 🎁 ${a.free} sin cargo</span>`);
+        if (a.disc > 0)  items.push(`<span class="ud-tag">${escapeHtml(n)} · 🏷️ ${a.discMode === 'amt' ? fmt(a.disc) : fmtPct(a.disc) + '%'}</span>`);
+        if (a.surch > 0) items.push(`<span class="ud-tag">${escapeHtml(n)} · ➕ ${a.surchMode === 'pct' ? fmtPct(a.surch) + '%' : fmt(a.surch)}</span>`);
+      });
+      ap.innerHTML = items.length ? `<small>Aplicado:</small> ${items.join('')}` : '';
+    }
+    // Tabla por unidad (solo cuando hay ajustes propios de algún depto)
+    const tbl = q('ud-table');
+    if (tbl) tbl.innerHTML = P.unitMode ? `
+      <table class="ud-table"><thead><tr><th>Depto</th><th>Subtotal</th><th>Sin cargo</th><th>Desc.</th><th>Recargo</th><th>Neto</th></tr></thead><tbody>
+        ${P.perUnit.map(u => `<tr><td>${escapeHtml(this._unitLabel(u.id))}</td><td>${fmt(u.gross)}</td>
+          <td>${u.freeAmt ? '−' + fmt(u.freeAmt) : '—'}</td><td>${u.discAmt ? '−' + fmt(u.discAmt) : '—'}</td>
+          <td>${u.surchAmt ? '+' + fmt(u.surchAmt) : '—'}</td><td><b>${fmt(u.net)}</b></td></tr>`).join('')}
+        ${P.collectiveSurch > 0 ? `<tr><td colspan="5">Recargo de toda la reserva</td><td>+${fmt(P.collectiveSurch)}</td></tr>` : ''}
+        <tr class="tot"><td colspan="5">Total (sin late check-out ni pagos)</td><td>${fmt(P.total - P.late)}</td></tr>
+      </tbody></table>` : '';
+  }
+
   // ── Precio breakdown ──────────────────────────────
   _updateBreakdown() {
-    const ci    = document.getElementById('f-checkin').value;
-    const co    = document.getElementById('f-checkout').value;
-    const price = parseFloat(document.getElementById('f-price').value) || 0;
-    const freeN_pre = parseInt(document.getElementById('f-free-nights').value) || 0;
-    const nights_pre = (ci && co) ? Math.max(0, Math.round((new Date(co)-new Date(ci))/86400000)) : 0;
-    const _subtotalForDisc = price * Math.max(0, nights_pre - freeN_pre);
-    const _discMode0 = document.getElementById('f-discount-mode')?.value ?? 'pct';
-    const _discRaw0  = parseFloat(document.getElementById('f-discount').value) || 0;
-    const disc  = _discMode0 === 'amt'
-      ? (_subtotalForDisc > 0 ? Math.min(100, _discRaw0 / _subtotalForDisc * 100) : 0)
-      : _discRaw0;
-    const _sModeA = document.getElementById('f-surcharge-mode')?.value ?? 'amt';
-    const _sRawA  = parseFloat(document.getElementById('f-surcharge').value) || 0;
-    const surch   = _sModeA === 'pct' ? Math.round(subtotal * _sRawA / 100) : _sRawA;
-    const freeN = parseInt(document.getElementById('f-free-nights').value) || 0;
-    const lateCheckout     = document.getElementById('f-late-checkout')?.checked ?? false;
-    const lateCheckoutPaid = lateCheckout && (document.getElementById('f-late-checkout-paid')?.checked ?? true);
-    const lateAmtCustom    = parseFloat(document.getElementById('f-late-checkout-amount')?.value) || (price * 0.5);
+    const { P, nights, price, ci, co, lateChecked, latePaid, lateAmt } = this._pricing();
+    const set = (id, text) => { const el = document.getElementById(id); if (el) el.textContent = text; };
 
     if (!ci || !co || !price) {
       ['pb-nights','pb-subtotal','pb-discount','pb-surcharge','pb-total','pb-free-nights','pb-late-checkout']
-        .forEach(id => { const el = document.getElementById(id); if (el) el.textContent = '—'; });
+        .forEach(id => set(id, '—'));
+      this._refreshUnitDistStatus?.();
       return;
     }
 
-    const nights       = Math.round((new Date(co) - new Date(ci)) / 86400000);
-    const billable     = Math.max(0, nights - freeN);
-    const subtotal     = price * billable;
-    const discAmt      = Math.round(subtotal * (disc / 100));
-    const lateAmt      = lateCheckoutPaid ? lateAmtCustom : 0;
-    const total        = Math.max(0, subtotal - discAmt + Math.round(surch) + lateAmt);
-
-    const set = (id, text) => { const el = document.getElementById(id); if (el) el.textContent = text; };
-    set('pb-nights',       `${nights} noche${nights !== 1 ? 's' : ''}${lateCheckout ? ' + ½' : ''}`);
-    set('pb-subtotal',     formatARS(subtotal));
-    set('pb-free-nights',  freeN > 0 ? `−${formatARS(price * freeN)}` : '—');
-    set('pb-discount',     disc > 0 ? `−${formatARS(discAmt)} (${fmtPct(disc)}%)` : '—');
+    const freeAmt = P.freeAmt, discAmt = P.discAmt, surch = P.surchAmt;
+    set('pb-nights',       `${nights} noche${nights !== 1 ? 's' : ''}${lateChecked ? ' + ½' : ''}`);
+    set('pb-subtotal',     formatARS(P.subtotal));
+    set('pb-free-nights',  freeAmt > 0 ? `−${formatARS(freeAmt)}` : '—');
+    set('pb-discount',     discAmt > 0 ? (P.unitMode ? `−${formatARS(discAmt)}` : `−${formatARS(discAmt)} (${fmtPct(P.discPct)}%)`) : '—');
     set('pb-surcharge',    surch > 0 ? `+${formatARS(surch)}` : '—');
-    set('pb-late-checkout', lateCheckoutPaid ? `+${formatARS(lateAmt)}` : lateCheckout ? 'Sin cargo' : '—');
-    set('pb-total',        formatARS(total));
+    set('pb-late-checkout', latePaid ? `+${formatARS(lateAmt)}` : lateChecked ? 'Sin cargo' : '—');
+    set('pb-total',        formatARS(P.total));
 
-    document.getElementById('pbr-free-nights')?.style.setProperty('display', freeN > 0 ? '' : 'none');
-    document.getElementById('pbr-discount')?.style.setProperty('display',    disc > 0 ? '' : 'none');
+    document.getElementById('pbr-free-nights')?.style.setProperty('display', freeAmt > 0 ? '' : 'none');
+    document.getElementById('pbr-discount')?.style.setProperty('display',    discAmt > 0 ? '' : 'none');
     document.getElementById('pbr-surcharge')?.style.setProperty('display',   surch > 0 ? '' : 'none');
-    document.getElementById('pbr-late-checkout')?.style.setProperty('display', lateCheckout ? '' : 'none');
+    document.getElementById('pbr-late-checkout')?.style.setProperty('display', lateChecked ? '' : 'none');
 
-    this._cachedTotal = total;
+    this._cachedTotal = P.total;
     this._updatePaymentSummary();
+    this._refreshUnitDistStatus?.();
   }
 
   // ── Manejo de pagos ───────────────────────────────
@@ -2073,27 +2373,15 @@ export class BookingForm {
     const source = selectedChip?.dataset?.source ?? 'direct';
 
     // Nights & financials
-    const nightsN    = ci && co ? Math.round((new Date(co) - new Date(ci)) / 86400000) : 0;
-    const freeNights = parseInt(document.getElementById('f-free-nights')?.value ?? 0);
+    const { P, nights: nightsN } = this._pricing();   // cálculo único (incluye ajustes por unidad)
+    const freeNights = P.unitMode ? 0 : P.collective.freeNights;
     const billable   = Math.max(0, nightsN - freeNights);
-    const subtotal   = billable * price;
-
-    const _discMode1 = document.getElementById('f-discount-mode')?.value ?? 'pct';
-    const _discRaw1  = parseFloat(document.getElementById('f-discount')?.value ?? 0);
-    const discPct    = _discMode1 === 'amt'
-      ? (subtotal > 0 ? Math.min(100, _discRaw1 / subtotal * 100) : 0)
-      : _discRaw1;
-    const _sModeB    = document.getElementById('f-surcharge-mode')?.value ?? 'amt';
-    const _sRawB     = parseFloat(document.getElementById('f-surcharge')?.value ?? 0);
-    const surcharge  = _sModeB === 'pct' ? Math.round(subtotal * _sRawB / 100) : _sRawB;
-    const discount   = Math.round(subtotal * discPct / 100);
-
-    const _lateCheckedX = document.getElementById('f-late-checkout')?.checked ?? false;
-    const _latePaidX    = _lateCheckedX && (document.getElementById('f-late-checkout-paid')?.checked ?? true);
-    const _priceX       = parseFloat(document.getElementById('f-price')?.value) || 0;
-    const _lateRawX     = parseFloat(document.getElementById('f-late-checkout-amount')?.value) || (_priceX * 0.5);
-    const lateAmtDisp   = (_latePaidX) ? Math.round(_lateRawX) : 0;
-    const total      = Math.round(subtotal - discount + surcharge + lateAmtDisp);
+    const subtotal   = P.subtotal;
+    const discPct    = P.discPct;
+    const surcharge  = P.surchAmt;
+    const discount   = P.discAmt;
+    const lateAmtDisp = P.late;
+    const total      = P.total;
     const paid       = Math.round(this._getTotalPaid());
     const balance    = total - paid;
     const fmt = n => '$' + Math.round(n).toLocaleString('es-AR');
@@ -2126,7 +2414,7 @@ export class BookingForm {
                  // cambio de depto: precio del tramo × noches del tramo; simultáneos: × noches facturables
                  total: this._isSplit()
                    ? (parseFloat(this._unitPrices[uid]) || 0) * (this._splitEditor.getSegments().find(sg => sg.unit_id === String(uid))?.nights ?? 0)
-                   : (parseFloat(this._unitPrices[uid]) || 0) * billable };
+                   : (P.unitMode ? (P.perUnit.find(x => x.id === String(uid))?.net ?? 0) : (parseFloat(this._unitPrices[uid]) || 0) * billable) };
       });
       const sumTotals   = unitTotals.reduce((s,u) => s + u.total, 0) || 1;
       const generalPaid = payRows.filter(p => !p.unitId).reduce((s,p) => s + p.amount, 0);
@@ -2205,17 +2493,23 @@ export class BookingForm {
           👥 ${adults} adulto${adults !== 1 ? 's' : ''}${children ? ` + ${children} menor${children !== 1 ? 'es' : ''}` : ''}
         </div>
         <div class="voucher-row-sm">🏠 ${unitNames || '—'}</div>
+        ${this._distributionHTML()}
       </div>
 
       ${perUnitHTML}
 
       <div class="voucher-section">
         <div class="voucher-section-title">💰 Finanzas</div>
+        ${P.unitMode ? P.perUnit.map(u => `
+          <div class="voucher-fin-row"><span>${escapeHtml(this._unitLabel(u.id))} · ${nightsN} × ${fmt(u.price)}</span><span>${fmt(u.gross)}</span></div>
+          ${u.freeNights > 0 ? `<div class="voucher-fin-row voucher-disc"><span>&nbsp;&nbsp;Noches sin cargo (${u.freeNights})</span><span>−${fmt(u.freeAmt)}</span></div>` : ''}
+          ${u.discAmt > 0 ? `<div class="voucher-fin-row voucher-disc"><span>&nbsp;&nbsp;Descuento ${fmtPct(u.discPct)}%</span><span>−${fmt(u.discAmt)}</span></div>` : ''}
+          ${u.surchAmt > 0 ? `<div class="voucher-fin-row"><span>&nbsp;&nbsp;Recargo</span><span>+${fmt(u.surchAmt)}</span></div>` : ''}`).join('') + (P.collectiveSurch > 0 ? `<div class="voucher-fin-row"><span>Recargo (toda la reserva)</span><span>+${fmt(P.collectiveSurch)}</span></div>` : '') : `
         <div class="voucher-fin-row"><span>Precio por noche</span><span>${fmt(price)}</span></div>
         <div class="voucher-fin-row"><span>Noches facturadas (${billable})</span><span>${fmt(subtotal)}</span></div>
         ${discPct > 0   ? `<div class="voucher-fin-row voucher-disc"><span>Descuento ${fmtPct(discPct)}%</span><span>−${fmt(discount)}</span></div>` : ''}
         ${surcharge > 0 ? `<div class="voucher-fin-row"><span>Recargo</span><span>+${fmt(surcharge)}</span></div>` : ''}
-        ${freeNights > 0 ? `<div class="voucher-fin-row voucher-disc"><span>Noches sin cargo (${freeNights})</span><span>✓</span></div>` : ''}
+        ${freeNights > 0 ? `<div class="voucher-fin-row voucher-disc"><span>Noches sin cargo (${freeNights})</span><span>✓</span></div>` : ''}`}
         <div class="voucher-fin-row voucher-total"><span><strong>TOTAL</strong></span><span><strong>${fmt(total)}</strong></span></div>
         ${payRows.map(p => {
           const dateFmt = p.date ? p.date.split('-').reverse().join('/') : '';
@@ -2259,27 +2553,15 @@ export class BookingForm {
 
     const unitNames = this._unitsText(' / ');
 
-    const nightsN    = ci && co ? Math.round((new Date(co) - new Date(ci)) / 86400000) : 0;
-    const freeNights = parseInt(val('f-free-nights')) || 0;
+    const { P, nights: nightsN } = this._pricing();   // cálculo único (incluye ajustes por unidad)
+    const freeNights = P.unitMode ? 0 : P.collective.freeNights;
     const billable   = Math.max(0, nightsN - freeNights);
-    const subtotal   = billable * price;
-
-    const discMode = document.getElementById('f-discount-mode')?.value ?? 'pct';
-    const discRaw  = parseFloat(val('f-discount')) || 0;
-    const discPct  = discMode === 'amt'
-      ? (subtotal > 0 ? Math.min(100, discRaw / subtotal * 100) : 0)
-      : discRaw;
-    const sMode     = document.getElementById('f-surcharge-mode')?.value ?? 'amt';
-    const sRaw      = parseFloat(val('f-surcharge')) || 0;
-    const surcharge = sMode === 'pct' ? Math.round(subtotal * sRaw / 100) : sRaw;
-    const discount  = Math.round(subtotal * discPct / 100);
-
-    const lateChecked = document.getElementById('f-late-checkout')?.checked ?? false;
-    const latePaid    = lateChecked && (document.getElementById('f-late-checkout-paid')?.checked ?? true);
-    const lateRaw     = parseFloat(val('f-late-checkout-amount')) || (price * 0.5);
-    const lateAmt     = latePaid ? Math.round(lateRaw) : 0;
-
-    const total   = Math.round(subtotal - discount + surcharge + lateAmt);
+    const subtotal   = P.subtotal;
+    const discPct    = P.discPct;
+    const surcharge  = P.surchAmt;
+    const discount   = P.discAmt;
+    const lateAmt    = P.late;
+    const total   = P.total;
     const paid    = Math.round(this._getTotalPaid());
     const balance = Math.max(0, total - paid);
 
@@ -2293,20 +2575,32 @@ export class BookingForm {
 
     // Desglose (solo las líneas que aplican)
     const lines = [];
-    if (splitSegs.length > 1) {
-      splitSegs.forEach(sg => lines.push({
-        label: `${sg.unitName} · ${sg.nights} noche${sg.nights === 1 ? '' : 's'} × $\u00a0${Math.round(sg.pricePerNight).toLocaleString('es-AR')}`,
-        value: sg.pricePerNight * sg.nights, kind: 'sub',
-      }));
-    } else if (price > 0) {
-      lines.push({ label: 'Precio por noche', value: price, kind: 'sub' });
-      lines.push({
-        label: `Noches (${billable}${freeNights ? ` facturables de ${nightsN} — ${freeNights} sin cargo` : ''})`,
-        value: subtotal, kind: 'sub',
+    if (P.unitMode && splitSegs.length <= 1) {
+      // Reserva con ajustes por unidad: un bloque por depto, sin mezclar importes
+      P.perUnit.forEach(u => {
+        const nm = unitLabel(u.id);
+        lines.push({ label: `${nm} · ${nightsN} noche${nightsN === 1 ? '' : 's'} × $\u00a0${Math.round(u.price).toLocaleString('es-AR')}`, value: u.gross, kind: 'sub' });
+        if (u.freeNights > 0) lines.push({ label: `Noches sin cargo (${nm}): ${u.freeNights}`, value: -u.freeAmt, kind: 'disc' });
+        if (u.discAmt > 0)    lines.push({ label: `Descuento ${fmtPct(u.discPct)}% (${nm})`, value: -u.discAmt, kind: 'disc' });
+        if (u.surchAmt > 0)   lines.push({ label: `Recargo (${nm})`, value: u.surchAmt, kind: 'surcharge' });
       });
+      if (P.collectiveSurch > 0) lines.push({ label: 'Recargo adicional (toda la reserva)', value: P.collectiveSurch, kind: 'surcharge' });
+    } else {
+      if (splitSegs.length > 1) {
+        splitSegs.forEach(sg => lines.push({
+          label: `${sg.unitName} · ${sg.nights} noche${sg.nights === 1 ? '' : 's'} × $\u00a0${Math.round(sg.pricePerNight).toLocaleString('es-AR')}`,
+          value: sg.pricePerNight * sg.nights, kind: 'sub',
+        }));
+      } else if (price > 0) {
+        lines.push({ label: 'Precio por noche', value: price, kind: 'sub' });
+        lines.push({
+          label: `Noches (${billable}${freeNights ? ` facturables de ${nightsN} — ${freeNights} sin cargo` : ''})`,
+          value: subtotal, kind: 'sub',
+        });
+      }
+      if (discount  > 0) lines.push({ label: `Descuento ${fmtPct(discPct)}%`, value: -discount, kind: 'disc' });
+      if (surcharge > 0) lines.push({ label: 'Recargo adicional', value: surcharge, kind: 'surcharge' });
     }
-    if (discount  > 0) lines.push({ label: `Descuento ${fmtPct(discPct)}%`, value: -discount, kind: 'disc' });
-    if (surcharge > 0) lines.push({ label: 'Recargo adicional', value: surcharge, kind: 'surcharge' });
     if (lateAmt   > 0) lines.push({ label: 'Late check-out', value: lateAmt, kind: 'surcharge' });
 
     const PAY_LABELS = { cash:'Efectivo', transfer:'Transferencia', mercadopago:'MercadoPago',
@@ -2342,6 +2636,7 @@ export class BookingForm {
           units: unitNames,
           segments: splitSegs,
           paxLabel: paxLabel({ adults, children }),
+          distribution: this._distributionLines(),
           channel: document.querySelector('#f-source-selector .src-chip.selected span')?.textContent?.trim() ?? 'Directo',
         },
         money: { lines, total, paid, balance, payments },
@@ -2369,25 +2664,15 @@ export class BookingForm {
     const unitNames = this._unitsText(', ');
 
     const nightsN  = ci && co ? Math.round((new Date(co) - new Date(ci)) / 86400000) : 0;
-    const _discMode3 = document.getElementById('f-discount-mode')?.value ?? 'pct';
-    const _discRaw3  = parseFloat(document.getElementById('f-discount')?.value ?? 0);
-    const discPct  = _discMode3 === 'amt'
-      ? (subtotal > 0 ? Math.min(100, _discRaw3 / subtotal * 100) : 0)
-      : _discRaw3;
-    const _sModeD  = document.getElementById('f-surcharge-mode')?.value ?? 'amt';
-    const _sRawD   = parseFloat(document.getElementById('f-surcharge')?.value ?? 0);
-    const surcharge= _sModeD === 'pct' ? Math.round(subtotal * _sRawD / 100) : _sRawD;
-    const freeNights = parseInt(document.getElementById('f-free-nights')?.value ?? 0);
+    const { P } = this._pricing();   // cálculo único (incluye ajustes por unidad)
+    const freeNights = P.unitMode ? 0 : P.collective.freeNights;
+    const discPct  = P.discPct;
+    const surcharge= P.surchAmt;
     const billable = Math.max(0, nightsN - freeNights);
-    const subtotal = billable * price;
-    const discount = Math.round(subtotal * discPct / 100);
-
-    const _lateCheckedX = document.getElementById('f-late-checkout')?.checked ?? false;
-    const _latePaidX    = _lateCheckedX && (document.getElementById('f-late-checkout-paid')?.checked ?? true);
-    const _priceX       = parseFloat(document.getElementById('f-price')?.value) || 0;
-    const _lateRawX     = parseFloat(document.getElementById('f-late-checkout-amount')?.value) || (_priceX * 0.5);
-    const lateAmtDisp   = (_latePaidX) ? Math.round(_lateRawX) : 0;
-    const total    = Math.round(subtotal - discount + surcharge + lateAmtDisp);
+    const subtotal = P.subtotal;
+    const discount = P.discAmt;
+    const lateAmtDisp = P.late;
+    const total    = P.total;
     const paid     = Math.round(this._getTotalPaid());
     const balance  = Math.max(0, total - paid);
 
@@ -2449,35 +2734,21 @@ export class BookingForm {
       const ci    = document.getElementById('f-checkin').value;
       const co    = document.getElementById('f-checkout').value;
       const price = parseFloat(document.getElementById('f-price').value) || 0;
-      const freeN = parseInt(document.getElementById('f-free-nights').value) || 0;
+      const _pr    = this._pricing();
+      const P      = _pr.P;
+      const freeN  = P.collective.freeNights;   // noches sin cargo COLECTIVAS (las de cada depto van en booking_units)
       const dep   = parseFloat(document.getElementById('f-deposit').value) || 0;
       const notes = document.getElementById('f-notes').value.trim().slice(0, 200);
       const source = document.querySelector('input[name="booking-source"]:checked')?.value ?? 'direct';
 
       let bookingId = this._editingId;
 
-      const nights   = Math.round((new Date(co) - new Date(ci)) / 86400000);
-      const billable = Math.max(0, nights - freeN);
-      const subtotal = price * billable;
-
-      // Descuento — ahora subtotal ya está definido
-      const _discMode4 = document.getElementById('f-discount-mode')?.value ?? 'pct';
-      const _discRaw4  = parseFloat(document.getElementById('f-discount').value) || 0;
-      const disc  = _discMode4 === 'amt'
-        ? (subtotal > 0 ? Math.min(100, _discRaw4 / subtotal * 100) : 0)
-        : _discRaw4;
-
-      // Recargo — ídem
-      const _sModeE = document.getElementById('f-surcharge-mode')?.value ?? 'amt';
-      const _sRawE  = parseFloat(document.getElementById('f-surcharge').value) || 0;
-      const surch   = _sModeE === 'pct' ? Math.round(subtotal * _sRawE / 100) : _sRawE;
-      const discAmt  = Math.round(subtotal * (disc / 100));
-      // Late checkout — debe sumarse al total guardado igual que en el preview
-      const _lateChecked  = document.getElementById('f-late-checkout')?.checked ?? false;
-      const _latePaid     = _lateChecked && (document.getElementById('f-late-checkout-paid')?.checked ?? true);
-      const _lateAmtRaw   = parseFloat(document.getElementById('f-late-checkout-amount')?.value) || (price * 0.5);
-      const lateAmtSave   = _latePaid ? Math.round(_lateAmtRaw) : 0;
-      const total    = Math.max(0, subtotal - discAmt + Math.round(surch) + lateAmtSave);
+      // Cálculo único (services/booking-pricing.js): lo colectivo va a bookings, lo de cada depto a booking_units
+      const nights   = P.nights;
+      const disc     = P.collectiveDiscPct;     // descuento COLECTIVO (%)
+      const surch    = P.collectiveSurch;       // recargo COLECTIVO ($)
+      const lateAmtSave = P.late;
+      const total    = P.total;
       const paid     = Math.round(this._getTotalPaid());
       const balance  = Math.max(0, total - paid);
 
@@ -2495,6 +2766,23 @@ export class BookingForm {
           return;
         }
       }
+      // ── Reservas de 2+ deptos: distribución de huéspedes y precios por unidad ──
+      const multi = this._isMulti();
+      const muOk  = await this._multiUnitSupported();
+      const _abort = () => {
+        if (btn) { btn.disabled = false; btn.textContent = this._editingId ? 'Guardar cambios' : 'Confirmar reserva'; }
+        clearTimeout(_safetyTimer);
+      };
+      const dist = multi ? this._distributionCheck() : { loaded: false, warnings: [] };
+      if (multi && (P.unitMode || dist.loaded) && !muOk) {
+        showToast('⚠️ Para guardar ajustes u huéspedes por unidad falta correr la migración multiunidad (migration_multiunidad.sql).', 'error', 7000);
+        _abort(); return;
+      }
+      if (dist.warnings.length &&
+          !window.confirm('⚠️ ' + dist.warnings.map(w => w.text).join('\n') + '\n\n¿Guardar igual?')) {
+        _abort(); return;
+      }
+
       const wantedSegments = splitActive
         ? this._splitEditor.getSegments()
         : [...this._selectedUnitIds].map(uid => ({ unit_id: String(uid), from: ci, to: co }));
@@ -2573,6 +2861,9 @@ export class BookingForm {
 
       // ── Columnas CORE (siempre existen en la DB) ──────────────
       const lateCheckout = document.getElementById('f-late-checkout')?.checked ?? false;
+      // Reservas con precios por unidad: la app manda el total y el trigger zz_booking_unit_pricing_total lo respeta
+      const _unitPricingOn = !splitActive && multi && P.unitMode;
+      const muFields = muOk ? { unit_pricing: _unitPricingOn, unit_pricing_total: _unitPricingOn ? total : null } : {};
       const corePayload = {
         hotel_id:         this.ctx.hotelId,
         guest_id:         guestId,
@@ -2601,7 +2892,7 @@ export class BookingForm {
       if (bookingId) {
         // UPDATE — intentar con free_nights primero
         let { error: upErr } = await this._withTimeout(this.db.from('bookings').update({
-          ...corePayload, free_nights: freeN
+          ...corePayload, free_nights: freeN, ...muFields
         }).eq('id', bookingId), 'Actualizar reserva');
         if (upErr?.message?.includes('free_nights')) {
           // Columna no existe aún → guardar sin ella
@@ -2622,7 +2913,7 @@ export class BookingForm {
       } else {
         // INSERT — intentar con free_nights primero
         let { data: newB, error: insErr } = await this._withTimeout(
-          this.db.from('bookings').insert({ ...corePayload, free_nights: freeN }).select('id').single(),
+          this.db.from('bookings').insert({ ...corePayload, free_nights: freeN, ...muFields }).select('id').single(),
           'Crear reserva'
         );
         if (insErr?.message?.includes('free_nights') || insErr?.message?.includes('does not exist')) {
@@ -2660,7 +2951,8 @@ export class BookingForm {
       // y después se borran las que ya no están.
       let unitRows;
       if (splitActive) {
-        unitRows = toBookingUnitRows({ check_in: ci, check_out: co }, this._splitEditor.getSegments(), bookingId);
+        unitRows = toBookingUnitRows({ check_in: ci, check_out: co }, this._splitEditor.getSegments(), bookingId)
+          .map(r => ({ ...r, ...(muOk ? { adults: null, children: null, free_nights: null, discount_pct: null, surcharge_amount: null } : {}) }));
       } else {
         const isMultiUnit = this._selectedUnitIds.size >= 2;
         unitRows = [...this._selectedUnitIds].map(uid => ({
@@ -2672,6 +2964,8 @@ export class BookingForm {
           // Si la reserva tenía cambio de depto y se volvió a un solo depto,
           // limpiar los tramos (NULL = toda la estadía).
           ...(this._hadSegments ? { segment_check_in: null, segment_check_out: null } : {}),
+          // Huéspedes y ajustes propios del depto (migration_multiunidad.sql)
+          ...(muOk ? this._unitRowExtras(uid, P, multi) : {}),
         }));
       }
       if (unitRows.length) {

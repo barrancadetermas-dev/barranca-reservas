@@ -11,7 +11,8 @@ import { Bus, EVENTS } from '../services/event-bus.js';
 import { logAction } from '../services/audit-service.js';
 import { alojado, groupGender, genderSymbolHTML } from '../utils/gender.js';
 import { escapeHtml } from '../services/voucher-template.js';
-import { queryWithOptionalColumns, segmentColumns, genderColumn } from '../utils/db-compat.js';
+import { queryWithOptionalColumns, segmentColumns, genderColumn, multiUnitColumns } from '../utils/db-compat.js';
+import { distributionOf, guestsText } from '../services/booking-pricing.js';
 import { registerCheckIn } from '../services/checkin-service.js';
 import { rowsOnNight, rowsAtArrival, rowsAtDeparture } from '../services/stay-segments.js';
 // ↑ Sin import de app.js — evita dependencia circular.
@@ -300,6 +301,7 @@ export class Dashboard {
     // Columnas de tramo (cambio de depto) y de género, si la base ya las tiene
     const SEG = await segmentColumns(this.db);
     const GEN = await genderColumn(this.db);
+    const MU  = await multiUnitColumns(this.db);   // huéspedes por depto (migration_multiunidad.sql)
 
     // Reservas activas hoy (overlapping today)
     // guests.gender es opcional: si la migración no está aplicada se reintenta sin él
@@ -325,9 +327,9 @@ export class Dashboard {
     const { data: checkins } = await this.db
       .from('bookings')
       .select(`
-        id, check_in, check_out, checked_in_at, total_amount, total_paid, balance, status, notes, pax,
+        id, check_in, check_out, checked_in_at, total_amount, total_paid, balance, status, notes, pax, adults, children,
         guests!bookings_guest_id_fkey(first_name, last_name, phone${GEN}),
-        booking_units(unit_id${SEG}, units(name, color, sort_order))
+        booking_units(unit_id${SEG}${MU}, units(name, color, sort_order))
       `)
       .eq('hotel_id', hotelId)
       .eq('check_in', today)
@@ -337,9 +339,9 @@ export class Dashboard {
     const { data: checkouts } = await this.db
       .from('bookings')
       .select(`
-        id, check_in, check_out, checked_out_at, total_amount, total_paid, balance, pax,
+        id, check_in, check_out, checked_out_at, total_amount, total_paid, balance, pax, adults, children,
         guests!bookings_guest_id_fkey(first_name, last_name${GEN}),
-        booking_units(unit_id${SEG}, units(name, color, sort_order))
+        booking_units(unit_id${SEG}${MU}, units(name, color, sort_order))
       `)
       .eq('hotel_id', hotelId)
       .eq('check_out', today)
@@ -1099,6 +1101,10 @@ export class Dashboard {
             (b.total_amount > 0 ? '<span style="font-size:.72rem;font-weight:700;color:var(--color-text-2)">$' + Math.round(b.total_amount).toLocaleString('es-AR') + '</span>' : '') +
           '</span>' +
         '</div>' +
+        // Para armar: personas por depto (solo reservas de 2+ deptos con distribución cargada)
+        ((() => { const dd = distributionOf(b); return dd.length
+          ? '<div style="font-size:.68rem;color:var(--color-text-2);margin-top:3px;display:flex;gap:10px;flex-wrap:wrap">' +
+            dd.map(d => '<span><b>#' + d.order + '</b> ' + guestsText(d.adults, d.children) + '</span>').join('') + '</div>' : ''; })()) +
       '</div>' +
       actionBtn +
     '</div>';

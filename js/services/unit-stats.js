@@ -9,6 +9,7 @@
 // ══════════════════════════════════════════════════════════════
 
 import { getSegments, addDays, nightsBetween, unitNightsInRange } from './stay-segments.js';
+import { unitNetOf } from './booking-pricing.js';
 
 /**
  * @param {{bookings:Array, units:Array<{id:string}>, firstDay:string, lastDay:string, daysInMonth:number}} p
@@ -43,7 +44,9 @@ export function computeUnitStats({ bookings, units, firstDay, lastDay, daysInMon
       // Precio de esta unidad; si no tiene precio propio, el de la reserva repartido entre sus unidades
       st.totalPriceNights += nights * (unitPrice > 0 ? unitPrice : (b.price_per_night ?? 0) / unitIds.length);
       if (unitPrice > 0) {
-        st.revenue += unitPrice * nights * billableRatio;
+        // Reservas con precios por unidad: el neto REAL de este depto (con sus noches sin cargo/descuento/recargo)
+        const unitNet = unitNetOf(b, uid);
+        st.revenue += (unitNet != null && fullNights > 0) ? unitNet * (nights / fullNights) : unitPrice * nights * billableRatio;
       } else if (allSegNights > 0) {
         st.revenue += (b.total_amount ?? 0) * (nights / allSegNights);
       }

@@ -12,7 +12,7 @@ import { alojado, genderSymbolHTML } from '../utils/gender.js';
 import { escapeHtml } from '../services/voucher-template.js';
 import { specialChipsHTML } from '../services/special-dates.js';
 import { guestCountsText, promoLabel, paymentProgressText } from '../utils/booking-display.js';
-import { queryWithOptionalColumns, segmentColumns } from '../utils/db-compat.js';
+import { queryWithOptionalColumns, segmentColumns, multiUnitColumns, unitPricingColumn } from '../utils/db-compat.js';
 import { registerCheckIn } from '../services/checkin-service.js';
 import { cache } from '../services/supabase-cache.js';
 import { Bus, EVENTS } from '../services/event-bus.js';
@@ -160,23 +160,26 @@ export class BookingList {
         return;
       }
 
-      const buildSelect = (withExtras) => `
+      const buildSelect = (withExtras, mu = false) => `
           id, check_in, check_out, nights, status, source,
           total_amount, total_paid, balance, price_per_night,
-          discount_pct, surcharge_amount,
+          discount_pct, surcharge_amount, free_nights, late_checkout${mu ? ', unit_pricing' : ''},
           notes, is_blocked, block_reason, created_at, adults, children, pax,
           checked_in_at, checked_out_at,
           guests!bookings_guest_id_fkey(
             id, first_name, last_name, dni, phone,
             bad_experience, bad_experience_note, tags, age, car_model, car_plate, nationality${withExtras ? ', gender' : ''}
           ),
-          booking_units(unit_id, price_per_night${withExtras ? ', segment_check_in, segment_check_out' : ''}, units(name, sort_order, color))
+          booking_units(unit_id, price_per_night${withExtras ? ', segment_check_in, segment_check_out' : ''}${mu ? ', adults, children, free_nights, discount_pct, surcharge_amount' : ''}, units(name, sort_order, color))
         `;
-      const { data, error } = await queryWithOptionalColumns(
-        sel => this.db.from('bookings').select(sel)
+      const runList = sel => this.db.from('bookings').select(sel)
           .eq('hotel_id', this.ctx.hotelId)
-          .order('check_in', { ascending: true }),
-        buildSelect(true), buildSelect(false));
+          .order('check_in', { ascending: true });
+      // Primero con las columnas por unidad (migration_multiunidad.sql); si la base aún no las tiene, como siempre
+      let { data, error } = await runList(buildSelect(true, true));
+      if (error && /column|schema cache/i.test(error.message ?? '')) {
+        ({ data, error } = await queryWithOptionalColumns(runList, buildSelect(true), buildSelect(false)));
+      }
 
       if (error) throw error;
       this._allBookings = data ?? [];
@@ -1215,12 +1218,14 @@ export class BookingList {
   async _openVoucher(id) {
     try {
       const SEG = await segmentColumns(this.db);
+      const MU = await multiUnitColumns(this.db);
+      const UP = await unitPricingColumn(this.db);
       const { data: booking, error } = await this.db.from('bookings')
         .select(`id, check_in, check_out, nights, pax, adults, children, total_amount, total_paid, balance,
-          price_per_night, discount_pct, surcharge_amount, free_nights,
+          price_per_night, discount_pct, surcharge_amount, free_nights${UP},
           status, source, notes, late_checkout,
           guests!bookings_guest_id_fkey(first_name, last_name, dni, phone, email),
-          booking_units(unit_id, price_per_night${SEG}, units(name, color, sort_order)),
+          booking_units(unit_id, price_per_night${SEG}${MU}, units(name, color, sort_order)),
           payments(amount, amount_ars, method, payment_date)`)
         .eq('id', id).single();
       if (error || !booking) { showToast('No se pudo cargar la reserva', 'error'); return; }

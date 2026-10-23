@@ -1,3 +1,4 @@
+import { computeBookingPricing } from './booking-pricing.js';
 // ══════════════════════════════════════════════════════════════
 // voucher-template.js — Plantilla ÚNICA del voucher de reserva
 //
@@ -70,6 +71,30 @@ export function voucherFileTitle(guestName, checkIn) {
  * @returns {{ lines: Array<{label:string,value:number,kind:string}>, total:number }}
  */
 export function buildMoneyLines(booking, segments = []) {
+  // Reserva con precios por unidad: un bloque por depto (importes de cada uno sin mezclar) + lo colectivo aparte
+  if (booking.unit_pricing === true && (booking.booking_units ?? []).length > 1 && !(segments.length > 1)) {
+    const nightsU = Number(booking.nights) || 0;
+    const P = computeBookingPricing({
+      nights: nightsU,
+      units: booking.booking_units.map(bu => ({ id: String(bu.unit_id), price: Number(bu.price_per_night) || 0, freeNights: bu.free_nights,
+        disc: { mode: 'pct', value: bu.discount_pct }, surch: { mode: 'amt', value: bu.surcharge_amount } })),
+      collective: { freeNights: booking.free_nights, disc: { mode: 'pct', value: booking.discount_pct }, surch: { mode: 'amt', value: booking.surcharge_amount } } });
+    const totalU = Number(booking.total_amount) || 0;
+    const restU  = totalU - P.total;
+    if (Math.abs(restU) <= 1 || (booking.late_checkout && restU > 0.5)) {
+      const name = id => booking.booking_units.find(b => String(b.unit_id) === id)?.units?.name ?? 'Depto';
+      const linesU = [];
+      P.perUnit.forEach(u => {
+        linesU.push({ label: `${name(u.id)} · ${plural(nightsU, 'noche', 'noches')} × ${money(u.price)}`, value: u.gross, kind: 'sub' });
+        if (u.freeNights > 0) linesU.push({ label: `Noches sin cargo (${name(u.id)}): ${u.freeNights}`, value: -u.freeAmt, kind: 'disc' });
+        if (u.discAmt > 0)    linesU.push({ label: `Descuento ${Math.round(u.discPct * 100) / 100}% (${name(u.id)})`, value: -u.discAmt, kind: 'disc' });
+        if (u.surchAmt > 0)   linesU.push({ label: `Recargo (${name(u.id)})`, value: u.surchAmt, kind: 'surcharge' });
+      });
+      if (P.collectiveSurch > 0) linesU.push({ label: 'Recargo adicional (toda la reserva)', value: P.collectiveSurch, kind: 'surcharge' });
+      if (booking.late_checkout && restU > 0.5) linesU.push({ label: 'Late check-out', value: restU, kind: 'surcharge' });
+      return { lines: linesU, total: totalU };
+    }
+  }
   const total      = Number(booking.total_amount) || 0;
   const nights     = Number(booking.nights) || 0;
   const free       = Number(booking.free_nights) || 0;
@@ -349,6 +374,7 @@ export function renderVoucherHTML(d) {
       <div class="fields-grid">
         ${stayBlock}
         ${field('Huéspedes', s.paxLabel)}
+        ${(s.distribution ?? []).length ? field('Distribución por departamento', s.distribution.map(d => `${d.name}: ${d.text}`).join(' · ')) : ''}
         ${field('Canal de reserva', s.channel)}
       </div>
     </div>

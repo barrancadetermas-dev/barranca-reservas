@@ -44,7 +44,7 @@ import { initMilaAssistant } from './modules/mila-assistant/mila-assistant.js';
 import { initEncargadaShare } from './modules/encargada-share/encargada-share.js';
 import { getSegments, rowsAtArrival } from './services/stay-segments.js';
 import { registerCheckIn } from './services/checkin-service.js';
-import { segmentColumns } from './utils/db-compat.js';
+import { segmentColumns, multiUnitColumns } from './utils/db-compat.js';
 
 let dashboard   = null;
 let calendar    = null;
@@ -1006,9 +1006,10 @@ function setupDetailModal() {
   const getDetailBooking = async () => {
     const id = bookingForm?._currentDetailBookingId;
     if (!id) return null;
+    const MU = await multiUnitColumns(supabase);   // datos por unidad (migration_multiunidad.sql), si la base los tiene
     const { data } = await supabase
       .from('bookings')
-      .select('*, guests!bookings_guest_id_fkey(*), booking_units(unit_id, units(name,sort_order,color,max_guests)), payments(*)')
+      .select(`*, guests!bookings_guest_id_fkey(*), booking_units(unit_id, price_per_night${MU}, units(name,sort_order,color,max_guests)), payments(*)`)
       .eq('id', id).single();
     return data;
   };

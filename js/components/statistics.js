@@ -194,15 +194,17 @@ export class Statistics {
     const daysInMonth = lastDayObj.getDate();
 
     try {
-      const statsSel = (seg) => `id, check_in, check_out, price_per_night, total_amount, status, nights, free_nights, source, booking_units(unit_id, price_per_night${seg ? ', segment_check_in, segment_check_out' : ''})`;
-      const { data: bookings } = await queryWithOptionalColumns(
-        sel => this.db
+      const statsSel = (seg, mu = false) => `id, check_in, check_out, price_per_night, total_amount, status, nights, free_nights, source${mu ? ', discount_pct, unit_pricing' : ''}, booking_units(unit_id, price_per_night${seg ? ', segment_check_in, segment_check_out' : ''}${mu ? ', free_nights, discount_pct, surcharge_amount' : ''})`;
+      const runStats = sel => this.db
           .from('bookings')
           .select(sel)
           .eq('hotel_id', this.ctx.hotelId)
           .neq('status', 'cancelled').neq('status', 'blocked')
-          .lte('check_in', lastDayStr).gt('check_out', firstDay),
-        statsSel(true), statsSel(false));
+          .lte('check_in', lastDayStr).gt('check_out', firstDay);
+      // Primero con los datos por unidad (migration_multiunidad.sql); si la base aún no los tiene, como siempre
+      let statsRes = await runStats(statsSel(true, true));
+      if (statsRes.error && /column|schema cache/i.test(statsRes.error.message ?? '')) statsRes = await queryWithOptionalColumns(runStats, statsSel(true), statsSel(false));
+      const bookings = statsRes.data;
 
       this._lastBookings = bookings ?? []; // ← necesario para el gráfico de canales
 
@@ -1372,14 +1374,15 @@ export class Statistics {
         const last  = new Date(Date.UTC(year, month+1, 0)).toISOString().slice(0,10);
         // Misma cuenta que el resto de estadísticas (cada unidad recibe solo SUS noches e ingresos;
         // antes cada unidad sumaba el total completo de la reserva y se duplicaba con 2 deptos)
-        const unitSel = (seg) => `id, check_in, check_out, price_per_night, total_amount, nights, free_nights, booking_units(unit_id, price_per_night${seg ? ', segment_check_in, segment_check_out' : ''})`;
-        const { data: bks } = await queryWithOptionalColumns(
-          sel => this.db.from('bookings')
+        const unitSel = (seg, mu = false) => `id, check_in, check_out, price_per_night, total_amount, nights, free_nights${mu ? ', discount_pct, unit_pricing' : ''}, booking_units(unit_id, price_per_night${seg ? ', segment_check_in, segment_check_out' : ''}${mu ? ', free_nights, discount_pct, surcharge_amount' : ''})`;
+        const runUnits = sel => this.db.from('bookings')
             .select(sel)
             .eq('hotel_id', this.ctx.hotelId)
             .not('status','in','(cancelled,blocked)')
-            .lte('check_in', last).gt('check_out', first),
-          unitSel(true), unitSel(false));
+            .lte('check_in', last).gt('check_out', first);
+        let unitRes = await runUnits(unitSel(true, true));
+        if (unitRes.error && /column|schema cache/i.test(unitRes.error.message ?? '')) unitRes = await queryWithOptionalColumns(runUnits, unitSel(true), unitSel(false));
+        const bks = unitRes.data;
         const dim = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
         computeUnitStats({ bookings: bks ?? [], units: this.ctx.units, firstDay: first, lastDay: last, daysInMonth: dim })
           .forEach(r => {

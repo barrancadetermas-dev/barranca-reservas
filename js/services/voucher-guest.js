@@ -1,3 +1,4 @@
+import { distributionOf, guestsText } from './booking-pricing.js';
 // ══════════════════════════════════════════════════════════════
 // voucher-guest.js — Voucher/comprobante de reserva para el huésped
 // (botón "Voucher" de cada reserva en la lista). El diseño vive en
@@ -42,6 +43,7 @@ export function openGuestVoucher(booking, hotel = {}) {
       units: units.join(split ? ' → ' : ' / '),
       segments: segs,
       paxLabel: paxLabel(booking),
+      distribution: distributionOf(booking).map(d => ({ name: d.name, text: guestsText(d.adults, d.children) })),
       channel: CHANNEL_LABELS[booking.source] ?? booking.source ?? 'Directo',
     },
     money: {
