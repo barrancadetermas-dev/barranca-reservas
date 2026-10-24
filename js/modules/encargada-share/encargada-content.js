@@ -185,7 +185,7 @@ export function generateEncargadaPDF(bookings, rangeLabel, includeAmounts) {
           <div class="enc-row"><span class="enc-lbl">Fecha Ingreso:</span><span class="enc-val">${esc(fmtShort(b.check_in))}</span></div>
           <div class="enc-row"><span class="enc-lbl">Fecha Salida:</span><span class="enc-val">${esc(fmtShort(b.check_out))}</span></div>
           <div class="enc-row"><span class="enc-lbl">Noches:</span><span class="enc-val">${nights}</span></div>
-          <div class="enc-row"><span class="enc-lbl">Cant. de Personas:</span><span class="enc-val">${pax !== '' ? esc(String(pax)) : '—'}</span></div>${(dist ?? []).map(d => `<div class="enc-row"><span class="enc-lbl">Armado ${esc(d.name || ('#' + d.order))}:</span><span class="enc-val">${esc(guestsText(d.adults, d.children))}</span></div>`).join('')}
+          <div class="enc-row"><span class="enc-lbl">Cant. de Personas:</span><span class="enc-val">${pax !== '' ? esc(String(pax)) : '—'}</span></div>${(dist ?? []).map(d => `<div class="enc-row"><span class="enc-lbl">Armado ${esc(d.label || d.name || ('#' + d.order))}:</span><span class="enc-val">${esc(guestsText(d.adults, d.children))}</span></div>`).join('')}
           ${amountRow}
           <div class="enc-row enc-notes"><span class="enc-lbl">Nota:</span><span class="enc-val enc-note-text">${esc(notes) || '—'}</span></div>
         </div>`;
@@ -316,7 +316,7 @@ export function generateEncargadaWhatsApp(bookings, rangeLabel, includeAmounts) 
         `- Fecha Salida: ${fmtShort(b.check_out)} _(${nights} ${nights !== 1 ? 'noches' : 'noche'})_`,
         `- Cant. de Personas: ${pax !== '' ? String(pax) : '—'}`,
         ...(dist ?? []).map(d => { const bu = units.find(x => x.unit_id === d.unitId); const { num } = bu ? unitLabelWA(bu) : { num: d.order };
-          return `   • *${num}* ${guestsText(d.adults, d.children)}`; }),
+          return `   • *${num}*${d.label ? ' ' + d.label : ''}: ${guestsText(d.adults, d.children)}`; }),
         age ? `- Edad: ${age}` : null,
         car ? `- Auto: ${car}` : null,
         balance > 0 ? `- Abonan al ingreso: *${fmtMoney(balance)}*` : null,

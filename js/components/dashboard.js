@@ -1104,7 +1104,7 @@ export class Dashboard {
         // Para armar: personas por depto (solo reservas de 2+ deptos con distribución cargada)
         ((() => { const dd = distributionOf(b); return dd.length
           ? '<div style="font-size:.68rem;color:var(--color-text-2);margin-top:3px;display:flex;gap:10px;flex-wrap:wrap">' +
-            dd.map(d => '<span><b>#' + d.order + '</b> ' + guestsText(d.adults, d.children) + '</span>').join('') + '</div>' : ''; })()) +
+            dd.map(d => '<span><b>#' + d.order + '</b> ' + (d.label ? escapeHtml(d.label) + ': ' : '') + guestsText(d.adults, d.children) + '</span>').join('') + '</div>' : ''; })()) +
       '</div>' +
       actionBtn +
     '</div>';

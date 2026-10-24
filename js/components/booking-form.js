@@ -25,7 +25,7 @@ import { Sound } from '../services/sound-service.js';
 import { fetchDisponibilidad } from '../modules/mila-assistant/mila-data.js';
 import { getUsdConversionRate } from '../services/usd-rate-history.js';
 import { queryWithOptionalColumns, multiUnitColumns } from '../utils/db-compat.js';
-import { computeBookingPricing, validateDistribution, autoDistribute, guestsText, hasUnitPricing, distributionOf } from '../services/booking-pricing.js';
+import { computeBookingPricing, validateDistribution, autoDistribute, guestsText, hasUnitPricing, distributionOf, cleanLabel, unitDisplayName } from '../services/booking-pricing.js';
 import { genderSymbolHTML } from '../utils/gender.js';
 import { specialChipsHTML } from '../services/special-dates.js';
 import { promoLabel, paymentPercents, pctOf, fmtPct as fmtPctPay } from '../utils/booking-display.js';
@@ -447,7 +447,7 @@ export class BookingForm {
         this._unitAdj[String(bu.unit_id)] = {
           free: bu.free_nights || 0, disc: parseFloat(bu.discount_pct) || 0, discMode: 'pct',
           surch: parseFloat(bu.surcharge_amount) || 0, surchMode: 'amt',
-          adults: bu.adults ?? null, children: bu.children ?? null };
+          adults: bu.adults ?? null, children: bu.children ?? null, label: bu.label ?? '' };
       });
       // Reserva vieja con 2+ unidades pero sin precio individual guardado:
       // sugerir como punto de partida el precio total repartido en partes iguales
@@ -561,7 +561,7 @@ export class BookingForm {
       const d = distributionOf(booking);
       return d.length ? `<div class="detail-stay"><div class="detail-label">👥 Distribución por unidad</div>${d.map(x => `
         <div class="detail-stay-row" style="--c:${escapeHtml(x.color ?? '#6366f1')}"><span class="detail-stay-dot"></span>
-          <strong>${escapeHtml(x.name)}</strong><span class="detail-stay-n">${guestsText(x.adults, x.children)}</span></div>`).join('')}</div>` : '';
+          <strong>${escapeHtml(x.label || x.name)}</strong>${x.label ? `<span class="detail-stay-n" style="opacity:.7">${escapeHtml(x.name)}</span>` : ''}<span class="detail-stay-n">${guestsText(x.adults, x.children)}</span></div>`).join('')}</div>` : '';
     })();
     const _unitDetail = (hasUnitPricing(booking) && _bus.length > 1 && !split) ? (() => {
       const P = computeBookingPricing({
@@ -569,7 +569,7 @@ export class BookingForm {
         units: _bus.map(bu => ({ id: String(bu.unit_id), price: bu.price_per_night || 0, freeNights: bu.free_nights,
           disc: { mode: 'pct', value: bu.discount_pct }, surch: { mode: 'amt', value: bu.surcharge_amount } })),
         collective: { freeNights: booking.free_nights, disc: { mode: 'pct', value: booking.discount_pct }, surch: { mode: 'amt', value: booking.surcharge_amount } } });
-      const nm = id => _bus.find(b => String(b.unit_id) === id)?.units?.name ?? 'Depto';
+      const nm = id => { const bu = _bus.find(b => String(b.unit_id) === id); return bu ? unitDisplayName(bu) : 'Depto'; };
       const row = (a, b, color) => `<div class="detail-breakdown-row"${color ? ` style="color:${color}"` : ''}><span>${a}</span><span>${b}</span></div>`;
       const rest = (booking.total_amount ?? 0) - P.total;
       return P.perUnit.map(u => row(`${escapeHtml(nm(u.id))} · ${booking.nights} × ${formatARS(u.price)}`, formatARS(u.gross))
@@ -1591,8 +1591,17 @@ export class BookingForm {
 
   _isMulti() { return this._selectedUnitIds?.size >= 2 && !this._isSplit(); }
 
+  /** Nombre para el huésped/voucher: nombre propio + nombre del depto ("Depto de los abuelos · 2AMB Planta Baja"). */
+  _unitLabelFull(uid) {
+    const base = this.ctx?.units?.find(u => String(u.id) === String(uid))?.name ?? 'Depto';
+    const lbl = cleanLabel(this._unitAdj?.[String(uid)]?.label);
+    return lbl ? `${lbl} · ${base}` : base;
+  }
+
   _unitLabel(uid) {
     const u = this.ctx?.units?.find(x => String(x.id) === String(uid));
+    const lbl = cleanLabel(this._unitAdj?.[String(uid)]?.label);   // nombre propio dentro de la reserva (ej.: "Depto de los abuelos")
+    if (lbl) return `${lbl}${u?.sort_order != null ? ' (#' + u.sort_order + ')' : ''}`;
     return u ? `${u.name}${u.sort_order != null ? ' #' + u.sort_order : ''}` : 'Depto';
   }
 
@@ -1658,10 +1667,11 @@ export class BookingForm {
 
   /** Columnas por unidad que se guardan en booking_units (solo con 2+ deptos). */
   _unitRowExtras(uid, P, multi) {
-    if (!multi) return { adults: null, children: null, free_nights: null, discount_pct: null, surcharge_amount: null };
+    if (!multi) return { ...(this._lblOk ? { label: null } : {}), adults: null, children: null, free_nights: null, discount_pct: null, surcharge_amount: null };
     const a = this._unitAdj[uid] ?? {};
     const pu = P.perUnit.find(x => x.id === String(uid));
     return {
+      ...(this._lblOk ? { label: cleanLabel(a.label) || null } : {}),
       adults: a.adults ?? null, children: a.children ?? null,
       free_nights: P.unitMode ? (a.free || 0) : 0,
       discount_pct: P.unitMode ? (pu?.unitDiscPct || 0) : 0,
@@ -1670,13 +1680,15 @@ export class BookingForm {
 
   /** ¿La base ya tiene las columnas de migration_multiunidad.sql? (se consulta una vez) */
   async _multiUnitSupported() {
-    if (this._muSupport === true) return true;
+    if (this._muSupport === true && this._lblOk !== undefined) return true;
     try {
       const [a, b] = await Promise.all([
         this.db.from('booking_units').select('adults').limit(1),
         this.db.from('bookings').select('unit_pricing').limit(1)]);
       const ok = !a.error && !b.error;
       if (ok) this._muSupport = true;
+      const l = await this.db.from('booking_units').select('label').limit(1);   // nombre propio del depto (migration_multiunidad_nombre.sql)
+      this._lblOk = !l.error;
       return ok;
     } catch { return false; }
   }
@@ -1770,9 +1782,11 @@ export class BookingForm {
         ${ids.map(uid => {
           const u = this.ctx.units.find(x => String(x.id) === uid); const a = this._unitAdj[uid] ?? {};
           return `<details class="ud-item" data-uid="${uid}" ${this._udOpen.has(uid) ? 'open' : ''}>
-            <summary><span class="ud-dot" style="background:${escapeHtml(u?.color ?? '#6366f1')}"></span><b>${escapeHtml(this._unitLabel(uid))}</b>
+            <summary><span class="ud-dot" style="background:${escapeHtml(u?.color ?? '#6366f1')}"></span><b class="ud-name" data-uid="${uid}">${escapeHtml(this._unitLabel(uid))}</b>
               <span class="ud-sum" data-uid="${uid}"></span></summary>
             <div class="ud-body">
+              <label class="ud-lbl-wrap">Nombre en esta reserva <small>(opcional · para identificar el depto)</small>
+                <input type="text" class="ud-lbl" data-uid="${uid}" maxlength="40" placeholder="Ej.: Depto de los abuelos" value="${escapeHtml(a.label ?? '')}"></label>
               <label>Adultos<input type="number" min="0" max="20" class="ud-in" data-uid="${uid}" data-f="adults" placeholder="—" value="${a.adults ?? ''}"></label>
               <label>Niños<input type="number" min="0" max="20" class="ud-in" data-uid="${uid}" data-f="children" placeholder="—" value="${a.children ?? ''}"></label>
               <div class="ud-cap"><div class="ud-capbar"><i data-uid="${uid}"></i></div><small class="ud-capt" data-uid="${uid}"></small></div>
@@ -1783,6 +1797,10 @@ export class BookingForm {
       </details>`;
     distWrap.querySelectorAll('.ud-item').forEach(d => d.addEventListener('toggle', () => {
       d.open ? this._udOpen.add(d.dataset.uid) : this._udOpen.delete(d.dataset.uid); }));
+    distWrap.querySelectorAll('.ud-lbl').forEach(inp => inp.addEventListener('input', () => {
+      (this._unitAdj[inp.dataset.uid] ??= {}).label = inp.value;
+      this._refreshUnitNames();
+    }));
     distWrap.querySelectorAll('.ud-in').forEach(inp => inp.addEventListener('input', () => {
       const a = (this._unitAdj[inp.dataset.uid] ??= {});
       a[inp.dataset.f] = inp.value === '' ? null : Math.max(0, parseInt(inp.value) || 0);
@@ -1793,6 +1811,16 @@ export class BookingForm {
       autoDistribute(tot, ids.map(uid => ({ id: uid, maxGuests: this.ctx.units.find(x => String(x.id) === uid)?.max_guests ?? null })))
         .forEach(r => { const a = (this._unitAdj[r.id] ??= {}); a.adults = r.adults; a.children = r.children; });
       this._renderUnitAdjustUI();
+    });
+    this._refreshUnitDistStatus();
+  }
+
+  /** Refleja el nombre propio de cada depto en encabezados y selectores sin volver a dibujar (no pierde el foco). */
+  _refreshUnitNames() {
+    [...(this._selectedUnitIds ?? [])].map(String).forEach(uid => {
+      const nm = this._unitLabel(uid);
+      document.querySelectorAll(`.ud-name[data-uid="${uid}"]`).forEach(el => { el.textContent = nm; });
+      document.querySelectorAll(`#unit-scope-wrap option[value="${uid}"]`).forEach(o => { o.textContent = nm; });
     });
     this._refreshUnitDistStatus();
   }
@@ -2566,7 +2594,7 @@ export class BookingForm {
     const balance = Math.max(0, total - paid);
 
     // Cambio de departamento: tramos para el voucher
-    const unitLabel = uid => this.ctx?.units?.find(u => String(u.id) === String(uid))?.name ?? 'Depto';
+    const unitLabel = uid => this._unitLabelFull(uid);
     const splitSegs = this._isSplit()
       ? this._splitEditor.getSegments().map(sg => ({
           unitName: unitLabel(sg.unit_id), from: sg.from, to: sg.to, nights: sg.nights, pricePerNight: sg.pricePerNight,
@@ -2774,6 +2802,11 @@ export class BookingForm {
         clearTimeout(_safetyTimer);
       };
       const dist = multi ? this._distributionCheck() : { loaded: false, warnings: [] };
+      const _hasLabels = multi && [...this._selectedUnitIds].some(uid => cleanLabel(this._unitAdj[uid]?.label));
+      if (_hasLabels && muOk && !this._lblOk) {
+        showToast('⚠️ Para guardar el nombre de cada depto falta correr migration_multiunidad_nombre.sql en Supabase.', 'error', 7000);
+        _abort(); return;
+      }
       if (multi && (P.unitMode || dist.loaded) && !muOk) {
         showToast('⚠️ Para guardar ajustes u huéspedes por unidad falta correr la migración multiunidad (migration_multiunidad.sql).', 'error', 7000);
         _abort(); return;
@@ -2952,7 +2985,7 @@ export class BookingForm {
       let unitRows;
       if (splitActive) {
         unitRows = toBookingUnitRows({ check_in: ci, check_out: co }, this._splitEditor.getSegments(), bookingId)
-          .map(r => ({ ...r, ...(muOk ? { adults: null, children: null, free_nights: null, discount_pct: null, surcharge_amount: null } : {}) }));
+          .map(r => ({ ...r, ...(muOk ? { ...(this._lblOk ? { label: null } : {}), adults: null, children: null, free_nights: null, discount_pct: null, surcharge_amount: null } : {}) }));
       } else {
         const isMultiUnit = this._selectedUnitIds.size >= 2;
         unitRows = [...this._selectedUnitIds].map(uid => ({

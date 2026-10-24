@@ -21,7 +21,8 @@ import { segmentColumns } from '../utils/db-compat.js';
 import { genderSymbolHTML } from '../utils/gender.js';
 import { specialChipsHTML, specialsForStay, emojiHTML } from '../services/special-dates.js';
 import { guestCountsText, promoLabel, fmtPct } from '../utils/booking-display.js';
-import { unitAdjustments, hasUnitPricing, distributionOf, guestsText } from '../services/booking-pricing.js';
+import { registerCheckIn } from '../services/checkin-service.js';
+import { unitAdjustments, hasUnitPricing, distributionOf, guestsText, cleanLabel, unitDisplayName, unitAmounts } from '../services/booking-pricing.js';
 import { escapeHtml } from '../services/voucher-template.js';
 
 // Late check-out: la barra de la reserva que sale tarde invade LATE_FRAC de la celda del día de salida
@@ -254,17 +255,18 @@ export class Calendar {
     const params = { hotelId: this.ctx.hotelId, firstDay, lastDay };
     // Consulta por niveles: cada migración opcional (género, estadía dividida) se pide solo
     // si la base la tiene; si una falla, se reintenta sin ella en vez de dejar el calendario en blanco.
-    const makeSelect = ({ gender, seg, mu }) => `
+    const makeSelect = ({ gender, seg, mu, lbl }) => `
         id, check_in, check_out, status, source, is_blocked, block_reason,
         late_checkout, late_checkout_charged, free_nights, discount_pct, surcharge_amount${mu ? ', unit_pricing' : ''},
         total_amount, total_paid, balance, nights, pax,
         adults, children, notes, price_per_night, created_at,
         checked_in_at, checked_out_at,
-        guests!bookings_guest_id_fkey(first_name, last_name, bad_experience, tags${gender ? ', gender' : ''}),
-        booking_units(unit_id, price_per_night${seg ? ', segment_check_in, segment_check_out' : ''}${mu ? ', adults, children, free_nights, discount_pct, surcharge_amount' : ''}, units(name, sort_order, color, max_guests))
+        guests!bookings_guest_id_fkey(first_name, last_name, phone, bad_experience, tags${gender ? ', gender' : ''}),
+        booking_units(unit_id, price_per_night${seg ? ', segment_check_in, segment_check_out' : ''}${mu ? ', adults, children, free_nights, discount_pct, surcharge_amount' : ''}${lbl ? ', label' : ''}, units(name, sort_order, color, max_guests))
       `;
     const tiers = [
-      { gender: true,  seg: true, mu: true },   // con columnas por unidad (migration_multiunidad.sql)
+      { gender: true,  seg: true, mu: true, lbl: true },   // con columnas por unidad y nombre del depto (migraciones multiunidad)
+      { gender: true,  seg: true, mu: true },              // sin la columna del nombre
       { gender: true,  seg: true  },
       { gender: false, seg: true  },    // falta la migración de género
       { gender: false, seg: false },    // falta también la de estadía dividida
@@ -1691,9 +1693,10 @@ export class Calendar {
     const firstName = booking.guests?.first_name ?? '';
     const lastName  = booking.guests?.last_name  ?? '';
     const isBlock   = booking.status === 'blocked' || booking.is_blocked;
+    const _unitLbl  = isBlock ? '' : cleanLabel(_bu?.label);   // nombre propio del depto dentro de la reserva
     const guestFull = isBlock
       ? (booking.block_reason ?? 'Bloqueo')
-      : `${lastName} ${firstName}`.trim();
+      : `${lastName} ${firstName}`.trim() + (_unitLbl ? ' · ' + _unitLbl : '');
 
     const bar = document.createElement('div');
     bar.className = 'bar bar-span' + (isPast ? ' past-bar' : '') + (hasLateExt ? ' bar-late-end' : '') + (startsAfterLate ? ' bar-late-start' : '');
@@ -2171,13 +2174,13 @@ export class Calendar {
         if (bus.length < 2) return '';
         let out = '';
         if (hasUnitPricing(booking)) bus.forEach(bu => {
-          const nm = escapeHtml(bu.units?.name ?? 'Depto');
+          const nm = escapeHtml(unitDisplayName(bu));
           if (bu.free_nights > 0)      out += `<div class="ct-promo">🎁 ${nm}: ${bu.free_nights} noche${bu.free_nights === 1 ? '' : 's'} sin cargo</div>`;
           if (bu.discount_pct > 0)     out += `<div class="ct-promo">🏷️ ${nm}: DESCUENTO ${fmtPct(bu.discount_pct)}</div>`;
           if (bu.surcharge_amount > 0) out += `<div class="ct-promo">➕ ${nm}: RECARGO (+${formatARS(bu.surcharge_amount)})</div>`;
         });
         const dist = distributionOf(booking);
-        if (dist.length) out += `<div class="ct-nights">👥 ${dist.map(d => `${escapeHtml(d.name)}: ${guestsText(d.adults, d.children)}`).join(' · ')}</div>`;
+        if (dist.length) out += `<div class="ct-nights">👥 ${dist.map(d => `${escapeHtml(d.label || d.name)}: ${guestsText(d.adults, d.children)}`).join(' · ')}</div>`;
         return out;
       })()}
       ${(() => { if (booking.status === 'blocked' || booking.is_blocked) return ''; const sp = specialsForStay(booking.check_in, booking.check_out); if (!sp.any) return '';
@@ -6309,143 +6312,149 @@ export class Calendar {
   }
 
 
+  // ══════════════════════════════════════════════════════════════
+  // Cards de "próximas reservas" (debajo del calendario) — diseño v2
+  // Agrupadas por día (Hoy · Mañana · Esta semana · Próximas), una fila por depto
+  // (nombre propio, personas, importe y etiquetas), barra de pago, avisos y acciones.
+  // ══════════════════════════════════════════════════════════════
   _renderMiniAgenda(bookings) {
     const el = document.getElementById('cal-mini-agenda-list');
     if (!el) return;
+    el.classList.add('cal-c2');
 
     const today = localToday();
     const DAYS  = ['dom','lun','mar','mié','jue','vie','sáb'];
-    const MONTHS= ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+    const MAX   = 6;
+    const dayDiff = iso => Math.round((new Date(iso + 'T12:00:00') - new Date(today + 'T12:00:00')) / 86400000);
+    const k = n => '$' + Math.round(n / 1000) + 'k';
 
-    // Mobile: máx 6 cards; Desktop: máx 7
-    const SLOTS = window.innerWidth <= 768 ? 6 : 7;
-
-    // Ventana de búsqueda: desde el inicio visible del calendario
-    // (o hoy si ya pasó) hasta el fin de la vista actual.
-    // Antes era fijo "hoy + 30 días", lo que ocultaba reservas cuando el
-    // usuario navegaba a un período futuro más lejano.
+    // Ventana: desde el inicio visible del calendario (o hoy si ya pasó) hasta el fin de la vista
     const winStart = this._windowStart > today ? this._windowStart : today;
     const winEnd   = this._addDays(this._windowStart, this._visibleDays ?? 35);
-
-    const upcoming = bookings
+    const all = bookings
       .filter(b => !b.is_blocked && b.status !== 'blocked' && b.status !== 'cancelled'
-                && b.check_in >= winStart && b.check_in <= winEnd
-                && this._bookingPassesFilters(b))
-      .sort((a, b) => a.check_in.localeCompare(b.check_in))
-      .slice(0, SLOTS);
-    const cards = [];
+                && b.check_in >= winStart && b.check_in <= winEnd && this._bookingPassesFilters(b))
+      .sort((a, b) => a.check_in.localeCompare(b.check_in));
+    const shown  = all.slice(0, MAX);
+    const hidden = all.length - shown.length;
 
-    for (let i = 0; i < SLOTS; i++) {
-      const b = upcoming[i];
-      if (!b) {
-        cards.push(
-          '<div class="cal-agenda-slot cal-agenda-slot--empty">' +
-            '<span class="cal-agenda-empty-text">Sin reserva&nbsp;😢</span>' +
-          '</div>'
-        );
-        continue;
+    // Turno de limpieza: ¿sale otro huésped ese día en el mismo depto?
+    const outDay = new Set();
+    bookings.forEach(b => { if (!b.is_blocked && b.status !== 'cancelled') (b.booking_units ?? []).forEach(bu => outDay.add(`${bu.unit_id}|${b.check_out}`)); });
+
+    const groups = [{ t: 'HOY', items: [] }, { t: 'MAÑANA', items: [] }, { t: 'ESTA SEMANA', items: [] }, { t: 'PRÓXIMAS', items: [] }];
+    shown.forEach(b => { const d = dayDiff(b.check_in); groups[d <= 0 ? 0 : d === 1 ? 1 : d <= 7 ? 2 : 3].items.push(b); });
+
+    const card = (b) => {
+      const d     = dayDiff(b.check_in);
+      const ci    = new Date(b.check_in + 'T12:00:00'), co = new Date(b.check_out + 'T12:00:00');
+      const nights = Math.max(0, Math.round((co - ci) / 86400000));
+      const fn = b.guests?.first_name ?? '', ln = b.guests?.last_name ?? '';
+      const guest = fn ? `${fn}${ln ? ' ' + ln : ''}` : '—';
+      const parts = `${fn} ${ln}`.trim().split(' ').filter(Boolean);
+      const initials = ((parts[0]?.[0] ?? '') + (parts.length > 1 ? parts[parts.length - 1][0] : '')).toUpperCase() || '?';
+      const bus = [...(b.booking_units ?? [])].sort((x, y) => (x.units?.sort_order ?? 99) - (y.units?.sort_order ?? 99));
+      const multi = bus.length > 1;
+      const colors = bus.map(bu => bu.units?.color).filter(Boolean);
+      const total = Number(b.total_amount) || 0, paid = Number(b.total_paid) || 0;
+      const bal   = Math.max(0, b.balance ?? (total - paid));
+      const pct   = total > 0 ? Math.min(100, Math.round(paid / total * 100)) : 0;
+      const st    = getBookingBarColor(b);
+      const sc    = SOURCE_CONFIG[b.source ?? 'direct'] ?? {};
+      const chan  = (b.source && b.source !== 'direct' && sc.color)
+        ? `<span class="cal-c2-chip" style="background:${sc.color}22;color:${sc.color}">${escapeHtml(sc.label ?? b.source)}</span>`
+        : (b.source === 'direct' ? '<span class="cal-c2-chip" style="background:var(--color-surface-2);color:var(--color-text-2)">Directo</span>' : '');
+
+      // ── Una fila por depto ──
+      const dist = distributionOf(b);
+      const amts = Object.fromEntries(unitAmounts(b).map(x => [x.unitId, x.net]));
+      const rows = bus.map(bu => {
+        const uid = String(bu.unit_id);
+        const adj = unitAdjustments(b, uid);
+        const dd  = dist.find(x => String(x.unitId) === uid);
+        const lbl = cleanLabel(bu.label);
+        const who = multi
+          ? (dd ? guestsText(dd.adults, dd.children) : '<span class="cal-c2-mute">sin distribuir</span>')
+          : ((b.adults != null || b.children != null) ? guestsText(b.adults, b.children) : (b.pax ? `${b.pax} pers.` : ''));
+        const tags = [];
+        if (adj.freeNights > 0) tags.push(`<span class="cal-c2-tag">🎁${adj.freeNights}</span>`);
+        if (adj.discPct > 0)    tags.push(`<span class="cal-c2-tag">🏷️${fmtPct(adj.discPct)}%</span>`);
+        if (adj.unitSurcharge > 0 || (!multi && Number(b.surcharge_amount) > 0)) tags.push('<span class="cal-c2-tag">➕</span>');
+        const amt = multi ? (amts[uid] ?? 0) : total;
+        const dot = `<i style="background:${escapeHtml(bu.units?.color ?? 'var(--color-primary)')}"></i>`;
+        const num = `<b>#${bu.units?.sort_order ?? '?'}</b>`;
+        const amtH = `<span class="cal-c2-amt">${amt > 0 ? k(amt) : ''}</span>`;
+        if (multi) {
+          // Varios deptos: línea 1 = nombre propio (o del depto) + importe · línea 2 = personas + etiquetas
+          const nm = lbl || bu.units?.name || '';
+          return `<div class="cal-c2-u m"><div class="l1">${dot}${num}<em title="${escapeHtml(bu.units?.name ?? '')}">${escapeHtml(nm)}</em>${amtH}</div>` +
+            `<div class="l2"><span class="cal-c2-who">${who}</span>${tags.join('')}</div></div>`;
+        }
+        return `<div class="cal-c2-u">${dot}${num}<em>${escapeHtml(bu.units?.name ?? '')}</em><span class="cal-c2-who">${who}</span>${tags.join('')}${amtH}</div>`;
+      }).join('');
+
+      // ── Etiquetas especiales ──
+      const chips = [];
+      if (b.late_checkout) chips.push('<span class="cal-c2-sp">🌅 Late check-out</span>');
+      if (bus.some(bu => outDay.has(`${bu.unit_id}|${b.check_in}`))) chips.push(`<span class="cal-c2-sp ok">🧹 Turno de limpieza ${d === 0 ? 'hoy' : 'ese día'}</span>`);
+      if (b.checked_in_at) chips.push('<span class="cal-c2-sp ok">✔ Check-in hecho</span>');
+
+      // ── Avisos accionables ──
+      const when = d <= 0 ? 'hoy' : d === 1 ? 'mañana' : `en ${d} días`;
+      let alert = '', urgent = false;
+      if (b.status === 'pending' && paid <= 0 && bal > 0 && d <= 2) { alert = `<div class="cal-c2-alert r">⛔ Llega ${when} y no hay seña cargada</div>`; urgent = true; }
+      else if (bal > 0 && d <= 3 && !b.checked_in_at) alert = `<div class="cal-c2-alert w">⚠ Faltan ${k(bal)} · cobrar antes del check-in</div>`;
+      const noDist = multi && !dist.length ? '<span class="cal-c2-link" data-act="edit">＋ Cargar personas por depto (para el armado)</span>' : '';
+
+      // ── Acciones (al pasar el mouse; siempre visibles en pantallas táctiles) ──
+      const phone = (b.guests?.phone ?? '').replace(/\D/g, '');
+      const acts = [];
+      if (d <= 0 && !b.checked_in_at) acts.push('<span class="cal-c2-btn pri" data-act="checkin">✅ Check-in</span>');
+      if (phone) acts.push('<span class="cal-c2-btn" data-act="wa" title="WhatsApp">💬</span>');
+      acts.push('<span class="cal-c2-btn" data-act="view">Ver</span>');
+
+      const bar = colors.length > 1
+        ? `<div class="cal-c2-bar">${colors.map(c => `<i style="background:${escapeHtml(c)}"></i>`).join('')}</div>`
+        : `<div class="cal-c2-bar"><i style="background:${escapeHtml(colors[0] ?? 'var(--color-primary)')}"></i></div>`;
+      const pill = d <= 0 ? '<span class="cal-c2-pill hoy">HOY</span>' : d === 1 ? '<span class="cal-c2-pill man">mañana</span>' : `<span class="cal-c2-pill">en ${d} días</span>`;
+
+      return `<div class="cal-c2-card${d <= 0 ? ' is-hoy' : ''}${urgent ? ' is-urgent' : ''}" data-booking-id="${b.id}" data-guest="${escapeHtml(guest)}">${bar}
+        <div class="cal-c2-hd"><div class="cal-c2-day"><b>${ci.getDate()}</b><span>${DAYS[ci.getDay()]}</span></div>
+          <div class="cal-c2-when">${pill}<span>${nights} noche${nights !== 1 ? 's' : ''}</span></div>
+          <div class="cal-c2-out">sale<br><b>${DAYS[co.getDay()]} ${co.getDate()}</b></div></div>
+        <div class="cal-c2-gn"><span class="cal-c2-av">${escapeHtml(initials)}</span><span class="cal-c2-nm">${escapeHtml(guest)}</span>${chan}</div>
+        <div class="cal-c2-units">${rows}</div>
+        ${chips.length ? `<div class="cal-c2-sps">${chips.join('')}</div>` : ''}${noDist}
+        <div class="cal-c2-pay"><div class="cal-c2-pbar"><i style="width:${pct}%;background:${st.statusColor}"></i></div>
+          <div class="cal-c2-pf"><span class="cal-c2-st" style="background:${st.statusColor}22;color:${st.statusColor}">${st.statusLabel}${pct > 0 && pct < 100 ? ' · ' + pct + '%' : ''}</span>
+            ${bal > 0 ? `<span class="cal-c2-sal">Saldo <b>${k(bal)}</b></span>` : '<span class="cal-c2-sal ok">Sin saldo</span>'}</div></div>
+        ${alert}<div class="cal-c2-act">${acts.join('')}</div></div>`;
+    };
+
+    const html = groups.filter(g => g.items.length).map(g =>
+      `<div class="cal-c2-grp"><span>${g.t}</span><span class="n">· ${g.items.length}</span><i></i></div>` +
+      `<div class="cal-c2-grid">${g.items.map(card).join('')}</div>`).join('');
+    const more = hidden > 0 ? `${hidden} reserva${hidden !== 1 ? 's' : ''} más en este período. ` : (all.length ? 'No hay más llegadas en este período. ' : 'No hay llegadas en este período. ');
+    el.innerHTML = html + `<div class="cal-c2-empty"><span>${more}</span><span class="b"><span class="cal-c2-btn" data-act="all">Ver todas las reservas →</span><span class="cal-c2-btn pri2" data-act="new">＋ Nueva reserva</span></span></div>`;
+
+    // Un solo manejador (asignado, no acumulado): acciones de la card o popover de la reserva
+    el.onclick = async (e) => {
+      const actEl = e.target.closest('[data-act]');
+      const cardEl = e.target.closest('[data-booking-id]');
+      const act = actEl?.dataset.act;
+      if (act === 'all') { document.querySelector('.nav-item[data-section="bookings"]')?.click(); return; }
+      if (act === 'new') { document.getElementById('btn-new-booking')?.click(); return; }
+      if (!cardEl) return;
+      const id = cardEl.dataset.bookingId;
+      if (act === 'checkin') { e.stopPropagation(); await registerCheckIn(this.db, id, { guestName: cardEl.dataset.guest }); return; }
+      if (act === 'wa') {
+        e.stopPropagation();
+        const b = this._lastRenderedBookings?.find(x => String(x.id) === String(id));
+        const p = (b?.guests?.phone ?? '').replace(/\D/g, ''); if (p) window.open('https://wa.me/' + p, '_blank', 'noopener');
+        return;
       }
-      const fn    = b.guests?.first_name ?? '';
-      const ln    = b.guests?.last_name  ?? '';
-      const guest = fn ? (fn + (ln ? ' ' + ln : '')) : '—';
-      const bUnits = b.booking_units ?? [];
-      const unit   = bUnits[0]?.units;
-      const nights = Math.round((new Date(b.check_out+'T12:00:00') - new Date(b.check_in+'T12:00:00')) / 86400000);
-      const d     = new Date(b.check_in+'T12:00:00');
-      const days  = Math.round((d - new Date(today+'T12:00:00')) / 86400000);
-      const dStr  = DAYS[d.getDay()] + ' ' + d.getDate() + ' ' + MONTHS[d.getMonth()];
-      const nStr  = nights + ' noche' + (nights !== 1 ? 's' : '');
-      const daysLabel = days === 0 ? 'hoy' : days === 1 ? 'mañana' : 'en ' + days + ' día' + (days !== 1 ? 's' : '');
-
-      // ── Barra lateral: 1 color sólido, o segmentada si hay múltiples unidades ──
-      let barHTML;
-      let unitLabel;
-      if (bUnits.length > 1) {
-        const segH = (100 / bUnits.length).toFixed(2);
-        barHTML = '<div class="cal-agenda-slot-bar cal-agenda-slot-bar--multi">' +
-          bUnits.map(bu => `<div style="height:${segH}%;background:${bu.units?.color ?? 'var(--color-primary)'}"></div>`).join('') +
-          '</div>';
-        const numbers = bUnits
-          .map(bu => bu.units?.sort_order)
-          .filter(n => n != null)
-          .sort((a,b) => a-b)
-          .map(n => '#' + n)
-          .join(' ');
-        unitLabel = bUnits.length + ' unidades' + (numbers ? ' (' + numbers + ')' : '') + ' · ' + nStr;
-      } else {
-        const color = unit?.color ?? 'var(--color-primary)';
-        barHTML = '<div class="cal-agenda-slot-bar" style="background:' + color + '"></div>';
-        unitLabel = (unit?.name ?? '—') + ' · ' + nStr;
-      }
-
-      // Avatar con colores de unidad
-      const uColors   = bUnits.map(bu => bu.units?.color).filter(Boolean);
-      const nameParts = (fn + ' ' + ln).trim().split(' ').filter(Boolean);
-      const initials  = ((nameParts[0]?.[0] ?? '') + (nameParts[nameParts.length-1]?.[0] ?? '')).toUpperCase() || '?';
-      let avBg, avColor;
-      if      (uColors.length === 0) { avBg='var(--color-surface-2)'; avColor='var(--color-text-3)'; }
-      else if (uColors.length === 1) { avBg=uColors[0]+'33'; avColor=uColors[0]; }
-      else if (uColors.length === 2) { avBg='linear-gradient(135deg,'+uColors[0]+'44 50%,'+uColors[1]+'44 50%)'; avColor='var(--color-text)'; }
-      else { const step=Math.round(360/uColors.length); avBg='conic-gradient('+uColors.map((col,i)=>col+'44 '+(i*step)+'deg '+((i+1)*step)+'deg').join(',')+')'; avColor='var(--color-text)'; }
-
-      // Canal (chip con el color del canal; antes el mapa de íconos no coincidía con los valores reales de `source`)
-      const _sc       = SOURCE_CONFIG[b.source ?? 'direct'] ?? {};
-      const srcIcon   = (b.source && b.source !== 'direct' && _sc.color)
-        ? `<span style="font-size:.52rem;font-weight:700;padding:1px 5px;border-radius:6px;background:${_sc.color}22;color:${_sc.color};flex-shrink:0">${escapeHtml(_sc.label ?? b.source)}</span>` : '';
-      // Estado de pago y saldo
-      const _st       = getBookingBarColor(b);
-      const _bal      = Math.max(0, b.balance ?? ((b.total_amount || 0) - (b.total_paid || 0)));
-      const statusRow = '<div style="display:flex;align-items:center;justify-content:space-between;margin-top:3px">' +
-        `<span style="font-size:.52rem;font-weight:700;padding:1px 6px;border-radius:6px;background:${_st.statusColor}22;color:${_st.statusColor}">${_st.statusLabel}</span>` +
-        (_bal > 0 ? `<span style="font-size:.58rem;color:var(--color-text-2)">Saldo $${Math.round(_bal / 1000)}k</span>` : '<span style="font-size:.58rem;font-weight:700;color:#16a34a">Sin saldo</span>') + '</div>';
-      // Personas por depto (si la reserva tiene la distribución cargada)
-      const _dist = distributionOf(b);
-      const distRows = _dist.map(d => '<div style="display:flex;align-items:center;gap:3px;border-top:.5px solid var(--color-border);padding:2px 0;font-size:.58rem">' +
-        `<i style="width:6px;height:6px;border-radius:50%;background:${d.color ?? 'var(--color-primary)'};flex-shrink:0"></i><b>#${d.order}</b><span>${guestsText(d.adults, d.children)}</span></div>`).join('');
-      const amtStr    = b.total_amount > 0 ? '$' + Math.round(b.total_amount / 1000) + 'k' : '';
-      const isToday2  = days === 0;
-
-      // Barra lateral segmentada (estructura original del CSS)
-      const barTopInner = bUnits.length > 1
-        ? '<div class="cal-agenda-slot-bar cal-agenda-slot-bar--multi">'
-            + bUnits.map(bu => '<div style="flex:1;background:' + (bu.units?.color ?? 'var(--color-primary)') + '"></div>').join('')
-            + '</div>'
-        : '<div class="cal-agenda-slot-bar" style="background:' + (uColors[0] ?? 'var(--color-primary)') + '"></div>';
-
-      const todayPill = isToday2
-        ? '<span style="font-size:.6rem;font-weight:700;padding:1px 6px;border-radius:99px;background:#f0fdf4;color:#16a34a;white-space:nowrap">HOY</span>'
-        : '<span class="cal-agenda-slot-days">' + daysLabel + '</span>';
-
-      cards.push(
-        '<div class="cal-agenda-slot" data-booking-id="' + b.id + '" style="cursor:pointer' + (isToday2 ? ';border-color:var(--color-primary);border-width:1.5px' : '') + '">' +
-          barTopInner +
-          '<div class="cal-agenda-slot-body">' +
-            '<div style="display:flex;align-items:center;justify-content:space-between;gap:3px;margin-bottom:4px">' +
-              '<span class="cal-agenda-slot-date">' + dStr + '</span>' +
-              todayPill +
-            '</div>' +
-            '<div style="display:flex;align-items:center;gap:5px;margin-bottom:3px">' +
-              '<div style="width:26px;height:26px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;background:' + avBg + ';color:' + avColor + '">' + initials + '</div>' +
-              '<span class="cal-agenda-slot-guest" style="flex:1;min-width:0">' + guest + '</span>' +
-              (srcIcon ? '<span style="font-size:11px;flex-shrink:0">' + srcIcon + '</span>' : '') +
-            '</div>' +
-            '<div style="display:flex;align-items:center;justify-content:space-between;padding-top:3px;border-top:0.5px solid var(--color-border)">' +
-              '<span class="cal-agenda-slot-unit" style="flex:1;min-width:0">' + unitLabel + '</span>' +
-              (amtStr ? '<span style="font-size:.58rem;font-weight:600;color:var(--color-text-2);flex-shrink:0;margin-left:3px">' + amtStr + '</span>' : '') +
-            '</div>' + distRows + statusRow +
-          '</div>' +
-        '</div>'
-      );
-    }
-
-    el.innerHTML = cards.join('');
-
-    // Click en card de agenda → abre popover igual que las barras del calendario
-    el.addEventListener('click', (e) => {
-      const card = e.target.closest('[data-booking-id]');
-      if (!card?.dataset.bookingId) return;
-      // Usar el card como ancla del popover
-      this._openBarPopover(card.dataset.bookingId, card, e);
-    }, { capture: false });
+      if (act === 'edit') { e.stopPropagation(); this.bookingForm?.openEdit(id); return; }
+      this._openBarPopover(id, cardEl, e);   // clic en la card o "Ver": igual que las barras del calendario
+    };
   }
 }

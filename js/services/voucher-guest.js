@@ -43,7 +43,7 @@ export function openGuestVoucher(booking, hotel = {}) {
       units: units.join(split ? ' → ' : ' / '),
       segments: segs,
       paxLabel: paxLabel(booking),
-      distribution: distributionOf(booking).map(d => ({ name: d.name, text: guestsText(d.adults, d.children) })),
+      distribution: distributionOf(booking).map(d => ({ name: d.label ? `${d.label} · ${d.name}` : d.name, text: guestsText(d.adults, d.children) })),
       channel: CHANNEL_LABELS[booking.source] ?? booking.source ?? 'Directo',
     },
     money: {

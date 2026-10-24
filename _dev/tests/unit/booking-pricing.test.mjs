@@ -1,7 +1,7 @@
 // Pruebas del cálculo de precios y de la distribución de huéspedes.  Correr:  node --test _dev/tests/unit/
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { computeBookingPricing as calc, validateDistribution, autoDistribute, unitAdjustments, unitNetOf, guestsText, distributionOf } from '../../../js/services/booking-pricing.js';
+import { computeBookingPricing as calc, validateDistribution, autoDistribute, unitAdjustments, unitNetOf, guestsText, distributionOf, unitDisplayName, cleanLabel, unitAmounts } from '../../../js/services/booking-pricing.js';
 
 const U2 = { id: 'd2', price: 120000 }, U4 = { id: 'd4', price: 110000 };
 
@@ -99,4 +99,23 @@ test('textos y distribución guardada', () => {
   assert.equal(guestsText(3, 1), '3 adultos, 1 niño'); assert.equal(guestsText(1, 2), '1 adulto, 2 niños');
   const d = distributionOf({ booking_units: [{ unit_id: 'd4', adults: 1, children: 2, units: { name: 'D4', sort_order: 4 } }, { unit_id: 'd2', adults: 3, children: 0, units: { name: 'D2', sort_order: 2 } }] });
   assert.equal(d[0].name, 'D2'); assert.equal(distributionOf({ booking_units: [{ unit_id: 'x' }, { unit_id: 'y' }] }).length, 0);
+});
+
+// ── Nombre propio del depto dentro de la reserva ──
+test('nombre propio: se muestra el de la reserva y, si no hay, el del depto', () => {
+  assert.equal(unitDisplayName({ label: '  Depto de los   abuelos ', units: { name: '2AMB P. Baja' } }), 'Depto de los abuelos');
+  assert.equal(unitDisplayName({ label: '', units: { name: '2AMB P. Baja' } }), '2AMB P. Baja');
+  assert.equal(unitDisplayName({}), 'Depto');
+  assert.equal(cleanLabel('x'.repeat(80)).length, 60); assert.equal(cleanLabel(null), '');
+});
+test('distributionOf incluye el nombre propio', () => {
+  const d = distributionOf({ booking_units: [{ unit_id: 'd2', label: 'Abuelos', adults: 2, children: 0, units: { name: 'D2', sort_order: 2 } }, { unit_id: 'd4', adults: 1, children: 1, units: { name: 'D4', sort_order: 4 } }] });
+  assert.equal(d[0].label, 'Abuelos'); assert.equal(d[1].label, '');
+});
+test('unitAmounts: neto real por depto en reservas por unidad; reparto proporcional en las viejas', () => {
+  const bu = [{ unit_id: 'd2', price_per_night: 120000, free_nights: 1, discount_pct: 10 }, { unit_id: 'd4', price_per_night: 110000 }];
+  const nuevo = unitAmounts({ unit_pricing: true, nights: 4, check_in: '2026-10-21', check_out: '2026-10-25', booking_units: bu });
+  assert.deepEqual(nuevo.map(x => x.net), [324000, 440000]);
+  const viejo = unitAmounts({ nights: 4, check_in: '2026-10-21', check_out: '2026-10-25', price_per_night: 230000, booking_units: [{ unit_id: 'd2', price_per_night: 120000 }, { unit_id: 'd4', price_per_night: 110000 }] });
+  assert.equal(viejo.reduce((s, x) => s + x.net, 0), 920000);
 });

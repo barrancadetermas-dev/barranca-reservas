@@ -172,6 +172,33 @@ export function guestsText(adults, children) {
 export function distributionOf(booking = {}) {
   const bus = booking.booking_units ?? [];
   if (bus.length < 2 || !bus.some(bu => bu.adults != null || bu.children != null)) return [];
-  return bus.map(bu => ({ unitId: bu.unit_id, name: bu.units?.name ?? '', order: bu.units?.sort_order ?? 99, color: bu.units?.color,
+  return bus.map(bu => ({ unitId: bu.unit_id, name: bu.units?.name ?? '', label: cleanLabel(bu.label), order: bu.units?.sort_order ?? 99, color: bu.units?.color,
                           adults: int(bu.adults), children: int(bu.children) })).sort((a, b) => a.order - b.order);
+}
+
+// ── Nombre propio del depto dentro de una reserva (ej.: "Depto de los abuelos") ──
+export const cleanLabel = v => (typeof v === 'string' ? v.trim().replace(/\s+/g, ' ').slice(0, 60) : '') || '';
+
+/** Cómo mostrar un depto de una reserva: su nombre propio si lo tiene, si no el nombre del depto. */
+export function unitDisplayName(bu = {}) {
+  return cleanLabel(bu.label) || bu.units?.name || 'Depto';
+}
+
+/**
+ * Importe de cada depto de una reserva guardada (sin late check-out ni recargo colectivo).
+ * Con precios por unidad = neto real; si no, reparto proporcional al precio (informativo).
+ * @returns {Array<{unitId:string, net:number}>}
+ */
+export function unitAmounts(booking = {}) {
+  const bus = booking.booking_units ?? [];
+  if (!bus.length) return [];
+  const nights = Number(booking.nights) || Math.round((new Date(booking.check_out + 'T12:00:00') - new Date(booking.check_in + 'T12:00:00')) / 86400000);
+  const r = computeBookingPricing({
+    nights,
+    units: bus.map(bu => ({ id: String(bu.unit_id), price: num(bu.price_per_night) || num(booking.price_per_night) / bus.length,
+      freeNights: hasUnitPricing(booking) ? bu.free_nights : 0,
+      disc:  { mode: 'pct', value: hasUnitPricing(booking) ? bu.discount_pct : 0 },
+      surch: { mode: 'amt', value: hasUnitPricing(booking) ? bu.surcharge_amount : 0 } })),
+    collective: { freeNights: booking.free_nights, disc: { mode: 'pct', value: booking.discount_pct }, surch: { mode: 'amt', value: 0 } } });
+  return r.perUnit.map(u => ({ unitId: u.id, net: u.net }));
 }

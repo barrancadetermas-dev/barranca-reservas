@@ -127,6 +127,21 @@ with sync_playwright() as p:
     t('reabrir: lo de cada depto sigue identificado', 'Departamento 2' in txt(pg, '#ud-table') and '324.000' in txt(pg, '#ud-table'), txt(pg, '#ud-table'))
     t('sin errores de JS (reabrir)', not errs, errs)
 
+    # ── 7b. Nombre propio de cada depto dentro de la reserva ──────────────────
+    pg, errs = new_page(b); load(pg, LEGACY); open_all(pg)
+    pg.fill('.ud-lbl[data-uid="D2"]', 'Depto de los abuelos'); pg.fill('.ud-lbl[data-uid="D3"]', 'Los primos'); pg.wait_for_timeout(250)
+    t('el nombre propio aparece en el encabezado del depto', 'Depto de los abuelos' in txt(pg, '.ud-name[data-uid="D2"]'), txt(pg, '.ud-name[data-uid="D2"]'))
+    t('y en el selector de "A quién se aplica" (sin perder el foco al escribir)', 'Los primos' in pg.evaluate("[...document.querySelectorAll('#unit-scope-wrap option')].map(o=>o.textContent).join('|')"))
+    pg.click('#btn-save-now'); pg.wait_for_timeout(1200); bk, up, cs = saved(pg); ru = {r['unit_id']: r for r in (up or [])}
+    t('el nombre se guarda por depto (label) en booking_units', ru.get('D2', {}).get('label') == 'Depto de los abuelos' and ru.get('D3', {}).get('label') == 'Los primos', up)
+    t('poner nombres NO cambia el precio (sigue 920.000, sin precios por unidad)', bk and bk['total_amount'] == 920000 and bk.get('unit_pricing') is False, bk)
+    named = booking([('D2', 120000, {'label': 'Depto de los abuelos'}), ('D3', 110000, {'label': 'Los primos'})])
+    pg, errs = new_page(b); load(pg, named); open_all(pg)
+    t('reabrir: el nombre propio se conserva', pg.input_value('.ud-lbl[data-uid="D2"]') == 'Depto de los abuelos' and pg.input_value('.ud-lbl[data-uid="D3"]') == 'Los primos')
+    pg.fill('.ud-lbl[data-uid="D3"]', ''); pg.click('#btn-save-now'); pg.wait_for_timeout(1200); bk, up, cs = saved(pg); ru = {r['unit_id']: r for r in (up or [])}
+    t('borrar el nombre lo limpia (null)', ru.get('D3', {}).get('label') is None and ru.get('D2', {}).get('label') == 'Depto de los abuelos', up)
+    t('sin errores de JS (nombre por depto)', not errs, errs)
+
     # ── 8. Una sola unidad: nada nuevo en pantalla ────────────────────────────
     one = booking([('D2', 120000, {})], price_per_night=120000, total_amount=480000, adults=2, children=0, pax=2)
     pg, errs = new_page(b); load(pg, one)

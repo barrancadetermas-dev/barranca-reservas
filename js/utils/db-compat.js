@@ -66,8 +66,14 @@ export const genderColumn = (db) => optionalColumn(db, 'guests', 'gender');
  * @returns {Promise<string>}
  */
 export async function multiUnitColumns(db) {
-  return (await optionalColumn(db, 'booking_units', 'adults'))
-    ? ', adults, children, free_nights, discount_pct, surcharge_amount' : '';
+  if (!(await optionalColumn(db, 'booking_units', 'adults'))) return '';
+  // `label` (nombre propio del depto en la reserva) llegó después: se pide solo si la columna existe
+  return ', adults, children, free_nights, discount_pct, surcharge_amount'
+    + ((await optionalColumn(db, 'booking_units', 'label')) ? ', label' : '');
+}
+/** `, label` si booking_units.label existe, o ''. */
+export async function unitLabelColumn(db) {
+  return (await optionalColumn(db, 'booking_units', 'label')) ? ', label' : '';
 }
 /** `, unit_pricing` si la base ya tiene bookings.unit_pricing, o ''. */
 export const unitPricingColumn = (db) => optionalColumn(db, 'bookings', 'unit_pricing');

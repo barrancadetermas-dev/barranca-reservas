@@ -82,7 +82,7 @@ export function buildMoneyLines(booking, segments = []) {
     const totalU = Number(booking.total_amount) || 0;
     const restU  = totalU - P.total;
     if (Math.abs(restU) <= 1 || (booking.late_checkout && restU > 0.5)) {
-      const name = id => booking.booking_units.find(b => String(b.unit_id) === id)?.units?.name ?? 'Depto';
+      const name = id => { const bu = booking.booking_units.find(b => String(b.unit_id) === id); const l = bu?.label ? String(bu.label).trim() : ''; const n = bu?.units?.name ?? 'Depto'; return l ? `${l} · ${n}` : n; };
       const linesU = [];
       P.perUnit.forEach(u => {
         linesU.push({ label: `${name(u.id)} · ${plural(nightsU, 'noche', 'noches')} × ${money(u.price)}`, value: u.gross, kind: 'sub' });

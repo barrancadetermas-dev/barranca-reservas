@@ -160,7 +160,7 @@ export class BookingList {
         return;
       }
 
-      const buildSelect = (withExtras, mu = false) => `
+      const buildSelect = (withExtras, mu = false, lbl = false) => `
           id, check_in, check_out, nights, status, source,
           total_amount, total_paid, balance, price_per_night,
           discount_pct, surcharge_amount, free_nights, late_checkout${mu ? ', unit_pricing' : ''},
@@ -170,13 +170,14 @@ export class BookingList {
             id, first_name, last_name, dni, phone,
             bad_experience, bad_experience_note, tags, age, car_model, car_plate, nationality${withExtras ? ', gender' : ''}
           ),
-          booking_units(unit_id, price_per_night${withExtras ? ', segment_check_in, segment_check_out' : ''}${mu ? ', adults, children, free_nights, discount_pct, surcharge_amount' : ''}, units(name, sort_order, color))
+          booking_units(unit_id, price_per_night${withExtras ? ', segment_check_in, segment_check_out' : ''}${mu ? ', adults, children, free_nights, discount_pct, surcharge_amount' : ''}${lbl ? ', label' : ''}, units(name, sort_order, color))
         `;
       const runList = sel => this.db.from('bookings').select(sel)
           .eq('hotel_id', this.ctx.hotelId)
           .order('check_in', { ascending: true });
       // Primero con las columnas por unidad (migration_multiunidad.sql); si la base aún no las tiene, como siempre
-      let { data, error } = await runList(buildSelect(true, true));
+      let { data, error } = await runList(buildSelect(true, true, true));
+      if (error && /column|schema cache/i.test(error.message ?? '')) ({ data, error } = await runList(buildSelect(true, true)));   // sin la columna del nombre del depto
       if (error && /column|schema cache/i.test(error.message ?? '')) {
         ({ data, error } = await queryWithOptionalColumns(runList, buildSelect(true), buildSelect(false)));
       }
