@@ -1,7 +1,7 @@
 // Pruebas del cálculo de precios y de la distribución de huéspedes.  Correr:  node --test _dev/tests/unit/
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { computeBookingPricing as calc, validateDistribution, autoDistribute, unitAdjustments, unitNetOf, guestsText, distributionOf, unitDisplayName, cleanLabel, unitAmounts } from '../../../js/services/booking-pricing.js';
+import { computeBookingPricing as calc, validateDistribution, autoDistribute, unitAdjustments, unitNetOf, guestsText, distributionOf, unitDisplayName, cleanLabel, unitAmounts, unitBalances, guestsShort } from '../../../js/services/booking-pricing.js';
 
 const U2 = { id: 'd2', price: 120000 }, U4 = { id: 'd4', price: 110000 };
 
@@ -118,4 +118,69 @@ test('unitAmounts: neto real por depto en reservas por unidad; reparto proporcio
   assert.deepEqual(nuevo.map(x => x.net), [324000, 440000]);
   const viejo = unitAmounts({ nights: 4, check_in: '2026-10-21', check_out: '2026-10-25', price_per_night: 230000, booking_units: [{ unit_id: 'd2', price_per_night: 120000 }, { unit_id: 'd4', price_per_night: 110000 }] });
   assert.equal(viejo.reduce((s, x) => s + x.net, 0), 920000);
+});
+
+// ── Saldo por unidad ──
+const BAL = { unit_pricing: true, nights: 4, check_in: '2026-10-21', check_out: '2026-10-25', total_amount: 764000, price_per_night: 230000,
+  booking_units: [{ unit_id: 'd2', price_per_night: 120000, free_nights: 1, discount_pct: 10 }, { unit_id: 'd4', price_per_night: 110000 }] };
+test('saldo por unidad: sin pagos, cada depto debe su neto y la suma da el total', () => {
+  const r = unitBalances(BAL, []);
+  assert.deepEqual(r.map(x => x.due), [324000, 440000]); assert.deepEqual(r.map(x => x.balance), [324000, 440000]);
+});
+test('saldo por unidad: el pago asignado a un depto solo descuenta de ese depto', () => {
+  const r = unitBalances(BAL, [{ unit_id: 'd2', amount_ars: 100000 }]);
+  assert.equal(r[0].paid, 100000); assert.equal(r[0].balance, 224000); assert.equal(r[1].paid, 0); assert.equal(r[1].balance, 440000);
+});
+test('saldo por unidad: el pago GENERAL se reparte proporcional a lo que corresponde a cada depto', () => {
+  const r = unitBalances(BAL, [{ unit_id: null, amount_ars: 76400 }]);   // 10% del total
+  assert.equal(r[0].paid, 32400); assert.equal(r[1].paid, 44000);
+  assert.equal(r[0].paid + r[1].paid, 76400);
+  assert.equal(r[0].balance + r[1].balance, 764000 - 76400);
+});
+test('saldo por unidad: directo + general, pagado de más y la suma siempre cierra con el total', () => {
+  const r = unitBalances(BAL, [{ unit_id: 'd4', amount_ars: 500000 }, { unit_id: null, amount: 100000 }]);
+  assert.equal(r[1].over > 0, true); assert.equal(r[1].balance, 0);
+  assert.equal(r.reduce((s, x) => s + x.paid, 0), 600000);
+  assert.equal(r.reduce((s, x) => s + x.due, 0), 764000);
+});
+test('saldo por unidad: recargo colectivo y late check-out (resto) se reparten proporcional', () => {
+  const b = { ...BAL, total_amount: 764000 + 60000 };   // +60.000 de late/recargo de toda la reserva
+  const r = unitBalances(b, []);
+  assert.equal(r.reduce((s, x) => s + x.due, 0), 824000);
+  assert.ok(r[0].due > 324000 && r[1].due > 440000);
+});
+test('saldo por unidad: reserva vieja (precios iguales sin ajustes) reparte por precio', () => {
+  const v = { nights: 4, check_in: '2026-10-21', check_out: '2026-10-25', total_amount: 920000, price_per_night: 230000,
+    booking_units: [{ unit_id: 'd2', price_per_night: 120000 }, { unit_id: 'd4', price_per_night: 110000 }] };
+  const r = unitBalances(v, [{ amount_ars: 92000 }]);
+  assert.deepEqual(r.map(x => x.due), [480000, 440000]); assert.equal(r.reduce((s, x) => s + x.paid, 0), 92000);
+});
+test('guestsShort', () => { assert.equal(guestsShort(3, 0), '3 ad'); assert.equal(guestsShort(1, 2), '1 ad 2 ni'); assert.equal(guestsShort(0, 0), '—'); });
+
+// ── Mensaje de armado hoy/mañana ──
+import { buildArmadoText } from '../../../js/services/armado-service.js';
+const U = (n, name) => ({ name, sort_order: n });
+const G = (f, l) => ({ first_name: f, last_name: l });
+test('armado: formato de Marian (HOY y MAÑANA, #depto ~ NOMBRE, PERS, fechas, noches, saldo)', () => {
+  const txt = buildArmadoText([
+    { id: 1, status: 'partial', check_in: '2026-10-27', check_out: '2026-10-30', adults: 2, children: 0, total_amount: 150000, total_paid: 50000, balance: 100000, guests: G('Liliana', 'López'), booking_units: [{ unit_id: 'd6', units: U(6, 'X') }] },
+    { id: 2, status: 'partial', check_in: '2026-10-28', check_out: '2026-10-29', adults: 4, children: 0, total_amount: 40000, total_paid: 0, balance: 40000, guests: G('Marcela', 'Bedu'), booking_units: [{ unit_id: 'd7', units: U(7, 'Y') }] },
+  ], '2026-10-27');
+  assert.equal(txt, 'HOY\n#6 ~ LILIANA LÓPEZ, 2PERS, (27/10 al 30/10) 3 noches. $100.000\n\nMAÑANA\n#7 ~ MARCELA BEDU, 4PERS, (28/10 al 29/10) 1 noche. $40.000');
+});
+test('armado: reserva de 2 deptos → una línea por depto con nombre propio, personas y saldo de CADA depto', () => {
+  const b = { id: 3, status: 'partial', check_in: '2026-10-27', check_out: '2026-10-31', nights: 4, adults: 4, children: 2, unit_pricing: true, total_amount: 764000, total_paid: 100000, balance: 664000, price_per_night: 230000,
+    guests: G('Familia', 'Pérez'), payments: [{ unit_id: 'd2', amount_ars: 100000 }],
+    booking_units: [{ unit_id: 'd2', price_per_night: 120000, free_nights: 1, discount_pct: 10, adults: 3, children: 0, label: 'Depto de los abuelos', units: U(2, 'A') },
+                    { unit_id: 'd4', price_per_night: 110000, adults: 1, children: 2, label: 'Los primos', units: U(4, 'B') }] };
+  const lines = buildArmadoText([b], '2026-10-27', { manana: false }).split('\n');
+  assert.equal(lines[1], '#2 ~ FAMILIA PÉREZ (DEPTO DE LOS ABUELOS), 3PERS, (27/10 al 31/10) 4 noches. $224.000');
+  assert.equal(lines[2], '#4 ~ FAMILIA PÉREZ (LOS PRIMOS), 3PERS (2 NIÑOS), (27/10 al 31/10) 4 noches. $440.000');
+});
+test('armado: saldo 0 → PAGADO; sin saldo (opción) y sin llegadas; ignora canceladas y bloqueos', () => {
+  const pag = { id: 4, status: 'paid', check_in: '2026-10-27', check_out: '2026-10-28', adults: 2, total_amount: 50000, total_paid: 50000, balance: 0, guests: G('Ana', 'Paga'), booking_units: [{ unit_id: 'd1', units: U(1, 'X') }] };
+  assert.match(buildArmadoText([pag], '2026-10-27'), /1 noche\. PAGADO/);
+  assert.doesNotMatch(buildArmadoText([pag], '2026-10-27', { saldo: false }), /PAGADO|\$/);
+  assert.equal(buildArmadoText([], '2026-10-27'), 'HOY\nSin llegadas\n\nMAÑANA\nSin llegadas');
+  assert.match(buildArmadoText([{ ...pag, status: 'cancelled' }], '2026-10-27'), /Sin llegadas/);
 });

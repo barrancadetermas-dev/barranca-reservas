@@ -90,3 +90,39 @@ Archivos: `js/components/calendar.js`, `js/supabase-config.js`, `index.html`, `_
 - **Tests** (`npx vite --port 5199` y luego `python3 _dev/tests/e2e/<archivo>`): `late_checkout_past_test.py` (actualizado),
   `late_checkout_diagonal_test.py`, `bar_colors_test.py`, `unit_filter_test.py`; helpers en `_cal_helpers.py`.
   Antes de correrlos: `python3 _dev/tests/e2e/regen_harness.py` (copia el HTML real de index.html a los arneses).
+
+## Ronda 4 — Reservas con 2+ deptos: huéspedes y ajustes POR UNIDAD
+**Migración (correr ANTES de subir el código):** `migration_multiunidad.sql`
+Archivos: `js/services/booking-pricing.js` (nuevo, cálculo único), `js/components/booking-form.js`, `calendar.js`, `booking-list.js`,
+`dashboard.js`, `statistics.js`, `js/app.js`, `js/utils/db-compat.js`, `js/services/{unit-stats,voucher-template,voucher-guest}.js`,
+`js/modules/encargada-share/encargada-content.js`, `index.html`, `css/calendar-v5.css`.
+- Noches sin cargo, descuento y recargo: "Toda la reserva" o "Una unidad" (selector + depto). Lo colectivo sigue en `bookings`; lo de cada depto en `booking_units`.
+- "Distribución por unidad": adultos/niños por depto, suma vs total, capacidad por depto, "Repartir automáticamente".
+- Total: una sola función (`computeBookingPricing`). Sin ajustes por unidad = fórmula de siempre al centavo.
+- Trigger `zz_booking_unit_pricing_total`: respeta el total de la app solo si `bookings.unit_pricing = true`.
+- Se muestra en: formulario, resumen/voucher, detalle de reserva, calendario (barras y tooltip), tarjetas, Panel de Hoy, mensaje a la encargada, estadísticas por depto.
+- Tests: `node --test _dev/tests/unit/` (21) y `_dev/tests/e2e/multiunit_form_test.py` (36).
+- Limpieza: borrar `js/components/supabase-config.js`.
+
+## Ronda 5 — Cards de reservas v2 + nombre propio de cada depto
+**Migración:** `migration_multiunidad.sql` (ya incluye la columna nueva) o, si ya corriste la anterior, `migration_multiunidad_nombre.sql`.
+- **Nombre por depto dentro de la reserva** (`booking_units.label`, hasta 60 caracteres): campo "Nombre en esta reserva" en cada depto de
+  "Distribución por unidad". Se ve en: formulario, calendario (texto de la barra y tooltip), cards, detalle, voucher, Panel de Hoy y mensaje a la encargada.
+- **Cards de "próximas reservas"** (`calendar.js → _renderMiniAgenda`, estilos en `calendar-v5.css`): agrupadas por día (Hoy · Mañana · Esta semana · Próximas),
+  fecha grande + noches + salida, nombre completo + canal, una fila por depto (nombre propio, personas, importe, etiquetas 🎁🏷️➕), etiquetas 🌅 late y 🧹 turno,
+  barra de pago con saldo real, avisos (sin seña a ≤2 días, saldo a ≤3 días, falta distribución), acciones al pasar el mouse (Check-in solo HOY, WhatsApp, Ver),
+  barra final "Ver todas / Nueva reserva". Respeta los filtros. Se corrigió un manejador de clic que se acumulaba en cada redibujado.
+- Calendario: el teléfono del huésped ahora viaja en la consulta (para WhatsApp).
+- Tests: `booking_cards_v2_test.py` (27, reemplaza a `booking_cards_test.py`, que validaba el diseño anterior), `multiunit_form_test.py` (43), unitarios (24).
+
+## Ronda 6 — Armado hoy/mañana, saldo por unidad, edición rápida, UI más compacta y arreglos
+- **Armado de hoy y mañana** (`js/services/armado-service.js` + `js/components/armado-modal.js`): botón "📲 Armado hoy/mañana" en la barra de las cards. Texto editable para WhatsApp:
+  `#6 ~ LILIANA LÓPEZ, 2PERS, (27/10 al 30/10) 3 noches. $100.000`. Una línea por depto (nombre propio, personas del depto, saldo del depto; saldo 0 → PAGADO). Opciones: Hoy / Mañana / Incluir saldo; Copiar y Abrir WhatsApp.
+- **Saldo por unidad** (`unitBalances`): corresponde = neto del depto + parte proporcional de lo colectivo; pagado = pagos del depto (`payments.unit_id`) + parte proporcional de los pagos generales. Se ve en el detalle de la reserva y en el armado.
+- **Edición rápida**: botón "⚡ Edición rápida" en el detalle; abre el formulario directo en Precios (descuentos, noches sin cargo, recargos, nombre y personas por depto).
+- **Lista de Reservas**: el nombre propio del depto aparece junto al chip (y el buscador lo encuentra).
+- **Calendario**: la barra de herramientas ya no flota sobre la grilla al hacer scroll.
+- **Cards**: UNA sola línea (máx. 6, HOY y futuras juntas), compactas (una línea por depto, máx. 2 + "+N deptos más"), acciones como iconos al pasar el mouse.
+- **Formulario (paso 3)** mucho más corto: Noches sin cargo · Descuento · Recargo en una fila con "Toda / Un depto" debajo de cada uno; distribución por unidad en filas de una línea (depto, nombre, adultos, niños, capacidad); late check-out y depósito en una fila.
+- **Arreglos de errores reales:** `dashboard.js` (check-out: "Error: notas is not defined", sin refresco ni sonido); noches sin cargo pintadas en amarillo cuando caen fuera de la vista; en estadías divididas las noches sin cargo y el late check-out aparecían en cada tramo (ahora solo en el que corresponde); cola de recargo casi negra (0.55 → 0.65).
+- **Tests viejos puestos al día:** `free_nights_test` (diseño de degradé vigente) y `ui_test4`.

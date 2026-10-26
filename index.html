@@ -934,7 +934,7 @@
           El total por noche se suma automáticamente entre los departamentos elegidos.
         </div>
       </div>
-      <div class="form-grid-2">
+      <div class="form-grid-2 pc-row">
         <div class="form-group"><label>Noches sin cargo</label><input type="number" id="f-free-nights" min="0" value="0"></div>
         <div class="form-group">
           <label style="display:flex;align-items:center;justify-content:space-between">
@@ -973,31 +973,29 @@
       <!-- Reservas de 2+ deptos: a quién se aplica cada concepto + distribución de huéspedes (los dibuja booking-form.js) -->
       <div id="unit-scope-wrap" class="ms-wrap" style="display:none"></div>
       <div id="unit-dist-wrap" class="ud-wrap" style="display:none"></div>
-      <!-- Late Check-out: todo en una sola línea inline -->
-      <div class="form-group" style="margin-top:4px">
-        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none;white-space:nowrap">
+      <!-- Late check-out y depósito en una sola fila (el formulario es más corto) -->
+      <div class="form-grid-2 lc-row">
+        <div class="form-group">
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none;white-space:nowrap;margin-bottom:6px">
             <input type="checkbox" id="f-late-checkout" style="width:15px;height:15px;cursor:pointer">
             <span style="font-size:.82rem">🌅 Late check-out</span>
           </label>
-          <label id="f-lco-paid-wrap" style="display:none;align-items:center;gap:6px;cursor:pointer;user-select:none;white-space:nowrap">
-            <input type="checkbox" id="f-late-checkout-paid" checked style="width:14px;height:14px;cursor:pointer">
-            <span style="font-size:.78rem;color:var(--color-text-2)">✅ Se cobra</span>
-          </label>
-          <div id="f-lco-amount-wrap" style="display:none;align-items:center;gap=6px">
-            <span style="font-size:.75rem;color:var(--color-text-3);white-space:nowrap">¿Cuánto?</span>
-            <input type="number" id="f-late-checkout-amount" min="0" step="500"
-              placeholder="½ noche" style="width:110px;padding:3px 8px;border-radius:6px;
-              border:1px solid var(--color-border);background:var(--color-surface-2);
-              font-size:.78rem;color:var(--color-text)">
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+            <label id="f-lco-paid-wrap" style="display:none;align-items:center;gap:6px;cursor:pointer;user-select:none;white-space:nowrap">
+              <input type="checkbox" id="f-late-checkout-paid" checked style="width:14px;height:14px;cursor:pointer">
+              <span style="font-size:.78rem;color:var(--color-text-2)">✅ Se cobra</span>
+            </label>
+            <div id="f-lco-amount-wrap" style="display:none;align-items:center;gap:6px">
+              <span style="font-size:.75rem;color:var(--color-text-3);white-space:nowrap">¿Cuánto?</span>
+              <input type="number" id="f-late-checkout-amount" min="0" step="500"
+                placeholder="½ noche" style="width:100px;padding:3px 8px;border-radius:6px;
+                border:1px solid var(--color-border);background:var(--color-surface-2);
+                font-size:.78rem;color:var(--color-text)">
+            </div>
           </div>
         </div>
-      </div>
-      <div class="form-grid-2">
         <div class="form-group">
-          <label>Depósito de garantía ($)
-            <span class="label-hint">Reembolsable al check-out. No se suma al total de la reserva.</span>
-          </label>
+          <label title="Reembolsable al check-out. No se suma al total de la reserva.">Depósito de garantía ($) <span style="color:var(--color-text-3);cursor:help">ⓘ</span></label>
           <input type="number" id="f-deposit" min="0" step="500" value="0">
         </div>
       </div>
@@ -1119,6 +1117,7 @@
       <!-- Fila 2: acciones principales -->
       <div class="detail-footer-main">
         <button class="btn btn-outline btn-sm" id="detail-btn-edit">Editar</button>
+        <button class="btn btn-outline btn-sm" id="detail-btn-quick" title="Abre directo en Precios: descuentos, noches sin cargo, recargos, nombre y personas por depto, sin recorrer todos los pasos">⚡ Edición rápida</button>
         <button class="btn btn-outline btn-sm" id="detail-btn-cancel-booking" style="color:var(--color-warning)">Cancelar</button>
         <button class="btn btn-danger btn-sm" id="detail-btn-delete">Eliminar</button>
       </div>

@@ -168,12 +168,60 @@ export function guestsText(adults, children) {
   return parts.join(', ') || '—';
 }
 
+/** Versión corta para espacios chicos: "3 ad" / "1 ad 2 ni". */
+export function guestsShort(adults, children) {
+  const a = int(adults), c = int(children);
+  return [a ? `${a} ad` : '', c ? `${c} ni` : ''].filter(Boolean).join(' ') || '—';
+}
+
 /** Distribución guardada de una reserva: [{unitId, name, adults, children}] o [] si no se cargó. */
 export function distributionOf(booking = {}) {
   const bus = booking.booking_units ?? [];
   if (bus.length < 2 || !bus.some(bu => bu.adults != null || bu.children != null)) return [];
   return bus.map(bu => ({ unitId: bu.unit_id, name: bu.units?.name ?? '', label: cleanLabel(bu.label), order: bu.units?.sort_order ?? 99, color: bu.units?.color,
                           adults: int(bu.adults), children: int(bu.children) })).sort((a, b) => a.order - b.order);
+}
+
+// ── Saldo por unidad ──
+/**
+ * Cuánto corresponde, cuánto se pagó y cuánto falta en CADA depto de una reserva guardada.
+ *  - Corresponde = neto del depto (con sus noches sin cargo / descuento / recargo) + parte proporcional de lo colectivo
+ *    (recargo de toda la reserva, late check-out y redondeos), repartido según el neto de cada depto.
+ *  - Pagado = pagos asignados a ese depto (payments.unit_id) + parte proporcional de los pagos GENERALES (sin depto),
+ *    repartida según lo que corresponde a cada depto.
+ * Suma de "corresponde" = total de la reserva y suma de "pagado" = total pagado (se reparte el resto en el último depto).
+ * @returns {Array<{unitId:string, due:number, paid:number, balance:number, over:number}>}
+ */
+export function unitBalances(booking = {}, payments = booking.payments ?? []) {
+  const bus = booking.booking_units ?? [];
+  if (!bus.length) return [];
+  const amts = unitAmounts(booking);
+  const total = Math.max(0, Math.round(Number(booking.total_amount) || 0));
+  const sumNet = amts.reduce((s, x) => s + x.net, 0);
+  const weights = amts.map(x => (sumNet > 0 ? x.net / sumNet : 1 / amts.length));
+  // 1) lo que corresponde a cada depto (el resto colectivo se reparte proporcional al neto)
+  const rest = total - sumNet;
+  let left = total;
+  const due = amts.map((x, i) => {
+    const v = i === amts.length - 1 ? left : Math.round(x.net + rest * weights[i]);
+    left -= v; return Math.max(0, v);
+  });
+  // 2) pagos: directos al depto + parte proporcional de los generales
+  const amt = p => num(p.amount_ars ?? p.amount);
+  const direct = Object.fromEntries(amts.map(x => [x.unitId, 0]));
+  let general = 0;
+  (payments ?? []).forEach(p => {
+    const uid = p.unit_id != null ? String(p.unit_id) : null;
+    if (uid && uid in direct) direct[uid] += amt(p); else general += amt(p);
+  });
+  const sumDue = due.reduce((s, v) => s + v, 0);
+  let gLeft = Math.round(general);
+  return amts.map((x, i) => {
+    const share = i === amts.length - 1 ? gLeft : Math.round(general * (sumDue > 0 ? due[i] / sumDue : 1 / amts.length));
+    gLeft -= share;
+    const paid = Math.round(direct[x.unitId]) + share;
+    return { unitId: x.unitId, due: due[i], paid, balance: Math.max(0, due[i] - paid), over: Math.max(0, paid - due[i]) };
+  });
 }
 
 // ── Nombre propio del depto dentro de una reserva (ej.: "Depto de los abuelos") ──

@@ -1394,3 +1394,91 @@
 .cal-c2-u.m .l2 { display:flex; align-items:center; gap:5px; padding-left:13px; margin-top:2px; min-width:0; }
 #ud-auto { border:1px solid var(--color-border); background:var(--color-surface); color:var(--color-text); border-radius:8px; padding:5px 11px; font-weight:700; font-size:.72rem; cursor:pointer; }
 #ud-auto:hover { background:var(--color-surface-2); }
+
+
+/* ══════════════════════════════════════════════════════════
+   Barra de herramientas del calendario: ya no flota sobre la grilla al hacer scroll
+   (era sticky y tapaba las filas; ahora scrollea en su lugar. Los encabezados de fecha y la columna de deptos siguen fijos)
+══════════════════════════════════════════════════════════ */
+#section-calendar .cal-toolbar { position: static !important; top: auto !important; z-index: auto !important; }
+
+/* ══════════════════════════════════════════════════════════
+   Cards v2 COMPACTAS — una sola línea (máx. 6)
+══════════════════════════════════════════════════════════ */
+.cal-c2-grid { display:grid !important; grid-auto-flow:column; grid-template-columns:none !important; grid-auto-columns:minmax(176px, 1fr); gap:8px; overflow-x:auto; padding:2px 2px 6px; scrollbar-width:thin; }
+.cal-c2-card { padding:8px 8px 7px 12px !important; border-radius:12px !important; font-size:.68rem !important; min-width:0; }
+.cal-c2-bar { width:5px !important; }
+.cal-c2-hd { gap:6px !important; }
+.cal-c2-day { min-width:30px !important; padding:3px 5px !important; border-radius:8px !important; }
+.cal-c2-day b { font-size:.95rem !important; }
+.cal-c2-when { min-width:0; } .cal-c2-when span:last-child { font-size:.58rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.cal-c2-pill { font-size:.56rem !important; padding:1px 7px !important; }
+.cal-c2-gn { margin:6px 0 4px !important; gap:5px !important; }
+.cal-c2-nm { font-size:.76rem !important; display:block !important; -webkit-line-clamp:unset !important; white-space:nowrap; text-overflow:ellipsis; overflow:hidden; flex:1; min-width:0; }
+.cal-c2-chip { font-size:.52rem !important; padding:1px 5px !important; }
+.cal-c2-units { border-top:1px solid var(--color-border); }
+.cal-c2-u { display:flex !important; align-items:center; gap:4px; padding:3px 0 !important; border-bottom:1px solid var(--color-border); min-width:0; }
+.cal-c2-u i { width:7px; height:7px; border-radius:50%; flex-shrink:0; }
+.cal-c2-u em { font-style:normal; font-weight:700; flex:1; min-width:0; max-width:none !important; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.cal-c2-who { flex:none !important; font-size:.6rem; color:var(--color-text-2); white-space:nowrap; }
+.cal-c2-amt { flex:none; font-weight:800; margin-left:2px !important; }
+.cal-c2-more { font-size:.58rem; color:var(--color-text-3); padding:2px 0 0; }
+.cal-c2-pay { margin-top:6px !important; } .cal-c2-pf { margin-top:3px !important; }
+.cal-c2-st { font-size:.54rem !important; padding:1px 6px !important; } .cal-c2-sal { font-size:.6rem !important; } .cal-c2-sal b { font-size:.66rem !important; }
+.cal-c2-alert { margin:6px 0 0 !important; padding:3px 6px !important; font-size:.56rem !important; border-radius:6px !important; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; cursor:default; }
+.cal-c2-alert.i { background:#eef2ff; color:#3730a3; cursor:pointer; }
+.cal-c2-sps { margin-top:5px !important; } .cal-c2-sp { font-size:.54rem !important; padding:1px 6px !important; }
+/* Acciones: iconos arriba a la derecha, solo con hover (no cambian la altura de la card) */
+.cal-c2-ia { position:absolute; top:6px; right:6px; display:none; gap:4px; z-index:3; }
+.cal-c2-card:hover .cal-c2-ia { display:flex; }
+@media (hover: none) { .cal-c2-ia { display:flex; } }
+.cal-c2-ib { width:22px; height:22px; display:flex; align-items:center; justify-content:center; font-size:.7rem; border-radius:7px; background:var(--color-surface); border:1px solid var(--color-border); box-shadow:0 1px 3px rgba(0,0,0,.12); cursor:pointer; }
+.cal-c2-ib.pri { background:#16a34a; border-color:#16a34a; }
+.cal-c2-act, .cal-c2-grp { display:none !important; }
+.cal-c2-empty { margin-top:6px !important; padding:6px 10px !important; font-size:.64rem !important; }
+.cal-c2-empty .cal-c2-btn { padding:4px 10px; }
+
+
+/* ══════════════════════════════════════════════════════════
+   Paso 3 "Precios" más corto: conceptos en una fila, alcance debajo de cada campo,
+   distribución por unidad en filas compactas, late check-out + depósito en una fila
+══════════════════════════════════════════════════════════ */
+.form-grid-2.pc-row { grid-template-columns:repeat(auto-fit, minmax(118px, 1fr)) !important; gap:8px 10px !important; }
+.form-grid-2.pc-row .form-group { margin-bottom:0 !important; }
+.form-grid-2.lc-row { align-items:start; }
+.ms-inline { margin-top:5px; display:flex; flex-direction:column; gap:4px; }
+.ms-inline .ms-seg { width:100%; }
+.ms-inline .ms-seg button { flex:1; padding:3px 4px; font-size:.62rem; white-space:nowrap; }
+.ms-inline .ms-unit { width:100%; font-size:.68rem; padding:3px 6px; }
+#unit-scope-wrap.ms-wrap { padding:6px 10px; margin:2px 0 8px; background:transparent; border:0; }
+#unit-scope-wrap .ms-applied { margin:0; }
+.ud-t { display:block; }
+.ud-th, .ud-tr { display:grid; grid-template-columns:minmax(78px, 1.1fr) minmax(90px, 1.6fr) 46px 46px 40px; gap:6px; align-items:center; padding:4px 10px; }
+.ud-th { font-size:.58rem; font-weight:800; color:var(--color-text-3); text-transform:uppercase; letter-spacing:.04em; padding-top:6px; padding-bottom:2px; }
+.ud-tr { border-top:1px solid var(--color-border); }
+.ud-tr .ud-name { font-size:.7rem; font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; display:flex; align-items:center; gap:5px; }
+.ud-tr input { width:100%; padding:4px 6px !important; font-size:.74rem !important; min-width:0; }
+.ud-tr input[type=number] { text-align:center; padding-left:2px !important; padding-right:2px !important; }
+.ud-cap-pill { font-size:.6rem; font-weight:800; text-align:center; padding:2px 0; border-radius:99px; background:#dcfce7; color:#15803d; }
+.ud-cap-pill.bad { background:#fee2e2; color:#b91c1c; } .ud-cap-pill.empty { background:var(--color-surface-2); color:var(--color-text-3); }
+.ud > summary { padding:7px 10px !important; font-size:.78rem !important; }
+.ud-actions { padding:5px 10px 0 !important; } .ud-actions small { font-size:.62rem; }
+.ud-alert { margin:6px 10px 0 !important; padding:5px 8px !important; font-size:.68rem !important; }
+.ud-table { width:calc(100% - 20px) !important; margin:6px 10px 8px !important; font-size:.66rem !important; }
+.ud-wrap { margin-bottom:8px !important; }
+.ud-name::before { content:''; display:inline-block; width:7px; height:7px; border-radius:50%; background:var(--dot, var(--color-primary)); margin-right:5px; flex-shrink:0; }
+#ud-auto { padding:4px 10px !important; font-size:.68rem !important; }
+
+.bl-unit-lbl { font-size:.64rem; font-weight:700; padding:1px 7px; border-radius:99px; background:var(--color-surface-2); color:var(--color-text-2); border:1px solid var(--color-border); max-width:150px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; display:inline-block; vertical-align:middle; }
+/* Ventana "Armado de hoy y mañana" */
+.armado-ov { position:fixed; inset:0; background:rgba(15,23,42,.55); z-index:9000; display:flex; align-items:center; justify-content:center; padding:16px; }
+.armado-box { background:var(--color-surface); color:var(--color-text); border-radius:16px; width:min(560px,100%); max-height:92vh; display:flex; flex-direction:column; box-shadow:0 20px 50px rgba(0,0,0,.35); }
+.armado-hd { display:flex; align-items:center; justify-content:space-between; padding:14px 18px; border-bottom:1px solid var(--color-border); font-weight:800; }
+.armado-hd button { border:0; background:transparent; font-size:1.1rem; cursor:pointer; color:var(--color-text-2); }
+.armado-bd { padding:12px 18px; overflow:auto; display:flex; flex-direction:column; gap:10px; }
+.armado-opts { display:flex; gap:14px; flex-wrap:wrap; font-size:.78rem; }
+.armado-opts label { display:flex; align-items:center; gap:5px; cursor:pointer; }
+.armado-ta { width:100%; min-height:210px; font:600 .82rem/1.45 ui-monospace,SFMono-Regular,Menlo,monospace; padding:10px 12px; border:1px solid var(--color-border); border-radius:10px; background:var(--color-surface-2); color:var(--color-text); resize:vertical; }
+.armado-ft { display:flex; gap:8px; justify-content:flex-end; padding:12px 18px; border-top:1px solid var(--color-border); flex-wrap:wrap; }
+.armado-ft button { padding:8px 14px; border-radius:9px; border:1px solid var(--color-border); background:var(--color-surface-2); font-weight:800; font-size:.78rem; cursor:pointer; color:var(--color-text); }
+.armado-ft button.wa { background:#16a34a; border-color:#16a34a; color:#fff; }

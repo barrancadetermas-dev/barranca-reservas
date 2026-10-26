@@ -13,6 +13,7 @@ import { escapeHtml } from '../services/voucher-template.js';
 import { specialChipsHTML } from '../services/special-dates.js';
 import { guestCountsText, promoLabel, paymentProgressText } from '../utils/booking-display.js';
 import { queryWithOptionalColumns, segmentColumns, multiUnitColumns, unitPricingColumn } from '../utils/db-compat.js';
+import { cleanLabel } from '../services/booking-pricing.js';
 import { registerCheckIn } from '../services/checkin-service.js';
 import { cache } from '../services/supabase-cache.js';
 import { Bus, EVENTS } from '../services/event-bus.js';
@@ -367,7 +368,7 @@ export class BookingList {
         const name = g ? `${g.first_name} ${g.last_name}`.toLowerCase() : '';
         const dni  = (g?.dni ?? '').toLowerCase();
         const phone = (g?.phone ?? '').toLowerCase();
-        const unit = (b.booking_units ?? []).map(bu => bu.units?.name ?? '').join(' ').toLowerCase();
+        const unit = (b.booking_units ?? []).map(bu => `${bu.units?.name ?? ''} ${bu.label ?? ''}`).join(' ').toLowerCase();
         if (!name.includes(this._search) && !dni.includes(this._search) && !phone.includes(this._search) && !unit.includes(this._search)) return false;
       }
 
@@ -876,7 +877,8 @@ export class BookingList {
         ? bu.units
         : (AppContext.units?.find(x => String(x.id) === String(bu.unit_id)) ?? bu.units);
       const u = { ...full, id: bu.unit_id };
-      return getUnitChipHTML(u, 'sm');
+      const lbl = units.length > 1 ? cleanLabel(bu.label) : '';   // nombre propio del depto dentro de la reserva
+      return getUnitChipHTML(u, 'sm') + (lbl ? `<span class="bl-unit-lbl" title="${escapeHtml(lbl)}">${escapeHtml(lbl)}</span>` : '');
     });
     // Con más de 2 unidades, en vez de que el wrap dependa del ancho
     // disponible (rompía la alineación de la fila entera), se agrupan de
@@ -947,7 +949,7 @@ export class BookingList {
     return `
       <div class="booking-row ${isBad ? 'booking-row-bad' : ''} ${b.status === 'cancelled' ? 'booking-row-cancelled' : ''}" data-booking-id="${b.id}"
            style="cursor:pointer;background:${rowBg}">
-        <div class="booking-row-accent" style="background:${accentBg}" title="${units.map(bu => bu.units?.name).filter(Boolean).join(' · ') || barLabel}"></div>
+        <div class="booking-row-accent" style="background:${accentBg}" title="${units.map(bu => (cleanLabel(bu.label) ? cleanLabel(bu.label) + ' · ' : '') + (bu.units?.name ?? '')).filter(Boolean).join(' | ') || barLabel}"></div>
         <div class="booking-row-body">
           <div class="bl-row-main">
             <div class="bl-col-guest">

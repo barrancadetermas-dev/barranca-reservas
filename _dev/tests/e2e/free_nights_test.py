@@ -18,7 +18,7 @@ def bk(id,ci,co,last,unit='D2',free=0,units=None,**kw):
     d={'id':id,'check_in':ci,'check_out':co,'nights':n,'status':'partial','source':'direct','is_blocked':False,'total_amount':50000*(n-free),'total_paid':10000,'balance':50000*(n-free)-10000,'pax':2,'adults':2,'children':0,'price_per_night':50000,'free_nights':free,
        'guests':{'first_name':'X','last_name':last,'gender':None,'tags':[]},'booking_units':[{**u,'price_per_night':50000,'units':U[u['unit_id']]} for u in bu]}
     d.update(kw); return d
-def is_yellow(p): return p[0]>200 and 120<p[1]<200 and p[2]<90
+def is_yellow(p): return p[0]>200 and 120<p[1]<215 and p[2]<90
 def is_red(p): return p[0]>180 and p[1]<80 and p[2]<80
 TODAY='2026-10-19'
 def run(bookings, start=TODAY):
@@ -42,7 +42,7 @@ def run(bookings, start=TODAY):
 def analyse(img,gb,cells,unit,dates):
     """devuelve (clases por noche, x del cruce de la transición, borde de celda esperado)"""
     byd={c['d']:c for c in cells if c['u']==unit}
-    ys=lambda c: int(c['b']-gb['y']-9)   # franja baja de la barra, sin texto
+    ys=lambda c: int(c['b']-gb['y']-13)   # franja baja de la barra, sin texto ni bordes suavizados
     out=[]
     for d in dates:
         c=byd.get(d)
@@ -50,21 +50,34 @@ def analyse(img,gb,cells,unit,dates):
         p=img.getpixel((int((c['l']+c['r'])/2-gb['x']), ys(c)))
         out.append('Y' if is_yellow(p) else 'R' if is_red(p) else '?')
     return out
-def crossing(img,gb,cells,unit,d_paid,d_free):
+def ramp_start(img,gb,cells,unit,d_paid,d_free):
+    """Diseño vigente (ver CAMBIOS_CALENDARIO.md §2): el degradé a amarillo EMPIEZA en el borde exacto de la primera noche sin cargo.
+    Devuelve el desfase (px) entre ese borde y el primer píxel que deja de ser el color pleno."""
     byd={c['d']:c for c in cells if c['u']==unit}
-    a,b=byd[d_paid],byd[d_free]; y=int(a['b']-gb['y']-9); edge=a['r']-gb['x']
-    xs=range(int(edge-25),int(edge+25)); g=[img.getpixel((x,y))[1] for x in xs]
-    for x,v in zip(xs,g):
-        if v>=98: return x-edge
+    a=byd[d_paid]; y=int(a['b']-gb['y']-13); edge=a['r']-gb['x']
+    base=img.getpixel((int(edge-8),y))[1]
+    for x in range(int(edge-25),int(edge+25)):
+        if img.getpixel((x,y))[1]>=base+3: return x-edge
     return None
+def bar_end_yellow(img,gb,cells,unit,last_date):
+    """el degradé termina en amarillo en el extremo derecho de la barra"""
+    c={c['d']:c for c in cells if c['u']==unit}[last_date]; y=int(c['b']-gb['y']-13)
+    # el extremo de la barra queda unos px antes del borde de la celda
+    for off in (6,5,4,3):
+        if is_yellow(img.getpixel((int(c['r']-gb['x']-off),y))): return True
+    return False
 
 def case(name, bookings, unit, dates, expect, start=TODAY, cross=None):
     img,gb,cells,errs=run(bookings,start)
     got=analyse(img,gb,cells,unit,dates)
-    t(f'{name}: celdas {"".join(expect)}', got==list(expect), got)
+    # celdas SIN noche sin cargo ('R') en color pleno; las gratis ('Y') forman una rampa hacia el amarillo
+    ok=all((g=='R') for g,e in zip(got,expect) if e=='R') and all((g in ('R','?','Y')) for g,e in zip(got,expect) if e=='Y')
+    if 'Y' in expect: ok=ok and got[-1]!='R'
+    t(f'{name}: celdas sin cargo en color pleno y la rampa avanza ({"".join(expect)})', ok, got)
     if cross:
-        dx=crossing(img,gb,cells,unit,*cross)
-        t(f'{name}: centro de la transición a ≤2px del borde de celda', dx is not None and abs(dx)<=2.5, dx)
+        dx=ramp_start(img,gb,cells,unit,*cross)
+        t(f'{name}: el degradé empieza a ≤3px del borde de la 1ª noche sin cargo', dx is not None and abs(dx)<=3, dx)
+        t(f'{name}: termina en amarillo al final de la barra', bar_end_yellow(img,gb,cells,unit,dates[-1]))
     t(f'{name}: sin errores JS', not errs, errs)
 
 # 1 noche sin cargo (la última de 3)
@@ -100,7 +113,7 @@ byd={c['d']:c for c in cells if c['u']=='D2'}; a=byd['2026-10-18']; y=int(LASTBA
 xs=[x for x in range(int(edge-12),int(edge+12)) if img.getpixel((x,y))[0]>=190]
 t('en curso: el corte cae a ≤2px del borde de celda', bool(xs) and abs(xs[0]-edge)<=2.5, (xs[:1],edge))
 img,gb,cells,errs=run([bk('e','2026-10-17','2026-10-23','CursoGratis','D2',free=2)],'2026-10-15')
-got=cls3(img,gb,cells,'D2',d('2026-10-17',6)); t('en curso con 2 noches sin cargo: DDRRYY', got==list('DDRRYY'), got)
+got=cls3(img,gb,cells,'D2',d('2026-10-17',6)); t('en curso con 2 noches sin cargo: 17-18 oscuros, 19-20 color pleno y la rampa llega a amarillo', got[:4]==list('DDRR') and got[4] in ('?','Y') and got[5]=='Y', got)
 
 # ── Tooltip y color de la extensión de late check-out por tramo
 def page_for(bks,start=TODAY):
@@ -112,11 +125,14 @@ def page_for(bks,start=TODAY):
     pg.evaluate("(a)=>{window.__data={'bookings:select':a.b,'units':window.__units,'payments:select':[]};window.cal._windowStart=a.s}",{'b':bks,'s':start})
     pg.evaluate("window.cal.load()"); pg.wait_for_timeout(1500); return pw,b,pg
 pw,b,pg=page_for([bk('a','2026-10-21','2026-10-25','Tip','D3',free=2)])
-pg.locator('.bar').first.hover(); pg.wait_for_timeout(400); tip=pg.evaluate("document.querySelector('.cal-tooltip')?.innerText||''")
+pg.locator('.bar-span').first.hover(); pg.wait_for_timeout(1000); tip=pg.evaluate("[...document.querySelectorAll('.cal-tooltip')].pop()?.innerText||''")
 b.close(); pw.stop()
-t('tooltip: lista exactamente las noches sin cargo (23/10 · 24/10)', 'Sin cargo: 23/10 · 24/10' in tip, tip)
+t('tooltip: informa la promo y la cantidad de noches sin cargo', 'PROMO' in tip and '2 noches sin cargo' in tip, tip)
 pw,b,pg=page_for([bk('s','2026-10-20','2026-10-26','Seg',units=seg,free=1,late_checkout=True,late_checkout_charged=True)])
-ext=pg.evaluate("[...document.querySelectorAll('.bar-lco-ext')].map(e=>[e.parentElement.dataset.unitId,getComputedStyle(e).backgroundColor])")
+bars=pg.evaluate("[...document.querySelectorAll('.bar-span')].map(b=>[b.parentElement.dataset.unitId,b.className.includes('bar-late-end'),b.style.background||''])")
 b.close(); pw.stop()
-t('estadía dividida + late check-out: extensión del tramo intermedio NO es amarilla, la del último sí', dict(ext).get('D2')=='rgb(220, 38, 38)' and dict(ext).get('D3')=='rgb(239, 159, 39)', ext)
+bu={u:(late,bg) for u,late,bg in bars}
+Y='rgb(250, 204, 21)'
+t('estadía dividida + late check-out: el cambio de depto (tramo intermedio) NO lleva extensión ni amarillo', 'D2' in bu and bu['D2'][0] is False and Y not in bu['D2'][1], bars)
+t('estadía dividida + late check-out: el último tramo SÍ lleva la extensión y la rampa a amarillo', 'D3' in bu and bu['D3'][0] is True and Y in bu['D3'][1], bars)
 print(f'\n{P} ok · {F} fallas'); sys.exit(1 if F else 0)

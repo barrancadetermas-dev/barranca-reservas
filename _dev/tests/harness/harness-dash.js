@@ -33,7 +33,9 @@ function builder(table) {
         const m = (re) => (f.match(re) ?? [])[1];
         const eqCi = m(/eq\("check_in","([^"]+)"\)/), eqCo = m(/eq\("check_out","([^"]+)"\)/);
         const lteCi = m(/lte\("check_in","([^"]+)"\)/), gtCo = m(/gt\("check_out","([^"]+)"\)/);
-        if (eqCi) data = BOOKING.check_in === eqCi ? [BOOKING] : [];
+        const eqId = m(/eq\("id","([^"]+)"\)/);   // consulta por id (check-out desde el Panel de Hoy)
+        if (eqId) data = BOOKING.id === eqId ? [BOOKING] : [];
+        else if (eqCi) data = BOOKING.check_in === eqCi ? [BOOKING] : [];
         else if (eqCo) data = BOOKING.check_out === eqCo ? [BOOKING] : [];
         else if (lteCi && gtCo) data = (BOOKING.check_in <= lteCi && BOOKING.check_out > gtCo) ? [BOOKING] : [];
         else if (/lt\("check_in"/.test(f) && gtCo) data = (BOOKING.check_out > gtCo) ? [BOOKING] : []; // pronóstico de ocupación

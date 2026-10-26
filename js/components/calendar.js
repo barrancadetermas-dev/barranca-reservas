@@ -22,7 +22,7 @@ import { genderSymbolHTML } from '../utils/gender.js';
 import { specialChipsHTML, specialsForStay, emojiHTML } from '../services/special-dates.js';
 import { guestCountsText, promoLabel, fmtPct } from '../utils/booking-display.js';
 import { registerCheckIn } from '../services/checkin-service.js';
-import { unitAdjustments, hasUnitPricing, distributionOf, guestsText, cleanLabel, unitDisplayName, unitAmounts } from '../services/booking-pricing.js';
+import { unitAdjustments, hasUnitPricing, distributionOf, guestsText, guestsShort, cleanLabel, unitDisplayName, unitAmounts } from '../services/booking-pricing.js';
 import { escapeHtml } from '../services/voucher-template.js';
 
 // Late check-out: la barra de la reserva que sale tarde invade LATE_FRAC de la celda del día de salida
@@ -51,7 +51,7 @@ const CELL_W_MOB  = 32;
 const FREE_NIGHT_END = '#FACC15';
 // Recargo: el último tramo (proporcional al % cobrado sobre el alquiler) vira al color base oscurecido
 // (bordó en las barras rojas, verde oscuro en las pagadas). Factor de oscurecimiento del tono final:
-const SURCHARGE_DARKEN = 0.55;
+const SURCHARGE_DARKEN = 0.65;   // el tramo de recargo se oscurece, pero conserva ≥ 60% del brillo (antes 0.55: quedaba casi negro)
 // Huecos entre reservas: se resaltan los de hasta GAP_ALERT_MAX_NIGHTS noches (difíciles de vender)
 // y se sugiere un descuento según el tamaño del hueco (en %).
 const GAP_ALERT_MAX_NIGHTS = 2;
@@ -468,6 +468,7 @@ export class Calendar {
             map[unit_id][iso].push({
               ...b,
               check_in: uCi, check_out: uCo, // para que _renderBar dibuje solo este tramo
+              stayCheckOut: co,              // salida de TODA la estadía (las noches sin cargo son las últimas de la estadía, no del tramo)
               _isSplitSegment: !!(segment_check_in || segment_check_out),
               _cellType: this._getCellType(uCi, uCo, iso),
             });
@@ -1303,6 +1304,9 @@ export class Calendar {
       } else if (f.statusColor) {
         const nPct = f.lateExt ? Math.max(1, Math.min(100, (nightsEnd / width) * 100)) : 100;
         baseGrad = `linear-gradient(to right, ${ramp(nPct)}, ${f.statusColor} 100%)`;
+      } else if (f.freeHidden) {
+        // Sin noches sin cargo a la vista: color pleno (antes se aplicaba al tramo visible el degradé pensado para la barra completa → amarillo falso)
+        baseGrad = `linear-gradient(${f.color}, ${f.color})`;
       }
       let passedPx = null;
       if (f.passedIdx > 0) {
@@ -1676,7 +1680,8 @@ export class Calendar {
     const startsAfterLate = !truncLeft && (this._lateCheckoutMap?.has(lateCoKey) ?? false);
     // Late check-out propio: la MISMA barra se prolonga LATE_FRAC dentro de la celda de salida (un solo
     // elemento = mismo color/degradé, sin costura) y termina en diagonal.
-    const hasLateExt = !!booking.late_checkout && !truncRight;
+    // El late check-out es de la SALIDA de la estadía: en una estadía dividida solo lo lleva el último tramo (no el cambio de depto)
+    const hasLateExt = !!booking.late_checkout && !truncRight && (booking.stayCheckOut ?? co) === co;
     const startPx    = LATE_SKEW - LATE_GAP;   // la barra entrante arranca antes y se recorta en diagonal
     const leftStyle = startsAfterLate ? `calc(${LATE_FRAC * 100}% - ${startPx}px)` : `${left}px`;
     const widthReduceForLate = startsAfterLate ? ` - ${LATE_FRAC * 100}% + ${startPx}px` : '';
@@ -1728,7 +1733,7 @@ export class Calendar {
       const freeShown = Math.min(freeN, totalN);
       let freeFrom = -1, freeCount = 0;
       if (freeShown > 0 && !isBlock) {
-        const freeStartISO = this._addDays(co, -freeShown);            // primera noche sin cargo
+        const freeStartISO = this._addDays(booking.stayCheckOut ?? co, -freeShown);   // primera noche sin cargo (de la estadía completa)
         const fs = freeStartISO < visStart ? visStart : freeStartISO;  // recortada a lo visible
         freeCount = Math.max(0, this._dayDiff(fs, visEnd));
         freeFrom  = this._dayDiff(visStart, fs);
@@ -1749,6 +1754,8 @@ export class Calendar {
         span, left, rightM, late: startsAfterLate,
         lateExt: hasLateExt,
         statusColor: chanBar ? statusColor : null,
+        // Las noches sin cargo existen pero NO caen en lo visible (fuera de la vista o en otro tramo de una estadía dividida)
+        freeHidden: freeShown > 0 && !isBlock && freeCount === 0,
         lateFreeTail: hasLateExt && booking.late_checkout_charged === false && booking.status !== 'paid',
         color, progressOverlay, freeFrom, freeCount, tailFrom, tailEnd,
         baseBg: baseBgPlain,
@@ -6313,9 +6320,10 @@ export class Calendar {
 
 
   // ══════════════════════════════════════════════════════════════
-  // Cards de "próximas reservas" (debajo del calendario) — diseño v2
-  // Agrupadas por día (Hoy · Mañana · Esta semana · Próximas), una fila por depto
-  // (nombre propio, personas, importe y etiquetas), barra de pago, avisos y acciones.
+  // Cards de "próximas reservas" (debajo del calendario) — v2 compacta
+  // UNA sola línea (máx. 6 llegadas), de menor a mayor fecha: HOY y las futuras juntas.
+  // Cada card: fecha + cuándo, nombre, una línea por depto (nombre propio, personas, importe),
+  // barra de pago con saldo, y un aviso corto. Las acciones aparecen al pasar el mouse.
   // ══════════════════════════════════════════════════════════════
   _renderMiniAgenda(bookings) {
     const el = document.getElementById('cal-mini-agenda-list');
@@ -6324,11 +6332,10 @@ export class Calendar {
 
     const today = localToday();
     const DAYS  = ['dom','lun','mar','mié','jue','vie','sáb'];
-    const MAX   = 6;
+    const MAX = 6, MAX_ROWS = 2;
     const dayDiff = iso => Math.round((new Date(iso + 'T12:00:00') - new Date(today + 'T12:00:00')) / 86400000);
     const k = n => '$' + Math.round(n / 1000) + 'k';
 
-    // Ventana: desde el inicio visible del calendario (o hoy si ya pasó) hasta el fin de la vista
     const winStart = this._windowStart > today ? this._windowStart : today;
     const winEnd   = this._addDays(this._windowStart, this._visibleDays ?? 35);
     const all = bookings
@@ -6342,17 +6349,12 @@ export class Calendar {
     const outDay = new Set();
     bookings.forEach(b => { if (!b.is_blocked && b.status !== 'cancelled') (b.booking_units ?? []).forEach(bu => outDay.add(`${bu.unit_id}|${b.check_out}`)); });
 
-    const groups = [{ t: 'HOY', items: [] }, { t: 'MAÑANA', items: [] }, { t: 'ESTA SEMANA', items: [] }, { t: 'PRÓXIMAS', items: [] }];
-    shown.forEach(b => { const d = dayDiff(b.check_in); groups[d <= 0 ? 0 : d === 1 ? 1 : d <= 7 ? 2 : 3].items.push(b); });
-
     const card = (b) => {
       const d     = dayDiff(b.check_in);
       const ci    = new Date(b.check_in + 'T12:00:00'), co = new Date(b.check_out + 'T12:00:00');
       const nights = Math.max(0, Math.round((co - ci) / 86400000));
       const fn = b.guests?.first_name ?? '', ln = b.guests?.last_name ?? '';
       const guest = fn ? `${fn}${ln ? ' ' + ln : ''}` : '—';
-      const parts = `${fn} ${ln}`.trim().split(' ').filter(Boolean);
-      const initials = ((parts[0]?.[0] ?? '') + (parts.length > 1 ? parts[parts.length - 1][0] : '')).toUpperCase() || '?';
       const bus = [...(b.booking_units ?? [])].sort((x, y) => (x.units?.sort_order ?? 99) - (y.units?.sort_order ?? 99));
       const multi = bus.length > 1;
       const colors = bus.map(bu => bu.units?.color).filter(Boolean);
@@ -6362,86 +6364,75 @@ export class Calendar {
       const st    = getBookingBarColor(b);
       const sc    = SOURCE_CONFIG[b.source ?? 'direct'] ?? {};
       const chan  = (b.source && b.source !== 'direct' && sc.color)
-        ? `<span class="cal-c2-chip" style="background:${sc.color}22;color:${sc.color}">${escapeHtml(sc.label ?? b.source)}</span>`
-        : (b.source === 'direct' ? '<span class="cal-c2-chip" style="background:var(--color-surface-2);color:var(--color-text-2)">Directo</span>' : '');
+        ? `<span class="cal-c2-chip" style="background:${sc.color}22;color:${sc.color}">${escapeHtml(sc.label ?? b.source)}</span>` : '';
 
-      // ── Una fila por depto ──
+      // ── Una línea por depto (máx. MAX_ROWS) ──
       const dist = distributionOf(b);
       const amts = Object.fromEntries(unitAmounts(b).map(x => [x.unitId, x.net]));
-      const rows = bus.map(bu => {
+      const rowsHtml = bus.slice(0, MAX_ROWS).map(bu => {
         const uid = String(bu.unit_id);
         const adj = unitAdjustments(b, uid);
         const dd  = dist.find(x => String(x.unitId) === uid);
         const lbl = cleanLabel(bu.label);
         const who = multi
-          ? (dd ? guestsText(dd.adults, dd.children) : '<span class="cal-c2-mute">sin distribuir</span>')
-          : ((b.adults != null || b.children != null) ? guestsText(b.adults, b.children) : (b.pax ? `${b.pax} pers.` : ''));
+          ? (dd ? guestsShort(dd.adults, dd.children) : '<span class="cal-c2-mute">s/d</span>')
+          : ((b.adults != null || b.children != null) ? guestsShort(b.adults, b.children) : (b.pax ? `${b.pax}p` : ''));
         const tags = [];
         if (adj.freeNights > 0) tags.push(`<span class="cal-c2-tag">🎁${adj.freeNights}</span>`);
         if (adj.discPct > 0)    tags.push(`<span class="cal-c2-tag">🏷️${fmtPct(adj.discPct)}%</span>`);
         if (adj.unitSurcharge > 0 || (!multi && Number(b.surcharge_amount) > 0)) tags.push('<span class="cal-c2-tag">➕</span>');
         const amt = multi ? (amts[uid] ?? 0) : total;
-        const dot = `<i style="background:${escapeHtml(bu.units?.color ?? 'var(--color-primary)')}"></i>`;
-        const num = `<b>#${bu.units?.sort_order ?? '?'}</b>`;
-        const amtH = `<span class="cal-c2-amt">${amt > 0 ? k(amt) : ''}</span>`;
-        if (multi) {
-          // Varios deptos: línea 1 = nombre propio (o del depto) + importe · línea 2 = personas + etiquetas
-          const nm = lbl || bu.units?.name || '';
-          return `<div class="cal-c2-u m"><div class="l1">${dot}${num}<em title="${escapeHtml(bu.units?.name ?? '')}">${escapeHtml(nm)}</em>${amtH}</div>` +
-            `<div class="l2"><span class="cal-c2-who">${who}</span>${tags.join('')}</div></div>`;
-        }
-        return `<div class="cal-c2-u">${dot}${num}<em>${escapeHtml(bu.units?.name ?? '')}</em><span class="cal-c2-who">${who}</span>${tags.join('')}${amtH}</div>`;
+        const nm  = lbl || bu.units?.name || '';
+        return `<div class="cal-c2-u" title="${escapeHtml((lbl ? lbl + ' · ' : '') + (bu.units?.name ?? ''))}">` +
+          `<i style="background:${escapeHtml(bu.units?.color ?? 'var(--color-primary)')}"></i><b>#${bu.units?.sort_order ?? '?'}</b>` +
+          `<em>${escapeHtml(nm)}</em><span class="cal-c2-who">${who}</span>${tags.join('')}` +
+          `<span class="cal-c2-amt">${amt > 0 ? k(amt) : ''}</span></div>`;
       }).join('');
+      const moreRows = bus.length > MAX_ROWS ? `<div class="cal-c2-more">+${bus.length - MAX_ROWS} depto${bus.length - MAX_ROWS !== 1 ? 's' : ''} más</div>` : '';
 
-      // ── Etiquetas especiales ──
-      const chips = [];
-      if (b.late_checkout) chips.push('<span class="cal-c2-sp">🌅 Late check-out</span>');
-      if (bus.some(bu => outDay.has(`${bu.unit_id}|${b.check_in}`))) chips.push(`<span class="cal-c2-sp ok">🧹 Turno de limpieza ${d === 0 ? 'hoy' : 'ese día'}</span>`);
-      if (b.checked_in_at) chips.push('<span class="cal-c2-sp ok">✔ Check-in hecho</span>');
-
-      // ── Avisos accionables ──
+      // ── Aviso corto (una línea) ──
       const when = d <= 0 ? 'hoy' : d === 1 ? 'mañana' : `en ${d} días`;
-      let alert = '', urgent = false;
-      if (b.status === 'pending' && paid <= 0 && bal > 0 && d <= 2) { alert = `<div class="cal-c2-alert r">⛔ Llega ${when} y no hay seña cargada</div>`; urgent = true; }
-      else if (bal > 0 && d <= 3 && !b.checked_in_at) alert = `<div class="cal-c2-alert w">⚠ Faltan ${k(bal)} · cobrar antes del check-in</div>`;
-      const noDist = multi && !dist.length ? '<span class="cal-c2-link" data-act="edit">＋ Cargar personas por depto (para el armado)</span>' : '';
+      let note = '', urgent = false;
+      if (b.status === 'pending' && paid <= 0 && bal > 0 && d <= 2) { note = `<div class="cal-c2-alert r" title="Llega ${when} y no hay seña cargada">⛔ Sin seña · llega ${when}</div>`; urgent = true; }
+      else if (bal > 0 && d <= 3 && !b.checked_in_at) note = `<div class="cal-c2-alert w" title="Cobrar ${k(bal)} antes del check-in">⚠ Cobrar ${k(bal)}</div>`;
+      else if (multi && !dist.length) note = '<div class="cal-c2-alert i" data-act="edit" title="Cargar personas por depto (para el armado)">👥 Cargar personas</div>';
+      const sps = [];
+      if (b.late_checkout) sps.push('<span class="cal-c2-sp">🌅 late</span>');
+      if (bus.some(bu => outDay.has(`${bu.unit_id}|${b.check_in}`))) sps.push('<span class="cal-c2-sp ok">🧹 turno</span>');
+      if (b.checked_in_at) sps.push('<span class="cal-c2-sp ok">✔ check-in</span>');
 
-      // ── Acciones (al pasar el mouse; siempre visibles en pantallas táctiles) ──
+      // ── Acciones (aparecen al pasar el mouse, arriba a la derecha; siempre visibles en pantallas táctiles) ──
       const phone = (b.guests?.phone ?? '').replace(/\D/g, '');
       const acts = [];
-      if (d <= 0 && !b.checked_in_at) acts.push('<span class="cal-c2-btn pri" data-act="checkin">✅ Check-in</span>');
-      if (phone) acts.push('<span class="cal-c2-btn" data-act="wa" title="WhatsApp">💬</span>');
-      acts.push('<span class="cal-c2-btn" data-act="view">Ver</span>');
+      if (d <= 0 && !b.checked_in_at) acts.push('<span class="cal-c2-ib pri" data-act="checkin" title="Hacer check-in">✅</span>');
+      if (phone) acts.push('<span class="cal-c2-ib" data-act="wa" title="WhatsApp">💬</span>');
+      acts.push('<span class="cal-c2-ib" data-act="view" title="Ver reserva">👁</span>');
 
-      const bar = colors.length > 1
-        ? `<div class="cal-c2-bar">${colors.map(c => `<i style="background:${escapeHtml(c)}"></i>`).join('')}</div>`
-        : `<div class="cal-c2-bar"><i style="background:${escapeHtml(colors[0] ?? 'var(--color-primary)')}"></i></div>`;
-      const pill = d <= 0 ? '<span class="cal-c2-pill hoy">HOY</span>' : d === 1 ? '<span class="cal-c2-pill man">mañana</span>' : `<span class="cal-c2-pill">en ${d} días</span>`;
+      const bar = `<div class="cal-c2-bar">${(colors.length ? colors : ['var(--color-primary)']).map(c => `<i style="background:${escapeHtml(c)}"></i>`).join('')}</div>`;
+      const pill = d <= 0 ? '<span class="cal-c2-pill hoy">HOY</span>' : d === 1 ? '<span class="cal-c2-pill man">mañana</span>' : `<span class="cal-c2-pill">en ${d} d</span>`;
 
       return `<div class="cal-c2-card${d <= 0 ? ' is-hoy' : ''}${urgent ? ' is-urgent' : ''}" data-booking-id="${b.id}" data-guest="${escapeHtml(guest)}">${bar}
+        <div class="cal-c2-ia">${acts.join('')}</div>
         <div class="cal-c2-hd"><div class="cal-c2-day"><b>${ci.getDate()}</b><span>${DAYS[ci.getDay()]}</span></div>
-          <div class="cal-c2-when">${pill}<span>${nights} noche${nights !== 1 ? 's' : ''}</span></div>
-          <div class="cal-c2-out">sale<br><b>${DAYS[co.getDay()]} ${co.getDate()}</b></div></div>
-        <div class="cal-c2-gn"><span class="cal-c2-av">${escapeHtml(initials)}</span><span class="cal-c2-nm">${escapeHtml(guest)}</span>${chan}</div>
-        <div class="cal-c2-units">${rows}</div>
-        ${chips.length ? `<div class="cal-c2-sps">${chips.join('')}</div>` : ''}${noDist}
+          <div class="cal-c2-when">${pill}<span>${nights} noche${nights !== 1 ? 's' : ''} · sale ${DAYS[co.getDay()]} ${co.getDate()}</span></div></div>
+        <div class="cal-c2-gn"><span class="cal-c2-nm" title="${escapeHtml(guest)}">${escapeHtml(guest)}</span>${chan}</div>
+        <div class="cal-c2-units">${rowsHtml}${moreRows}</div>
         <div class="cal-c2-pay"><div class="cal-c2-pbar"><i style="width:${pct}%;background:${st.statusColor}"></i></div>
-          <div class="cal-c2-pf"><span class="cal-c2-st" style="background:${st.statusColor}22;color:${st.statusColor}">${st.statusLabel}${pct > 0 && pct < 100 ? ' · ' + pct + '%' : ''}</span>
+          <div class="cal-c2-pf"><span class="cal-c2-st" style="background:${st.statusColor}22;color:${st.statusColor}">${st.statusLabel}${pct > 0 && pct < 100 ? ' ' + pct + '%' : ''}</span>
             ${bal > 0 ? `<span class="cal-c2-sal">Saldo <b>${k(bal)}</b></span>` : '<span class="cal-c2-sal ok">Sin saldo</span>'}</div></div>
-        ${alert}<div class="cal-c2-act">${acts.join('')}</div></div>`;
+        ${note}${sps.length ? `<div class="cal-c2-sps">${sps.join('')}</div>` : ''}</div>`;
     };
 
-    const html = groups.filter(g => g.items.length).map(g =>
-      `<div class="cal-c2-grp"><span>${g.t}</span><span class="n">· ${g.items.length}</span><i></i></div>` +
-      `<div class="cal-c2-grid">${g.items.map(card).join('')}</div>`).join('');
-    const more = hidden > 0 ? `${hidden} reserva${hidden !== 1 ? 's' : ''} más en este período. ` : (all.length ? 'No hay más llegadas en este período. ' : 'No hay llegadas en este período. ');
-    el.innerHTML = html + `<div class="cal-c2-empty"><span>${more}</span><span class="b"><span class="cal-c2-btn" data-act="all">Ver todas las reservas →</span><span class="cal-c2-btn pri2" data-act="new">＋ Nueva reserva</span></span></div>`;
+    const more = hidden > 0 ? `+${hidden} llegada${hidden !== 1 ? 's' : ''} más en este período` : (all.length ? '' : 'No hay llegadas en este período');
+    el.innerHTML = (shown.length ? `<div class="cal-c2-grid">${shown.map(card).join('')}</div>` : '') +
+      `<div class="cal-c2-empty"><span>${more}</span><span class="b"><span class="cal-c2-btn" data-act="armado" title="Texto de WhatsApp para la encargada con las llegadas de hoy y mañana">📲 Armado hoy/mañana</span><span class="cal-c2-btn" data-act="all">Ver todas →</span><span class="cal-c2-btn pri2" data-act="new">＋ Nueva reserva</span></span></div>`;
 
     // Un solo manejador (asignado, no acumulado): acciones de la card o popover de la reserva
     el.onclick = async (e) => {
       const actEl = e.target.closest('[data-act]');
       const cardEl = e.target.closest('[data-booking-id]');
       const act = actEl?.dataset.act;
+      if (act === 'armado') { const { openArmadoModal } = await import('./armado-modal.js'); openArmadoModal(this.db, this.ctx.hotelId); return; }
       if (act === 'all') { document.querySelector('.nav-item[data-section="bookings"]')?.click(); return; }
       if (act === 'new') { document.getElementById('btn-new-booking')?.click(); return; }
       if (!cardEl) return;
@@ -6454,7 +6445,7 @@ export class Calendar {
         return;
       }
       if (act === 'edit') { e.stopPropagation(); this.bookingForm?.openEdit(id); return; }
-      this._openBarPopover(id, cardEl, e);   // clic en la card o "Ver": igual que las barras del calendario
+      this._openBarPopover(id, cardEl, e);   // clic en la card o 👁: igual que las barras del calendario
     };
   }
 }

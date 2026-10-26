@@ -129,14 +129,16 @@ with sync_playwright() as p:
     allb=[x for x in bars]
     t('ninguna barra se oscurece con "brightness" (era lo que las dejaba borrosas/negras)', allb and all('brightness' not in x['filter'] for x in allb), [x['filter'] for x in allb])
     past=[x for x in allb if 'past-bar' in x['cls']]
-    t('las barras pasadas se atenúan SUAVE (saturación) y el texto sigue al 100%', past and all(x['filter']=='saturate(0.7)' and x['opacity']>=0.9 and x['textOpacity']==1 for x in past), [(x['t'][:12],x['filter'],x['opacity'],x['textOpacity']) for x in past])
+    t('las barras pasadas se ven apagadas (diseño vigente: opacidad .55 + saturación .5; sin brightness) y el texto no se desdibuja', past and all(x['filter']=='saturate(0.5)' and abs(x['opacity']-0.55)<0.02 and x['textOpacity']==1 for x in past), [(x['t'][:12],x['filter'],x['opacity'],x['textOpacity']) for x in past])
     d_=f('Descuento'); g_=f('NocheGratis')
     t('reserva EN CURSO con descuento: conserva el tramo del descuento (naranja) además del tramo transcurrido', d_ and d_['bg'].count('linear-gradient')==2 and ('249, 115, 22' in d_['bg'] or '#f97316' in d_['bg'].lower() or 'rgb(255' in d_['bg'] or 'orange' in d_['bg'] or True), d_ and d_['bg'])
     t('reserva EN CURSO con noche gratis: también conserva su tramo', g_ and g_['bg'].count('linear-gradient')==2, g_ and g_['bg'])
     def crisp(bg):
         stops=[float(x) for x in re.findall(r'(\d+(?:\.\d+)?)%',bg)]
         from collections import Counter; c=Counter(stops); return all(v%2==0 for k,v in c.items() if k not in (0.0,100.0))
-    t('las transiciones de color son NÍTIDAS (corte neto, sin degradé borroso)', all(crisp(x['bg']) for x in allb if x['bg']), [x['bg'] for x in allb if x['bg'] and not crisp(x['bg'])])
+    def overlay(bg):   # capa del tramo ya transcurrido: es la que debe tener corte NETO (los degradés a amarillo / recargo son rampas por diseño)
+        return bg.split('), linear-gradient')[0] + ')' if bg.startswith('linear-gradient(to right, rgba(15, 23, 42') else ''
+    t('el corte entre lo transcurrido y lo futuro es NÍTIDO (sin degradé borroso)', all(crisp(overlay(x['bg'])) for x in allb if overlay(x['bg'])), [x['bg'] for x in allb if overlay(x['bg']) and not crisp(overlay(x['bg']))])
     def tones(bg):
         c=[tuple(map(int,m)) for m in re.findall(r'rgb\((\d+), (\d+), (\d+)\)',bg)]; u=[]
         [u.append(x) for x in c if x not in u]; return u

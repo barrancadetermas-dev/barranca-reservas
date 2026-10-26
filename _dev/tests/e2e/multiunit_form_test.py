@@ -39,8 +39,8 @@ def saved(pg):
     return (bu[-1]['args'][0][1] if bu else None), (up[-1]['args'][0][1] if up else None), cs
 def open_all(pg): pg.evaluate("document.querySelectorAll('.ud-item').forEach(d => d.open = true)"); pg.wait_for_timeout(100)
 def scope(pg, concept, unit=None):
-    pg.click(f'.ms-row[data-concept="{concept}"] [data-scope="unit"]')
-    if unit: pg.select_option(f'.ms-row[data-concept="{concept}"] .ms-unit', unit)
+    pg.click(f'.ms-inline[data-concept="{concept}"] [data-scope="unit"]')
+    if unit: pg.select_option(f'.ms-inline[data-concept="{concept}"] .ms-unit', unit)
     pg.wait_for_timeout(150)
 
 with sync_playwright() as p:
@@ -48,7 +48,7 @@ with sync_playwright() as p:
 
     # ── 1. Reserva VIEJA de 2 deptos: sin cambios ─────────────────────────────
     pg, errs = new_page(b); load(pg, LEGACY)
-    t('2 deptos: aparece "¿A quién se aplica?" y "Distribución por unidad"', pg.is_visible('#unit-scope-wrap') and pg.is_visible('#unit-dist-wrap'))
+    t('2 deptos: cada concepto muestra "Toda / Un depto" y aparece "Distribución por unidad"', pg.locator('.ms-inline').count() == 3 and pg.is_visible('#unit-dist-wrap'))
     t('total idéntico al de siempre (920.000)', '920.000' in txt(pg, '#pb-total'), txt(pg, '#pb-total'))
     t('sin distribución cargada: "sin distribuir" y sin advertencias', 'sin distribuir' in txt(pg, '#ud-chips') and pg.locator('.ud-alert').count() == 0)
     pg.click('#btn-save-now'); pg.wait_for_timeout(1200)
@@ -91,7 +91,7 @@ with sync_playwright() as p:
     pg.fill('#f-discount', '5'); pg.wait_for_timeout(150)
     scope(pg, 'disc', 'D2'); pg.fill('#f-discount', '10'); pg.wait_for_timeout(250)
     t('5% a toda la reserva + 10% al depto 2 → D2 15%, D3 5% (total 480000×.85 + 440000×.95 = 826.000)', '826.000' in txt(pg, '#pb-total'), txt(pg, '#pb-total'))
-    pg.click('.ms-row[data-concept="disc"] [data-scope="all"]'); pg.wait_for_timeout(200)
+    pg.click('.ms-inline[data-concept="disc"] [data-scope="all"]'); pg.wait_for_timeout(200)
     t('volver a "Toda la reserva" muestra el 5% colectivo (no el 10% del depto)', pg.input_value('#f-discount') == '5', pg.input_value('#f-discount'))
 
     # ── 6. CRITERIOS: distribución, suma y capacidad ──────────────────────────
@@ -129,9 +129,10 @@ with sync_playwright() as p:
 
     # ── 7b. Nombre propio de cada depto dentro de la reserva ──────────────────
     pg, errs = new_page(b); load(pg, LEGACY); open_all(pg)
+    scope(pg, 'disc', 'D2')   # abre el selector de depto del descuento para ver cómo se refleja el nombre
     pg.fill('.ud-lbl[data-uid="D2"]', 'Depto de los abuelos'); pg.fill('.ud-lbl[data-uid="D3"]', 'Los primos'); pg.wait_for_timeout(250)
     t('el nombre propio aparece en el encabezado del depto', 'Depto de los abuelos' in txt(pg, '.ud-name[data-uid="D2"]'), txt(pg, '.ud-name[data-uid="D2"]'))
-    t('y en el selector de "A quién se aplica" (sin perder el foco al escribir)', 'Los primos' in pg.evaluate("[...document.querySelectorAll('#unit-scope-wrap option')].map(o=>o.textContent).join('|')"))
+    t('y en el selector de "A quién se aplica" (sin perder el foco al escribir)', 'Los primos' in pg.evaluate("[...document.querySelectorAll('.ms-inline option')].map(o=>o.textContent).join('|')"))
     pg.click('#btn-save-now'); pg.wait_for_timeout(1200); bk, up, cs = saved(pg); ru = {r['unit_id']: r for r in (up or [])}
     t('el nombre se guarda por depto (label) en booking_units', ru.get('D2', {}).get('label') == 'Depto de los abuelos' and ru.get('D3', {}).get('label') == 'Los primos', up)
     t('poner nombres NO cambia el precio (sigue 920.000, sin precios por unidad)', bk and bk['total_amount'] == 920000 and bk.get('unit_pricing') is False, bk)
@@ -142,10 +143,23 @@ with sync_playwright() as p:
     t('borrar el nombre lo limpia (null)', ru.get('D3', {}).get('label') is None and ru.get('D2', {}).get('label') == 'Depto de los abuelos', up)
     t('sin errores de JS (nombre por depto)', not errs, errs)
 
+    # ── 7c. Edición rápida: abre directo en Precios; detalle con saldo por unidad ──
+    stored2 = booking([('D2', 120000, {'adults': 3, 'children': 0, 'free_nights': 1, 'discount_pct': 10, 'surcharge_amount': 0, 'label': 'Depto de los abuelos'}), ('D3', 110000, {'adults': 1, 'children': 2, 'free_nights': 0, 'discount_pct': 0, 'surcharge_amount': 0, 'label': 'Los primos'})],
+                       unit_pricing=True, total_amount=764000)
+    pg, errs = new_page(b)
+    pg.evaluate("(a)=>{window.__calls.length=0;window.__errors={};window.__data={'bookings:select':a,'payments:select':a.payments,'booking_units:select':[]}}", stored2)
+    pg.evaluate("form.openEdit('m1', { step: 3 })"); pg.wait_for_timeout(1200)
+    t('edición rápida: abre directo en el paso 3 (Precios)', pg.evaluate("form._currentStep") == 3 and pg.is_visible('#unit-dist-wrap'), pg.evaluate("form._currentStep"))
+    pg.evaluate("(a)=>form.openDetail(a)", stored2); pg.wait_for_timeout(600)
+    body = pg.evaluate("document.getElementById('detail-body').innerText")
+    t('detalle: bloque "Saldo por unidad" con el nombre propio de cada depto', 'saldo por unidad' in body.lower() and 'Depto de los abuelos' in body and 'Los primos' in body, body[:600])
+    t('detalle: el pago general ($50.000) se reparte proporcional → saldos 302.796 y 411.204', '302.796' in body and '411.204' in body, body[-500:])
+    t('sin errores de JS (edición rápida y saldo por unidad)', not errs, errs)
+
     # ── 8. Una sola unidad: nada nuevo en pantalla ────────────────────────────
     one = booking([('D2', 120000, {})], price_per_night=120000, total_amount=480000, adults=2, children=0, pax=2)
     pg, errs = new_page(b); load(pg, one)
-    t('1 depto: no aparecen "¿A quién se aplica?" ni la distribución', not pg.is_visible('#unit-scope-wrap') and not pg.is_visible('#unit-dist-wrap'))
+    t('1 depto: no aparecen los controles de alcance ni la distribución', pg.locator('.ms-inline').count() == 0 and not pg.is_visible('#unit-dist-wrap'))
     t('1 depto: total de siempre', '480.000' in txt(pg, '#pb-total'), txt(pg, '#pb-total'))
     pg.click('#btn-save-now'); pg.wait_for_timeout(1200); bk, up, cs = saved(pg)
     t('1 depto: se guarda igual que antes (unit_pricing=false)', bk and bk['total_amount'] == 480000 and bk.get('unit_pricing') is False, bk)

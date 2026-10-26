@@ -13,6 +13,7 @@ import { alojado, groupGender, genderSymbolHTML } from '../utils/gender.js';
 import { escapeHtml } from '../services/voucher-template.js';
 import { queryWithOptionalColumns, segmentColumns, genderColumn, multiUnitColumns } from '../utils/db-compat.js';
 import { distributionOf, guestsText } from '../services/booking-pricing.js';
+import { Sound } from '../services/sound-service.js';
 import { registerCheckIn } from '../services/checkin-service.js';
 import { rowsOnNight, rowsAtArrival, rowsAtDeparture } from '../services/stay-segments.js';
 // ↑ Sin import de app.js — evita dependencia circular.
@@ -142,6 +143,8 @@ export class Dashboard {
           .update({ checked_out_at: new Date().toISOString() }).eq('id', bookingId);
         if (bkErr) throw bkErr;
 
+        let cleaningMsg = '';   // aviso de la tarea de limpieza (antes se usaba una variable `notas` que nunca existió y rompía el aviso)
+
         // 2. Obtener info de la reserva (unidad + fecha check-out)
         const { data: bk } = await this.db.from('bookings')
           .select(`check_in, check_out, booking_units(unit_id${await segmentColumns(this.db)}, units(name))`)
@@ -167,6 +170,7 @@ export class Dashboard {
             await this.db.from('cleaning_tasks')
               .update({ notes: cleaningNote, status: 'pending' })
               .eq('id', existing[0].id);
+            cleaningMsg = ' · Tarea de limpieza actualizada';
           } else if (unitId) {
             // Crear nueva tarea de limpieza
             await this.db.from('cleaning_tasks').insert({
@@ -177,6 +181,7 @@ export class Dashboard {
               notes:          cleaningNote,
               priority:       'high',
             });
+            cleaningMsg = ' · Tarea de limpieza creada';
           }
 
           Bus.emit(EVENTS.CHECKOUT_DONE, { bookingId, guestName: guest, unitName });
@@ -197,10 +202,10 @@ export class Dashboard {
         }
 
         document.dispatchEvent(new CustomEvent('show:toast', {
-          detail: { msg: '👋 Check-out registrado' + (notas.trim() ? ' · Tarea de limpieza creada' : ''), type: 'success' }
+          detail: { msg: '👋 Check-out registrado' + cleaningMsg, type: 'success' }
         }));
         document.dispatchEvent(new CustomEvent('booking:changed'));
-        if (typeof Sound !== 'undefined') Sound?.checkOut?.();
+        Sound.checkOut?.();   // antes `Sound` no estaba importado y nunca sonaba
       } catch (e) {
         document.dispatchEvent(new CustomEvent('show:toast', { detail: { msg: 'Error: ' + e.message, type: 'error' } }));
       }

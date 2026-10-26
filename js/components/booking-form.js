@@ -25,7 +25,7 @@ import { Sound } from '../services/sound-service.js';
 import { fetchDisponibilidad } from '../modules/mila-assistant/mila-data.js';
 import { getUsdConversionRate } from '../services/usd-rate-history.js';
 import { queryWithOptionalColumns, multiUnitColumns } from '../utils/db-compat.js';
-import { computeBookingPricing, validateDistribution, autoDistribute, guestsText, hasUnitPricing, distributionOf, cleanLabel, unitDisplayName } from '../services/booking-pricing.js';
+import { computeBookingPricing, validateDistribution, autoDistribute, guestsText, hasUnitPricing, distributionOf, cleanLabel, unitDisplayName, unitBalances } from '../services/booking-pricing.js';
 import { genderSymbolHTML } from '../utils/gender.js';
 import { specialChipsHTML } from '../services/special-dates.js';
 import { promoLabel, paymentPercents, pctOf, fmtPct as fmtPctPay } from '../utils/booking-display.js';
@@ -382,7 +382,8 @@ export class BookingForm {
     }, 120);
   }
 
-  async openEdit(bookingId) {
+  /** @param {{step?:number}} [opts]  step: abre directo en ese paso (edición rápida → 3 = Precios) */
+  async openEdit(bookingId, opts = {}) {
     // Guard de carrera: si esta función se vuelve a llamar antes de que esta
     // ejecución termine (doble clic, reapertura rápida), la llamada vieja se
     // aborta sola en cuanto la nueva toma el control — así nunca conviven
@@ -528,6 +529,8 @@ export class BookingForm {
       console.error('[BookingForm] openEdit error:', err);
       showToast('Error al cargar reserva', 'error');
     }
+    // Edición rápida: salta directo al paso pedido (todo lo económico y las personas por depto están en el paso 3)
+    if (opts.step && this._editingId) { await new Promise(r => setTimeout(r, 0)); this._goToStep(opts.step); }
   }
 
   // ── openDetail ────────────────────────────────────
@@ -689,6 +692,20 @@ export class BookingForm {
       </div>
       ${booking.notes ? `<div class="detail-notes"><span class="detail-label">Notas</span><p>${escapeHtml(booking.notes)}</p></div>` : ''}
     `;
+
+    // Reservas de 2+ deptos: cuánto corresponde, cuánto se pagó y cuánto falta en CADA depto
+    if (_bus.length > 1) {
+      const bal = unitBalances(booking, booking.payments ?? []);
+      const nmOf = id => { const bu = _bus.find(b => String(b.unit_id) === id); return bu ? unitDisplayName(bu) : 'Depto'; };
+      body.innerHTML += `<div class="detail-payments"><div class="detail-label" style="margin-bottom:8px">💰 Saldo por unidad</div>
+        ${bal.map(u => `<div class="pay-row-detail" style="display:grid;grid-template-columns:1fr auto auto auto;gap:10px;align-items:center">
+          <strong>${escapeHtml(nmOf(u.unitId))}</strong>
+          <span style="font-size:.72rem;color:var(--color-text-3)">Corresponde ${formatARS(u.due)}</span>
+          <span style="font-size:.72rem;color:var(--color-success)">Pagado ${formatARS(u.paid)}</span>
+          <span style="font-weight:800;color:${u.balance > 0 ? 'var(--color-warning)' : 'var(--color-success)'}">${u.balance > 0 ? 'Saldo ' + formatARS(u.balance) : (u.over > 0 ? 'A favor ' + formatARS(u.over) : 'Pagado')}</span>
+        </div>`).join('')}
+        <div style="font-size:.66rem;color:var(--color-text-3);margin-top:4px">Los pagos generales (sin depto asignado) se reparten en proporción a lo que corresponde a cada depto.</div></div>`;
+    }
 
     if (paymentRows.length) {
       const payHtml = paymentRows
@@ -1739,64 +1756,58 @@ export class BookingForm {
         this._scope[c] = 'all'; this._scopeUnit[c] = null; this._loadAdjToDom(c);
       }
     });
-    if (!multi) { scopeWrap.innerHTML = ''; distWrap.innerHTML = ''; return; }
+    if (!multi) { document.querySelectorAll('.ms-inline').forEach(e => e.remove()); scopeWrap.innerHTML = ''; distWrap.innerHTML = ''; return; }
 
-    const titles = { free: '🎁 Noches sin cargo', disc: '🏷️ Descuento', surch: '➕ Recargo' };
-    scopeWrap.innerHTML = `
-      <div class="ms-title">¿A quién se aplica?</div>
-      ${concepts.map(c => `
-        <div class="ms-row" data-concept="${c}">
-          <span class="ms-lbl">${titles[c]}</span>
-          <span class="ms-seg">
-            <button type="button" data-scope="all"  class="${this._scope[c] === 'all'  ? 'on' : ''}">Toda la reserva</button>
-            <button type="button" data-scope="unit" class="${this._scope[c] === 'unit' ? 'on' : ''}">Una unidad</button>
-          </span>
-          <select class="ms-unit" ${this._scope[c] === 'unit' ? '' : 'style="display:none"'}>
-            ${ids.map(uid => `<option value="${uid}" ${this._scopeUnit[c] === uid ? 'selected' : ''}>${escapeHtml(this._unitLabel(uid))}</option>`).join('')}
-          </select>
-        </div>`).join('')}
-      <div class="ms-applied" id="ms-applied"></div>`;
-    scopeWrap.querySelectorAll('.ms-row').forEach(row => {
-      const c = row.dataset.concept;
-      row.querySelectorAll('[data-scope]').forEach(btn => btn.addEventListener('click', () => {
+    // Alcance de cada concepto: control compacto DEBAJO de cada campo (Noches sin cargo · Descuento · Recargo)
+    const hosts = { free: 'f-free-nights', disc: 'f-discount', surch: 'f-surcharge' };
+    const names = { free: 'las noches sin cargo', disc: 'el descuento', surch: 'el recargo' };
+    concepts.forEach(c => {
+      const grp = document.getElementById(hosts[c])?.closest('.form-group');
+      if (!grp) return;
+      let host = grp.querySelector(`.ms-inline[data-concept="${c}"]`);
+      if (!host) { host = document.createElement('div'); host.className = 'ms-inline'; host.dataset.concept = c; grp.appendChild(host); }
+      const on = k => this._scope[c] === k ? 'on' : '';
+      host.innerHTML = `
+        <span class="ms-seg">
+          <button type="button" data-scope="all"  class="${on('all')}"  title="Aplicar ${names[c]} a toda la reserva">Toda</button>
+          <button type="button" data-scope="unit" class="${on('unit')}" title="Aplicar ${names[c]} a un solo depto">Un depto</button>
+        </span>
+        ${this._scope[c] === 'unit' ? `<select class="ms-unit">${ids.map(uid => `<option value="${uid}" ${this._scopeUnit[c] === uid ? 'selected' : ''}>${escapeHtml(this._unitLabel(uid))}</option>`).join('')}</select>` : ''}`;
+      host.querySelectorAll('[data-scope]').forEach(btn => btn.addEventListener('click', () => {
         this._syncAdjFromDom();                       // guarda lo que se estaba editando
         this._scope[c] = btn.dataset.scope;
         this._scopeUnit[c] = btn.dataset.scope === 'unit' ? (this._scopeUnit[c] && ids.includes(this._scopeUnit[c]) ? this._scopeUnit[c] : ids[0]) : null;
         this._loadAdjToDom(c);
         this._renderUnitAdjustUI(); this._updateBreakdown();
       }));
-      row.querySelector('.ms-unit')?.addEventListener('change', (e) => {
+      host.querySelector('.ms-unit')?.addEventListener('change', (e) => {
         this._syncAdjFromDom();
         this._scopeUnit[c] = e.target.value;
         this._loadAdjToDom(c);
         this._renderUnitAdjustUI(); this._updateBreakdown();
       });
     });
+    scopeWrap.innerHTML = '<div class="ms-applied" id="ms-applied"></div>';
 
-    this._udOpen ??= new Set([ids[0]]);
     distWrap.innerHTML = `
       <details class="ud" open>
         <summary>👥 Distribución por unidad <span class="ud-chips" id="ud-chips"></span></summary>
-        <div class="ud-actions"><button type="button" class="btn btn-outline btn-sm" id="ud-auto">Repartir automáticamente</button>
-          <small>Opcional: sirve para armar cada depto. La suma debe coincidir con el total de personas.</small></div>
-        ${ids.map(uid => {
-          const u = this.ctx.units.find(x => String(x.id) === uid); const a = this._unitAdj[uid] ?? {};
-          return `<details class="ud-item" data-uid="${uid}" ${this._udOpen.has(uid) ? 'open' : ''}>
-            <summary><span class="ud-dot" style="background:${escapeHtml(u?.color ?? '#6366f1')}"></span><b class="ud-name" data-uid="${uid}">${escapeHtml(this._unitLabel(uid))}</b>
-              <span class="ud-sum" data-uid="${uid}"></span></summary>
-            <div class="ud-body">
-              <label class="ud-lbl-wrap">Nombre en esta reserva <small>(opcional · para identificar el depto)</small>
-                <input type="text" class="ud-lbl" data-uid="${uid}" maxlength="40" placeholder="Ej.: Depto de los abuelos" value="${escapeHtml(a.label ?? '')}"></label>
-              <label>Adultos<input type="number" min="0" max="20" class="ud-in" data-uid="${uid}" data-f="adults" placeholder="—" value="${a.adults ?? ''}"></label>
-              <label>Niños<input type="number" min="0" max="20" class="ud-in" data-uid="${uid}" data-f="children" placeholder="—" value="${a.children ?? ''}"></label>
-              <div class="ud-cap"><div class="ud-capbar"><i data-uid="${uid}"></i></div><small class="ud-capt" data-uid="${uid}"></small></div>
-              <div class="ud-tags" data-uid="${uid}"></div>
-            </div></details>`; }).join('')}
+        <div class="ud-actions"><button type="button" id="ud-auto">Repartir automáticamente</button>
+          <small>Opcional · para armar cada depto. La suma debe coincidir con el total de personas.</small></div>
+        <div class="ud-t">
+          <div class="ud-th"><span>Depto</span><span>Nombre en esta reserva</span><span>Ad.</span><span>Ni.</span><span>Cap.</span></div>
+          ${ids.map(uid => {
+            const u = this.ctx.units.find(x => String(x.id) === uid); const a = this._unitAdj[uid] ?? {};
+            return `<div class="ud-tr" data-uid="${uid}">
+              <b class="ud-name" data-uid="${uid}" style="--dot:${escapeHtml(u?.color ?? '#6366f1')}">${escapeHtml(this._unitLabel(uid))}</b>
+              <input type="text" class="ud-lbl" data-uid="${uid}" maxlength="40" placeholder="${escapeHtml(u?.name ?? 'Opcional')}" value="${escapeHtml(a.label ?? '')}" title="Nombre para identificar este depto dentro de la reserva (ej.: Depto de los abuelos)">
+              <input type="number" min="0" max="20" class="ud-in" data-uid="${uid}" data-f="adults" placeholder="—" value="${a.adults ?? ''}" title="Adultos">
+              <input type="number" min="0" max="20" class="ud-in" data-uid="${uid}" data-f="children" placeholder="—" value="${a.children ?? ''}" title="Niños">
+              <span class="ud-cap-pill empty" data-uid="${uid}">—</span></div>`; }).join('')}
+        </div>
         <div id="ud-warn"></div>
         <div id="ud-table"></div>
       </details>`;
-    distWrap.querySelectorAll('.ud-item').forEach(d => d.addEventListener('toggle', () => {
-      d.open ? this._udOpen.add(d.dataset.uid) : this._udOpen.delete(d.dataset.uid); }));
     distWrap.querySelectorAll('.ud-lbl').forEach(inp => inp.addEventListener('input', () => {
       (this._unitAdj[inp.dataset.uid] ??= {}).label = inp.value;
       this._refreshUnitNames();
@@ -1820,7 +1831,7 @@ export class BookingForm {
     [...(this._selectedUnitIds ?? [])].map(String).forEach(uid => {
       const nm = this._unitLabel(uid);
       document.querySelectorAll(`.ud-name[data-uid="${uid}"]`).forEach(el => { el.textContent = nm; });
-      document.querySelectorAll(`#unit-scope-wrap option[value="${uid}"]`).forEach(o => { o.textContent = nm; });
+      document.querySelectorAll(`.ms-inline option[value="${uid}"]`).forEach(o => { o.textContent = nm; });
     });
     this._refreshUnitDistStatus();
   }
@@ -1844,6 +1855,11 @@ export class BookingForm {
       const occ = (a.adults || 0) + (a.children || 0), cap = u?.max_guests ?? 0;
       const sum = document.querySelector(`.ud-sum[data-uid="${uid}"]`);
       if (sum) sum.textContent = (a.adults != null || a.children != null) ? `${guestsText(a.adults, a.children)}${cap ? ` · ${occ}/${cap}` : ''}` : 'sin distribuir';
+      const pill = document.querySelector(`.ud-cap-pill[data-uid="${uid}"]`);
+      if (pill) {
+        pill.textContent = (a.adults != null || a.children != null) ? (cap ? `${occ}/${cap}` : String(occ)) : (cap ? `—/${cap}` : '—');
+        pill.className = 'ud-cap-pill ' + ((a.adults == null && a.children == null) ? 'empty' : (cap && occ > cap ? 'bad' : ''));
+      }
       const bar = document.querySelector(`.ud-capbar i[data-uid="${uid}"]`);
       if (bar) { bar.style.width = cap ? Math.min(100, occ / cap * 100) + '%' : '0'; bar.style.background = cap && occ > cap ? '#dc2626' : '#16a34a'; }
       const capt = document.querySelector(`.ud-capt[data-uid="${uid}"]`);

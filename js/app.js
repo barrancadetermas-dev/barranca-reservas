@@ -1054,6 +1054,15 @@ function setupDetailModal() {
     bookingForm?.openEdit(b.id);
   });
 
+  // Edición rápida: abre directo en el paso de Precios (ajustes, nombres y personas por depto)
+  document.getElementById('detail-btn-quick')?.addEventListener('click', async () => {
+    if (isDemo()) { showDemoAction(null); return; }
+    const b = await getDetailBooking();
+    if (!b) return;
+    closeDetail();
+    bookingForm?.openEdit(b.id, { step: 3 });
+  });
+
   // Cancelar reserva
   document.getElementById('detail-btn-cancel-booking')?.addEventListener('click', () => {
     const id = bookingForm?._currentDetailBookingId;
