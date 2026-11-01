@@ -12,7 +12,7 @@ import { alojado, genderSymbolHTML } from '../utils/gender.js';
 import { escapeHtml } from '../services/voucher-template.js';
 import { specialChipsHTML } from '../services/special-dates.js';
 import { guestCountsText, promoLabel, paymentProgressText } from '../utils/booking-display.js';
-import { queryWithOptionalColumns, segmentColumns, multiUnitColumns, unitPricingColumn } from '../utils/db-compat.js';
+import { queryWithOptionalColumns, segmentColumns, multiUnitColumns, unitPricingColumn, adjustmentsSelect } from '../utils/db-compat.js';
 import { cleanLabel } from '../services/booking-pricing.js';
 import { registerCheckIn } from '../services/checkin-service.js';
 import { cache } from '../services/supabase-cache.js';
@@ -1223,13 +1223,14 @@ export class BookingList {
       const SEG = await segmentColumns(this.db);
       const MU = await multiUnitColumns(this.db);
       const UP = await unitPricingColumn(this.db);
+      const ADJ = await adjustmentsSelect(this.db);
       const { data: booking, error } = await this.db.from('bookings')
         .select(`id, check_in, check_out, nights, pax, adults, children, total_amount, total_paid, balance,
           price_per_night, discount_pct, surcharge_amount, free_nights${UP},
           status, source, notes, late_checkout,
           guests!bookings_guest_id_fkey(first_name, last_name, dni, phone, email),
           booking_units(unit_id, price_per_night${SEG}${MU}, units(name, color, sort_order)),
-          payments(amount, amount_ars, method, payment_date)`)
+          payments(amount, amount_ars, method, payment_date)${ADJ}`)
         .eq('id', id).single();
       if (error || !booking) { showToast('No se pudo cargar la reserva', 'error'); return; }
       const { openGuestVoucher } = await import('../services/voucher-guest.js');

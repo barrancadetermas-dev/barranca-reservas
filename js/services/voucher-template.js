@@ -1,4 +1,4 @@
-import { computeBookingPricing } from './booking-pricing.js';
+import { computeBookingPricing, bookingAdjustmentView } from './booking-pricing.js';
 // ══════════════════════════════════════════════════════════════
 // voucher-template.js — Plantilla ÚNICA del voucher de reserva
 //
@@ -71,6 +71,17 @@ export function voucherFileTitle(guestName, checkIn) {
  * @returns {{ lines: Array<{label:string,value:number,kind:string}>, total:number }}
  */
 export function buildMoneyLines(booking, segments = []) {
+  // Reserva con lista de ajustes: una línea por ajuste con su MOTIVO (si el total coincide con lo guardado)
+  const view = !(segments.length > 1) ? bookingAdjustmentView(booking) : null;
+  if (view) {
+    const { P, lines: adj, names } = view;
+    const Lv = [];
+    if (P.perUnit.length > 1) P.perUnit.forEach(u => Lv.push({ label: `${names[u.id] ?? 'Depto'} · ${plural(P.nights, 'noche', 'noches')} × ${money(u.price)}`, value: u.gross, kind: 'sub' }));
+    else Lv.push({ label: `${plural(P.nights, 'noche', 'noches')} × ${money(P.perUnit[0]?.price ?? 0)}`, value: P.subtotalGross, kind: 'sub' });
+    adj.forEach(l => Lv.push({ label: `${l.icon} ${l.label} ${l.valueText}${l.target ? ' · ' + l.target : ''}${l.reason ? ' — ' + l.reason : ''}`,
+      value: l.amount, kind: l.amount < 0 ? 'disc' : (l.amount > 0 ? 'surcharge' : 'sub') }));
+    return { lines: Lv, total: Number(booking.total_amount) || 0 };
+  }
   // Reserva con precios por unidad: un bloque por depto (importes de cada uno sin mezclar) + lo colectivo aparte
   if (booking.unit_pricing === true && (booking.booking_units ?? []).length > 1 && !(segments.length > 1)) {
     const nightsU = Number(booking.nights) || 0;

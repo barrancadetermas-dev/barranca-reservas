@@ -1,7 +1,7 @@
 // Pruebas del cálculo de precios y de la distribución de huéspedes.  Correr:  node --test _dev/tests/unit/
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { computeBookingPricing as calc, validateDistribution, autoDistribute, unitAdjustments, unitNetOf, guestsText, distributionOf, unitDisplayName, cleanLabel, unitAmounts, unitBalances, guestsShort } from '../../../js/services/booking-pricing.js';
+import { computeBookingPricing as calc, validateDistribution, autoDistribute, unitAdjustments, unitNetOf, guestsText, distributionOf, unitDisplayName, cleanLabel, unitAmounts, unitBalances, guestsShort, computeFromAdjustments, adjustmentsToSpecs, aggregateColumns, legacyToAdjustments, reasonOf, ADJUSTMENT_REASONS, adjustmentBreakdown, bookingAdjustmentView } from '../../../js/services/booking-pricing.js';
 
 const U2 = { id: 'd2', price: 120000 }, U4 = { id: 'd4', price: 110000 };
 
@@ -183,4 +183,107 @@ test('armado: saldo 0 → PAGADO; sin saldo (opción) y sin llegadas; ignora can
   assert.doesNotMatch(buildArmadoText([pag], '2026-10-27', { saldo: false }), /PAGADO|\$/);
   assert.equal(buildArmadoText([], '2026-10-27'), 'HOY\nSin llegadas\n\nMAÑANA\nSin llegadas');
   assert.match(buildArmadoText([{ ...pag, status: 'cancelled' }], '2026-10-27'), /Sin llegadas/);
+});
+
+// ── Ajustes (lista) ──
+const UN = [{ id: 'd2', price: 120000 }, { id: 'd4', price: 110000 }];
+const A = (kind, unitId, mode, value, extra = {}) => ({ id: Math.random().toString(36).slice(2), kind, unitId, mode, value, reason: '', ...extra });
+test('ajustes: VARIOS descuentos del mismo depto se suman (10% + 5% de toda la reserva = 15%)', () => {
+  const { P } = computeFromAdjustments({ nights: 4, units: UN, adjustments: [A('discount', 'd2', 'pct', 10), A('discount', null, 'pct', 5)] });
+  assert.equal(P.perUnit[0].discPct, 15); assert.equal(P.perUnit[0].net, 480000 * 0.85); assert.equal(P.perUnit[1].net, 440000 * 0.95);
+});
+test('ajustes: dos descuentos al MISMO depto (un % y un monto) se acumulan', () => {
+  const { P } = computeFromAdjustments({ nights: 4, units: UN, adjustments: [A('discount', 'd2', 'pct', 10), A('discount', 'd2', 'amt', 48000)] });
+  assert.equal(P.perUnit[0].discPct, 20); assert.equal(P.perUnit[0].net, 384000); assert.equal(P.perUnit[1].net, 440000);
+});
+test('ajustes: varios recargos de un depto se suman; el de toda la reserva va aparte', () => {
+  const { P } = computeFromAdjustments({ nights: 4, units: UN, adjustments: [A('surcharge', 'd4', 'amt', 15000), A('surcharge', 'd4', 'pct', 10), A('surcharge', null, 'amt', 5000)] });
+  assert.equal(P.perUnit[1].surchAmt, 15000 + 44000); assert.equal(P.collectiveSurch, 5000);
+  assert.equal(P.total, 480000 + 440000 + 59000 + 5000);
+});
+test('ajustes: noches sin cargo de un depto + colectivas', () => {
+  const { P } = computeFromAdjustments({ nights: 5, units: UN, adjustments: [A('free_nights', 'd2', 'nights', 1), A('free_nights', null, 'nights', 1)] });
+  assert.equal(P.perUnit[0].freeNights, 2); assert.equal(P.perUnit[1].freeNights, 1); assert.equal(P.nights, 5);
+});
+test('late check-out POR DEPTO: uno lo tiene y el otro no; sin cargo no suma', () => {
+  const pago = computeFromAdjustments({ nights: 4, units: UN, adjustments: [A('late_checkout', 'd4', 'amt', 55000, { charged: true })] });
+  assert.equal(pago.P.perUnit[1].lateAmt, 55000); assert.equal(pago.P.perUnit[0].lateAmt, 0); assert.equal(pago.P.total, 920000 + 55000);
+  const gratis = computeFromAdjustments({ nights: 4, units: UN, adjustments: [A('late_checkout', 'd4', 'amt', 55000, { charged: false })] });
+  assert.equal(gratis.P.total, 920000);
+});
+test('late check-out de TODA la reserva (colectivo) se suma una vez', () => {
+  const { P } = computeFromAdjustments({ nights: 4, units: UN, adjustments: [A('late_checkout', null, 'amt', 60000)] });
+  assert.equal(P.total, 920000 + 60000);
+});
+test('1 solo depto: los ajustes (aun con unitId) usan el camino de siempre', () => {
+  const { P } = computeFromAdjustments({ nights: 4, units: [{ id: 'a', price: 230000 }], adjustments: [A('free_nights', null, 'nights', 1), A('discount', null, 'pct', 10), A('surcharge', null, 'amt', 5000)] });
+  assert.equal(P.total, 3 * 230000 * 0.9 + 5000); assert.equal(P.unitMode, false);
+});
+test('columnas derivadas: lo colectivo a la reserva, lo de cada depto a su fila, late por depto explícito', () => {
+  const adj = [A('discount', 'd2', 'pct', 10), A('free_nights', 'd2', 'nights', 1), A('discount', null, 'pct', 5), A('late_checkout', 'd4', 'amt', 55000)];
+  const { P, specs } = computeFromAdjustments({ nights: 4, units: UN, adjustments: adj });
+  const agg = aggregateColumns(P, specs, ['d2', 'd4']);
+  assert.equal(agg.booking.discount_pct, 5); assert.equal(agg.booking.free_nights, 0); assert.equal(agg.booking.late_checkout, true);
+  assert.equal(agg.units.d2.discount_pct, 10); assert.equal(agg.units.d2.free_nights, 1); assert.equal(agg.units.d2.late_checkout, false);
+  assert.equal(agg.units.d4.late_checkout, true); assert.equal(agg.units.d4.late_checkout_amount, 55000); assert.equal(agg.units.d4.late_checkout_charged, true);
+});
+test('reserva guardada con late por depto: unitNetOf y saldo por unidad lo incluyen', () => {
+  const b = { unit_pricing: true, nights: 4, check_in: '2026-10-21', check_out: '2026-10-25', total_amount: 920000 + 55000,
+    booking_units: [{ unit_id: 'd2', price_per_night: 120000, late_checkout: false }, { unit_id: 'd4', price_per_night: 110000, late_checkout: true, late_checkout_charged: true, late_checkout_amount: 55000 }] };
+  assert.equal(unitNetOf(b, 'd4'), 440000 + 55000);
+  const r = unitBalances(b, []); assert.deepEqual(r.map(x => x.due), [480000, 495000]);
+});
+test('reservas VIEJAS → lista de ajustes equivalente (colectivos, por depto y late)', () => {
+  const l = legacyToAdjustments({ nights: 4, check_in: '2026-10-21', check_out: '2026-10-25', price_per_night: 230000, free_nights: 1, discount_pct: 10, surcharge_amount: 5000,
+    late_checkout: true, late_checkout_charged: true, total_amount: 3 * 230000 * 0.9 + 5000 + 60000, booking_units: [] });
+  assert.deepEqual(l.map(a => a.kind), ['free_nights', 'discount', 'surcharge', 'late_checkout']);
+  assert.equal(l[3].value, 60000); assert.equal(l[3].unitId, null);
+  const { P } = computeFromAdjustments({ nights: 4, units: [{ id: 'x', price: 230000 }], adjustments: l });
+  assert.equal(P.total, 3 * 230000 * 0.9 + 5000 + 60000);
+});
+test('reserva por unidad guardada → ajustes por depto (con su late)', () => {
+  const l = legacyToAdjustments({ unit_pricing: true, nights: 4, check_in: '2026-10-21', check_out: '2026-10-25', total_amount: 764000, booking_units: [
+    { unit_id: 'd2', price_per_night: 120000, free_nights: 1, discount_pct: 10, late_checkout: false }, { unit_id: 'd4', price_per_night: 110000, late_checkout: true, late_checkout_charged: false, late_checkout_amount: 55000 }] });
+  assert.deepEqual(l.map(a => `${a.unitId}:${a.kind}`), ['d2:free_nights', 'd2:discount', 'd4:late_checkout']); assert.equal(l[2].charged, false);
+});
+test('motivo: el elegido, o el texto libre si eligió "Otro"', () => {
+  assert.equal(reasonOf({ reason: 'Promo' }), 'Promo'); assert.equal(reasonOf({ reason: 'Otro', reasonOther: '  Vecino   del barrio ' }), 'Vecino del barrio');
+  assert.equal(reasonOf({ reason: 'Otro', reasonOther: '' }), ''); assert.ok(ADJUSTMENT_REASONS.includes('Otro') && ADJUSTMENT_REASONS.length >= 12);
+});
+
+// ── Líneas de ajustes con motivo (voucher / detalle) ──
+test('líneas de ajustes: monto y motivo por ajuste; la suma cuadra con el total', () => {
+  const adj = [A('free_nights', 'd2', 'nights', 1, { reason: 'Cumpleaños' }), A('discount', 'd2', 'pct', 10, { reason: 'Atención comercial' }), A('discount', null, 'pct', 5, { reason: 'Cliente frecuente' }),
+    A('surcharge', 'd4', 'amt', 15000, { reason: 'Mascota' }), A('late_checkout', 'd4', 'amt', 55000, { reason: 'Salida 16 hs' })];
+  const { P } = computeFromAdjustments({ nights: 4, units: UN, adjustments: adj });
+  const L = adjustmentBreakdown(adj, P, { d2: 'Abuelos', d4: 'Primos' });
+  assert.deepEqual(L.map(l => l.reason), ['Cumpleaños', 'Atención comercial', 'Cliente frecuente', 'Mascota', 'Salida 16 hs']);
+  assert.equal(L[0].amount, -120000);
+  const gross = P.perUnit.reduce((s, u) => s + u.gross, 0);
+  assert.equal(gross + L.reduce((s, l) => s + l.amount, 0), P.total);
+  assert.equal(L[1].target, 'Abuelos'); assert.equal(L[2].target, '');
+});
+test('líneas de ajustes: 1 solo depto (camino clásico) también cuadra', () => {
+  const adj = [A('free_nights', null, 'nights', 1), A('discount', null, 'pct', 10, { reason: 'Promo' }), A('surcharge', null, 'amt', 5000), A('late_checkout', null, 'amt', 60000, { charged: false })];
+  const { P } = computeFromAdjustments({ nights: 4, units: [{ id: 'a', price: 230000 }], adjustments: adj });
+  const L = adjustmentBreakdown(adj, P);
+  assert.equal(P.nights * 230000 + L.reduce((s, l) => s + l.amount, 0), P.total); assert.equal(L[3].amount, 0); assert.equal(L[3].valueText, 'sin cargo');
+});
+test('reserva guardada con lista: vista con motivos; si el total no coincide → null', () => {
+  const b = { nights: 4, check_in: '2026-10-21', check_out: '2026-10-25', total_amount: 872000,
+    booking_units: [{ unit_id: 'd2', price_per_night: 120000, label: 'Abuelos', units: { name: 'A' } }, { unit_id: 'd4', price_per_night: 110000 }],
+    booking_adjustments: [{ unit_id: 'd2', kind: 'discount', mode: 'pct', value: 10, charged: true, reason: 'Atención comercial', sort_order: 0 }] };
+  const v = bookingAdjustmentView(b); assert.equal(v.lines[0].reason, 'Atención comercial'); assert.equal(v.lines[0].target, 'Abuelos'); assert.equal(v.lines[0].amount, -48000);
+  assert.equal(bookingAdjustmentView({ ...b, total_amount: 900000 }), null); assert.equal(bookingAdjustmentView({ ...b, booking_adjustments: [] }), null);
+});
+
+// ── Voucher guardado con ajustes (motivo en cada línea) ──
+import { buildMoneyLines } from '../../../js/services/voucher-template.js';
+test('voucher: una línea por ajuste, con su motivo, y la suma cuadra con el total', () => {
+  const b = { nights: 4, check_in: '2026-10-21', check_out: '2026-10-25', total_amount: 872000, price_per_night: 230000,
+    booking_units: [{ unit_id: 'd2', price_per_night: 120000, label: 'Abuelos', units: { name: 'A' } }, { unit_id: 'd4', price_per_night: 110000, units: { name: 'B' } }],
+    booking_adjustments: [{ unit_id: 'd2', kind: 'discount', mode: 'pct', value: 10, charged: true, reason: 'Atención comercial', sort_order: 0 }] };
+  const m = buildMoneyLines(b);
+  assert.ok(m.lines.some(l => l.label.includes('Atención comercial') && l.label.includes('Abuelos') && l.value === -48000));
+  assert.equal(m.lines.reduce((s, l) => s + l.value, 0), 872000);
 });

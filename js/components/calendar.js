@@ -255,17 +255,18 @@ export class Calendar {
     const params = { hotelId: this.ctx.hotelId, firstDay, lastDay };
     // Consulta por niveles: cada migración opcional (género, estadía dividida) se pide solo
     // si la base la tiene; si una falla, se reintenta sin ella en vez de dejar el calendario en blanco.
-    const makeSelect = ({ gender, seg, mu, lbl }) => `
+    const makeSelect = ({ gender, seg, mu, lbl, ext }) => `
         id, check_in, check_out, status, source, is_blocked, block_reason,
         late_checkout, late_checkout_charged, free_nights, discount_pct, surcharge_amount${mu ? ', unit_pricing' : ''},
         total_amount, total_paid, balance, nights, pax,
         adults, children, notes, price_per_night, created_at,
         checked_in_at, checked_out_at,
         guests!bookings_guest_id_fkey(first_name, last_name, phone, bad_experience, tags${gender ? ', gender' : ''}),
-        booking_units(unit_id, price_per_night${seg ? ', segment_check_in, segment_check_out' : ''}${mu ? ', adults, children, free_nights, discount_pct, surcharge_amount' : ''}${lbl ? ', label' : ''}, units(name, sort_order, color, max_guests))
+        booking_units(unit_id, price_per_night${seg ? ', segment_check_in, segment_check_out' : ''}${mu ? ', adults, children, free_nights, discount_pct, surcharge_amount' : ''}${lbl ? ', label' : ''}${ext ? ', late_checkout, late_checkout_charged, late_checkout_amount' : ''}, units(name, sort_order, color, max_guests))${ext ? ', booking_adjustments(unit_id, kind, mode, value, charged, reason, sort_order)' : ''}
       `;
     const tiers = [
-      { gender: true,  seg: true, mu: true, lbl: true },   // con columnas por unidad y nombre del depto (migraciones multiunidad)
+      { gender: true,  seg: true, mu: true, lbl: true, ext: true },   // + late por depto y ajustes con motivo (migración multiunidad completa)
+      { gender: true,  seg: true, mu: true, lbl: true },   // con columnas por unidad y nombre del depto
       { gender: true,  seg: true, mu: true },              // sin la columna del nombre
       { gender: true,  seg: true  },
       { gender: false, seg: true  },    // falta la migración de género
@@ -1681,7 +1682,10 @@ export class Calendar {
     // Late check-out propio: la MISMA barra se prolonga LATE_FRAC dentro de la celda de salida (un solo
     // elemento = mismo color/degradé, sin costura) y termina en diagonal.
     // El late check-out es de la SALIDA de la estadía: en una estadía dividida solo lo lleva el último tramo (no el cambio de depto)
-    const hasLateExt = !!booking.late_checkout && !truncRight && (booking.stayCheckOut ?? co) === co;
+    // Late check-out POR DEPTO: si la reserva lo define por depto (true/false) manda el del depto de esta barra; si no (NULL), el de la reserva
+    const _lateHere = (_bu?.late_checkout != null) ? !!_bu.late_checkout : !!booking.late_checkout;
+    const _lateCharged = (_bu?.late_checkout != null && _bu?.late_checkout_charged != null) ? _bu.late_checkout_charged : booking.late_checkout_charged;
+    const hasLateExt = _lateHere && !truncRight && (booking.stayCheckOut ?? co) === co;
     const startPx    = LATE_SKEW - LATE_GAP;   // la barra entrante arranca antes y se recorta en diagonal
     const leftStyle = startsAfterLate ? `calc(${LATE_FRAC * 100}% - ${startPx}px)` : `${left}px`;
     const widthReduceForLate = startsAfterLate ? ` - ${LATE_FRAC * 100}% + ${startPx}px` : '';
@@ -1756,7 +1760,7 @@ export class Calendar {
         statusColor: chanBar ? statusColor : null,
         // Las noches sin cargo existen pero NO caen en lo visible (fuera de la vista o en otro tramo de una estadía dividida)
         freeHidden: freeShown > 0 && !isBlock && freeCount === 0,
-        lateFreeTail: hasLateExt && booking.late_checkout_charged === false && booking.status !== 'paid',
+        lateFreeTail: hasLateExt && _lateCharged === false && booking.status !== 'paid',
         color, progressOverlay, freeFrom, freeCount, tailFrom, tailEnd,
         baseBg: baseBgPlain,
         passedIdx: (isInProgress && !isPast && span > 1) ? Math.max(0, this._dayDiff(visStart, todayISO)) : 0,
@@ -2161,6 +2165,19 @@ export class Calendar {
       ${promoLabel(booking.nights, booking.free_nights) ? `<div class="ct-promo">🎁 PROMO ${promoLabel(booking.nights, booking.free_nights)} (${booking.free_nights} noche${booking.free_nights === 1 ? '' : 's'} sin cargo)</div>` : ''}
       ${(() => {
         if (booking.status === 'blocked' || booking.is_blocked) return '';
+        const adjs = booking.booking_adjustments ?? [];
+        if (adjs.length) {   // ajustes con su motivo (descuentos, recargos, noches sin cargo y late check-out)
+          const ICON = { discount: '🏷️', surcharge: '➕', free_nights: '🎁', late_checkout: '🌅' };
+          const NAME = { discount: 'DESCUENTO', surcharge: 'RECARGO', free_nights: 'SIN CARGO', late_checkout: 'LATE CHECK-OUT' };
+          return [...adjs].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0)).map(a => {
+            const bu = (booking.booking_units ?? []).find(x => String(x.unit_id) === String(a.unit_id));
+            const who = a.unit_id == null ? '' : ` · ${escapeHtml(bu ? unitDisplayName(bu) : 'Depto')}`;
+            const val = a.kind === 'free_nights' ? `${a.value} noche${Number(a.value) === 1 ? '' : 's'}`
+              : a.kind === 'late_checkout' ? (a.charged === false ? 'sin cargo' : formatARS(a.value))
+              : (a.mode === 'pct' ? `${fmtPct(a.value)}` : formatARS(a.value));
+            return `<div class="ct-promo">${ICON[a.kind]} ${NAME[a.kind]} ${val}${who}${a.reason ? ` — ${escapeHtml(a.reason)}` : ''}</div>`;
+          }).join('');
+        }
         const disc  = parseFloat(booking.discount_pct ?? 0) || 0;
         const surch = parseFloat(booking.surcharge_amount ?? 0) || 0;
         const base  = (booking.price_per_night > 0 && booking.nights > 0) ? booking.price_per_night * booking.nights : Math.max(totalAmount - surch, 0);
@@ -2180,7 +2197,7 @@ export class Calendar {
         const bus = booking.booking_units ?? [];
         if (bus.length < 2) return '';
         let out = '';
-        if (hasUnitPricing(booking)) bus.forEach(bu => {
+        if (hasUnitPricing(booking) && !(booking.booking_adjustments ?? []).length) bus.forEach(bu => {
           const nm = escapeHtml(unitDisplayName(bu));
           if (bu.free_nights > 0)      out += `<div class="ct-promo">🎁 ${nm}: ${bu.free_nights} noche${bu.free_nights === 1 ? '' : 's'} sin cargo</div>`;
           if (bu.discount_pct > 0)     out += `<div class="ct-promo">🏷️ ${nm}: DESCUENTO ${fmtPct(bu.discount_pct)}</div>`;
@@ -3525,40 +3542,13 @@ export class Calendar {
         if (lnEl) lnEl.value = rest.join(' ');
       }
 
-      // ── Noches sin cargo: dato que se traslada explícitamente ──
-      if (freeCount > 0) setAndFire('f-free-nights', freeCount);
-
-      // ── Descuento / recargo: van a sus propios campos nativos,
-      //    ya NO se mezclan dentro del precio promedio ──
-      if (payload.discount_value) {
-        const modeEl = document.getElementById('f-discount-mode');
-        if (modeEl) modeEl.value = payload.discount_mode;
-        setAndFire('f-discount', payload.discount_value);
-      }
-      if (payload.surcharge_value) {
-        const modeEl = document.getElementById('f-surcharge-mode');
-        if (modeEl) modeEl.value = payload.surcharge_mode;
-        setAndFire('f-surcharge', payload.surcharge_value);
-      }
-
-      // Trasladar el Late Check-out tal cual quedó cotizado — mismos
-      // campos y misma lógica que ya usa el form de reserva.
-      if (payload.late_checkout) {
-        const lcoEl = document.getElementById('f-late-checkout');
-        if (lcoEl) {
-          lcoEl.checked = true;
-          lcoEl.dispatchEvent(new Event('change', { bubbles: true }));
-          const paidEl = document.getElementById('f-late-checkout-paid');
-          if (paidEl) {
-            paidEl.checked = !!payload.late_checkout_paid;
-            paidEl.dispatchEvent(new Event('change', { bubbles: true }));
-            if (payload.late_checkout_paid && payload.late_checkout_amount) {
-              const amtEl = document.getElementById('f-late-checkout-amount');
-              if (amtEl) { amtEl.value = payload.late_checkout_amount; amtEl.dispatchEvent(new Event('input', { bubbles: true })); }
-            }
-          }
-        }
-      }
+      // ── Noches sin cargo, descuento, recargo y late check-out cotizados → lista de ajustes de la reserva ──
+      this.bookingForm.prefillAdjustments({
+        freeNights: freeCount,
+        discount:  payload.discount_value  ? { mode: payload.discount_mode,  value: payload.discount_value }  : null,
+        surcharge: payload.surcharge_value ? { mode: payload.surcharge_mode, value: payload.surcharge_value } : null,
+        late: payload.late_checkout ? { charged: !!payload.late_checkout_paid, amount: payload.late_checkout_paid ? payload.late_checkout_amount : 0 } : null,
+        reason: 'Otro', reasonOther: 'Según cotización' });
 
       if (freeCount > 0) {
         showToast(`Reserva precargada: ${freeCount} noche${freeCount !== 1 ? 's' : ''} sin cargo aplicada${freeCount !== 1 ? 's' : ''} — no se cobra${freeCount !== 1 ? 'n' : ''}`, 'info');
@@ -6423,9 +6413,13 @@ export class Calendar {
         ${note}${sps.length ? `<div class="cal-c2-sps">${sps.join('')}</div>` : ''}</div>`;
     };
 
-    const more = hidden > 0 ? `+${hidden} llegada${hidden !== 1 ? 's' : ''} más en este período` : (all.length ? '' : 'No hay llegadas en este período');
-    el.innerHTML = (shown.length ? `<div class="cal-c2-grid">${shown.map(card).join('')}</div>` : '') +
+    // SIEMPRE 6 lugares del mismo tamaño: las reservas y, en los que faltan, "Sin reserva ☹️" (tocarlo crea una reserva nueva)
+    const empties = Array.from({ length: Math.max(0, MAX - shown.length) }, () =>
+      '<div class="cal-c2-ph" data-act="new" role="button" tabindex="0" title="Crear una reserva nueva"><span class="s">☹️</span><span>Sin reserva</span><small>Tocá para crear una</small></div>').join('');
+    const more = hidden > 0 ? `+${hidden} llegada${hidden !== 1 ? 's' : ''} más en este período` : '';
+    el.innerHTML = `<div class="cal-c2-grid">${shown.map(card).join('')}${empties}</div>` +
       `<div class="cal-c2-empty"><span>${more}</span><span class="b"><span class="cal-c2-btn" data-act="armado" title="Texto de WhatsApp para la encargada con las llegadas de hoy y mañana">📲 Armado hoy/mañana</span><span class="cal-c2-btn" data-act="all">Ver todas →</span><span class="cal-c2-btn pri2" data-act="new">＋ Nueva reserva</span></span></div>`;
+    el.onkeydown = (e) => { if ((e.key === 'Enter' || e.key === ' ') && e.target.classList?.contains('cal-c2-ph')) { e.preventDefault(); e.target.click(); } };
 
     // Un solo manejador (asignado, no acumulado): acciones de la card o popover de la reserva
     el.onclick = async (e) => {

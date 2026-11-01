@@ -934,71 +934,13 @@
           El total por noche se suma automáticamente entre los departamentos elegidos.
         </div>
       </div>
-      <div class="form-grid-2 pc-row">
-        <div class="form-group"><label>Noches sin cargo</label><input type="number" id="f-free-nights" min="0" value="0"></div>
-        <div class="form-group">
-          <label style="display:flex;align-items:center;justify-content:space-between">
-            <span>Descuento</span>
-            <span style="display:flex;border:0.5px solid var(--color-border);border-radius:6px;overflow:hidden;font-size:.7rem">
-              <button type="button" id="disc-mode-pct" onclick="window._discModePct()"
-                style="padding:1px 8px;background:var(--color-primary);color:#fff;border:none;cursor:pointer;font-size:.7rem;font-weight:600">%</button>
-              <button type="button" id="disc-mode-amt" onclick="window._discModeAmt()"
-                style="padding:1px 8px;background:var(--color-surface-2);color:var(--color-text-2);border:none;cursor:pointer;font-size:.7rem">$</button>
-            </span>
-          </label>
-          <div style="position:relative">
-            <span id="disc-prefix" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);font-size:.8rem;color:var(--color-text-3);pointer-events:none">%</span>
-            <input type="number" id="f-discount" min="0" step="0.0001" value="0"
-                   style="padding-left:28px">
-            <input type="hidden" id="f-discount-mode" value="pct">
-          </div>
-        </div>
-        <div class="form-group">
-          <label style="display:flex;align-items:center;justify-content:space-between">
-            <span>Recargo</span>
-            <span style="display:flex;border:0.5px solid var(--color-border);border-radius:6px;overflow:hidden;font-size:.7rem">
-              <button type="button" id="surch-mode-pct" onclick="window._surchModePct()"
-                style="padding:1px 8px;background:var(--color-surface-2);color:var(--color-text-2);border:none;cursor:pointer;font-size:.7rem">%</button>
-              <button type="button" id="surch-mode-amt" onclick="window._surchModeAmt()"
-                style="padding:1px 8px;background:var(--color-primary);color:#fff;border:none;cursor:pointer;font-size:.7rem;font-weight:600">$</button>
-            </span>
-          </label>
-          <div style="position:relative">
-            <span id="surch-prefix" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);font-size:.8rem;color:var(--color-text-3);pointer-events:none">$</span>
-            <input type="number" id="f-surcharge" min="0" step="500" value="0" style="padding-left:28px">
-            <input type="hidden" id="f-surcharge-mode" value="amt">
-          </div>
-        </div>
-      </div>
-      <!-- Reservas de 2+ deptos: a quién se aplica cada concepto + distribución de huéspedes (los dibuja booking-form.js) -->
-      <div id="unit-scope-wrap" class="ms-wrap" style="display:none"></div>
+      <!-- Ajustes de precio: descuentos, recargos, noches sin cargo y late check-out, cada uno con su motivo
+           (toda la reserva o un depto; se pueden agregar varios, editar y borrar). Lo dibuja js/components/booking-adjustments.js -->
+      <div id="adj-wrap" class="adj-wrap"></div>
+      <!-- Reservas de 2+ deptos: distribución de huéspedes y nombre de cada depto (lo dibuja booking-form.js) -->
       <div id="unit-dist-wrap" class="ud-wrap" style="display:none"></div>
-      <!-- Late check-out y depósito en una sola fila (el formulario es más corto) -->
-      <div class="form-grid-2 lc-row">
-        <div class="form-group">
-          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none;white-space:nowrap;margin-bottom:6px">
-            <input type="checkbox" id="f-late-checkout" style="width:15px;height:15px;cursor:pointer">
-            <span style="font-size:.82rem">🌅 Late check-out</span>
-          </label>
-          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-            <label id="f-lco-paid-wrap" style="display:none;align-items:center;gap:6px;cursor:pointer;user-select:none;white-space:nowrap">
-              <input type="checkbox" id="f-late-checkout-paid" checked style="width:14px;height:14px;cursor:pointer">
-              <span style="font-size:.78rem;color:var(--color-text-2)">✅ Se cobra</span>
-            </label>
-            <div id="f-lco-amount-wrap" style="display:none;align-items:center;gap:6px">
-              <span style="font-size:.75rem;color:var(--color-text-3);white-space:nowrap">¿Cuánto?</span>
-              <input type="number" id="f-late-checkout-amount" min="0" step="500"
-                placeholder="½ noche" style="width:100px;padding:3px 8px;border-radius:6px;
-                border:1px solid var(--color-border);background:var(--color-surface-2);
-                font-size:.78rem;color:var(--color-text)">
-            </div>
-          </div>
-        </div>
-        <div class="form-group">
-          <label title="Reembolsable al check-out. No se suma al total de la reserva.">Depósito de garantía ($) <span style="color:var(--color-text-3);cursor:help">ⓘ</span></label>
-          <input type="number" id="f-deposit" min="0" step="500" value="0">
-        </div>
-      </div>
+      <!-- El depósito de garantía ya no se pide: se conserva el dato de reservas viejas (campo oculto) para no pisarlo al editar -->
+      <input type="hidden" id="f-deposit" value="0">
       <div class="price-breakdown" id="price-breakdown">
         <div class="pb-row"><span>Noches</span><span id="pb-nights">—</span></div>
         <div class="pb-row"><span>Subtotal base</span><span id="pb-subtotal">$—</span></div>

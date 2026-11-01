@@ -77,3 +77,16 @@ export async function unitLabelColumn(db) {
 }
 /** `, unit_pricing` si la base ya tiene bookings.unit_pricing, o ''. */
 export const unitPricingColumn = (db) => optionalColumn(db, 'bookings', 'unit_pricing');
+
+/**
+ * `, booking_adjustments(...)` para sumar a un select de bookings si la tabla de ajustes existe (migración multiunidad completa), o ''.
+ * Se consulta una vez y se recuerda: sin la migración, todo sigue funcionando como antes.
+ */
+let _adjSelectCache = null;
+export async function adjustmentsSelect(db) {
+  if (_adjSelectCache === null) {
+    try { const r = await db.from('booking_adjustments').select('id').limit(1); _adjSelectCache = r.error ? '' : ', booking_adjustments(unit_id, kind, mode, value, charged, reason, sort_order)'; }
+    catch { _adjSelectCache = ''; }
+  }
+  return _adjSelectCache;
+}

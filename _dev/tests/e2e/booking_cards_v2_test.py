@@ -26,7 +26,7 @@ with sync_playwright() as p:
     hs = q("[...document.querySelectorAll('.cal-c2-card')].map(c=>Math.round(c.getBoundingClientRect().height))")
     R.t('compactas: ninguna pasa los 210px de alto (aun con una reserva de 4 deptos)', max(hs) <= 210, hs)
     R.t('no hay encabezados de grupo ni acciones que agranden la card', q("[...document.querySelectorAll('.cal-c2-grp')].every(e=>getComputedStyle(e).display==='none')"))
-    R.t('ya no hay casilleros vacíos "Sin reserva"', q("document.querySelectorAll('.cal-agenda-slot--empty').length") == 0)
+    R.t('6 lugares: 6 cards, ningún lugar vacío', q("document.querySelectorAll('.cal-c2-card').length + document.querySelectorAll('.cal-c2-ph').length") == 6 and q("document.querySelectorAll('.cal-c2-ph').length") == 0)
     R.t('barra final con "Ver todas" y "Nueva reserva"', 'Ver todas' in q("document.querySelector('.cal-c2-empty').innerText") and 'Nueva reserva' in q("document.querySelector('.cal-c2-empty').innerText"))
     R.t('HOY: marcada (borde), píldora HOY y botón de check-in', 'is-hoy' in by['h1']['cls'] and 'HOY' in by['h1']['t'] and q("!!document.querySelector('.cal-c2-card[data-booking-id=\"h1\"] [data-act=\"checkin\"]')"), by['h1']['cls'])
     R.t('solo las de HOY tienen check-in; las demás solo "Ver"', not q("!!document.querySelector('.cal-c2-card[data-booking-id=\"f1\"] [data-act=\"checkin\"]')"))
@@ -80,4 +80,24 @@ with sync_playwright() as p:
     n = pg3.evaluate("document.querySelectorAll('.cal-c2-card').length"); msg = pg3.evaluate("document.querySelector('.cal-c2-empty').innerText")
     R.t('más de 6 llegadas: muestra 6 en una línea y avisa cuántas más hay', n == 6 and '+2 llegadas más' in msg, (n, msg))
     br3.close()
+# ── Tamaño fijo y lugares vacíos "Sin reserva ☹️" ──
+with sync_playwright() as p:
+    sizes = {}
+    for name, data in (('cero', []), ('una', [B[2]]), ('tres', B[1:4])):
+        brx, pgx, errsx = open_calendar(p, data, height=1000, width=1500)
+        info = pgx.evaluate("""()=>{const g=document.querySelector('.cal-c2-grid');const items=[...g.children];
+          return {n:items.length, cards:g.querySelectorAll('.cal-c2-card').length, ph:g.querySelectorAll('.cal-c2-ph').length,
+                  widths:[...new Set(items.map(e=>Math.round(e.getBoundingClientRect().width)))], tops:[...new Set(items.map(e=>Math.round(e.getBoundingClientRect().top)))],
+                  heights:[...new Set(items.map(e=>Math.round(e.getBoundingClientRect().height)))], txt:(g.querySelector('.cal-c2-ph')?.innerText||'')}}""")
+        sizes[name] = info
+        R.t(f'{name} reservas: SIEMPRE 6 lugares ({info["cards"]} cards + {info["ph"]} "Sin reserva")', info['n'] == 6 and info['cards'] + info['ph'] == 6, info)
+        R.t(f'{name} reservas: todos del mismo ancho y alto, en una sola línea', len(info['widths']) == 1 and len(info['tops']) == 1 and len(info['heights']) == 1, info)
+        if name == 'una':
+            R.t('1 sola reserva: ya no se estira (ancho de la card = ancho de un lugar vacío)', len(info['widths']) == 1 and info['widths'][0] < 330, info['widths'])
+            R.t('lugar vacío con carita triste: "Sin reserva"', '☹️' in info['txt'] and 'Sin reserva' in info['txt'], info['txt'])
+            pgx.evaluate("window.__newClicks=0;document.getElementById('btn-new-booking').addEventListener('click',()=>window.__newClicks++)")
+            pgx.locator('.cal-c2-ph').first.click(); pgx.wait_for_timeout(200)
+            R.t('tocar un lugar vacío crea una reserva nueva (igual que "Nueva reserva")', pgx.evaluate("window.__newClicks") == 1, pgx.evaluate("window.__newClicks"))
+        R.t(f'{name}: sin errores de JS', not errsx, errsx); brx.close()
+    R.t('el ancho de cada lugar es el mismo con 0, 1 o 3 reservas', sizes['cero']['widths'] == sizes['una']['widths'] == sizes['tres']['widths'], {k: v['widths'] for k, v in sizes.items()})
 R.done()
